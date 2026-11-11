@@ -841,5 +841,14 @@ pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
 /// The `i(`/`a{`-family text object: the block `open`..`close` around the
 /// cursor, `n` levels out.
 fn block(op: Op, n: c_int, include: bool, open: char, close: char) -> bool {
-    op.on_copy(|op| current_block(op, n, include, open as c_int, close as c_int).is_ok())
+    op.on_copy(|op| {
+        current_block(
+            op,
+            n,
+            include,
+            Codepoint::from(open),
+            Codepoint::from(close),
+        )
+        .is_ok()
+    })
 }

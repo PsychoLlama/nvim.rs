@@ -122,7 +122,7 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
             if c >= 0x80 {
                 // Illegal byte.
                 col += utf_char2cells(Codepoint::from(c));
-                msg_putchar(Codepoint::from(c).get());
+                msg_putchar(Codepoint::from(c));
                 continue;
             }
             extra_fill = 0;

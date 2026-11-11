@@ -128,7 +128,7 @@ fn prompt_exmode(st: &Sub) -> Key {
         false,
     );
     if !ui_has(UI_MESSAGES) {
-        say::putchar('\n' as c_int);
+        say::putchar(b'\n');
     }
     // getcmdline_prompt() answers NULL when there is no command line to
     // return.

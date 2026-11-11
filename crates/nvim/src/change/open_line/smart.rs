@@ -23,6 +23,7 @@
 
 use crate::charset::skip;
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use core::ffi::c_int;
 
@@ -54,7 +55,7 @@ fn line_copy(lnum: LineNr) -> XString {
 
 /// `findmatch` from the cursor, for `initc`.
 fn find_match(initc: u8) -> Option<Pos> {
-    findmatch(None, c_int::from(initc))
+    findmatch(None, Codepoint::from(initc))
 }
 
 /// [`get_leader_len`] when only the length is wanted.

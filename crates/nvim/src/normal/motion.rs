@@ -586,7 +586,7 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
     } else {
         op.motion_type = MotionType::CharWise;
         op.use_reg_one = true;
-        let pos = findmatch(Some(&mut op), 0);
+        let pos = findmatch(Some(&mut op), Codepoint::NUL);
         if let Some(pos) = pos {
             setpcmark();
             win.w_cursor = pos;

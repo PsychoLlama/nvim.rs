@@ -891,7 +891,7 @@ impl Win {
         if !equalpos(self.w_cursor, visual_anchor()) {
             return false;
         }
-        let Some(pos) = findmatch(Some(&mut op), 0) else {
+        let Some(pos) = findmatch(Some(&mut op), Codepoint::NUL) else {
             return false;
         };
 

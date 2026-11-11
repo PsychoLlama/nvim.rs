@@ -20,6 +20,7 @@ use crate::autocmd::fire_autocmds;
 use crate::charset::{getdigits_at, getdigits_int_at};
 use crate::env::home_to_tilde;
 use crate::file_search::find_nth_file_in_path;
+use crate::mbyte::Codepoint;
 use crate::memory::ThinCString;
 use crate::memory::XString;
 use crate::message::msg_display_bytes;
@@ -409,7 +410,7 @@ fn fill_name(buffer: Buf) -> XString {
 }
 
 fn msg_char(c: u8) {
-    msg_putchar(c_int::from(c));
+    msg_putchar(Codepoint::from(c));
 }
 
 fn is_changed(buffer: Buf) -> bool {

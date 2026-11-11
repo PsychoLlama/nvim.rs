@@ -56,8 +56,8 @@ use crate::input::prompt_for_input;
 use crate::message::state::{MSG_SCROLL, QUIT_MORE};
 use crate::message::{E_CURDIR, E_INTERR, E_SANDBOX};
 use crate::message::{
-    emsg, message_filtered, msg, msg_clr_eos, msg_display, msg_end, msg_outnum, msg_putchar,
-    msg_start, msg_starthere, msg_str, msgmore,
+    emsg, message_filtered, msg, msg_clr_eos, msg_display, msg_end, msg_outnum, msg_start,
+    msg_starthere, msg_str, msgmore,
 };
 use crate::option::defs::{OptVal, OptionSetFlags};
 use crate::options::OPT_FOLDCOLUMN;
@@ -335,7 +335,7 @@ fn list_oldfiles(list: &List) {
             say::puts(c": ");
             msg_display(text.string(value), 0, false);
             say::clear_eos();
-            say::putchar('\n' as ::core::ffi::c_int);
+            say::putchar(b'\n');
             os_breakcheck();
         }
     }
@@ -397,7 +397,8 @@ impl LineCopy {
 /// sites. The real fix is the message layer's own signatures; this is the
 /// family's share of it.
 pub(crate) mod say {
-    use super::{msg_clr_eos, msg_end, msg_putchar, msg_start, msg_starthere, msg_str, msgmore};
+    use super::{msg_clr_eos, msg_end, msg_start, msg_starthere, msg_str, msgmore};
+    use crate::message::msg_put_ascii;
     use ::core::ffi::{CStr, c_int};
 
     /// [`msg_start`]: begin a message.
@@ -416,9 +417,9 @@ pub(crate) mod say {
         msg_end()
     }
 
-    /// [`msg_putchar`]: show one character.
-    pub(crate) fn putchar(c: c_int) {
-        msg_putchar(c)
+    /// [`msg_put_ascii`]: show one ASCII character.
+    pub(crate) fn putchar(c: u8) {
+        msg_put_ascii(c)
     }
 
     /// [`msg_str`]: show a string that carries its own NUL.

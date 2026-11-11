@@ -379,7 +379,7 @@ fn put_hl(s: &CStr, hl_id: c_int) {
 }
 
 fn put_char(byte: u8) {
-    msg_putchar(c_int::from(byte));
+    msg_putchar(Codepoint::from(byte));
 }
 
 fn put_num(n: c_int) {

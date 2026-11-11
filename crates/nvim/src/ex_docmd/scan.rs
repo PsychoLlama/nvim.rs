@@ -326,9 +326,3 @@ pub(crate) fn skip_cmd_arg_at(text: &[u8], mut at: usize) -> usize {
 pub fn ends_excmd(c: u8) -> bool {
     matches!(c, 0 | b'|' | b'"' | b'\n')
 }
-
-/// [`ends_excmd`] for a character held as a `c_int`: none past a byte ends
-/// one.
-pub(crate) fn ends_excmd_char(c: c_int) -> bool {
-    u8::try_from(c).is_ok_and(ends_excmd)
-}

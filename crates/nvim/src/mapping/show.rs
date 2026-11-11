@@ -90,7 +90,7 @@ pub(crate) fn showmap(mp: &MapBlock, local: bool) {
         msg_put_ascii(b' ');
     }
 
-    msg_putchar(c_int::from(if local { b'@' } else { b' ' }));
+    msg_putchar(Codepoint::from(if local { b'@' } else { b' ' }));
 
     // `false` below would show only things like <Up> as such on the rhs
     // and not M-x etc; `true` gets both -- webb

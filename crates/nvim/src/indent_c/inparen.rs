@@ -22,6 +22,7 @@
 #![forbid(unsafe_code)]
 
 use super::*;
+use crate::mbyte::Codepoint;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -152,7 +153,7 @@ fn align_with_unclosed_paren(
         Win::current().w_cursor.lnum = our_paren_pos.lnum;
         Win::current().w_cursor.col = ColNr::try_from(look_col).unwrap_or(ColNr::MAX - 1) + 1;
         let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
-        let trypos = findmatchlimit(None, c_int::from(b')'), 0, maxparen);
+        let trypos = findmatchlimit(None, Codepoint::byte(b')'), 0, maxparen);
         if let Some(trypos) = trypos
             && trypos.lnum == our_paren_pos.lnum
             && trypos.col < our_paren_pos.col

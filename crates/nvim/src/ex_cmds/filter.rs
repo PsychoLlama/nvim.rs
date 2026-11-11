@@ -181,8 +181,8 @@ pub fn do_bang(addr_count: c_int, args: &mut ExArg, forceit: bool, do_in: bool, 
         // Echo the command; it is not remembered in the message history.
         say::start();
         msg_ext_set_kind(c"shell_cmd");
-        say::putchar(':' as c_int);
-        say::putchar('!' as c_int);
+        say::putchar(b':');
+        say::putchar(b'!');
         msg_display(cmd, 0, false);
         say::clear_eos();
         ui_cursor_goto(MSG_ROW.get(), MSG_COL.get());
@@ -383,7 +383,7 @@ impl Filter {
             return;
         }
         if !self.do_out {
-            say::putchar('\n' as c_int);
+            say::putchar(b'\n');
         }
         if self.shell(args, cmd) == Ran::PutBack {
             // put cursor back in same position for ":w !cmd"
@@ -411,7 +411,7 @@ impl Filter {
             return true;
         }
         if !ui_has(UI_MESSAGES) {
-            say::putchar('\n' as c_int);
+            say::putchar(b'\n');
         }
         drop(self.no_prompt.take());
         if !aborting() {
@@ -470,7 +470,7 @@ impl Filter {
             );
             if read.is_err() {
                 if !aborting() {
-                    say::putchar('\n' as c_int);
+                    say::putchar(b'\n');
                     let arg0 = msg_cstr(otmp_name);
                     semsg!("E485: Can't read file {arg0}");
                 }
@@ -590,8 +590,8 @@ pub(crate) fn do_shell(cmd: &CStr, flags: ShellOpts) {
     }
 
     // For the sake of the terminal, the shell's output starts on a fresh line.
-    say::putchar('\r' as c_int);
-    say::putchar('\n' as c_int);
+    say::putchar(b'\r');
+    say::putchar(b'\n');
 
     if p_warn() && !AUTOCMD_BUSY.get() && MSG_SILENT.get() == 0 && buffers().any(buf_is_changed) {
         say::puts(gettext(c"[No write since last change]\n"));
@@ -799,12 +799,12 @@ pub fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
         GLOBAL_NEED_MSG_KIND.set(false);
     } else if !save_silent {
         // don't want trailing newline with regular messaging
-        say::putchar('\n' as c_int);
+        say::putchar(b'\n');
     }
 
     print_line_no_prefix(lnum, use_number, list);
     if save_silent {
-        say::putchar('\n' as c_int);
+        say::putchar(b'\n');
         SILENT_MODE.set(save_silent);
     }
     INFO_MESSAGE.set(false);

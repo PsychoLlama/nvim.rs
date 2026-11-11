@@ -25,6 +25,7 @@
 )]
 
 use super::*;
+use crate::mbyte::Codepoint;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -56,7 +57,7 @@ pub(crate) fn find_start_brace() -> Option<Pos> {
     let cursor_save = Win::current().w_cursor;
     let mut trypos;
     loop {
-        trypos = findmatchlimit(None, c_int::from(b'{'), FM_BLOCKSTOP, 0);
+        trypos = findmatchlimit(None, Codepoint::byte(b'{'), FM_BLOCKSTOP, 0);
         let Some(brace) = trypos else {
             break;
         };
@@ -99,7 +100,7 @@ pub(crate) fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
 
     let found = loop {
         let limit = int64_t::from(ind_maxp_wk);
-        let found = findmatchlimit(None, c_int::from(c), 0, limit);
+        let found = findmatchlimit(None, Codepoint::from(c), 0, limit);
         let Some(trypos) = found else {
             break None;
         };

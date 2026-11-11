@@ -34,6 +34,7 @@ use crate::getchar::state::GOT_INT;
 use crate::highlight_group::{HLF_8, HLF_D};
 use crate::lua::executor::{api_new_luaref, funcref_description};
 use crate::lua::ffi::LUA_NOREF;
+use crate::mbyte::Codepoint;
 use crate::message::msg_display_bytes;
 use crate::message::msg_put_ascii;
 use crate::message::{
@@ -50,7 +51,7 @@ use crate::types::{ApiString, DictBuilder};
 use crate::ui::state::COLUMNS;
 use crate::usercmd::UserCmd;
 use crate::winlayer::Buf;
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use core::fmt::Write as _;
 use std::rc::Rc;
 
@@ -209,7 +210,7 @@ fn list_one(cmd: &Row, scope: Scope, name_len: usize) {
         (a.has(ExArgt::TRLBAR), b'|'),
     ] {
         if present {
-            msg_putchar(c_int::from(mark));
+            msg_putchar(Codepoint::from(mark));
             blank -= 1;
         }
     }

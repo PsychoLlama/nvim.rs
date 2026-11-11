@@ -143,11 +143,11 @@ fn count_parens(line: &[u8], parencount: &mut c_int) {
 
 /// The `(` or `[` that encloses the cursor line, whichever starts later.
 fn enclosing_open() -> Option<Pos> {
-    let __v = findmatch(None, c_int::from(b'('));
+    let __v = findmatch(None, Codepoint::byte(b'('));
     let Some(paren) = __v else {
-        return findmatch(None, c_int::from(b'['));
+        return findmatch(None, Codepoint::byte(b'['));
     };
-    match findmatch(None, c_int::from(b'[')) {
+    match findmatch(None, Codepoint::byte(b'[')) {
         Some(square) if !lt(square, paren) => Some(square),
         _ => Some(paren),
     }

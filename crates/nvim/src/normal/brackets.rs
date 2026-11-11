@@ -12,6 +12,7 @@
 
 use crate::keycodes::SpecialKey;
 use crate::mark::{MARK_BEGIN_LINE, MARK_CONTEXT};
+use crate::mbyte::Codepoint;
 use crate::normal::defs::{CmdArg, MotionType};
 use crate::search::{ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DEFINE};
 use crate::search::{FM_BACKWARD, FM_FORWARD};
@@ -98,7 +99,12 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     let mut n = if method { 9999 } else { cmd_arg.count1 };
 
     while n > 0 {
-        pos = findmatchlimit(Some(&mut cmd_arg.op()), findc, match_direction(cmd_arg), 0);
+        pos = findmatchlimit(
+            Some(&mut cmd_arg.op()),
+            Codepoint::new(findc),
+            match_direction(cmd_arg),
+            0,
+        );
         let Some(found) = pos else {
             if new_pos.lnum == LineNr::ZERO {
                 // Nothing found at all. A method search says so by leaving
@@ -162,8 +168,12 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
                 } else {
                     // A brace of the other kind: step over the block it
                     // opens or closes.
-                    pos =
-                        findmatchlimit(Some(&mut cmd_arg.op()), findc, match_direction(cmd_arg), 0);
+                    pos = findmatchlimit(
+                        Some(&mut cmd_arg.op()),
+                        Codepoint::new(findc),
+                        match_direction(cmd_arg),
+                        0,
+                    );
                     match pos {
                         None => n = 0,
                         Some(found) => Win::current().w_cursor = found,

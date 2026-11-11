@@ -31,8 +31,8 @@ use core::ffi::{CStr, c_int};
 const SPECIAL_HL: c_int = HLF_8;
 
 /// Show one character.
-pub fn msg_putchar(c: c_int) {
-    msg_putchar_hl(Codepoint::new(c), 0)
+pub fn msg_putchar(c: Codepoint) {
+    msg_putchar_hl(c, 0)
 }
 
 /// Show one ASCII character: [`msg_putchar`] for the byte a caller spells.
@@ -268,7 +268,7 @@ pub fn msg_make(arg: &CStr) {
     if left == 0 {
         msg_put_ascii(NL);
         for &byte in SHIFTED {
-            msg_putchar(c_int::from(byte - 3));
+            msg_putchar(Codepoint::from(byte - 3));
         }
     }
 }

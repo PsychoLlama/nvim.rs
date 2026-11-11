@@ -108,42 +108,51 @@ fn vim_strnsave_unquoted_does_not_unescape_backslash_n() {
     assert_eq!(r"/Program\nFiles/sh", unquoted("/Program\"\\n\"Files/sh"));
 }
 
-fn strchr(s: &[u8], c: c_int) -> Option<usize> {
-    find_char(s, Codepoint::new(c))
+fn strchr(s: &[u8], c: Codepoint) -> Option<usize> {
+    find_char(s, Codepoint::new(c.get()))
 }
 
 #[test]
 fn vim_strchr_handles_nul_and_negative_correctly() {
-    assert_eq!(None, strchr(b"abc", 0));
-    assert_eq!(None, strchr(b"abc", -1));
+    assert_eq!(None, strchr(b"abc", Codepoint::NUL));
+    assert_eq!(None, strchr(b"abc", Codepoint::new(-1)));
 }
 
 #[test]
 fn vim_strchr_works() {
-    assert_eq!(Some(0), strchr(b"abc", 'a' as c_int));
-    assert_eq!(Some(1), strchr(b"abc", 'b' as c_int));
-    assert_eq!(Some(2), strchr(b"abc", 'c' as c_int));
-    assert_eq!(Some(0), strchr("a«b»c".as_bytes(), 'a' as c_int));
-    assert_eq!(Some(3), strchr("a«b»c".as_bytes(), 'b' as c_int));
-    assert_eq!(Some(6), strchr("a«b»c".as_bytes(), 'c' as c_int));
+    assert_eq!(Some(0), strchr(b"abc", Codepoint::byte(b'a')));
+    assert_eq!(Some(1), strchr(b"abc", Codepoint::byte(b'b')));
+    assert_eq!(Some(2), strchr(b"abc", Codepoint::byte(b'c')));
+    assert_eq!(Some(0), strchr("a«b»c".as_bytes(), Codepoint::byte(b'a')));
+    assert_eq!(Some(3), strchr("a«b»c".as_bytes(), Codepoint::byte(b'b')));
+    assert_eq!(Some(6), strchr("a«b»c".as_bytes(), Codepoint::byte(b'c')));
 
     // The first *byte* of '«' names U+00C2, which is not in the string.
-    assert_eq!(None, strchr("«»".as_bytes(), 0xC2));
+    assert_eq!(None, strchr("«»".as_bytes(), Codepoint::new(0xC2)));
     // 0xAB == 171 == '«', but a lone 0xAB byte is not valid UTF-8 for it.
-    assert_eq!(None, strchr(b"\xAB", 0xAB));
-    assert_eq!(Some(0), strchr("«»".as_bytes(), 0xAB));
-    assert_eq!(Some(3), strchr("„«»“".as_bytes(), 0xAB));
+    assert_eq!(None, strchr(b"\xAB", Codepoint::new(0xAB)));
+    assert_eq!(Some(0), strchr("«»".as_bytes(), Codepoint::new(0xAB)));
+    assert_eq!(Some(3), strchr("„«»“".as_bytes(), Codepoint::new(0xAB)));
 
-    assert_eq!(Some(7), strchr("„«»“".as_bytes(), 0x201C));
-    assert_eq!(None, strchr("„«»“".as_bytes(), 0x201D));
-    assert_eq!(Some(0), strchr("„«»“".as_bytes(), 0x201E));
+    assert_eq!(Some(7), strchr("„«»“".as_bytes(), Codepoint::new(0x201C)));
+    assert_eq!(None, strchr("„«»“".as_bytes(), Codepoint::new(0x201D)));
+    assert_eq!(Some(0), strchr("„«»“".as_bytes(), Codepoint::new(0x201E)));
 
-    assert_eq!(Some(0), strchr(b"\xF4\x8F\xBC\x80", 0x10FF00));
-    assert_eq!(Some(2), strchr("«\u{10FF00}»".as_bytes(), 0x10FF00));
+    assert_eq!(
+        Some(0),
+        strchr(b"\xF4\x8F\xBC\x80", Codepoint::new(0x10FF00))
+    );
+    assert_eq!(
+        Some(2),
+        strchr("«\u{10FF00}»".as_bytes(), Codepoint::new(0x10FF00))
+    );
     // 0xDBFF 0xDF00 — a surrogate pair for 0x10FF00 is not a match.
     assert_eq!(
         None,
-        strchr(b"\xC2\xAB\xED\xAF\xBF\xED\xBC\x80\xC2\xBB", 0x10FF00)
+        strchr(
+            b"\xC2\xAB\xED\xAF\xBF\xED\xBC\x80\xC2\xBB",
+            Codepoint::new(0x10FF00)
+        )
     );
 }
 

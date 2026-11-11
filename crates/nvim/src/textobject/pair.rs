@@ -63,8 +63,8 @@ pub(crate) fn current_block(
     op: &mut OpArg,
     mut count: c_int,
     include: bool,
-    what: c_int,
-    other: c_int,
+    what: Codepoint,
+    other: Codepoint,
 ) -> Result<(), NoObject> {
     let mut pos: Option<Pos>;
     let mut start_pos = Pos {
@@ -81,7 +81,7 @@ pub(crate) fn current_block(
     // Starting on a bracket takes the whole block, brackets included.
     if !visual_active() || equalpos(visual_anchor(), Win::current().w_cursor) {
         setpcmark();
-        if what == '{' as c_int {
+        if what.get() == '{' as c_int {
             // Ignore the indent.
             while inindent(1) {
                 if inc_cursor() != Moved::InLine {
@@ -89,7 +89,7 @@ pub(crate) fn current_block(
                 }
             }
         }
-        if gchar_cursor().get() == what {
+        if gchar_cursor().get() == what.get() {
             // On the opening bracket: move just past it.
             Win::current().w_cursor.col += 1;
         }

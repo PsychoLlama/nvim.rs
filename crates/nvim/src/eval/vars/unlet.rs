@@ -35,7 +35,6 @@ use core::ffi::c_int;
 
 use super::{clear_local, do_unlet, with_var};
 use crate::eval::typval::{DI_FLAGS_FIX, DI_FLAGS_LOCK};
-use crate::ex_docmd::ends_excmd_char;
 
 /// What [`ex_unletlock`] does to each argument it resolves.
 #[derive(Clone, Copy, Debug)]
@@ -106,10 +105,10 @@ fn ex_unletlock(excmd: &mut ExArg, start: usize, glv_flags: c_int, action: Actio
                 // An error, but carry on parsing.
                 error = true;
             }
-            let trailing = end.ok().map(|end| c_int::from(byte_at(text, end)));
+            let trailing = end.ok().map(|end| byte_at(text, end));
             let Some(end) = end
                 .ok()
-                .filter(|_| trailing.is_some_and(|c| ascii_iswhite(c) || ends_excmd_char(c)))
+                .filter(|_| trailing.is_some_and(|c| ascii_iswhite(c) || ends_excmd(c)))
             else {
                 if let Ok(end) = end {
                     EMSG_SEVERE.set(true);

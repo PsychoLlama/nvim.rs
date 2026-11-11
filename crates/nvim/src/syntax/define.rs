@@ -26,7 +26,6 @@ use crate::types::Failed;
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::ex_docmd::ends_excmd_char;
 use crate::regexp::{RE_MAGIC, char_delim, skip_regexp_at};
 use crate::runtime::RuntimeOpts;
 use crate::types::ExArgt;
@@ -486,8 +485,8 @@ pub(crate) fn read_pattern(
     syn_clear_time(&mut ci.sp_time);
 
     let end = read_pattern_offsets(ci, &mut tail, end + 1);
-    let after = c_int::from(cstr::byte_at(&tail, end));
-    if !ends_excmd_char(after) && !ascii_iswhite(after) {
+    let after = cstr::byte_at(&tail, end);
+    if !ends_excmd(after) && !ascii_iswhite(after) {
         return Err(SyntaxError::GarbageAfterPattern(ThinCString::from_bytes(
             body,
         )));

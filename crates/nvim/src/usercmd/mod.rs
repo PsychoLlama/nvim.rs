@@ -40,7 +40,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::ex_docmd::ends_excmd_char;
 mod attr;
 mod complete;
 mod expand;
@@ -332,8 +331,8 @@ pub(crate) fn uc_validate_name(name: &[u8]) -> Option<usize> {
             end += 1;
         }
     }
-    let next = c_int::from(at(end));
-    (ends_excmd_char(next) || ascii_iswhite(next)).then_some(end)
+    let next = at(end);
+    (ends_excmd(next) || ascii_iswhite(next)).then_some(end)
 }
 
 /// Everything a command is defined with bar its name and its replacement.

@@ -14,6 +14,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::as_index;
 use crate::narrow::len_as_int;
@@ -396,9 +397,9 @@ fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: u8, spp: &SynPat) {
             break;
         }
     }
-    msg_putchar(c_int::from(SEPCHARS[i]));
+    msg_putchar(Codepoint::from(SEPCHARS[i]));
     msg_display(pattern, 0, false);
-    msg_putchar(c_int::from(SEPCHARS[i]));
+    msg_putchar(Codepoint::from(SEPCHARS[i]));
 
     put_pattern_offsets(spp);
     msg_put_ascii(b' ');

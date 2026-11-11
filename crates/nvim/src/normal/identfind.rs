@@ -14,6 +14,7 @@
 /// punctuation, 2 and up are the word classes (one per script).
 const CLASS_WHITE: c_int = 0;
 
+use crate::mbyte::Codepoint;
 use crate::mbyte::{CLASS_PUNCT, CLASS_WORD};
 use crate::ops::{Op, OpType};
 use crate::search::FM_FORWARD;
@@ -382,7 +383,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
             // cursor: it is a different scope.
             let travel = int64_t::from(old_pos.lnum - Win::current().w_cursor.lnum + 1);
             let brace = c_int::from(b'}');
-            let close = findmatchlimit(None, brace, FM_FORWARD, travel);
+            let close = findmatchlimit(None, Codepoint::new(brace), FM_FORWARD, travel);
             if let Some(close) = close
                 && close.lnum < old_pos.lnum
             {

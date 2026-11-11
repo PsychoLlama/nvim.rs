@@ -20,6 +20,7 @@
 
 use crate::charset::byte2cells;
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cells_at, c_cluster_len};
 use crate::memory::XString;
 use crate::normal::defs::MotionType;
@@ -97,10 +98,10 @@ fn dis_register(yb: &YankReg, name: RegName, type_0: u8, hl_id: c_int) {
 
     msg_put_ascii(b'\n');
     msg_str(c"  ");
-    msg_putchar(c_int::from(type_0));
+    msg_putchar(Codepoint::from(type_0));
     msg_str(c"  ");
     msg_put_ascii(b'"');
-    msg_putchar(c_int::from(name.byte()));
+    msg_putchar(Codepoint::from(name.byte()));
     msg_str(c"   ");
 
     // The content, cut off at the window width. A line break inside the

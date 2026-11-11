@@ -27,6 +27,7 @@
 
 use crate::charset::{getdigits_int_at, ptr2cells_at};
 use crate::cstr::{byte_at, until_nul};
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_cluster_len, c_display_width, head_off};
 use crate::narrow::len_as_int;
 use core::ffi::c_int;
@@ -587,7 +588,7 @@ pub(crate) fn indent_after_comment_end(
     }
     let old_cursor = Win::current().w_cursor;
     Win::current().w_cursor.col = ColNr::from_index(comment_end);
-    let newindent = match findmatch(None, 0) {
+    let newindent = match findmatch(None, Codepoint::NUL) {
         None => newindent,
         Some(pos) => {
             Win::current().w_cursor.lnum = pos.lnum;

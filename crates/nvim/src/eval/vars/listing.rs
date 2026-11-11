@@ -17,14 +17,14 @@
 use crate::cstr;
 use crate::eval::FNE_CHECK_START;
 use crate::eval::FNE_INCL_BR;
+use crate::mbyte::Codepoint;
 use crate::semsg;
 use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 use super::*;
 use crate::eval::typval::DictRef;
-use crate::ex_docmd::ends_excmd_char;
 use crate::message::IOSIZE;
 use crate::message::msg_put_ascii;
 
@@ -118,8 +118,8 @@ pub(crate) fn list_arg_vars(text: &[u8], skip: bool, first: &mut bool) -> usize 
             // left parses as names.
             let flags = FNE_INCL_BR | FNE_CHECK_START;
             arg += name_end(rest(arg), flags).end;
-            let c = c_int::from(cstr::byte_at(text, arg));
-            if !ascii_iswhite(c) && !ends_excmd_char(c) {
+            let c = cstr::byte_at(text, arg);
+            if !ascii_iswhite(c) && !ends_excmd(c) {
                 EMSG_SEVERE.set(true);
                 let shown = crate::message_fmt::msg_bytes(rest(arg));
                 semsg!("E488: Trailing characters: {shown}");
@@ -262,7 +262,7 @@ fn list_one_var_a(prefix: &CStr, name: &[u8], value_type: VarType, text: &[u8], 
         VAR_DICT => b'{',
         _ => b' ',
     };
-    msg_putchar(c_int::from(sigil));
+    msg_putchar(Codepoint::from(sigil));
     let text = match text.split_first() {
         Some((&lead, rest))
             if (value_type == VAR_LIST || value_type == VAR_DICT) && lead == sigil =>

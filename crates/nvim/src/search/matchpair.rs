@@ -33,7 +33,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 /// Find the match for the bracket under the cursor.
-pub fn findmatch(op: Option<&mut OpArg>, initc: c_int) -> Option<Pos> {
+pub fn findmatch(op: Option<&mut OpArg>, initc: Codepoint) -> Option<Pos> {
     findmatchlimit(op, initc, 0, 0)
 }
 
@@ -56,7 +56,7 @@ pub fn findmatch(op: Option<&mut OpArg>, initc: c_int) -> Option<Pos> {
 /// offer, which is why it is an `Option` and not a pointer.
 pub fn findmatchlimit(
     op: Option<&mut OpArg>,
-    initc: c_int,
+    initc: Codepoint,
     flags: c_int,
     maxtravel: int64_t,
 ) -> Option<Pos> {
@@ -127,14 +127,14 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
     let mut ptr = 0;
     while ptr < mps.len() {
         // The opening half of this pair.
-        if char_from(ptr).get() == *initc {
+        if char_from(ptr).get() == (*initc).get() {
             let other = char_from(ptr + len_from(ptr) + 1);
             if switchit {
                 *findc = *initc;
-                *initc = other.get();
+                *initc = other;
                 *backwards = true;
             } else {
-                *findc = other.get();
+                *findc = other;
                 *backwards = false;
             }
             return;
@@ -142,13 +142,13 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
         // The closing half.
         let prev = ptr;
         ptr += len_from(ptr) + 1;
-        if char_from(ptr).get() == *initc {
+        if char_from(ptr).get() == (*initc).get() {
             if switchit {
                 *findc = *initc;
-                *initc = char_from(prev).get();
+                *initc = char_from(prev);
                 *backwards = false;
             } else {
-                *findc = char_from(prev).get();
+                *findc = char_from(prev);
                 *backwards = true;
             }
             return;
@@ -165,9 +165,9 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
 #[derive(Debug)]
 struct Target {
     /// The character that opens; NUL when looking for a comment end.
-    initc: c_int,
+    initc: Codepoint,
     /// The character that closes.
-    findc: c_int,
+    findc: Codepoint,
     backwards: bool,
     /// Which way a comment end is being looked for; 0 when the target is
     /// a bracket pair.
@@ -205,7 +205,7 @@ enum Plan {
 /// here is bounds-checked.
 fn make_plan(
     op: Option<&mut OpArg>,
-    initc: c_int,
+    initc: Codepoint,
     dir: c_int,
     pos: &mut Pos,
     line: &[u8],
@@ -214,7 +214,7 @@ fn make_plan(
 ) -> Plan {
     let mut target = Target {
         initc,
-        findc: 0,
+        findc: Codepoint::NUL,
         backwards: false,
         comment_dir: 0,
         ignore_cend: false,
@@ -225,16 +225,16 @@ fn make_plan(
     // '/' and '*' are special cases: look for the start or end of a
     // comment. When '/' is used, running backwards into a "*/" is
     // ignored, because for the "[*" command any comment will do.
-    if initc == '/' as c_int || initc == '*' as c_int || initc == 'R' as c_int {
+    if initc == b'/' || initc == b'*' || initc == b'R' {
         target.comment_dir = dir;
-        target.ignore_cend = initc == '/' as c_int;
+        target.ignore_cend = initc == b'/';
         target.backwards = dir != FORWARD;
-        target.raw_string = initc == 'R' as c_int;
-        target.initc = 0;
+        target.raw_string = initc == b'R';
+        target.initc = Codepoint::NUL;
         return Plan::Walk(target);
     }
 
-    if initc != '#' as c_int && initc != 0 {
+    if initc != b'#' && initc != 0 {
         // A given character: look it up in the table.
         find_mps_values(&mut target, true);
         if dir != 0 {
@@ -248,8 +248,8 @@ fn make_plan(
 
     // Either initc is '#', or no initc was given and something under
     // or near the cursor has to be matched.
-    let mut hash_dir = if initc == '#' as c_int { dir } else { 0 };
-    if initc != '#' as c_int {
+    let mut hash_dir = if initc == b'#' { dir } else { 0 };
+    if initc != b'#' {
         // Only check for the special things when 'cpo' has no '%'.
         if !cpo_match {
             let white = skip::white(line);
@@ -293,7 +293,7 @@ fn make_plan(
             }
             loop {
                 let rest = &line[pos.col.as_usize().min(line.len())..];
-                target.initc = char_at(rest).get();
+                target.initc = char_at(rest);
                 if target.initc == 0 {
                     break;
                 }
@@ -324,7 +324,7 @@ fn make_plan(
     if let Some(op) = op {
         op.motion_type = MotionType::LineWise; // linewise for this case only
     }
-    if initc != '#' as c_int {
+    if initc != b'#' {
         let word = after_hash(line, skip::white(line));
         hash_dir = if word.starts_with(b"if") || word.starts_with(b"el") {
             1
@@ -346,7 +346,7 @@ fn after_hash(line: &[u8], hash: usize) -> &[u8] {
 
 /// Walk lines looking for the `#if`/`#else`/`#endif` that partners the
 /// one the cursor is on.
-fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option<Pos> {
+fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: Codepoint) -> Option<Pos> {
     let mut count = 0;
     pos.col = ColNr::ZERO;
     let mut lines = Lines::current();
@@ -385,7 +385,7 @@ fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option<Pos> {
                 return Some(pos);
             }
             count -= 1;
-        } else if initc == '#' as c_int && word.starts_with(b"el") {
+        } else if initc == b'#' && word.starts_with(b"el") {
             if count == 0 {
                 return Some(pos);
             }
@@ -764,8 +764,8 @@ impl Walk {
         // itself is what is being matched.
         if c == b'\''
             && !cpo_match
-            && target.initc != '\'' as c_int
-            && target.findc != '\'' as c_int
+            && target.initc != b'\''
+            && target.findc != b'\''
             && self.skip_char_constant()
         {
             return Step::Next;
@@ -785,7 +785,7 @@ impl Walk {
         // Check for a match outside of quotes, and inside of quotes
         // when the start position is inside quotes too.
         if (!self.inquote || self.start_in_quotes == Some(true))
-            && (c.get() == target.initc || c.get() == target.findc)
+            && (c.get() == target.initc.get() || c.get() == target.findc.get())
         {
             // Only accept a match when 'M' is in 'cpo', or when the
             // escaping is what it was at the start.
@@ -793,7 +793,7 @@ impl Walk {
                 || (backslash_count(self.lines.line(self.lnum), col) & 1 != 0)
                     == target.match_escaped
             {
-                if c.get() == target.initc {
+                if c.get() == target.initc.get() {
                     self.count += 1;
                 } else {
                     if self.count == 0 {
@@ -810,7 +810,7 @@ impl Walk {
 /// The body of [`findmatchlimit`], answering the position by value.
 fn find_match(
     op: Option<&mut OpArg>,
-    initc: c_int,
+    initc: Codepoint,
     flags: c_int,
     maxtravel: int64_t,
 ) -> Option<Pos> {
@@ -844,8 +844,7 @@ fn find_match(
 
     // This is just guessing: with 'rightleft' set, look for the
     // matching paren or brace in the other direction.
-    if Win::current().w_onebuf_opt.wo_rl != 0 && has_char(c"()[]{}<>", Codepoint::new(target.initc))
-    {
+    if Win::current().w_onebuf_opt.wo_rl != 0 && has_char(c"()[]{}<>", target.initc) {
         target.backwards = !target.backwards;
     }
 
@@ -892,7 +891,7 @@ fn find_match(
         if walk.col == 0 && flags & FM_BLOCKSTOP != 0 {
             let first = c_int::from(byte_at(walk.line(), 0));
             if first == '{' as c_int || first == '}' as c_int {
-                if first == target.findc && walk.count == 0 {
+                if first == target.findc.get() && walk.count == 0 {
                     return Some(walk.pos()); // match!
                 }
                 break; // out of scope

@@ -212,7 +212,7 @@ fn si_indent_like_open_brace(pos: Pos) {
     let after_paren = byte_at(line, as_index(i)) == b')';
     win.w_cursor.lnum = pos.lnum;
     win.w_cursor.col = ColNr::new(i);
-    if after_paren && let Some(open) = findmatch(None, c_int::from(b'(')) {
+    if after_paren && let Some(open) = findmatch(None, Codepoint::byte(b'(')) {
         win.w_cursor = open;
     }
     let indent = get_indent();
@@ -253,7 +253,7 @@ pub fn ins_try_si(c: c_int) {
         || CAN_SI.get() && c == c_int::from(b'}') && inindent(0)
     {
         let matching = if c == c_int::from(b'}') {
-            findmatch(None, c_int::from(b'{'))
+            findmatch(None, Codepoint::byte(b'{'))
         } else {
             None
         };

@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::message::msg_put_ascii;
 use crate::winlayer::cmdline_window;
 
@@ -174,7 +175,7 @@ pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
     let mut cc = Cc::current();
     if !ui_has(UI_CMDLINE) {
         MSG_NO_MORE.set(true);
-        msg_putchar(::core::ffi::c_int::from(c));
+        msg_putchar(Codepoint::new(i32::from(c)));
         if shift {
             draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
         }
@@ -321,7 +322,7 @@ pub(crate) fn redrawcmdprompt() {
         return;
     }
     if cc.cmdfirstc != 0 {
-        msg_putchar(::core::ffi::c_int::from(cc.cmdfirstc));
+        msg_putchar(Codepoint::from(cc.cmdfirstc));
     }
     // A copy: the message code re-enters the editor.
     if let Some(prompt) = cc.cmdprompt.clone() {
