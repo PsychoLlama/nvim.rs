@@ -645,8 +645,8 @@ fn elide_dir(text: &str, dir: &str) -> String {
         let shown = tail
             .match_indices('/')
             .map(|(slash, _)| slash)
-            .filter(|&slash| slash > 0 && dir.ends_with(&tail[..slash]))
-            .last();
+            .rev()
+            .find(|&slash| slash > 0 && dir.ends_with(&tail[..slash]));
         match shown {
             Some(slash) => {
                 out.push_str("<DIR>");
