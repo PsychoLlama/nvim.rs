@@ -632,6 +632,36 @@ fn the_stack_names_scripts_and_functions() {
     restore(&fx);
 }
 
+/// `text` with Lua's shortened spelling of a path under `dir` read as
+/// `<DIR>`. A chunk name longer than Lua's `LUA_IDSIZE` (60 bytes) keeps only
+/// its tail behind `...`, so how much of `dir` a Lua message shows depends on
+/// how long `$TMPDIR` is: `...ell.Ab12/nvim-unit-x-42/a.lua` is `<DIR>/a.lua`.
+fn elide_dir(text: &str, dir: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(at) = rest.find("...") {
+        out.push_str(&rest[..at]);
+        let tail = &rest[at + 3..];
+        let shown = tail
+            .match_indices('/')
+            .map(|(slash, _)| slash)
+            .filter(|&slash| slash > 0 && dir.ends_with(&tail[..slash]))
+            .last();
+        match shown {
+            Some(slash) => {
+                out.push_str("<DIR>");
+                rest = &tail[slash..];
+            }
+            None => {
+                out.push_str("...");
+                rest = tail;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Every way `:source` and `:runtime` can come up empty, with every message
 /// each says: a missing file, a directory, a script that fails half way, a
 /// `:finish`, a `SourceCmd` that takes the file over (or throws), a
@@ -651,7 +681,7 @@ fn sourcing_says_why_it_could_not() {
     sandbox.write("syntax.lua", b"local x = = 1\n");
     sandbox.write("raise.lua", b"error('rt raised')\n");
     sandbox.write("ok.lua", b"vim.g.rt_lua_ok = 1\n");
-    let msgs = |cmd: &str| fx.messages_of(cmd).replace(dir, "<DIR>");
+    let msgs = |cmd: &str| elide_dir(&fx.messages_of(cmd).replace(dir, "<DIR>"), dir);
     let rows = [
         format!("source {dir}/nosuch.vim"),
         format!("source {dir}/sub"),
