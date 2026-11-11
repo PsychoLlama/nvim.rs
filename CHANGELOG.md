@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2026.11.11-84ff67e6c4]
+
 ### Changed
 
 - Split every function over two hundred lines along its own seams, leaving no `goto`-shaped labelled block. It reaches the screen redraw, the statusline, the mode message, the hit-enter and `--More--` prompts, command-line colouring, computed folds, the mouse, closing windows, `:edit`, reading and writing files, swap-file recovery, `:!` filters, `:source`, startup, user functions and autocommands, the command line and its history, `:put`, `o`/`O` and text formatting, Insert-mode keys and `CTRL-X` completion, word and sentence motions, search and `searchcount()`, `match()`, `tr()`, `json_decode()`, `:map` and user commands, both regexp engines, spell checking (word lookup, sound-folding, `.aff` files, `'spelllang'`), extmarks, the terminal emulator and `sockconnect()`.
@@ -495,7 +497,8 @@ Safety foundation: make undefined behavior observable, then structurally shrink 
 
 First tagged release (unstable). The c2rust transpile of Neovim from C to Rust, made to build and pass the functional, old, and unit suites, with the CalVer release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe` Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.07-134f6fc430...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.11-84ff67e6c4...HEAD
+[2026.11.11-84ff67e6c4]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.07-134f6fc430...2026.11.11-84ff67e6c4
 [2026.11.07-134f6fc430]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.02-732b23427e...2026.11.07-134f6fc430
 [2026.11.02-732b23427e]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.30-9049d0284d...2026.11.02-732b23427e
 [2026.10.30-9049d0284d]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.28-6da68164b8...2026.10.30-9049d0284d
