@@ -118,14 +118,17 @@ fn refusals_report_once() {
         ),
         ("exe \"norm! /zzz\\r\"", "E486: Pattern not found: zzz"),
         (
-            "set nows | exe \"norm! G/zzz\\r\" | set ws",
+            "set nows | exe \"norm! G/zzz\\r\"",
             "E385: Search hit BOTTOM without match for: zzz",
         ),
         (
-            "set nows | exe \"norm! gg?zzz\\r\" | set ws",
+            "set nows | exe \"norm! gg?zzz\\r\"",
             "E384: Search hit TOP without match for: zzz",
         ),
-        ("/zzz/", "E385: Search hit BOTTOM without match for: zzz"),
+        (
+            "set nows | /zzz/",
+            "E385: Search hit BOTTOM without match for: zzz",
+        ),
         (
             "exe \"norm! gg/a/;x\\r\"",
             "E386: Expected '?' or '/'  after ';'",
@@ -137,6 +140,9 @@ fn refusals_report_once() {
     ] {
         fx.check_messages(cmd, want);
     }
+    // The failing searches above leave 'wrapscan' off: an error ends the
+    // command line before anything after it could turn it back on.
+    fx.run("set ws&");
     fx.run("bwipe!");
     fx.home();
     fx.settle();
