@@ -78,9 +78,13 @@ fn report_match(rex: Rex, subs: &RegSubs, col: ColNr) {
         rex.starts().as_array_of_cells(),
         rex.ends().as_array_of_cells(),
     );
-    for i in 0..slots(subs.norm.in_use) {
+    // A `while`, as `copy_sub`'s: this runs at every match.
+    let n = slots(subs.norm.in_use);
+    let mut i = 0;
+    while i < n {
         starts[i].set(subs.norm.list[i].start.as_pos());
         ends[i].set(subs.norm.list[i].end.as_pos());
+        i += 1;
     }
     if rex.multi() {
         rex.set_matchcol(subs.norm.orig_start_col);

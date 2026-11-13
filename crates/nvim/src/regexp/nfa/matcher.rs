@@ -136,11 +136,13 @@ fn scan<'p>(
             go_to_nextline = false;
         }
 
-        let (first, second) = list.split_at_mut(1);
+        // A pattern, not `split_at_mut`: the same two borrows, without the
+        // slice calls a debug build makes of it at every position.
+        let [first, second] = &mut *list;
         let (thislist, nextlist) = if current == 0 {
-            (&mut first[0], &mut second[0])
+            (first, second)
         } else {
-            (&mut second[0], &mut first[0])
+            (second, first)
         };
         current ^= 1;
         nextlist.clear();

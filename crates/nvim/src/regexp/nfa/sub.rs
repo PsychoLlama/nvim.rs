@@ -45,6 +45,7 @@ pub(crate) fn has_backref(rex: Rex) -> bool {
 }
 
 /// How many captures the pattern can fill.
+#[inline(always)]
 fn nsubexpr(rex: Rex) -> usize {
     slots(rex.nfa_nsubexpr())
 }
@@ -58,9 +59,19 @@ pub(crate) fn slots(in_use: c_int) -> usize {
 }
 
 /// Forget every capture in `sub`.
+///
+/// The loops in this file are `while`s over an index on purpose: they run
+/// per thread or per match attempt over one or two captures, and in a debug
+/// build -- the one the suites time -- `fill` or a `for` over a range is a
+/// chain of calls per element that costs more than the copy.
 pub(crate) fn clear_sub(rex: Rex, sub: &mut RegSub) {
     let n = nsubexpr(rex);
-    sub.list[..n].fill(Capture::unset(rex.pos_kind()));
+    let unset = Capture::unset(rex.pos_kind());
+    let mut i = 0;
+    while i < n {
+        sub.list[i] = unset;
+        i += 1;
+    }
     sub.in_use = 0;
 }
 
@@ -75,8 +86,11 @@ pub(crate) fn copy_sub(to: &mut RegSub, from: &RegSub) {
     // A plain loop rather than `copy_from_slice`: `in_use` is one or two in
     // almost every match, and at opt-level 0 the slice call chain costs more
     // than the copy. This runs once per thread put on a list.
-    for i in 0..slots(from.in_use) {
+    let n = slots(from.in_use);
+    let mut i = 0;
+    while i < n {
         to.list[i] = from.list[i];
+        i += 1;
     }
 }
 
@@ -86,8 +100,11 @@ pub(crate) fn copy_sub_off(to: &mut RegSub, from: &RegSub) {
     if to.in_use < from.in_use {
         to.in_use = from.in_use;
     }
-    for i in 1..slots(from.in_use) {
+    let n = slots(from.in_use);
+    let mut i = 1;
+    while i < n {
         to.list[i] = from.list[i];
+        i += 1;
     }
 }
 
