@@ -439,12 +439,18 @@ pub fn grid_clear(
 /// - different attributes, or
 /// - a double-width character whose second cell differs.
 ///
+/// `force` is [`redraw_forced`], read once by the caller: this runs per
+/// cell, and the two global reads were not hoisted out of the loop. With
+/// the `clear_rest_of_line` hoist below, scrbench -0.30 % Ir (cgu1 release,
+/// Rust 1.100), a third of what the 1.100 compiler had added to
+/// `grid_put_linebuf` over the 1.99 nightly.
 #[inline]
 fn grid_char_needs_redraw(
     line: &LineBuf,
     on_grid: &GridCells<'_>,
     col: c_int,
     cols: c_int,
+    force: bool,
 ) -> bool {
     let at = as_index(col);
     let (chars, attrs) = (line.chars(), line.attrs());
@@ -452,8 +458,14 @@ fn grid_char_needs_redraw(
         && ((chars[at] != on_grid.chars[at]
             || attrs[at] != on_grid.attrs[at]
             || (cols > 1 && chars[at + 1] == 0 && chars[at + 1] != on_grid.chars[at + 1]))
-            || EXMODE_ACTIVE.get() // TODO(bfredl): what in the actual fuck
-            || RDB_FLAGS.get() & OPT_RDB_FLAG_NODELTA != 0)
+            || force)
+}
+
+/// Whether every cell counts as changed: Ex mode, or `'redrawdebug'`'s
+/// `nodelta`.
+fn redraw_forced() -> bool {
+    EXMODE_ACTIVE.get() // TODO(bfredl): what in the actual fuck
+        || RDB_FLAGS.get() & OPT_RDB_FLAG_NODELTA != 0
 }
 
 /// What [`copy_changed_cells`] wrote.
@@ -485,7 +497,8 @@ fn copy_changed_cells(
 ) -> Copied {
     let (chars, attrs, vcols) = (line.chars(), line.attrs(), line.vcols());
 
-    let mut redraw_next = grid_char_needs_redraw(line, on_grid, col, endcol - col);
+    let force = redraw_forced();
+    let mut redraw_next = grid_char_needs_redraw(line, on_grid, col, endcol - col, force);
     let mut start_dirty = -1;
     let mut end_dirty = 0;
     let mut clear_next = false;
@@ -499,8 +512,13 @@ fn copy_changed_cells(
         };
         let redraw_this = redraw_next;
         let off = as_index(col);
-        redraw_next =
-            grid_char_needs_redraw(line, on_grid, col + char_cells, endcol - col - char_cells);
+        redraw_next = grid_char_needs_redraw(
+            line,
+            on_grid,
+            col + char_cells,
+            endcol - col - char_cells,
+            force,
+        );
 
         if redraw_this {
             if start_dirty == -1 {
@@ -580,11 +598,13 @@ fn clear_rest_of_line(
     let mut end = -1;
     // TODO(bfredl): we could cache winline widths.
     let mut col = clear_start;
+    // Read once: the loop runs per cell and nothing in it moves the option.
+    let nodelta = RDB_FLAGS.get() & OPT_RDB_FLAG_NODELTA != 0;
     while col < clear_width {
         let off = as_index(col);
         if on_grid.chars[off] != schar_from_ascii(b' ')
             || on_grid.attrs[off] != clear_attr
-            || RDB_FLAGS.get() & OPT_RDB_FLAG_NODELTA != 0
+            || nodelta
         {
             on_grid.chars[off] = schar_from_ascii(b' ');
             on_grid.attrs[off] = clear_attr;
