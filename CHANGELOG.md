@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Built on stable Rust (1.100) instead of a pinned nightly. Nightly is kept only for the three lanes that need its `-Z` flags: Miri, AddressSanitizer and the randomized-layout build.
+
 ## [2026.11.11-84ff67e6c4]
 
 ### Changed

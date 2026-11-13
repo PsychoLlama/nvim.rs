@@ -258,7 +258,7 @@ Use an optimized build:
 
 `:verbose version` should report a release build:
 >
-    Build: release, rustc 1.99.0
+    Build: release, rustc 1.100.0
 <
 If it reports `Build: debug` and you're building Nvim from source, build with
 `cargo build --release` (or `just build-release`) instead.
