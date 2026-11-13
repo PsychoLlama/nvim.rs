@@ -108,7 +108,7 @@ pub fn show_cursor_info_later(force: bool) {
 ///
 /// `MUST_REDRAW` is the maximum over all windows, so it only ever rises here;
 /// [`update_screen`] resets it.
-pub fn redraw_later(mut window: Win, redr_type: c_int) {
+pub(crate) fn redraw_later(mut window: Win, redr_type: c_int) {
     if EXITING.get() || REDRAW_NOT_ALLOWED.get() {
         return;
     }
@@ -132,7 +132,7 @@ pub fn redraw_all_later(redr_type: c_int) {
 }
 
 /// Raise `MUST_REDRAW` to `redr_type`, unless redrawing is currently forbidden.
-pub fn set_must_redraw(redr_type: c_int) {
+pub(crate) fn set_must_redraw(redr_type: c_int) {
     if !REDRAW_NOT_ALLOWED.get() {
         set_must_redraw_unchecked(redr_type);
     }

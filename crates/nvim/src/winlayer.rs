@@ -570,7 +570,7 @@ impl Win {
     }
 
     #[inline(always)]
-    pub fn redraw_later(self, redraw_type: ::core::ffi::c_int) {
+    pub(crate) fn redraw_later(self, redraw_type: ::core::ffi::c_int) {
         // SAFETY: a live window.
         redraw_later(self, redraw_type);
     }
