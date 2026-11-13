@@ -140,10 +140,16 @@ impl SpareLists {
     }
 
     /// An empty list, reusing a spare one's storage when there is one.
+    ///
+    /// A spare list is already empty, and a list of `'static` threads is a
+    /// list of `'p` ones (`NfaThread` is covariant), so it is handed out
+    /// as it is: only [`SpareLists::put`] has to relabel, which costs a
+    /// debug build an in-place `collect` per list.
     fn take<'p>(&self) -> Vec<NfaThread<'p>> {
         let mut spare = self.0.take();
-        let list = spare.pop().map_or_else(Vec::new, relabel);
+        let list = spare.pop().unwrap_or_default();
         self.0.set(spare);
+        debug_assert!(list.is_empty());
         list
     }
 
