@@ -110,9 +110,7 @@ const fn sorted_nv_cmds() -> ([usize; NV_CMDS_SIZE], usize) {
     while i < NV_CMDS_SIZE {
         let mut j = i;
         while j > 0 && rank(NV_CMDS[idx[j - 1]].cmd_char) > rank(NV_CMDS[idx[j]].cmd_char) {
-            let swap = idx[j - 1];
-            idx[j - 1] = idx[j];
-            idx[j] = swap;
+            idx.swap(j - 1, j);
             j -= 1;
         }
         i += 1;

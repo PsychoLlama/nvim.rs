@@ -40,12 +40,14 @@ pub(super) fn truncate(
         0
     } else {
         let mut at = s.items[item_idx].start;
-        for i in built.evalstart..last {
-            if s.items[i].kind == Kind::Trunc {
-                at = s.items[i].start;
-                item_idx = i;
-                break;
-            }
+        if let Some((i, item)) = s.items[..last]
+            .iter()
+            .enumerate()
+            .skip(built.evalstart)
+            .find(|(_, item)| item.kind == Kind::Trunc)
+        {
+            at = item.start;
+            item_idx = i;
         }
         at
     };
@@ -102,11 +104,11 @@ pub(super) fn truncate(
 
         // Move the items back, less the byte the `<` took; anything inside
         // the removed run collapses onto the `<`.
-        for i in item_idx..built.evalstart + built.itemcnt {
-            if s.items[i].start >= trunc_end {
-                s.items[i].start = (s.items[i].start + 1).wrapping_sub(trunc_len);
+        for item in &mut s.items[item_idx..built.evalstart + built.itemcnt] {
+            if item.start >= trunc_end {
+                item.start = (item.start + 1).wrapping_sub(trunc_len);
             } else {
-                s.items[i].start = trunc;
+                item.start = trunc;
             }
         }
 

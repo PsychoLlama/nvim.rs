@@ -660,6 +660,11 @@ impl<T> ConstTable<T> {
 
 deref_to_field!(impl[T] ConstTable<T> => T, 0);
 
+// A release build compiles every use of the crate out, which leaves cargo's
+// `unused_dependencies` lint calling the dependency dead; it is not.
+#[cfg(not(debug_assertions))]
+use nvim_mainthread as _;
+
 /// Armed once [`init_main_thread`] runs; false in processes that never call
 /// it (unit tests FFI-loading the symbols, `.init_array` constructors,
 /// `cargo test`), which keeps the check inert there.

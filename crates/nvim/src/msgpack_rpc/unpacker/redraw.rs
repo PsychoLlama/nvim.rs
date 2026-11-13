@@ -183,8 +183,8 @@ fn parse_redraw<'a>(
         if cursor.next(Kind::Array)?.len != 5 {
             return Err(Halt::Invalid);
         }
-        for slot in 0..3 {
-            g.args[slot] = cursor.next(Kind::Uint)?.lo.cast_signed();
+        for slot in &mut g.args {
+            *slot = cursor.next(Kind::Uint)?.lo.cast_signed();
         }
         g.ncells = cursor.next(Kind::Array)?.len.cast_signed();
         g.icell = 0;

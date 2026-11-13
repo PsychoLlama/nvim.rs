@@ -106,8 +106,14 @@ fn report_match(rex: Rex, subs: &RegSubs, col: ColNr) {
 fn z_captures(rex: Rex, subs: &RegSubs) -> ExtMatch {
     let mut captures = ExtMatch::default();
     // Group 0 is the whole match, which the highlighter does not want.
-    for i in 1..slots(subs.synt.in_use) {
-        let capture = subs.synt.list[i];
+    for (i, &capture) in subs
+        .synt
+        .list
+        .iter()
+        .enumerate()
+        .take(slots(subs.synt.in_use))
+        .skip(1)
+    {
         let (start, end) = (capture.start.as_pos(), capture.end.as_pos());
         let line = if rex.multi() {
             // A capture that spans lines cannot be handed over as one

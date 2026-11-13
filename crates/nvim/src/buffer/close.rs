@@ -764,8 +764,8 @@ fn free_buffer(mut buffer: Buf) {
     buffer.b_last_insert.clear(0);
     buffer.b_last_change.clear(0);
     buffer.b_prompt_start.clear(0);
-    for i in 0..NMARKS as usize {
-        buffer.b_namedm[i].clear(0);
+    for mark in buffer.b_namedm.iter_mut().take(NMARKS as usize) {
+        mark.clear(0);
     }
     for i in 0..as_index(buffer.b_changelistlen) {
         buffer.b_changelist[i].clear(0);

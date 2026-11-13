@@ -122,8 +122,8 @@ pub(crate) fn gotchars(chars: &[u8]) {
         let buflen = key.buflen;
 
         // One byte at a time; no translation to be done.
-        for i in 0..buflen {
-            updatescript(key.buf[i]);
+        for &byte in &key.buf[..buflen] {
+            updatescript(byte);
         }
 
         // `ins_char_typebuf` can ask for the bytes it puts back to be

@@ -326,6 +326,7 @@ impl<'t, 'p> ThreadList<'t, 'p> {
         // A plain index walk: at opt-level 0 the iterator adaptors are a
         // handful of calls per thread, and this is the match loop's innermost
         // comparison.
+        #[allow(clippy::needless_range_loop)]
         for i in 0..self.n {
             let thread = &self.threads[i];
             if core::ptr::eq(thread.state, state)
