@@ -11,6 +11,10 @@ set working-directory := ".."
 # the C deps are not (yet) instrumented. An explicit --target keeps RUSTFLAGS
 # off host build scripts; -Zbuild-std instruments std's own allocations; a
 # separate target dir keeps ASan artifacts out of the normal build cache.
+# Both -Z flags are unstable, so the build runs on the nightly toolchain:
+# `nightly` is the justfile's prefix of the same name (modules do not share
+# variables), and the only way these recipes reach it.
+nightly := 'PATH="${RUST_NIGHTLY:?the nightly lanes run inside the nix devshell}/bin:$PATH"'
 triple := `rustc -vV | sed -n 's/^host: //p'`
 bin := justfile_directory() / "target/asan" / triple / "debug/nvim"
 
@@ -32,11 +36,11 @@ leakoptions := "detect_leaks=1:exitcode=0:log_path=" + justfile_directory() / "t
 # Compile the nvim binary with AddressSanitizer. Stack-redzone checking is
 # on again: the 2023 nightly's C-ABI lowering over-read by-value aggregates
 # (12-byte Pos read with a 16-byte load), which forced -asan-stack=0; the
-# current toolchain's cast-ABI fixes lower those loads exactly.
+# pinned nightly's cast-ABI fixes lower those loads exactly.
 build:
-  RUSTFLAGS="-Zsanitizer=address" cargo build -Zbuild-std --target {{ triple }} --target-dir target/asan
+  {{ nightly }} RUSTFLAGS="-Zsanitizer=address" cargo build -Zbuild-std --target {{ triple }} --target-dir target/asan
 
-# setarch -R disables ASLR (inherited by every spawned nvim): this toolchain's
+# setarch -R disables ASLR (inherited by every spawned nvim): the nightly's
 # ASan runtime predates LLVM's fix for kernels with 32-bit mmap entropy, so
 # with ASLR on, ~1/3 of processes randomly land a mapping inside ASan's fixed
 # shadow regions and SIGSEGV in the dynamic loader before main.

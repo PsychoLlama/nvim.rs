@@ -145,7 +145,7 @@ fn rustc_version() -> String {
         return "unknown".to_owned();
     };
 
-    // `rustc 1.94.0-nightly (0123abcde 2026-07-24)` — the leading word is
+    // `rustc 1.100.0 (0ef1bc386 2026-11-09)` — the leading word is
     // redundant with the label `:version` prints it under.
     let version = stdout.trim();
     version.strip_prefix("rustc ").unwrap_or(version).to_owned()

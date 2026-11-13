@@ -11,8 +11,7 @@
 //! ([`semsg!`](crate::semsg) and friends, defined in
 //! [`crate::message_fmt`]): each renders a `format_args!` the compiler has
 //! checked, truncates it to the buffer size the C wrapper owned, and hands
-//! the bytes to the reporting functions here. Same bytes, same truncation --
-//! and no C-variadic definition, which only a nightly compiler can write.
+//! the bytes to the reporting functions here. Same bytes, same truncation.
 //!
 //! The shared message text -- upstream's `errors.h`, every `e_*` wording
 //! raised from more than one place -- sits at the end of the file.

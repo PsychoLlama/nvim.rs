@@ -4,6 +4,13 @@ mod asan 'just/asan.just'
 set indentation := "  "
 set default-list
 
+# Prefix for the commands that need the nightly toolchain: the miri and
+# randomize-layout recipes here and every `asan` recipe (just/asan.just keeps
+# its own copy; modules do not share variables). The default toolchain is
+# stable; `$RUST_NIGHTLY` (set by the devshell) is the only way to reach the
+# nightly, and nothing else uses it.
+nightly := 'PATH="${RUST_NIGHTLY:?the nightly lanes run inside the nix devshell}/bin:$PATH"'
+
 # Compile the nvim binary.
 build:
   cargo build
@@ -207,11 +214,12 @@ cargo-test *args:
 # uninitialized memory) on the pure-logic tests — the class of bug ASan
 # structurally cannot see. Slow (it interprets MIR), so it is not part of
 # minimal-ci or the pre-commit hooks; run it before merging any rewrite.
+# Runs on the nightly toolchain (Miri ships only there).
 # Uses its own target dir (target/miri), so it doesn't clobber normal builds.
 # Isolation is off because the unibi terminfo tests build real directory trees
 # in a tempdir; UB detection is unaffected.
 miri *args:
-  MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib --tests {{ args }}
+  {{ nightly }} MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib --tests {{ args }}
 
 # The `--lib` half of that lane: the crate's #[cfg(test)] modules alone,
 # without the integration tests under tests/, and the half that covers the
@@ -225,7 +233,7 @@ miri *args:
 # for the push gate; reach for it when a rewrite touches aliasing or
 # provenance.
 miri-lib *args:
-  MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib {{ args }}
+  {{ nightly }} MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib {{ args }}
 
 # Run the cargo-test lane with the struct layouts shuffled, to catch code
 # that assumes a `repr(Rust)` type's field order or size. `seed` picks the
@@ -237,9 +245,10 @@ miri-lib *args:
 # false positive here -- randomizing the layout is the compiler taking the
 # freedom those asserts describe. They stand down for this lane only.
 #
+# `-Zrandomize-layout` is unstable, so this runs on the nightly toolchain.
 # Its own target dir, so it does not clobber a normal build.
 randomize-layout seed='1':
-  @CARGO_TARGET_DIR=target/randlayout-{{ seed }} \
+  @{{ nightly }} CARGO_TARGET_DIR=target/randlayout-{{ seed }} \
     RUSTFLAGS="-Zrandomize-layout -Zlayout-seed={{ seed }} --cfg randomized_layout" \
     cargo test --lib --tests
 

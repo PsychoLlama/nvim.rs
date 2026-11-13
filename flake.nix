@@ -35,7 +35,30 @@
         )
       );
 
+      # The toolchain everything builds with: the devshell, the package, CI
+      # and the release workflow. Stable since c-variadic definitions
+      # (`os/cshim.rs`'s Miri `snprintf`) stopped needing a feature gate.
       mkToolchain =
+        pkgs:
+        (pkgs.fenix.toolchainOf {
+          channel = "1.100.0";
+          sha256 = "sha256-MFHoWVcPZKjFrLnQnodCXbUsfZcofGfo9tV9fTTvklg=";
+        }).withComponents
+          [
+            "cargo"
+            "clippy"
+            "rust-analyzer"
+            "rust-src"
+            "rustc"
+            "rustfmt"
+          ];
+
+      # The second toolchain, for the three lanes that need unstable compiler
+      # flags and nothing else: `just miri*` (Miri), `just asan *`
+      # (`-Zsanitizer`, `-Zbuild-std`) and `just randomize-layout`
+      # (`-Zrandomize-layout`). It is not on the devshell's PATH; each of those
+      # recipes puts `$RUST_NIGHTLY/bin` in front of it for its own commands.
+      mkNightlyToolchain =
         pkgs:
         (pkgs.fenix.toolchainOf {
           channel = "nightly";
@@ -44,12 +67,9 @@
         }).withComponents
           [
             "cargo"
-            "clippy"
             "miri"
-            "rust-analyzer"
             "rust-src"
             "rustc"
-            "rustfmt"
           ];
     in
 
@@ -123,6 +143,10 @@
             # with `RUSTFLAGS= cargo build`; `just asan` overrides it with
             # the sanitizer flags (uninstrumented lint parity is fine there).
             RUSTFLAGS = "-D warnings";
+
+            # Where the nightly toolchain lives (see `mkNightlyToolchain`).
+            # Only the miri, asan and randomize-layout recipes read it.
+            RUST_NIGHTLY = "${mkNightlyToolchain pkgs}";
 
             # `runtime/doc/tags` is a generated artifact (gitignored): upstream's
             # CMake build produced it, and the package regenerates it in
