@@ -51,8 +51,6 @@
 
 use crate::deref::deref_to_field;
 use core::cell::UnsafeCell;
-#[cfg(debug_assertions)]
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A global editor-state cell. See the module docs for the contract.
@@ -94,8 +92,7 @@ impl<T> GlobalCell<T> {
     where
         T: Copy,
     {
-        check_main_thread();
-        check_no_exclusive_borrow(self.0.get() as usize);
+        check_read(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding exclusive borrow.
         unsafe { *self.0.get() }
     }
@@ -103,10 +100,7 @@ impl<T> GlobalCell<T> {
     /// Overwrite the value.
     #[inline(always)]
     pub fn set(&self, value: T) {
-        check_main_thread();
-        check_no_borrow(self.0.get() as usize);
-        #[cfg(debug_assertions)]
-        check_no_field_loan(self.0.get() as usize);
+        check_write(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding borrow.
         unsafe { *self.0.get() = value }
     }
@@ -174,8 +168,7 @@ impl<T> GlobalCell<T> {
     /// reports. A shared reborrow is a read, and reads coexist.
     #[inline(always)]
     pub fn get_field<F: Copy>(&self, project: impl FnOnce(&T) -> &F) -> F {
-        check_main_thread();
-        check_no_exclusive_borrow(self.0.get() as usize);
+        check_read(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding exclusive borrow.
         *project(unsafe { &*self.0.get() })
     }
@@ -248,8 +241,7 @@ impl<T> GlobalCell<T> {
     /// for the same reason: `f` may read other fields of the record.
     #[inline(always)]
     pub fn with_field<F, R>(&self, project: impl FnOnce(&T) -> &F, f: impl FnOnce(&F) -> R) -> R {
-        check_main_thread();
-        check_no_exclusive_borrow(self.0.get() as usize);
+        check_read(self.0.get() as usize);
         // SAFETY: main-thread invariant + no outstanding exclusive borrow;
         // the loan below makes a write to the field (or the record) while
         // `f` holds it a debug-build panic.
@@ -268,11 +260,16 @@ impl<T> GlobalCell<T> {
     /// The write projects as [`set_field`](Self::set_field) describes.
     #[inline(always)]
     pub fn replace_field<F>(&self, project: impl FnOnce(&T) -> &F, value: F) -> F {
-        check_main_thread();
-        check_no_borrow(self.0.get() as usize);
+        let quiet = access_is_quiet();
+        if !quiet {
+            check_main_thread();
+            check_no_borrow(self.0.get() as usize);
+        }
         let field = self.field_ptr(project);
         #[cfg(debug_assertions)]
-        check_field_not_lent(field.addr());
+        if !quiet {
+            check_field_not_lent(field.addr());
+        }
         // SAFETY: main-thread invariant + no outstanding borrow; `field` is
         // an aligned, initialised `F` inside the cell carrying the cell's
         // provenance (`field_ptr`), and nothing holds a reference to it.
@@ -702,21 +699,67 @@ fn check_main_thread_cold() {
 #[inline(always)]
 fn check_main_thread() {}
 
-// Borrow tracking. Only `with`/`with_mut` create tracked borrows, so the
-// hot get/set path checks one counter and bails while the table is empty.
-// All state is main-thread-only (guarded by check_main_thread), so plain
-// relaxed atomics act as ordinary variables here. The table itself is
-// `nvim_mainthread::BorrowTable`, in the crate that is optimized in every
-// profile: see its module docs for what an unoptimized one cost.
+// Borrow tracking. Only `with`/`with_mut` (and `with_field`'s loans)
+// create tracked borrows, so the hot get/set path asks one question -- the
+// main thread, with nothing borrowed? -- and skips the rest while the answer
+// is yes. The table is `nvim_mainthread::BorrowTable`, in the crate that is
+// optimized in every profile: see its module docs for what an unoptimized
+// one cost. The question is one call there; it used to be the main-thread
+// call plus a load of a borrow counter here, which an unoptimized build
+// spent two more calls on (`AtomicUsize::load` -> `atomic_load`) at every
+// global access in the editor.
+
+/// Whether an access may skip its checks: it is on the main thread and no
+/// cell is borrowed. Always true in a release build, which checks nothing.
 #[cfg(debug_assertions)]
-static ACTIVE_BORROWS: AtomicUsize = AtomicUsize::new(0);
+#[inline(always)]
+fn access_is_quiet() -> bool {
+    nvim_mainthread::BorrowTable::idle()
+}
+
+#[cfg(not(debug_assertions))]
+#[inline(always)]
+fn access_is_quiet() -> bool {
+    true
+}
+
+/// The checks of a read (`get`, `get_field`, `with_field`): the main thread,
+/// and no exclusive borrow of the cell at `addr`.
+#[inline(always)]
+fn check_read(addr: usize) {
+    if !access_is_quiet() {
+        check_read_slow(addr);
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn check_read_slow(addr: usize) {
+    check_main_thread();
+    check_no_exclusive_borrow(addr);
+}
+
+/// The checks of a whole-cell write (`set`): the main thread, no borrow of
+/// the cell at `addr`, and none of its fields lent.
+#[inline(always)]
+fn check_write(addr: usize) {
+    if !access_is_quiet() {
+        check_write_slow(addr);
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn check_write_slow(addr: usize) {
+    check_main_thread();
+    check_no_borrow(addr);
+    #[cfg(debug_assertions)]
+    check_no_field_loan(addr);
+}
 
 #[cfg(debug_assertions)]
 #[inline(always)]
 fn check_no_exclusive_borrow(addr: usize) {
-    if ACTIVE_BORROWS.load(Ordering::Relaxed) == 0 {
-        return;
-    }
     if nvim_mainthread::BorrowTable::state(addr) < 0 {
         panic!("GlobalCell::get during an active with_mut borrow (cell @ {addr:#x})");
     }
@@ -729,9 +772,6 @@ fn check_no_exclusive_borrow(_addr: usize) {}
 #[cfg(debug_assertions)]
 #[inline(always)]
 fn check_no_borrow(addr: usize) {
-    if ACTIVE_BORROWS.load(Ordering::Relaxed) == 0 {
-        return;
-    }
     if nvim_mainthread::BorrowTable::state(addr) != 0 {
         panic!("GlobalCell::set during an active with/with_mut borrow (cell @ {addr:#x})");
     }
@@ -755,9 +795,6 @@ const LENT_RECORD: usize = 1 << (usize::BITS - 2);
 #[cfg(debug_assertions)]
 #[inline(always)]
 fn check_field_not_lent(field: usize) {
-    if ACTIVE_BORROWS.load(Ordering::Relaxed) == 0 {
-        return;
-    }
     if nvim_mainthread::BorrowTable::state(field | LENT_FIELD) != 0 {
         panic!("GlobalCell field written while with_field lends it (field @ {field:#x})");
     }
@@ -766,9 +803,6 @@ fn check_field_not_lent(field: usize) {
 #[cfg(debug_assertions)]
 #[inline(always)]
 fn check_no_field_loan(addr: usize) {
-    if ACTIVE_BORROWS.load(Ordering::Relaxed) == 0 {
-        return;
-    }
     if nvim_mainthread::BorrowTable::state(addr | LENT_RECORD) != 0 {
         panic!(
             "GlobalCell written whole while with_field lends one of its fields (cell @ {addr:#x})"
@@ -813,7 +847,6 @@ impl BorrowGuard {
                      reentrant global access"
                 );
             }
-            ACTIVE_BORROWS.fetch_add(1, Ordering::Relaxed);
             BorrowGuard {
                 addr,
                 exclusive: false,
@@ -835,7 +868,6 @@ impl BorrowGuard {
                      reentrant global access"
                 );
             }
-            ACTIVE_BORROWS.fetch_add(1, Ordering::Relaxed);
             BorrowGuard {
                 addr,
                 exclusive: true,
@@ -858,7 +890,6 @@ impl Drop for BorrowGuard {
         } else {
             debug_assert!(was > 0);
         }
-        ACTIVE_BORROWS.fetch_sub(1, Ordering::Relaxed);
     }
 }
 

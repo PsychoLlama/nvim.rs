@@ -95,6 +95,13 @@ thread_local! {
 }
 
 impl BorrowTable {
+    /// Whether the calling thread is the main thread and holds no borrow
+    /// at all -- when it is, a cell access has nothing left to check. Every
+    /// `GlobalCell` read and write asks this first, so it is one call.
+    pub fn idle() -> bool {
+        IS_MAIN_THREAD.get() && TABLE.with(|table| table.len.get() == 0)
+    }
+
     /// The state recorded for the cell at `addr`: a shared count, -1 for an
     /// exclusive borrow, or 0 when it is not borrowed at all.
     pub fn state(addr: usize) -> isize {
