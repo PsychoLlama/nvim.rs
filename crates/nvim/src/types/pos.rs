@@ -9,10 +9,62 @@
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
+use core::cmp::Ordering;
 use core::ffi::c_int;
 use core::fmt;
 use core::num::TryFromIntError;
 use core::ops::{Add, AddAssign, Sub, SubAssign};
+
+/// `PartialOrd` and `Ord` over the bare number, every method forced inline.
+///
+/// The derives answer `<` through `partial_cmp` and `cmp`, each a call in a
+/// debug build -- four calls for one integer compare -- and the suites run
+/// a debug build: written out, a comparison of two positions costs what
+/// comparing two `int`s does. A release build inlines either spelling.
+macro_rules! ordered_by_number {
+    ($ty:ty) => {
+        impl PartialOrd for $ty {
+            #[inline(always)]
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+            #[inline(always)]
+            fn lt(&self, other: &Self) -> bool {
+                self.0 < other.0
+            }
+            #[inline(always)]
+            fn le(&self, other: &Self) -> bool {
+                self.0 <= other.0
+            }
+            #[inline(always)]
+            fn gt(&self, other: &Self) -> bool {
+                self.0 > other.0
+            }
+            #[inline(always)]
+            fn ge(&self, other: &Self) -> bool {
+                self.0 >= other.0
+            }
+        }
+
+        impl Ord for $ty {
+            #[inline(always)]
+            fn cmp(&self, other: &Self) -> Ordering {
+                self.0.cmp(&other.0)
+            }
+            #[inline(always)]
+            fn max(self, other: Self) -> Self {
+                if other.0 >= self.0 { other } else { self }
+            }
+            #[inline(always)]
+            fn min(self, other: Self) -> Self {
+                if other.0 < self.0 { other } else { self }
+            }
+        }
+    };
+}
+
+ordered_by_number!(ColNr);
+ordered_by_number!(LineNr);
 
 /// `colnr_T`: a column in a line — a byte index into the line's text, or a
 /// virtual (screen) column, 0 for the first.
@@ -30,7 +82,7 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 /// `#[repr(transparent)]` over `c_int`, so `tools/ffigen` still renders it as
 /// `typedef int ColNr` and the structs that carry one keep their layout.
 #[repr(transparent)]
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct ColNr(c_int);
 
 impl ColNr {
@@ -44,16 +96,19 @@ impl ColNr {
     pub const NONE: Self = Self(-1);
 
     /// The column numbered `n`.
+    #[inline(always)]
     pub const fn new(n: i32) -> Self {
         Self(n)
     }
 
     /// The number, as C's `int`.
+    #[inline(always)]
     pub const fn get(self) -> i32 {
         self.0
     }
 
     /// Whether this is [`NONE`](Self::NONE).
+    #[inline(always)]
     pub const fn is_none(self) -> bool {
         self.0 == -1
     }
@@ -66,6 +121,7 @@ impl ColNr {
         clippy::cast_sign_loss,
         reason = "asserted non-negative; the release build keeps C's conversion"
     )]
+    #[inline(always)]
     pub fn as_usize(self) -> usize {
         debug_assert!(self.0 >= 0, "column {} has no index", self.0);
         self.0 as usize
@@ -104,11 +160,13 @@ impl ColNr {
 
     /// `count` columns on, stopping at [`MAX`](Self::MAX) rather than
     /// wrapping.
+    #[inline(always)]
     pub const fn saturating_add(self, count: i32) -> Self {
         Self(self.0.saturating_add(count))
     }
 
     /// `count` columns back, stopping at `c_int::MIN` rather than wrapping.
+    #[inline(always)]
     pub const fn saturating_sub(self, count: i32) -> Self {
         Self(self.0.saturating_sub(count))
     }
@@ -117,6 +175,7 @@ impl ColNr {
 impl Add<i32> for ColNr {
     type Output = Self;
 
+    #[inline(always)]
     fn add(self, count: i32) -> Self {
         Self(self.0 + count)
     }
@@ -125,6 +184,7 @@ impl Add<i32> for ColNr {
 impl Sub<i32> for ColNr {
     type Output = Self;
 
+    #[inline(always)]
     fn sub(self, count: i32) -> Self {
         Self(self.0 - count)
     }
@@ -134,36 +194,42 @@ impl Sub<i32> for ColNr {
 impl Sub for ColNr {
     type Output = i32;
 
+    #[inline(always)]
     fn sub(self, other: Self) -> i32 {
         self.0 - other.0
     }
 }
 
 impl AddAssign<i32> for ColNr {
+    #[inline(always)]
     fn add_assign(&mut self, count: i32) {
         self.0 += count;
     }
 }
 
 impl SubAssign<i32> for ColNr {
+    #[inline(always)]
     fn sub_assign(&mut self, count: i32) {
         self.0 -= count;
     }
 }
 
 impl From<ColNr> for i32 {
+    #[inline(always)]
     fn from(col: ColNr) -> Self {
         col.0
     }
 }
 
 impl From<ColNr> for i64 {
+    #[inline(always)]
     fn from(col: ColNr) -> Self {
         Self::from(col.0)
     }
 }
 
 impl From<ColNr> for f64 {
+    #[inline(always)]
     fn from(col: ColNr) -> Self {
         Self::from(col.0)
     }
@@ -174,6 +240,7 @@ impl From<ColNr> for f64 {
 impl TryFrom<ColNr> for usize {
     type Error = TryFromIntError;
 
+    #[inline(always)]
     fn try_from(col: ColNr) -> Result<Self, Self::Error> {
         Self::try_from(col.0)
     }
@@ -184,6 +251,7 @@ impl TryFrom<ColNr> for usize {
 impl TryFrom<i64> for ColNr {
     type Error = TryFromIntError;
 
+    #[inline(always)]
     fn try_from(n: i64) -> Result<Self, Self::Error> {
         c_int::try_from(n).map(Self)
     }
@@ -193,6 +261,7 @@ impl TryFrom<i64> for ColNr {
 impl TryFrom<usize> for ColNr {
     type Error = TryFromIntError;
 
+    #[inline(always)]
     fn try_from(n: usize) -> Result<Self, Self::Error> {
         c_int::try_from(n).map(Self)
     }
@@ -226,7 +295,7 @@ impl fmt::Debug for ColNr {
 /// `#[repr(transparent)]` over `i32`, so `tools/ffigen` still renders it as
 /// `typedef int32_t LineNr` and the structs that carry one keep their layout.
 #[repr(transparent)]
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Default)]
 pub struct LineNr(i32);
 
 impl LineNr {
@@ -241,16 +310,19 @@ impl LineNr {
     pub const MAX: Self = Self(i32::MAX);
 
     /// The line numbered `n`.
+    #[inline(always)]
     pub const fn new(n: i32) -> Self {
         Self(n)
     }
 
     /// The number, as C's `int32_t`.
+    #[inline(always)]
     pub const fn get(self) -> i32 {
         self.0
     }
 
     /// Whether this is [`ZERO`](Self::ZERO).
+    #[inline(always)]
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
@@ -262,6 +334,7 @@ impl LineNr {
         clippy::cast_sign_loss,
         reason = "asserted positive; the release build keeps C's conversion"
     )]
+    #[inline(always)]
     pub fn index(self) -> usize {
         debug_assert!(self.0 >= 1, "line {} has no index", self.0);
         (self.0 - 1) as usize
@@ -280,16 +353,19 @@ impl LineNr {
     }
 
     /// The line after this one.
+    #[inline(always)]
     pub const fn next(self) -> Self {
         Self(self.0 + 1)
     }
 
     /// The line before this one.
+    #[inline(always)]
     pub const fn prev(self) -> Self {
         Self(self.0 - 1)
     }
 
     /// `count` lines on, or `None` past `i32`.
+    #[inline(always)]
     pub const fn checked_add(self, count: i32) -> Option<Self> {
         match self.0.checked_add(count) {
             Some(n) => Some(Self(n)),
@@ -298,6 +374,7 @@ impl LineNr {
     }
 
     /// `count` lines back, stopping at `i32::MIN` rather than wrapping.
+    #[inline(always)]
     pub const fn saturating_sub(self, count: i32) -> Self {
         Self(self.0.saturating_sub(count))
     }
@@ -314,6 +391,7 @@ impl LineNr {
     }
 
     /// `count` lines on, stopping at [`MAX`](Self::MAX) rather than wrapping.
+    #[inline(always)]
     pub const fn saturating_add(self, count: i32) -> Self {
         Self(self.0.saturating_add(count))
     }
@@ -322,6 +400,7 @@ impl LineNr {
 impl Add<i32> for LineNr {
     type Output = Self;
 
+    #[inline(always)]
     fn add(self, count: i32) -> Self {
         Self(self.0 + count)
     }
@@ -330,6 +409,7 @@ impl Add<i32> for LineNr {
 impl Sub<i32> for LineNr {
     type Output = Self;
 
+    #[inline(always)]
     fn sub(self, count: i32) -> Self {
         Self(self.0 - count)
     }
@@ -339,36 +419,42 @@ impl Sub<i32> for LineNr {
 impl Sub for LineNr {
     type Output = i32;
 
+    #[inline(always)]
     fn sub(self, other: Self) -> i32 {
         self.0 - other.0
     }
 }
 
 impl AddAssign<i32> for LineNr {
+    #[inline(always)]
     fn add_assign(&mut self, count: i32) {
         self.0 += count;
     }
 }
 
 impl SubAssign<i32> for LineNr {
+    #[inline(always)]
     fn sub_assign(&mut self, count: i32) {
         self.0 -= count;
     }
 }
 
 impl From<LineNr> for i32 {
+    #[inline(always)]
     fn from(lnum: LineNr) -> Self {
         lnum.0
     }
 }
 
 impl From<LineNr> for i64 {
+    #[inline(always)]
     fn from(lnum: LineNr) -> Self {
         Self::from(lnum.0)
     }
 }
 
 impl From<LineNr> for f64 {
+    #[inline(always)]
     fn from(lnum: LineNr) -> Self {
         Self::from(lnum.0)
     }
@@ -379,6 +465,7 @@ impl From<LineNr> for f64 {
 impl TryFrom<LineNr> for usize {
     type Error = TryFromIntError;
 
+    #[inline(always)]
     fn try_from(lnum: LineNr) -> Result<Self, Self::Error> {
         Self::try_from(lnum.0)
     }
@@ -389,6 +476,7 @@ impl TryFrom<LineNr> for usize {
 impl TryFrom<i64> for LineNr {
     type Error = TryFromIntError;
 
+    #[inline(always)]
     fn try_from(n: i64) -> Result<Self, Self::Error> {
         i32::try_from(n).map(Self)
     }
@@ -398,6 +486,7 @@ impl TryFrom<i64> for LineNr {
 impl TryFrom<usize> for LineNr {
     type Error = TryFromIntError;
 
+    #[inline(always)]
     fn try_from(n: usize) -> Result<Self, Self::Error> {
         i32::try_from(n).map(Self)
     }
