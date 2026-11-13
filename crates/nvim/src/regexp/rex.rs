@@ -390,6 +390,7 @@ impl<'t> RegExec<'t> {
     }
 
     /// The handle the engines run the match through.
+    #[inline(always)]
     pub(crate) fn rex(&'t self) -> Rex<'t> {
         Rex(self)
     }

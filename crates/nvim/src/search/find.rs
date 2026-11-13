@@ -795,11 +795,20 @@ pub(crate) fn search_in_current(
 
 /// The number of the first sub-pattern that matched, or zero if none of
 /// them did.
+///
+/// A `while`, not `(1..10).find(..)`: it runs after every match the walk
+/// tries, and in a debug build -- the one the suites time -- the iterator
+/// spelling is a dozen calls per group.
 #[inline(always)]
 fn first_submatch(matcher: &LineMatcher) -> u8 {
-    (1..10)
-        .find(|&i| matcher.start(usize::from(i)).lnum >= LineNr::ZERO)
-        .unwrap_or(0)
+    let mut group = 1;
+    while group < 10 {
+        if matcher.start(usize::from(group)).lnum >= LineNr::ZERO {
+            return group;
+        }
+        group += 1;
+    }
+    0
 }
 
 /// Search for a line starting with `pat`, ignoring leading white space,

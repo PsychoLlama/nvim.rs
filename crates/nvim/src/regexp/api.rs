@@ -707,12 +707,14 @@ impl LineMatcher<'_> {
 
     /// Where group `no` of the last match starts, relative to the line it
     /// was run from.
+    #[inline(always)]
     pub(crate) fn start(&self, no: usize) -> LPos {
         self.ctx.rex().start(no).get().as_pos()
     }
 
     /// Where group `no` of the last match ends, relative to the line it
     /// was run from.
+    #[inline(always)]
     pub(crate) fn end(&self, no: usize) -> LPos {
         self.ctx.rex().end(no).get().as_pos()
     }
