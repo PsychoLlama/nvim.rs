@@ -85,6 +85,7 @@ pub(crate) enum MemlineError {
 }
 
 // Two words, so a `Result` carrying one is no wider than it has to be.
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<MemlineError>() <= 16);
 
 impl MemlineError {

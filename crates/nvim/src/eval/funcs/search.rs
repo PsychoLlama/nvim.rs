@@ -104,6 +104,7 @@ enum ArgsRefused {
     Quiet,
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<ArgsRefused>() <= 16);
 
 impl From<Failed> for ArgsRefused {

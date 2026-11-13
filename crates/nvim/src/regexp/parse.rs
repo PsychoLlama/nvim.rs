@@ -283,6 +283,7 @@ pub(crate) fn skip_regexp_copy(
 #[derive(Debug)]
 pub(crate) struct MissingDelimiter(ThinCString);
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<MissingDelimiter>() <= 16);
 
 impl core::fmt::Display for MissingDelimiter {

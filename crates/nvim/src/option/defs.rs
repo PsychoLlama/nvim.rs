@@ -274,6 +274,7 @@ pub enum OptError {
     Owned(crate::memory::ThinCString),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<OptError>() <= 16);
 
 /// A value an option's parser could not read. Nothing is said where it is

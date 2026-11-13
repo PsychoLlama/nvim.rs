@@ -46,6 +46,7 @@ pub(crate) enum SearchError {
     NotFound(Edge),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<SearchError>() <= 16);
 
 impl SearchError {

@@ -168,6 +168,7 @@ pub(crate) enum CompileError {
     Declined,
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<CompileError>() <= 16);
 
 /// What a pattern a compile refused was told; whatever there was to say has

@@ -263,6 +263,7 @@ pub(crate) fn saved_flags(flags: WordFlags) -> u8 {
 }
 
 /// Indexing the stack must stay a shift; see the module docs.
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<Frame>() == 32);
 
 /// Everything one run of the walk carries.

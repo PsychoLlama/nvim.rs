@@ -251,6 +251,7 @@ enum ShellError {
     ReadShort(ThinCString),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<ShellError>() <= 16);
 
 impl ShellError {

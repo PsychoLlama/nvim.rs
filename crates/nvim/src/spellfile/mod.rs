@@ -662,6 +662,7 @@ pub(crate) enum MkspellError {
     Reported(#[from] Failed),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<MkspellError>() <= 16);
 
 impl MkspellError {

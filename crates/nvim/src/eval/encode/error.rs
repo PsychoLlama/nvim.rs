@@ -53,6 +53,7 @@ pub(crate) enum EncodeError {
     Surrogate(ThinCString),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<EncodeError>() <= 16);
 
 impl EncodeError {

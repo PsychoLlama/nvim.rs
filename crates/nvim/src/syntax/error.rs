@@ -64,6 +64,7 @@ pub(crate) enum SyntaxError {
     Reported(Failed),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<SyntaxError>() <= 16);
 
 impl From<Failed> for SyntaxError {

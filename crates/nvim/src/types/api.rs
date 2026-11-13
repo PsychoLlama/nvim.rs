@@ -356,6 +356,7 @@ pub enum Object {
 
 // The lever the boxed-slice containers pull: a tag word and two payload
 // words. Every `Vec<Object>`, every copy and every move is this wide.
+#[cfg(not(randomized_layout))]
 const _: () = assert!(::core::mem::size_of::<Object>() == 24);
 
 impl Object {

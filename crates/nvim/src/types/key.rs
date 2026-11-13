@@ -49,6 +49,7 @@ const _: () = assert!(
     size_of::<Key>() == 4,
     "the typeahead stores keys at four bytes"
 );
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<KeyKind>() <= 8, "the view stays in two registers");
 
 /// A code that travels where a key does but that no key types: the operator

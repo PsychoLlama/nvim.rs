@@ -261,6 +261,7 @@ pub(crate) enum ShadaError {
 }
 
 // Two words, so a `Result` carrying one is no wider than it has to be.
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<ShadaError>() <= 16);
 
 impl ShadaError {

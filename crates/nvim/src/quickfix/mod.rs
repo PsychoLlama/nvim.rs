@@ -230,6 +230,7 @@ pub(crate) enum QfError {
 }
 
 // Two words, so a `Result` carrying one is no wider than it has to be.
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<QfError>() <= 16);
 
 impl QfError {

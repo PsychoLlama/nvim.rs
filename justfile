@@ -240,8 +240,8 @@ miri-lib *args:
 # permutation; run at least two, since one seed proves nothing on its own.
 #
 # `--cfg randomized_layout` travels with it (declared in crates/nvim/
-# Cargo.toml): a handful of const assertions pin what a dictionary item or a
-# list item *costs*, which is a real budget for the shipped layout and a
+# Cargo.toml): const assertions pin what a dictionary item, a list item or an
+# error enum *costs*, which is a real budget for the shipped layout and a
 # false positive here -- randomizing the layout is the compiler taking the
 # freedom those asserts describe. They stand down for this lane only.
 #

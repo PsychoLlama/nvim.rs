@@ -63,6 +63,7 @@ pub(crate) enum HighlightError {
     ColorNotRecognized(ThinCString),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<HighlightError>() <= 16);
 
 /// A payload as the message shows it, from the C string it was cut from.

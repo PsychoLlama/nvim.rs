@@ -132,6 +132,7 @@ pub(crate) enum WriteError {
     WriteFailed,
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<WriteError>() <= 16);
 
 /// The translated form of a literal message.

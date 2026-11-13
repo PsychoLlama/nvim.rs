@@ -118,8 +118,9 @@ non_upper_case_globals = "deny"
 # which `-D warnings` makes a deny, so leave it that way. One style member stays
 # off, for a reason that does not retire with a rewrite:
 # `just randomize-layout` sets this alongside `-Zrandomize-layout`. The tree
-# holds a handful of const assertions that pin a `repr(Rust)` type's size --
-# memory budgets for what a dictionary item or a list item costs -- and the
+# holds const assertions that pin a `repr(Rust)` type's size -- memory budgets
+# for what a dictionary item, a list item or an `Object` costs, and the "two
+# words" every error enum promises its `Result` -- and the
 # compiler makes no such promise: randomizing the layout is exactly the
 # compiler exercising that freedom, so those guards stand down for that lane
 # and nowhere else.

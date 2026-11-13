@@ -54,6 +54,7 @@ pub(crate) enum MatchError {
     NoSuchId(c_int),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<MatchError>() <= 16);
 
 impl From<Unconvertible> for MatchError {

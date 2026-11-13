@@ -312,6 +312,7 @@ enum ViewError {
     CannotOpen(ThinCString),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<ViewError>() <= 16);
 
 impl ViewError {

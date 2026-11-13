@@ -126,6 +126,7 @@ enum SpellLoadError {
     Quiet,
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<SpellLoadError>() <= 16);
 
 impl SpellLoadError {

@@ -102,6 +102,7 @@ pub(crate) enum DecodeError {
     CommaBeforeKey(ThinCString),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<DecodeError>() <= 16);
 
 // The value stack's four refusals keep the `{arg0}` their msgids were

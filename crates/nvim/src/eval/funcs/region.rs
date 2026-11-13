@@ -131,6 +131,7 @@ enum Unresolved {
     Column(ColNr),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<Unresolved>() <= 16);
 
 impl Unresolved {

@@ -42,6 +42,7 @@ pub(crate) enum ReadError {
     Reported(#[from] Failed),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<ReadError>() <= 16);
 
 impl ReadError {

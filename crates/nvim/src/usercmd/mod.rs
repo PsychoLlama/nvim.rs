@@ -402,6 +402,7 @@ pub(crate) enum UserCmdError {
 }
 
 // Two words, so a `Result` carrying one is no wider than it has to be.
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<UserCmdError>() <= 16);
 
 impl UserCmdError {

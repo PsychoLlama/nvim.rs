@@ -51,6 +51,7 @@ pub(crate) enum UndoError {
     AtNewest,
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<UndoError>() <= 16);
 
 impl UndoError {
@@ -97,6 +98,7 @@ pub(crate) enum UndoFileError {
     CannotCreateDir(Box<(Option<ThinCString>, &'static CStr)>),
 }
 
+#[cfg(not(randomized_layout))]
 const _: () = assert!(size_of::<UndoFileError>() <= 16);
 
 impl UndoFileError {
