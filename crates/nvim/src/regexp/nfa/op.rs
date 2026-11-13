@@ -418,7 +418,12 @@ const SPAN: usize = 202;
 /// which is the tree's hottest code and is built at opt-level 0 for the test
 /// suites. A two-hundred-way `switch` there costs real time; this makes it a
 /// bounds check and a load, and leaves the switch to compile time.
-const BY_CODE: [Option<NfaOp>; SPAN] = {
+///
+/// A `static`, not a `const`: indexing a `const` array with a runtime index
+/// materialises the whole 404-byte table on the stack first at opt-level 0,
+/// a `memcpy` per lookup that was about 7 % of a debug build's
+/// `searchcount()` (and pushed `Test_search_stat_option` past its 40 ms).
+static BY_CODE: [Option<NfaOp>; SPAN] = {
     let mut table = [None; SPAN];
     let (mut i, mut code) = (0, NfaOp::Split.code());
     while i < SPAN {

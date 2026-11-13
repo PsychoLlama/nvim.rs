@@ -39,6 +39,9 @@
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
+/// What [`Postfix::grow`] fills new slots from.
+static ZEROS: [c_int; 256] = [0; 256];
+
 /// The postfix program under construction. A field of the compile's
 /// [`RegCompiler`](crate::regexp::RegCompiler).
 #[derive(Debug)]
@@ -76,11 +79,23 @@ impl Postfix {
     /// reserved capacity before reallocating, as upstream's
     /// `realloc_post_list` grows by half again. Out of line: appending is
     /// the hot path and this runs a handful of times per compile.
+    ///
+    /// The zeroes are copied in from [`ZEROS`] rather than written by
+    /// `Vec::resize`, which at opt-level 0 is a call-laden loop per element:
+    /// the first 256 slots cost ~11,000 instructions on every compile, and a
+    /// search compiles once per `searchit()`, so `searchcount()` spent 7 % of
+    /// a debug build here. `extend_from_slice` of a `Copy` slice is a
+    /// `memcpy` at any opt-level.
     #[inline(never)]
     #[cold]
     fn grow(&mut self) {
         let len = self.buf.len();
-        self.buf.resize((len + len / 2 + 1).max(256), 0);
+        let mut missing = (len + len / 2 + 1).max(256) - len;
+        while missing > 0 {
+            let chunk = missing.min(ZEROS.len());
+            self.buf.extend_from_slice(&ZEROS[..chunk]);
+            missing -= chunk;
+        }
     }
 
     /// Append one item. The transpiled form of upstream's `EMIT` macro.
