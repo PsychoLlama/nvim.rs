@@ -22,7 +22,7 @@ use crate::eval::typval::{NumBuf, list_items};
 use crate::memory::XString;
 use crate::narrow::number_as_int;
 use crate::optionstr::OptString;
-use crate::regexp::RE_LAST;
+use crate::regexp::{RE_LAST, RE_SEARCH};
 use crate::search::{SEARCH_KEEP, SEARCH_STAT_DEF_TIMEOUT};
 use crate::semsg;
 use crate::types::VAR_LIST;
@@ -252,20 +252,27 @@ fn update_search_stat(
         };
         let mut done_search = false;
         let mut endpos = Pos::default();
-        // `searchit` walks `c.at` forward one match at a time; without
-        // 'wrapscan' it fails once past the last one.
+        // The search walks `c.at` forward one match at a time; without
+        // 'wrapscan' it fails once past the last one. Upstream's loop calls
+        // `searchit`, compiling the pattern again for every match; it is
+        // compiled once here, which is most of the count's time for a
+        // pattern that matches often.
         let (win, buf) = (Some(Win::current()), Buf::current());
-        while !GOT_INT.get()
-            && searchit(
+        let mut regmatch = RegMMatch::default();
+        let compiled = !GOT_INT.get()
+            && search_regcomp(b"", RE_SEARCH, RE_LAST, SEARCH_KEEP, &mut regmatch)
+                .map_err(|err| SearchError::Pattern(err).report(SEARCH_KEEP))
+                .is_ok();
+        while compiled
+            && !GOT_INT.get()
+            && searchit_compiled(
+                &mut regmatch,
                 win,
                 buf,
                 &mut c.at,
                 Some(&mut endpos),
                 FORWARD,
-                b"",
-                1,
                 SEARCH_KEEP,
-                RE_LAST,
                 None,
             )
             .is_ok()

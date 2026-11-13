@@ -614,12 +614,62 @@ fn search_buffer(
     count: c_int,
     options: c_int,
     pat_use: c_int,
-    mut extra_arg: Option<&mut SearchItArg>,
+    extra_arg: Option<&mut SearchItArg>,
 ) -> Result<u8, SearchError> {
     let mut regmatch = RegMMatch::default();
     let keep = options & (SEARCH_HIS | SEARCH_KEEP);
     search_regcomp(pat, RE_SEARCH, pat_use, keep, &mut regmatch).map_err(SearchError::Pattern)?;
+    search_compiled(
+        &mut regmatch,
+        win,
+        buffer,
+        pos,
+        end_pos,
+        dir,
+        count,
+        options,
+        extra_arg,
+    )
+}
 
+/// [`searchit`] with a pattern the caller compiled with
+/// [`search_regcomp`], for a run of searches of one pattern: each
+/// `searchit` compiles its pattern afresh, which in a count of every match
+/// in the buffer costs more than the matching. Says what `options` asks
+/// for, as `searchit` does.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn searchit_compiled(
+    regmatch: &mut RegMMatch,
+    win: Option<Win>,
+    buffer: Buf,
+    pos: &mut Pos,
+    end_pos: Option<&mut Pos>,
+    dir: Direction,
+    options: c_int,
+    extra_arg: Option<&mut SearchItArg>,
+) -> Result<u8, SearchError> {
+    let found = search_compiled(
+        regmatch, win, buffer, pos, end_pos, dir, 1, options, extra_arg,
+    );
+    if let Err(err) = found {
+        err.report(options);
+    }
+    found
+}
+
+/// [`search_buffer`] once the pattern is compiled into `regmatch`.
+#[allow(clippy::too_many_arguments)]
+fn search_compiled(
+    regmatch: &mut RegMMatch,
+    win: Option<Win>,
+    buffer: Buf,
+    pos: &mut Pos,
+    end_pos: Option<&mut Pos>,
+    dir: Direction,
+    count: c_int,
+    options: c_int,
+    mut extra_arg: Option<&mut SearchItArg>,
+) -> Result<u8, SearchError> {
     // Stop after this line number, when it is not zero.
     let mut stop_lnum: LineNr = LineNr::ZERO;
     let (mut tm, mut timed_out) = (None, false);
@@ -630,7 +680,7 @@ fn search_buffer(
     }
 
     // The pattern is set up once for the whole walk, not once per line.
-    let walked = walk_lines(&mut regmatch, win, &buffer, tm, |matcher| {
+    let walked = walk_lines(regmatch, win, &buffer, tm, |matcher| {
         let mut s = Searcher {
             buf: buffer,
             matcher,
@@ -651,7 +701,6 @@ fn search_buffer(
         );
         (found, submatch, lnum, s.timed_out)
     });
-    drop(regmatch);
     // `search_regcomp` left a program, so the walk ran.
     let (found, submatch, lnum, timed_out) = walked.unwrap_or((0, 0, pos.lnum, timed_out));
 
