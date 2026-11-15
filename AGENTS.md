@@ -11,6 +11,7 @@
 - Note big changes in `CHANGELOG.md`. It should not be exhaustive: only a hint about which release carried a sweeping change over a large feature. Small-to-mid size changes to not belong in the changelog.
 - Transpilation inherited original authors' terse naming. Don't match for parity's sake. When appropriate, use clear names.
 - When rewriting vendored code, keep the upstream copyright/license notice in the ported file and keep `LICENSE.txt` accurate.
+- A panic ends the process (swap files preserved, then `abort()`): `expect` an invariant with a message naming it, return an error for anything input reaches. See [docs/panic-policy.md](docs/panic-policy.md).
 
 # Ratchet
 

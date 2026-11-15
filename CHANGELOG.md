@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- A panic now ends the process the way a deadly signal does: the swap files are written out, the terminal is restored, the message and a backtrace go to the log, and the process aborts (`docs/panic-policy.md`).
+
 ## [2026.11.15-fd1efed7e4]
 
 ### Changed
