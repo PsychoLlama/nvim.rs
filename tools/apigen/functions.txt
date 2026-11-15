@@ -258,6 +258,7 @@ nvim__inspect_cell since=-1
 nvim__screenshot fast since=-1
 nvim__invalidate_glyph_cache since=-1
 nvim__unpack fast since=-1
+nvim__panic since=-1
 nvim_del_mark since=8
 nvim_get_mark since=8
 nvim_eval_statusline fast since=8

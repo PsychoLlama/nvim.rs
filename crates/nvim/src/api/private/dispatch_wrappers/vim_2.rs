@@ -14,6 +14,36 @@
 
 use super::*;
 
+/// The msgpack-RPC dispatch wrapper for `nvim_get_mark`.
+///
+/// Decodes the argument array against the signature, answers `Err` if
+/// the arity or a type is wrong, and encodes the answer as an
+/// `Object`.
+pub fn handle_nvim_get_mark(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
+    let mut args = args;
+    log_invoke(
+        c"handle_nvim_get_mark",
+        c"nvim_get_mark",
+        line!(),
+        channel_id,
+    );
+    if args.len() != 2 {
+        return Err(wrong_arity(2, args.len()));
+    }
+    let Some(arg_1) = as_string(args[0].take()) else {
+        return Err(wrong_type(1, c"nvim_get_mark", c"String"));
+    };
+    let mut arg_2: KeyDict_empty = match read_keydict(args[1].take()) {
+        KeySetArg::Read(v) => v,
+        KeySetArg::Refused(e) => return Err(e),
+        KeySetArg::WrongType => {
+            return Err(wrong_type(2, c"nvim_get_mark", c"Dict(empty) *"));
+        }
+    };
+    let rv = nvim_get_mark(arg_1, &mut arg_2)?;
+    Ok(Object::array(rv))
+}
+
 /// The msgpack-RPC dispatch wrapper for `nvim_get_mode`.
 ///
 /// Decodes the argument array against the signature, answers `Err` if

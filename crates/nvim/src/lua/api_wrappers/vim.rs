@@ -138,6 +138,17 @@ pub(super) fn convert_nvim__invalidate_glyph_cache(
     Ok(())
 }
 
+/// The Lua binding for `nvim__panic`: pop the arguments, call the API
+/// function, hand the result back.
+// `convert_nvim__panic` is derived from an API method's own name.
+#[allow(non_snake_case)]
+pub(super) fn convert_nvim__panic(stack: &mut Stack, blame: &mut Blame) -> Result<(), Error> {
+    let arg_1 = pop_string(stack).inspect_err(|_| *blame = Some(c"message"))?;
+    let _active = ActiveState::enter(stack);
+    nvim__panic(arg_1);
+    Ok(())
+}
+
 /// The Lua binding for `nvim__redraw`: pop the arguments, call the API
 /// function, hand the result back.
 // `convert_nvim__redraw` is derived from an API method's own name.

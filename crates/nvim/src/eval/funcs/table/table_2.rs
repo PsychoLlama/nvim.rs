@@ -17,7 +17,7 @@
 use super::*;
 
 /// This file's run of the builtin table, spliced in by the parent.
-pub(super) const PART: [EvalFuncDef; 170] = [
+pub(super) const PART: [EvalFuncDef; 171] = [
     builtin(
         c"writefile",
         Arity::Between(2, 3),
@@ -489,7 +489,8 @@ pub(super) const PART: [EvalFuncDef; 170] = [
         BaseArg::At(1),
         Some(f_shiftwidth),
     ),
-    api(c"nvim__stats", 0, 19),
+    api(c"nvim__panic", 1, 19),
+    api(c"nvim__stats", 0, 20),
     builtin(
         c"timer_pause",
         Arity::Exact(2),
@@ -769,10 +770,10 @@ pub(super) const PART: [EvalFuncDef; 170] = [
         BaseArg::At(2),
         Some(f_win_execute),
     ),
-    api(c"nvim__ns_get", 1, 29),
-    api(c"nvim__ns_set", 2, 30),
-    api(c"nvim__redraw", 1, 25),
-    api(c"nvim__unpack", 1, 28),
+    api(c"nvim__ns_get", 1, 30),
+    api(c"nvim__ns_set", 2, 31),
+    api(c"nvim__redraw", 1, 26),
+    api(c"nvim__unpack", 1, 29),
     builtin(
         c"gettabwinvar",
         Arity::Between(3, 4),
@@ -803,14 +804,14 @@ pub(super) const PART: [EvalFuncDef; 170] = [
         BaseArg::Never,
         Some(f_msgpackparse),
     ),
-    api(c"nvim_command", 1, 27),
+    api(c"nvim_command", 1, 28),
     builtin(
         c"getcmdprompt",
         Arity::Exact(0),
         BaseArg::Never,
         Some(f_getcmdprompt),
     ),
-    api(c"nvim_del_var", 1, 26),
+    api(c"nvim_del_var", 1, 27),
     builtin(
         c"complete_add",
         Arity::Exact(1),
@@ -841,7 +842,7 @@ pub(super) const PART: [EvalFuncDef; 170] = [
         BaseArg::At(1),
         Some(f_getregionpos),
     ),
-    api(c"nvim_get_var", 1, 31),
+    api(c"nvim_get_var", 1, 32),
     builtin(
         c"tabpagewinnr",
         Arity::Between(1, 2),
@@ -920,7 +921,7 @@ pub(super) const PART: [EvalFuncDef; 170] = [
         BaseArg::At(1),
         Some(f_matchstrlist),
     ),
-    api(c"nvim_set_var", 2, 32),
+    api(c"nvim_set_var", 2, 33),
     builtin(
         c"spellsuggest",
         Arity::Between(1, 3),
@@ -957,5 +958,5 @@ pub(super) const PART: [EvalFuncDef; 170] = [
         BaseArg::At(2),
         Some(f_assert_match),
     ),
-    api(c"nvim_ui_send", 1, 22),
+    api(c"nvim_ui_send", 1, 23),
 ];

@@ -218,15 +218,15 @@ const fn fill<const N: usize>(
 
 /// Every builtin Vimscript function there is, plus the blank row
 /// that ends the table.
-pub(crate) static BUILTINS: ConstTable<[EvalFuncDef; 644]> = ConstTable::new(table());
+pub(crate) static BUILTINS: ConstTable<[EvalFuncDef; 645]> = ConstTable::new(table());
 
 /// The table, spliced together from the generated parts.
-const fn table() -> [EvalFuncDef; 644] {
-    let mut table = [BLANK; 644];
+const fn table() -> [EvalFuncDef; 645] {
+    let mut table = [BLANK; 645];
     let mut base = 0;
     base = fill(&mut table, base, table_1::PART);
     base = fill(&mut table, base, table_2::PART);
     base = fill(&mut table, base, table_3::PART);
-    assert!(base == 643);
+    assert!(base == 644);
     table
 }
