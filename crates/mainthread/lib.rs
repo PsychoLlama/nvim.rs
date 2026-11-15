@@ -147,6 +147,23 @@ impl BorrowTable {
     }
 }
 
+impl BorrowTable {
+    /// Drop every borrow recorded on this thread, without the guards that
+    /// hold them being dropped.
+    ///
+    /// Only for the panic hook, which aborts the process: the frames that
+    /// hold those guards never run again, and the swap-file cleanup it runs
+    /// must not trip over a borrow their owner can no longer give back.
+    pub fn forget_all() {
+        TABLE.with(|table| {
+            for slot in &table.slots[..table.len.get()] {
+                slot.set((0, 0));
+            }
+            table.len.set(0);
+        });
+    }
+}
+
 /// The value objects (lists, dictionaries, blobs, partials) lent out
 /// writable through a shared handle on this thread, by address.
 ///

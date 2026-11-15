@@ -51,6 +51,7 @@ mod config;
 mod entry;
 mod eventloop;
 mod exit;
+mod panic_hook;
 mod remote;
 mod usage;
 

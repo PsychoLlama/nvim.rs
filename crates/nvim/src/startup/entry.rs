@@ -86,6 +86,7 @@ use crate::startup::buffers::{
 };
 use crate::startup::config::{exe_commands, exe_pre_commands, source_startup_scripts};
 use crate::startup::exit::{getout, os_exit};
+use crate::startup::panic_hook::install_panic_hook;
 use crate::startup::remote::remote_request;
 use crate::startup::usage::{mainerr, print_mainerr};
 use crate::startup::{
@@ -554,6 +555,9 @@ fn run_lua_script(lua_script: &CStr) -> ! {
 /// file name need not be UTF-8.
 pub fn main() {
     use std::os::unix::ffi::OsStringExt;
+    // Before anything that could panic: a panic ends the process, and the
+    // hook is what preserves the swap files on the way out.
+    install_panic_hook();
     let argv: Vec<CString> = std::env::args_os()
         .map(|arg| CString::new(arg.into_vec()).expect("an argument holds no NUL"))
         .collect();

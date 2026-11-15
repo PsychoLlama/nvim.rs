@@ -90,10 +90,7 @@ pub fn os_exit(mut r: c_int) -> ! {
         ml_close_all(true);
     }
 
-    if USED_STDIN.get() {
-        // Put the stream back the way we found it (#2598).
-        stream_set_blocking(STDIN_FILENO, true);
-    }
+    restore_stdin();
 
     logmsg!(LOGLVL_INF, c"os_exit", 737, "Nvim exit: {r}");
 
@@ -231,6 +228,9 @@ fn with_autocmds_unblocked(event: AutoEvent) {
     }
 }
 
+/// Set once we are certain we are going down, e.g. after a deadly signal.
+static REALLY_EXITING: GlobalCell<bool> = GlobalCell::new(false);
+
 /// Preserve the swap files, print `errmsg`, and exit 1.
 ///
 /// Reachable from `deadly_signal()` and from the allocator when it is out of
@@ -240,20 +240,10 @@ fn with_autocmds_unblocked(event: AutoEvent) {
 /// `None` means "say nothing", which is how the process-teardown path
 /// reaches it.
 pub fn preserve_exit(errmsg: Option<&CStr>) -> ! {
-    /// Set once we are certain we are going down, e.g. after a deadly signal.
-    static REALLY_EXITING: GlobalCell<bool> = GlobalCell::new(false);
-
-    if REALLY_EXITING.get() {
-        if USED_STDIN.get() {
-            // Put the stream back the way we found it (#2598).
-            stream_set_blocking(STDIN_FILENO, true);
-        }
+    if !begin_emergency_exit() {
+        restore_stdin();
         std::process::exit(2);
     }
-    REALLY_EXITING.set(true);
-
-    // Ignore SIGHUP now that we are already on the way out (#9274).
-    signal_reject_deadly();
 
     if UI_CLIENT_CHANNEL_ID.get() != 0 {
         // Leave the alternate screen so the message below can be read.
@@ -272,12 +262,43 @@ pub fn preserve_exit(errmsg: Option<&CStr>) -> ! {
         os_exit(1);
     }
 
+    preserve_swap_files(errmsg.is_some());
+
+    getout(1);
+}
+
+/// The first step of every emergency exit ([`preserve_exit`] and the panic
+/// hook): answers false when one is already under way, in which case the
+/// caller must touch nothing and leave.
+///
+/// Ignores SIGHUP from here on, since we are already on the way out
+/// (#9274).
+pub(super) fn begin_emergency_exit() -> bool {
+    if REALLY_EXITING.get() {
+        return false;
+    }
+    REALLY_EXITING.set(true);
+    signal_reject_deadly();
+    true
+}
+
+/// Put stdin back the way we found it (#2598), if the editor read from it.
+pub(super) fn restore_stdin() {
+    if USED_STDIN.get() {
+        stream_set_blocking(STDIN_FILENO, true);
+    }
+}
+
+/// Write every swap file out and close the memfiles without deleting them,
+/// so that the buffers can be recovered after the process is gone. Says so
+/// on stderr when `announce`.
+pub(super) fn preserve_swap_files(announce: bool) {
     ml_close_notmod();
 
     // One sync writes every swap file, so stop at the first buffer that has
     // one.
     if buffers().any(Buf::has_swap_file) {
-        if errmsg.is_some() {
+        if announce {
             write_c_stderr(b"Nvim: preserving files...\n");
         }
         ml_sync_all(0, 0, true);
@@ -286,9 +307,7 @@ pub fn preserve_exit(errmsg: Option<&CStr>) -> ! {
     // Close the memfiles without deleting them.
     ml_close_all(false);
 
-    if errmsg.is_some() {
+    if announce {
         write_c_stderr(b"Nvim: Finished.\n");
     }
-
-    getout(1);
 }
