@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2026.11.15-fd1efed7e4]
+
 ### Changed
 
 - Built on stable Rust (1.100) instead of a pinned nightly. Nightly is kept only for the three lanes that need its `-Z` flags: Miri, AddressSanitizer and the randomized-layout build.
@@ -501,7 +503,8 @@ Safety foundation: make undefined behavior observable, then structurally shrink 
 
 First tagged release (unstable). The c2rust transpile of Neovim from C to Rust, made to build and pass the functional, old, and unit suites, with the CalVer release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe` Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.11-84ff67e6c4...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.15-fd1efed7e4...HEAD
+[2026.11.15-fd1efed7e4]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.11-84ff67e6c4...2026.11.15-fd1efed7e4
 [2026.11.11-84ff67e6c4]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.07-134f6fc430...2026.11.11-84ff67e6c4
 [2026.11.07-134f6fc430]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.02-732b23427e...2026.11.07-134f6fc430
 [2026.11.02-732b23427e]: https://github.com/PsychoLlama/nvim.rs/compare/2026.10.30-9049d0284d...2026.11.02-732b23427e
