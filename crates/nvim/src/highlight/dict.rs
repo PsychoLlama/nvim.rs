@@ -200,7 +200,7 @@ fn put_colors(
             put(
                 hl,
                 key,
-                Object::integer(Integer::from(ae.cterm_fg_color - 1)),
+                Object::integer(Integer::from(ae.cterm_fg_color) - 1),
             );
         }
         if ae.cterm_bg_color != 0 {
@@ -212,7 +212,7 @@ fn put_colors(
             put(
                 hl,
                 key,
-                Object::integer(Integer::from(ae.cterm_bg_color - 1)),
+                Object::integer(Integer::from(ae.cterm_bg_color) - 1),
             );
         }
     }

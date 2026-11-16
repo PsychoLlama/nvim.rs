@@ -28,6 +28,14 @@ describe(':highlight', function()
     )
   end)
 
+  it('takes a cterm colour past 16 bits', function()
+    -- Used to panic: the attribute keeps the low 16 bits, as upstream's
+    -- (int16_t) does, and `:highlight` shows the number as given.
+    command('hi Foo ctermfg=32767 ctermbg=40000')
+    eq('Foo            xxx ctermfg=32767 ctermbg=40000', n.exec_capture('hi Foo'))
+    n.assert_alive()
+  end)
+
   it('invalid group name', function()
     eq('Vim(highlight):E411: Highlight group not found: foo', pcall_err(command, 'highlight foo'))
   end)

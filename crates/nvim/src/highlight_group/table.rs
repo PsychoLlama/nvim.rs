@@ -25,7 +25,7 @@
 
 use crate::mbyte::Codepoint;
 use crate::narrow::as_index;
-use crate::narrow::{count_as_int, len_as_int};
+use crate::narrow::{count_as_int, len_as_int, number_as_u16};
 use crate::types::Handle;
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
@@ -40,7 +40,6 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::state::{NORMAL_BG, NORMAL_FG};
 use crate::highlight::{HLATTRS_INIT, HlAttrFlags, hl_get_syn_attr, ns_get_attr, ns_get_link};
 use crate::highlight::{HlAttrs, RgbValue};
-use crate::os::libc::int16_t;
 use crate::types::{NS, ScriptCtx};
 use crate::ui::ui_mode_info_set;
 
@@ -249,8 +248,10 @@ pub(crate) fn set_hl_attr(id: c_int) {
         let group = &table.entries[as_index(id) - 1];
         HlAttrs {
             cterm_ae_attr: group.cterm,
-            cterm_fg_color: int16_t::try_from(group.cterm_fg).expect("a cterm colour fits 16 bits"),
-            cterm_bg_color: int16_t::try_from(group.cterm_bg).expect("a cterm colour fits 16 bits"),
+            // `:highlight ctermfg=N` takes any number; upstream's
+            // `(int16_t)` keeps the low 16 bits, and so does this.
+            cterm_fg_color: number_as_u16(group.cterm_fg.into()).cast_signed(),
+            cterm_bg_color: number_as_u16(group.cterm_bg.into()).cast_signed(),
             rgb_ae_attr: group.gui,
             rgb_fg_color: if group.rgb_fg_idx != COLOR_IDX_NONE {
                 group.rgb_fg
