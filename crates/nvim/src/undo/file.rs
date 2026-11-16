@@ -425,6 +425,14 @@ pub(crate) fn unserialize_uep(bi: &mut BufInfo) -> Result<UndoEntry, UndoFileErr
     let top = bi.read_4c();
     let bot = bi.read_4c();
     let lcount = bi.read_4c();
+    // An entry covers the lines strictly between `top` and `bot`, where a
+    // `bot` of zero means "to the end of the buffer". Nothing else is ever
+    // written, and applying anything else walks the memline out of range:
+    // a negative `top` passes the apply-time check against the buffer's
+    // length and deletes and appends below line one.
+    if top < 0 || bot < 0 || lcount < 0 || (bot != 0 && bot <= top) {
+        return Err(UndoFileError::Corrupt(Corruption::EntryLines));
+    }
     // A count, not an offset. Upstream widens it to `size_t` for the loop
     // below, so a negative one becomes about 2^64 iterations over an array
     // it never allocated.

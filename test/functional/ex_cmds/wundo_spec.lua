@@ -100,4 +100,72 @@ describe('the undo file format', function()
     end
     eq(states, reread)
   end)
+
+  -- Where each entry record of the file's first undo header starts: the
+  -- offset (1-based) of its `top` field. Walks the fixed layout the writer
+  -- lays down rather than searching for the magic, which may turn up
+  -- inside the hash.
+  local function first_header_entries(raw)
+    local at = 1
+    local function u32()
+      local b1, b2, b3, b4 = raw:byte(at, at + 3)
+      at = at + 4
+      return ((b1 * 256 + b2) * 256 + b3) * 256 + b4
+    end
+    local function trailer()
+      while raw:byte(at) ~= 0 do
+        at = at + 2 + raw:byte(at)
+      end
+      at = at + 1
+    end
+    at = 9 + 2 + 32 + 4 + 1
+    at = at + u32() -- the U line
+    at = at + 4 + 4 + 6 * 4 + 8
+    trailer()
+    assert(raw:sub(at, at + 1) == '\95\208', 'a header record follows the file header')
+    at = at + 2 + 5 * 4 + 12 + 4 + 2 + 26 * 12 + 32 + 8
+    trailer()
+    local entries = {}
+    while raw:sub(at, at + 1) == '\245\024' do
+      at = at + 2
+      entries[#entries + 1] = at
+      at = at + 12
+      for _ = 1, u32() do
+        at = at + u32()
+      end
+    end
+    assert(#entries > 0, 'the header carries an entry')
+    return entries
+  end
+
+  -- An entry covers the lines between its `top` and `bot`. A file whose
+  -- entry names a line below the first one is refused when it is read; it
+  -- used to pass the apply-time check against the buffer's length and walk
+  -- the memline out of range on the next undo.
+  it('refuses an entry whose line numbers no buffer has', function()
+    local target = tmpdir .. '/Xundo_lines'
+    write_file(target, 'alpha\nbeta\ngamma\nlast\n')
+    command('edit ' .. fn.fnameescape(target))
+    command('normal! jdd')
+    command('write')
+    -- Read only by hand from here, so that each refusal is the one asked for.
+    command('set noundofile')
+    local undofile = fn.undofile(target)
+    local raw = t.read_file(undofile)
+    local top = first_header_entries(raw)[1]
+    for _, bad in ipairs({
+      '\255\000\000\001', -- a negative top
+      '\000\000\000\003\000\000\000\002', -- bot above top
+    }) do
+      write_file(undofile, raw:sub(1, top - 1) .. bad .. raw:sub(top + #bad), true)
+      command('bwipe!')
+      command('edit ' .. fn.fnameescape(target))
+      t.matches(
+        'E825: Corrupted undo file %(entry line numbers%)',
+        t.pcall_err(command, 'rundo ' .. fn.fnameescape(undofile))
+      )
+      command('silent! undo 0')
+      eq({ 'alpha', 'gamma', 'last' }, fn.getline(1, '$'))
+    end
+  end)
 end)
