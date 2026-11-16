@@ -267,6 +267,17 @@ The input sites by module (every other module: all invariant):
 | `terminal`                  |       22 |     1 | a deferred `TermRequest` reported against a new terminal on the same buffer                                                                                   |
 | `help`, `highlight`         |        9 |     2 | an overridden help helper; a negative cterm colour under 'winblend' (unverified)                                                                              |
 
+Converted since the census (each with a regression test): the two
+`:terminal` resize panics (the resize clamps the saved cursor and drops a
+margin left past the edge), the API dict key with a NUL (cut there, as
+C's `strlen`), the out-of-range RPC handle (echoed as its 32 bits, as C
+release), `nvim_set_client_info` on a channel the same request closed
+(dropped), the overridden `vim._core` serverlist and help helpers (logged;
+refused like a Lua error), `:version` after tampering with `jit`/`_VERSION`
+(line left out), an `envp` entry with no `=` (skipped), a `TermRequest`
+reported against a reopened terminal (no shift), and `syn match … lc=-1`
+(no match past the line).
+
 What could not be classed: `viml/parser/expressions/ast.rs:182` (may fire
 in release after the `1 2]3` family mis-wires a node), and two low-
 confidence underflows (`register/yank.rs:194`, `indent/mod.rs:430`). The
