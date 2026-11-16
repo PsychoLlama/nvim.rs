@@ -32,7 +32,7 @@ use crate::mark::{
     shada_set_global_mark, shada_set_local_mark,
 };
 use crate::memory::{ThinCString, XString};
-use crate::narrow::len_as_int;
+use crate::narrow::{len_as_int, number_as_int};
 use crate::normal::defs::MotionType;
 use crate::option::vars::p_hi;
 use crate::path::{path_fnamecmp, path_try_shorten_fname};
@@ -214,7 +214,13 @@ impl Reading {
                 let yank = ShadaYank {
                     contents: reg.contents,
                     motion,
-                    width: len_as_int(reg.width),
+                    // C's `(colnr_T)`: the low 32 bits, so the all-ones
+                    // width `shada_initialize_registers` writes for an
+                    // empty block is -1 again, and a hostile one wraps
+                    // rather than ending the editor.
+                    width: number_as_int(
+                        u64::try_from(reg.width).unwrap_or(u64::MAX).cast_signed(),
+                    ),
                     timestamp,
                     extra,
                 };

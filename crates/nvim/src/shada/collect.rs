@@ -156,9 +156,13 @@ pub(crate) fn shada_initialize_registers(wms: &mut WriteMergerState, limit: Opti
                 motion: yank.motion.byte(),
                 contents: yank.contents,
                 is_unnamed,
-                // Only a blockwise register has a width.
+                // Only a blockwise register has a width. It is stored one
+                // less than the block's, so an empty block (`setreg('a',
+                // [''], 'b')`) has -1; upstream's `(size_t)` writes that as
+                // the all-ones number and its `(colnr_T)` reads it back, so
+                // the bits go out as they are.
                 width: if yank.motion == MotionType::BlockWise {
-                    usize::try_from(yank.width).expect("a block's width")
+                    usize::try_from(i64::from(yank.width).cast_unsigned()).unwrap_or(usize::MAX)
                 } else {
                     0
                 },

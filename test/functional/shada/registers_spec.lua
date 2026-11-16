@@ -36,6 +36,28 @@ describe('ShaDa support code', function()
     eq({ { 'bca', 'abc', 'cba' }, '\0223' }, getreg('b'))
   end)
 
+  it('dumps and restores an empty blockwise register', function()
+    -- Its width is -1 (one less than the block's): it used to end the
+    -- editor on the way out, while writing the ShaDa file.
+    setreg('e', { '' }, 'b')
+    expect_exit(nvim_command, 'qall')
+    reset()
+    eq({ { '' }, '\0220' }, getreg('e'))
+  end)
+
+  it('reads a register width that does not fit as C does', function()
+    local fname = t.tmpname()
+    local entry = vim.mpack.encode({ n = ('w'):byte(), rc = { 'abc' }, rt = 2, rw = -1 })
+    t.write_file(
+      fname,
+      vim.mpack.encode(5) .. vim.mpack.encode(0) .. vim.mpack.encode(#entry) .. entry,
+      true
+    )
+    nvim_command('rshada! ' .. fname)
+    os.remove(fname)
+    eq({ { 'abc' }, '\0220' }, getreg('w'))
+  end)
+
   it('does not dump registers with zero <', function()
     nvim_command("set shada='0,<0")
     setreg('c', { 'd', 'e', '' }, 'c')
