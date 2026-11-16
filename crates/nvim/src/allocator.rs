@@ -263,6 +263,17 @@ mod tests {
         }
     }
 
+    /// A refused request in a process that never ran `main` (this one)
+    /// answers null as `GlobalAlloc` says, so `try_reserve` still reports
+    /// it: the out-of-memory exit is only for the editor.
+    #[test]
+    #[cfg_attr(miri, ignore = "Miri reports a huge malloc instead of failing it")]
+    fn a_refused_request_without_main_answers_null() {
+        let mut bytes: Vec<u8> = Vec::new();
+        assert!(bytes.try_reserve_exact(1 << 62).is_err());
+        assert!(bytes.try_reserve_exact(16).is_ok());
+    }
+
     #[test]
     fn dropping_an_owned_runs_the_destructor_once() {
         let drops = Cell::new(0);

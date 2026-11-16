@@ -151,9 +151,10 @@ impl BorrowTable {
     /// Drop every borrow recorded on this thread, without the guards that
     /// hold them being dropped.
     ///
-    /// Only for the panic hook, which aborts the process: the frames that
-    /// hold those guards never run again, and the swap-file cleanup it runs
-    /// must not trip over a borrow their owner can no longer give back.
+    /// Only for the emergency exits (the panic hook, a failed allocation),
+    /// which end the process: the frames that hold those guards never run
+    /// again, and the swap-file cleanup they run must not trip over a
+    /// borrow their owner can no longer give back.
     pub fn forget_all() {
         TABLE.with(|table| {
             for slot in &table.slots[..table.len.get()] {
@@ -206,5 +207,28 @@ impl EditTable {
     /// Whether the object at `addr` is lent out writable.
     pub fn is_lent(addr: usize) -> bool {
         EDITS.with_borrow(|lent| lent.contains(&addr))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BorrowTable;
+
+    /// What the emergency exits rely on: after `forget_all` a cell that was
+    /// held, shared or exclusively, can be borrowed again as if it never
+    /// was, and the table tracks as before.
+    #[test]
+    fn forget_all_leaves_an_empty_table_that_still_tracks() {
+        let (a, b) = (0x1000, 0x2000);
+        assert_eq!(BorrowTable::acquire(a, true), 0);
+        assert_eq!(BorrowTable::acquire(b, false), 0);
+        assert_eq!(BorrowTable::acquire(b, false), 1);
+        BorrowTable::forget_all();
+        assert_eq!(BorrowTable::state(a), 0);
+        assert_eq!(BorrowTable::state(b), 0);
+        assert_eq!(BorrowTable::acquire(a, true), 0);
+        assert_eq!(BorrowTable::state(a), -1);
+        assert_eq!(BorrowTable::release(a, true), -1);
+        assert_eq!(BorrowTable::state(a), 0);
     }
 }

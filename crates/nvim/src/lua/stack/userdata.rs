@@ -83,6 +83,15 @@ struct Slot<T> {
     value: T,
 }
 
+impl<T: Default> Slot<T> {
+    /// What `__gc` does to the slot: the value, leaving `T::default()`, and
+    /// the slot marked collected; `None` the second time.
+    fn collect(&mut self) -> Option<T> {
+        let first = !core::mem::replace(&mut self.collected, true);
+        first.then(|| core::mem::take(&mut self.value))
+    }
+}
+
 /// Where a userdatum records that its `__gc` ran, for a value that keeps
 /// that userdatum alive through its environment and checks the record on
 /// every use without looking the userdatum up again: a tree-sitter node,
@@ -249,7 +258,8 @@ impl Stack {
     pub fn collected_mark<T: Userdata>(&mut self, at: At) -> Option<CollectedMark> {
         let block = self.userdata_block::<T>(at)?;
         // SAFETY: a block `new_userdata::<T>` wrote (see `userdata_slot`);
-        // the field's address is taken without making a reference.
+        // the field's address is taken without making a reference, so no
+        // borrow of the slot is disturbed (the tests below hold Miri to it).
         let mark = unsafe { &raw mut (*block).collected };
         ptr::NonNull::new(mark).map(CollectedMark)
     }
@@ -308,12 +318,79 @@ unsafe extern "C-unwind" fn collect<T: Userdata>(state: *mut lua_State) -> c_int
     // SAFETY: the caller's state; the body owns its frame's only `Stack`.
     unsafe {
         Stack::entry(state, |stack| {
-            let value = stack.userdata_slot::<T>(At::arg(1)).and_then(|slot| {
-                let first = !core::mem::replace(&mut slot.collected, true);
-                first.then(|| core::mem::take(&mut slot.value))
-            });
+            let value = stack.userdata_slot::<T>(At::arg(1)).and_then(Slot::collect);
             drop(value);
             Ok(0)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! The block's raw-memory protocol, with a Rust allocation standing in
+    //! for LuaJIT's block, so that Miri can follow it: the accessors above
+    //! reach the block through `luaL_testudata`, which Miri cannot call.
+
+    use core::cell::Cell;
+    use core::ptr::NonNull;
+    use std::rc::Rc;
+
+    use super::{CollectedMark, Slot};
+
+    /// Counts its drops, so a test can say when `__gc` released the value.
+    #[derive(Debug, Default)]
+    struct Tracked(Option<Rc<Cell<u32>>>);
+
+    impl Drop for Tracked {
+        fn drop(&mut self) {
+            if let Some(drops) = &self.0 {
+                drops.set(drops.get() + 1);
+            }
+        }
+    }
+
+    /// A mark taken from the block, then the value used through a fresh
+    /// `&mut Slot` (what every method does), then `__gc` twice through
+    /// further fresh ones, the mark read between each: the shape a
+    /// tree-sitter node has against its tree, including a hand-called
+    /// `__gc` while the node lives.
+    #[test]
+    fn the_mark_sees_a_collect_through_any_later_borrow() {
+        let drops = Rc::new(Cell::new(0));
+        let block = Box::into_raw(Box::new(Slot {
+            collected: false,
+            value: Tracked(Some(Rc::clone(&drops))),
+        }));
+        // As `Stack::collected_mark` takes it: from the block pointer, with
+        // no reference made.
+        // SAFETY: `block` is the live slot just made, until the `Box` below
+        // takes it back.
+        let mark = unsafe { CollectedMark(NonNull::new(&raw mut (*block).collected).unwrap()) };
+        // SAFETY: as above; the mark's block is live.
+        let collected = || unsafe { mark.is_collected() };
+        // A fresh `&mut Slot` per access, as every method takes one.
+        // SAFETY: as above; each borrow ends before the next access.
+        let slot = || unsafe { &mut *block };
+
+        assert!(!collected());
+        assert!(!slot().collected);
+        assert!(slot().value.0.is_some());
+        assert!(!collected());
+
+        let first = slot().collect();
+        assert!(first.is_some());
+        drop(first);
+        assert_eq!(drops.get(), 1);
+        assert!(collected());
+
+        // A second `__gc`, by hand or by the collector after a
+        // resurrection, finds nothing to drop.
+        assert!(slot().collect().is_none());
+        assert!(collected());
+        assert!(slot().value.0.is_none());
+
+        // SAFETY: the `Box` the block came from, taken back once.
+        drop(unsafe { Box::from_raw(block) });
+        assert_eq!(drops.get(), 1);
     }
 }

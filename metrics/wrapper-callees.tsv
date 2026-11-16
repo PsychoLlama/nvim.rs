@@ -4,7 +4,7 @@ count	callee	no_raw	defs	def
 20	from_raw_parts	0	0	
 17	zeroed	0	0	
 16	Reader::new	0	1	crates/nvim/src/event/rstream.rs
-11	Box::from_raw	0	6	
+12	Box::from_raw	0	6	
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 10	notify	0	0	
 8	Conn::new	0	1	crates/nvim/src/event/stream.rs
@@ -58,6 +58,7 @@ count	callee	no_raw	defs	def
 3	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 2	.assume_init	0	0	
 2	.bit_copy	1	1	crates/nvim/src/eval/typval/handle.rs
+2	.is_collected	1	1	crates/nvim/src/lua/stack/userdata.rs
 2	.map_unchecked_mut	0	0	
 2	.next_arg::<::core::ffi::c_long>	0	0	
 2	.offset	0	0	
@@ -123,13 +124,13 @@ count	callee	no_raw	defs	def
 2	wstream_write	0	1	crates/nvim/src/event/wstream.rs
 2	xcalloc	0	1	crates/nvim/src/memory/mod.rs
 2	xstrlcpy	0	1	crates/nvim/src/memory/mod.rs
-1	.is_collected	1	1	crates/nvim/src/lua/stack/userdata.rs
 1	.next_arg::<*const ::core::ffi::c_char>	0	0	
 1	.next_arg::<*mut ::core::ffi::c_void>	0	0	
 1	.next_arg::<::core::ffi::c_double>	0	0	
 1	.next_arg::<::core::ffi::c_uint>	0	0	
 1	BorrowedFd::borrow_raw	0	0	
 1	Box::new	0	14	
+1	CollectedMark	0	0	
 1	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 1	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 1	Ok	0	0	
