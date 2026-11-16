@@ -48,11 +48,16 @@ pub fn f_environ(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // A leading '=' is part of the name on the platforms that allow
         // it, so the separator search starts past it.
         let skip = usize::from(entry.first() == Some(&b'='));
-        let len = entry[skip..]
+        // Whoever exec'd this process chose the entries, and nothing makes
+        // them hold a '=': one without is no variable, and is left out.
+        // (Upstream reads from a NULL `strchr` there.)
+        let Some(len) = entry[skip..]
             .iter()
             .position(|&byte| byte == b'=')
             .map(|at| skip + at)
-            .expect("an environment entry holds a '='");
+        else {
+            continue;
+        };
         debug_assert!(len > 0);
         let (key, value) = (&entry[..len], &entry[len + 1..]);
         if !dict_has_key(result.dict_ref(), key) {

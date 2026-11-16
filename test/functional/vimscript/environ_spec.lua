@@ -23,6 +23,49 @@ describe('environment variables', function()
     eq(1, exists('$EMPTY_VAR'))
     eq(0, exists('$DOES_NOT_EXIST'))
   end)
+
+  it('environ() leaves out an entry without "="', function()
+    t.skip(t.is_os('win'), 'execve')
+    clear()
+    -- Only a raw execve() can hand a child such an entry; LuaJIT's FFI
+    -- makes the call from an `nvim -l` script.
+    local script = t.tmpname()
+    t.write_file(
+      script,
+      [[
+      local ffi = require('ffi')
+      ffi.cdef('int execve(const char *, char *const[], char *const[]);')
+      local function strv(t)
+        local v = ffi.new('char *[?]', #t + 1)
+        for i, s in ipairs(t) do
+          v[i - 1] = ffi.cast('char *', s)
+        end
+        return v
+      end
+      -- The test's own environment rides along (its NVIM_LOG_FILE and
+      -- XDG dirs keep the child off the user's).
+      ffi.cdef('extern char **environ;')
+      local env = { 'NOEQUALS', 'KEPT=1' }
+      local i = 0
+      while ffi.C.environ[i] ~= nil do
+        env[#env + 1] = ffi.string(ffi.C.environ[i])
+        i = i + 1
+      end
+      local prog = arg[1]
+      -- The tables stay referenced: they hold the strings the arrays point at.
+      local args = { prog, '--clean', '--headless', '-u', 'NONE', '-i', 'NONE',
+        '+lua local e = vim.fn.environ() io.stdout:write(vim.inspect({ e.KEPT, e.NOEQUALS }))',
+        '+qa!' }
+      ffi.C.execve(prog, strv(args), strv(env))
+      os.exit(2)
+    ]]
+    )
+    finally(function()
+      os.remove(script)
+    end)
+    eq('{ "1" }', system({ nvim_prog, '-l', script, nvim_prog }))
+    eq(0, eval('v:shell_error'))
+  end)
 end)
 
 describe('empty $HOME', function()
