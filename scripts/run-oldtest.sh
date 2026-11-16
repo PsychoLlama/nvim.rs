@@ -46,6 +46,11 @@ fi
 "$root/scripts/prep-test-tree.sh"
 
 NVIM_PRG=${NVIM_PRG:-$root/target/debug/nvim}
+
+# The log path is fixed when Nvim starts; setup.vim's `let $NVIM_LOG_FILE`
+# comes too late. Without this a debug build logs every test's DBG lines to
+# the user's own $XDG_STATE_HOME/nvim/nvim.log.
+export NVIM_LOG_FILE=${NVIM_LOG_FILE:-$root/target/oldtest-nvim.log}
 if [[ ! -x $NVIM_PRG ]]; then
   echo "$0: $NVIM_PRG not found; run \`just build\` first" >&2
   exit 66
