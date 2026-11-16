@@ -15,9 +15,11 @@
 //! # Bounds
 //!
 //! The trees are the part worth watching, because they are read into flat
-//! arrays and index into themselves. [`read_tree_node`] checks every index
+//! arrays and index into themselves. [`TreeReader::node`] checks every index
 //! against the array length before storing it and caps nesting at
-//! [`MAXWLEN`], so a cycle or a wild index cannot get through. What it
+//! [`MAXWLEN`]; a shared sub-tree must start where a node it has finished
+//! reading starts, and must not nest past `MAXWLEN` where it is hung, so a
+//! cycle or a wild index cannot get through. What it
 //! permits, [`tree_count_words`] then has to survive — see the note there.
 //!
 //! # Where the end of the file is *not* an error
@@ -521,7 +523,7 @@ fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
 ///
 /// # Depth
 ///
-/// The stacks are one longer than [`MAXWLEN`] on purpose. [`read_tree_node`]
+/// The stacks are one longer than [`MAXWLEN`] on purpose. [`TreeReader::node`]
 /// rejects a tree nested deeper than `MAXWLEN`, which still admits a node
 /// *at* depth `MAXWLEN`; sizing these to `MAXWLEN` alone left the deepest
 /// such tree writing one past the end of all three.
@@ -604,125 +606,218 @@ fn spell_read_tree(
     // Both arrays are `len` entries and nothing else reaches them until
     // the tree is read, so every index a corrupt file names is checked by
     // Rust rather than by review.
-    let mut byts = vec![0u8; len_usize].into_boxed_slice();
-    let mut idxs = vec![0 as SpellIdx; len_usize].into_boxed_slice();
-    let idx = read_tree_node(spl, &mut byts, &mut idxs, 0, prefixtree, prefixcnt, 0)?;
+    let mut reader = TreeReader {
+        spl,
+        byts: vec![0u8; len_usize].into_boxed_slice(),
+        idxs: vec![0 as SpellIdx; len_usize].into_boxed_slice(),
+        marks: vec![0u16; len_usize],
+        prefixtree,
+        maxprefcondnr: prefixcnt,
+    };
+    let idx = reader.node(0, 0)?;
     // Every byte of the array has to be accounted for; anything else
     // means the node lengths and the tree length disagree.
     if idx != len {
         return Err(SpellReadError::Format);
     }
-    *out = WordTree::from_parts(byts, idxs);
+    check_shape(&reader.byts, &reader.idxs, &mut reader.marks)?;
+    *out = WordTree::from_parts(reader.byts, reader.idxs);
     Ok(())
 }
 
-/// Read one node — a length byte and that many entries — and recurse into
-/// the children. Returns the next free index.
-///
-/// The two arrays arrive as slices, so every index a corrupt file could
-/// name is bounds-checked by Rust rather than by review; the explicit
-/// `startidx + len >= byts.len()` test below is kept because it must answer
-/// a format error rather than panic. Nesting is capped at [`MAXWLEN`], so
-/// the tree cannot be made to nest without end either.
-///
-/// The reads that spell `unwrap_or(-1)` are the ones upstream leaves
-/// unchecked: the value flows into a range test that rejects `-1` on its
-/// own, and turning the end of the file into an error here would answer
-/// `E758` where the suite pins `E759`.
-fn read_tree_node(
-    spl: &mut Spl,
-    byts: &mut [uint8_t],
-    idxs: &mut [SpellIdx],
-    startidx: SpellIdx,
+/// One tree being read: the file, the two arrays it fills in, and what is
+/// known so far about the nodes already read.
+struct TreeReader<'a> {
+    spl: &'a mut Spl,
+    byts: Box<[uint8_t]>,
+    idxs: Box<[SpellIdx]>,
+    /// [`NODE_START`] where a node starts, zero everywhere else; the
+    /// scratch [`check_shape`] works in once the tree is read.
+    marks: Vec<u16>,
     prefixtree: bool,
     maxprefcondnr: c_int,
-    depth: c_int,
-) -> SplResult<SpellIdx> {
-    let maxidx = len_as_int(byts.len());
-    let mut idx = startidx;
-    if usize::try_from(depth).is_ok_and(|depth| depth > MAXWLEN) {
-        return Err(SpellReadError::Format);
-    }
-    let len = spl.getc().map_or(-1, c_int::from);
-    if len <= 0 {
-        return Err(SpellReadError::Trunc);
-    }
-    if i64::from(startidx) + i64::from(len) >= i64::from(maxidx) {
-        return Err(SpellReadError::Format);
-    }
+}
 
-    byts[idx.cast_unsigned() as usize] = low_byte(len);
-    idx += 1;
-
-    for _ in 1..=len {
-        let mut c = spl.getc().map_or(-1, c_int::from);
-        if c < 0 {
+impl TreeReader<'_> {
+    /// Read one node — a length byte and that many entries — and recurse
+    /// into the children. Returns the next free index.
+    ///
+    /// The two arrays are slices, so every index a corrupt file could name
+    /// is bounds-checked by Rust rather than by review; the explicit
+    /// `startidx + len >= byts.len()` test below is kept because it must
+    /// answer a format error rather than panic. Nesting is capped at
+    /// [`MAXWLEN`], so the tree cannot be made to nest without end either.
+    ///
+    /// The reads that spell `unwrap_or(-1)` are the ones upstream leaves
+    /// unchecked: the value flows into a range test that rejects `-1` on
+    /// its own, and turning the end of the file into an error here would
+    /// answer `E758` where the suite pins `E759`.
+    fn node(&mut self, startidx: SpellIdx, depth: c_int) -> SplResult<SpellIdx> {
+        let spl = &mut *self.spl;
+        let prefixtree = self.prefixtree;
+        let maxidx = len_as_int(self.byts.len());
+        let mut idx = startidx;
+        if usize::try_from(depth).is_ok_and(|depth| depth > MAXWLEN) {
+            return Err(SpellReadError::Format);
+        }
+        let len = spl.getc().map_or(-1, c_int::from);
+        if len <= 0 {
             return Err(SpellReadError::Trunc);
         }
-        if c <= BY_SPECIAL.cast_signed() {
-            if c == BY_NOFLAGS.cast_signed() && !prefixtree {
-                // A word end with nothing to say about it.
-                idxs[idx.cast_unsigned() as usize] = 0;
-            } else if c != BY_INDEX.cast_signed() {
-                // A word end carrying flags; how many bytes follow
-                // depends on which flags are set.
-                if prefixtree {
-                    c = if c == BY_FLAGS.cast_signed() {
-                        spl.getc().map_or(-1, c_int::from) << 24
+        if i64::from(startidx) + i64::from(len) >= i64::from(maxidx) {
+            return Err(SpellReadError::Format);
+        }
+
+        self.byts[idx.cast_unsigned() as usize] = low_byte(len);
+        self.marks[idx.cast_unsigned() as usize] = NODE_START;
+        idx += 1;
+
+        for _ in 1..=len {
+            let mut c = spl.getc().map_or(-1, c_int::from);
+            if c < 0 {
+                return Err(SpellReadError::Trunc);
+            }
+            if c <= BY_SPECIAL.cast_signed() {
+                if c == BY_NOFLAGS.cast_signed() && !prefixtree {
+                    // A word end with nothing to say about it.
+                    self.idxs[idx.cast_unsigned() as usize] = 0;
+                } else if c != BY_INDEX.cast_signed() {
+                    // A word end carrying flags; how many bytes follow
+                    // depends on which flags are set.
+                    if prefixtree {
+                        c = if c == BY_FLAGS.cast_signed() {
+                            spl.getc().map_or(-1, c_int::from) << 24
+                        } else {
+                            0
+                        };
+                        c |= spl.getc().map_or(-1, c_int::from);
+                        let n = spl.get2c().unwrap_or(-1);
+                        if n >= self.maxprefcondnr {
+                            return Err(SpellReadError::Format);
+                        }
+                        c |= n << 8;
                     } else {
-                        0
-                    };
-                    c |= spl.getc().map_or(-1, c_int::from);
-                    let n = spl.get2c().unwrap_or(-1);
-                    if n >= maxprefcondnr {
+                        let kind = c;
+                        c = spl.getc().map_or(-1, c_int::from);
+                        if kind == BY_FLAGS2.cast_signed() {
+                            c += spl.getc().map_or(-1, c_int::from) << 8;
+                        }
+                        if WordFlags::from_bits(c).has(WordFlags::REGION) {
+                            c += spl.getc().map_or(-1, c_int::from) << 16;
+                        }
+                        if WordFlags::from_bits(c).has(WordFlags::AFX) {
+                            c += spl.getc().map_or(-1, c_int::from) << 24;
+                        }
+                    }
+                    self.idxs[idx.cast_unsigned() as usize] = c as SpellIdx;
+                    c = 0;
+                } else {
+                    // A reference to a sub-tree written elsewhere —
+                    // earlier in the file, or later: the writer hands a
+                    // sub-tree to the first parent that reaches it and
+                    // writes it only once that parent's turn comes.
+                    // Whether it names a node is for `check_shape`, once
+                    // every node is in.
+                    let n = spl.get3c().unwrap_or(-1);
+                    if n < 0 || n >= maxidx {
                         return Err(SpellReadError::Format);
                     }
-                    c |= n << 8;
-                } else {
-                    let kind = c;
+                    self.idxs[idx.cast_unsigned() as usize] =
+                        n.wrapping_add(SHARED_MASK) as SpellIdx;
                     c = spl.getc().map_or(-1, c_int::from);
-                    if kind == BY_FLAGS2.cast_signed() {
-                        c += spl.getc().map_or(-1, c_int::from) << 8;
-                    }
-                    if WordFlags::from_bits(c).has(WordFlags::REGION) {
-                        c += spl.getc().map_or(-1, c_int::from) << 16;
-                    }
-                    if WordFlags::from_bits(c).has(WordFlags::AFX) {
-                        c += spl.getc().map_or(-1, c_int::from) << 24;
+                    // The byte the sub-tree hangs under. A NUL there would
+                    // be a word end whose flags are the reference, which
+                    // the second pass leaves marked as shared.
+                    if c == 0 {
+                        return Err(SpellReadError::Format);
                     }
                 }
-                idxs[idx.cast_unsigned() as usize] = c as SpellIdx;
-                c = 0;
-            } else {
-                // A reference to a sub-tree written earlier.
-                let n = spl.get3c().unwrap_or(-1);
-                if n < 0 || n >= maxidx {
+            }
+            self.byts[idx.cast_unsigned() as usize] = low_byte(c);
+            idx += 1;
+        }
+
+        // Second pass: children follow the whole node, so their indices
+        // are only known now.
+        for i in 1..=len {
+            let at = (startidx + i).cast_unsigned() as usize;
+            if self.byts[at] == 0 {
+                continue;
+            }
+            if self.idxs[at] & SHARED_MASK != 0 {
+                self.idxs[at] &= !SHARED_MASK;
+                continue;
+            }
+            self.idxs[at] = idx;
+            idx = self.node(idx, depth + 1)?;
+        }
+        Ok(idx)
+    }
+}
+
+/// [`TreeReader::marks`] for an index where a node starts.
+const NODE_START: u16 = 1;
+/// [`check_shape`]'s mark for a node on the path it is walking.
+const ON_PATH: u16 = 2;
+/// [`check_shape`]'s mark for a node it has finished: this plus the
+/// levels its sub-tree spans.
+const SPANS: u16 = 2;
+
+/// Check that a tree just read is a tree the walks can take: every child
+/// index names the start of a node, no path comes back to a node it
+/// passed through, and no path is deeper than [`MAXWLEN`] — the walks
+/// size their stacks by that.
+///
+/// The reader already holds the nodes it read itself to all three, so
+/// this is about the shared sub-trees a [`BY_INDEX`] reference hangs
+/// somewhere: one into the middle of a node reads a child byte as a count
+/// and runs past the arrays, one to a node above it is a cycle, and one
+/// hung deeper than it was read can nest past `MAXWLEN`.
+///
+/// Each node is walked once; a shared one answers how many levels it
+/// spans from its mark the second time.
+fn check_shape(byts: &[u8], idxs: &[SpellIdx], marks: &mut [u16]) -> SplResult<()> {
+    // The node, the next child of it to look at, and the most levels
+    // its children have spanned so far.
+    let mut path: Vec<(usize, usize, u16)> = Vec::with_capacity(MAXWLEN + 1);
+    marks[0] = ON_PATH;
+    path.push((0, 1, 0));
+    while let Some(&mut (node, ref mut next, ref mut below)) = path.last_mut() {
+        if *next > usize::from(byts[node]) {
+            let spans = *below + 1;
+            marks[node] = SPANS + spans;
+            path.pop();
+            if let Some(parent) = path.last_mut() {
+                parent.2 = parent.2.max(spans);
+            }
+            continue;
+        }
+        let at = node + *next;
+        *next += 1;
+        if byts[at] == 0 {
+            continue; // a word end: its index is flags
+        }
+        let child = usize::try_from(idxs[at]).map_err(|_| SpellReadError::Format)?;
+        match marks.get(child).copied() {
+            Some(NODE_START) => {
+                if path.len() > MAXWLEN {
                     return Err(SpellReadError::Format);
                 }
-                idxs[idx.cast_unsigned() as usize] = n.wrapping_add(SHARED_MASK) as SpellIdx;
-                c = spl.getc().map_or(-1, c_int::from);
+                marks[child] = ON_PATH;
+                path.push((child, 1, 0));
             }
+            Some(done) if done > SPANS => {
+                let spans = done - SPANS;
+                *below = (*below).max(spans);
+                if path.len() + usize::from(spans) > MAXWLEN + 1 {
+                    return Err(SpellReadError::Format);
+                }
+            }
+            // Not a node start, or one on the path: a cycle.
+            _ => return Err(SpellReadError::Format),
         }
-        byts[idx.cast_unsigned() as usize] = low_byte(c);
-        idx += 1;
     }
-
-    // Second pass: children follow the whole node, so their indices
-    // are only known now.
-    for i in 1..=len {
-        let at = (startidx + i).cast_unsigned() as usize;
-        if byts[at] == 0 {
-            continue;
-        }
-        if idxs[at] & SHARED_MASK != 0 {
-            idxs[at] &= !SHARED_MASK;
-            continue;
-        }
-        idxs[at] = idx;
-        let deeper = depth + 1;
-        idx = read_tree_node(spl, byts, idxs, idx, prefixtree, maxprefcondnr, deeper)?;
-    }
-    Ok(idx)
+    Ok(())
 }
 
 /// Re-read every loaded language that came from `fname`, and redraw the

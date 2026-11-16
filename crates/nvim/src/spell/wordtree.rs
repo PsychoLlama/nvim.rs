@@ -21,10 +21,12 @@
 //! # Bounds
 //!
 //! Every index below is checked by Rust. That is affordable because the
-//! reader (`spellfile::read::read_tree_node`) has already refused a tree
+//! reader (`spellfile::read::TreeReader`) has already refused a tree
 //! whose node lengths run past the array: it rejects a node with no
 //! children and one whose last child would land at or past the end, so
 //! after reading a count at `n` the byte at `n + 1` is always there. A
+//! shared sub-tree must start where a node it finished reading starts, so
+//! a child index always lands on a node's count. A
 //! panic here would therefore mean the reader let a malformed tree
 //! through, not that a caller mis-stepped.
 
