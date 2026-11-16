@@ -191,26 +191,37 @@ pub(super) fn question(p: &mut ExprParser) -> Flow {
 
 /// `->`: closes a lambda's argument list, or is reported as misplaced.
 pub(super) fn arrow(p: &mut ExprParser) -> Flow {
+    // A closer may have unwound the AST stack past an argument list that had
+    // already failed (`{a,]->`), leaving its parse type behind: that list is
+    // gone, and this arrow is outside of it.
+    while p.cur_pt == EPT_LAMBDA_ARGUMENTS {
+        let lambda_node = p.lambda_node();
+        if p.ast_stack
+            .iter()
+            .any(|&slot| p.ast.slot(slot) == Some(lambda_node))
+        {
+            break;
+        }
+        debug_assert!(
+            p.ast.has_error(),
+            "only a failed argument list is left behind"
+        );
+        p.pop_lambda_arguments();
+        p.cur_pt = p.pt_top();
+    }
     if p.cur_pt == EPT_LAMBDA_ARGUMENTS {
-        p.pt_stack.truncate(p.pt_stack.len() - 1);
+        let lambda_node = p.lambda_node();
+        p.pop_lambda_arguments();
         debug_assert!(!p.pt_stack.is_empty(), "kv_size(pt_stack)");
         if p.want_node == E_NODE_VALUE {
             // Wanting a value means a trailing comma and NULL at the top of
             // the stack.
             p.ast_stack.truncate(p.ast_stack.len() - 1);
         }
-        debug_assert!(!p.ast_stack.is_empty(), "kv_size(ast_stack) >= 1");
-        while !matches!(
-            p.ast.kind(p.ast.filled(stack_top(&p.ast_stack, 0))),
-            EXPR_NODE_LAMBDA | EXPR_NODE_UNKNOWN_FIGURE
-        ) {
+        // Down to the brace, which the loop above found on the stack.
+        while p.ast.slot(stack_top(&p.ast_stack, 0)) != Some(lambda_node) {
             p.ast_stack.truncate(p.ast_stack.len() - 1);
         }
-        debug_assert!(
-            p.ast.slot(stack_top(&p.ast_stack, 0)) == p.lambda_node,
-            "(*kv_last(ast_stack)) == lambda_node"
-        );
-        let lambda_node = p.lambda_node.expect("a lambda's arguments are open");
         p.select_figure_brace_type(lambda_node, EXPR_NODE_LAMBDA, hl!(p, Lambda));
         let node = p.new_node(EXPR_NODE_ARROW);
         match p.ast.first_child(lambda_node) {
@@ -229,7 +240,6 @@ pub(super) fn arrow(p: &mut ExprParser) -> Flow {
             }
         }
         p.ast_stack.push(Slot::Children(node));
-        p.lambda_node = None;
     } else {
         // Only the first branch is valid.
         p.add_value_if_missing(c"E15: Unexpected arrow: %.*s");
@@ -253,7 +263,12 @@ pub(super) fn assignment(p: &mut ExprParser) -> Flow {
         p.error(c"E15: Misplaced assignment: %.*s");
     }
     debug_assert!(!p.pt_stack.is_empty(), "kv_size(pt_stack)");
-    debug_assert!(p.pt_top() == EPT_EXPR, "kv_last(pt_stack) == kEPTExpr");
+    // A misplaced `=` can also come among lambda arguments (`{a,=`), after
+    // the parse-type reconciliation has reported them.
+    debug_assert!(
+        p.pt_top() == EPT_EXPR || p.ast.has_error(),
+        "an expression is being parsed, or an error stands"
+    );
     p.add_value_if_missing(c"E15: Unexpected assignment: %.*s");
     let node = p.new_node(EXPR_NODE_ASSIGNMENT);
     p.ast.set_data(

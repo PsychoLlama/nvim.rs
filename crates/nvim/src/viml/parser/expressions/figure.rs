@@ -101,7 +101,7 @@ pub(super) fn figure_brace(p: &mut ExprParser) -> Flow {
             // a bare identifier, `,` and `->` — and `,`/`->` are exactly the two
             // that misbehaved.
             p.pt_stack.push(EPT_LAMBDA_ARGUMENTS);
-            p.lambda_node = Some(node);
+            p.lambda_nodes.push(node);
         }
     } else {
         // Operator: this may only be a part of a curly braces name.
@@ -227,7 +227,25 @@ fn closing_figure_brace(p: &mut ExprParser) -> Flow {
             EXPR_NODE_DICT_LITERAL => p.hl_token(hl!(p, Dict)),
             EXPR_NODE_CURLY_BRACES_IDENTIFIER => p.hl_token(hl!(p, Curly)),
             EXPR_NODE_LAMBDA => p.hl_token(hl!(p, Lambda)),
-            _ => unexpected = true,
+            _ => {
+                // No brace opened this one: enclose everything so far in a
+                // figure brace that is none of the three, as the branch above
+                // does (see `closing_bracket`).
+                let node = p.new_node(EXPR_NODE_UNKNOWN_FIGURE);
+                let fig = unhighlighted(
+                    p,
+                    ExprFigureGuesses {
+                        allow_dict: false,
+                        allow_lambda: false,
+                        allow_ident: false,
+                    },
+                );
+                p.ast.set_data(node, ExprNodeData::Figure(fig));
+                p.ast.set_len(node, 0);
+                p.ast.set_children(node, Some(new_top_node));
+                p.ast.set_slot(new_top_node_p, Some(node));
+                unexpected = true;
+            }
         }
     }
     if unexpected {
@@ -238,10 +256,9 @@ fn closing_figure_brace(p: &mut ExprParser) -> Flow {
     p.ast_stack.push(new_top_node_p);
     p.want_node = E_NODE_OPERATOR;
     if p.ast_stack.len() <= p.asgn_level {
-        debug_assert!(
-            p.ast_stack.len() == p.asgn_level,
-            "kv_size(ast_stack) == asgn_level"
-        );
+        // Usually exactly that level, but a closer that does not match the
+        // innermost opener (`[a{b]`, or one with nothing to close at all)
+        // unwinds past it.
         if p.cur_pt == EPT_EXPR
             && p.pt_stack.len() > 1
             && pt_is_assignment(p.pt_stack[p.pt_stack.len() - 2])

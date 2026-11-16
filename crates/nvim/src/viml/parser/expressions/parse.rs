@@ -224,9 +224,11 @@ pub(super) struct ExprParser<'a, 's> {
     pub(super) want_node: ExprASTWantedNode,
     pub(super) prev_token: LexExprToken,
     pub(super) highlighted_prev_spacing: bool,
-    /// The figure brace node currently being read as a lambda's argument
-    /// list; `None` at any other time.
-    pub(super) lambda_node: Option<NodeId>,
+    /// The figure brace node of each `EPT_LAMBDA_ARGUMENTS` entry on
+    /// `pt_stack`, innermost last. Upstream kept only the innermost, so a
+    /// brace opened inside an argument list that already failed (`{a,{,`)
+    /// lost the outer one while its entry stayed on the stack.
+    pub(super) lambda_nodes: Vec<NodeId>,
     /// Stack depth at which the assignment lvalue started, so that closing
     /// its last bracket can pop the assignment parse type again.
     pub(super) asgn_level: size_t,
@@ -276,7 +278,7 @@ impl<'a, 's> ExprParser<'a, 's> {
             want_node: E_NODE_VALUE,
             prev_token: blank,
             highlighted_prev_spacing: false,
-            lambda_node: None,
+            lambda_nodes: Vec::new(),
             asgn_level: 0,
             cur_token: blank,
             tok_type: EXPR_LEX_MISSING,
@@ -398,6 +400,27 @@ impl<'a, 's> ExprParser<'a, 's> {
             self.ast.set_slot(self.top_node_p, Some(node));
             self.want_node = E_NODE_OPERATOR;
         }
+    }
+
+    /// The figure brace whose lambda argument list is open: `cur_pt` is
+    /// `EPT_LAMBDA_ARGUMENTS`.
+    #[track_caller]
+    pub(super) fn lambda_node(&self) -> NodeId {
+        *self
+            .lambda_nodes
+            .last()
+            .expect("an open lambda argument list has its figure brace")
+    }
+
+    /// Close the innermost lambda argument list: its parse type (on top of
+    /// `pt_stack`) and its figure brace.
+    pub(super) fn pop_lambda_arguments(&mut self) {
+        debug_assert!(
+            self.pt_top() == EPT_LAMBDA_ARGUMENTS,
+            "lambda arguments are open"
+        );
+        self.pt_stack.truncate(self.pt_stack.len() - 1);
+        self.lambda_nodes.truncate(self.lambda_nodes.len() - 1);
     }
 
     /// `OP_MISSING`: two values in a row, as in `:echo @a @a`.
@@ -589,9 +612,13 @@ impl<'a, 's> ExprParser<'a, 's> {
         }
         debug_assert!(!self.pt_stack.is_empty(), "kv_size(pt_stack)");
         self.cur_pt = self.pt_top();
-        debug_assert!(
-            self.lambda_node.is_none() || self.cur_pt == EPT_LAMBDA_ARGUMENTS,
-            "lambda_node == NULL || cur_pt == kEPTLambdaArguments"
+        debug_assert_eq!(
+            self.lambda_nodes.len(),
+            self.pt_stack
+                .iter()
+                .filter(|&&pt| pt == EPT_LAMBDA_ARGUMENTS)
+                .count(),
+            "one figure brace per open lambda argument list"
         );
         self.dispatch()
     }
@@ -657,7 +684,7 @@ impl<'a, 's> ExprParser<'a, 's> {
                             && !self.cur_token.variable().autoload)
                         && self.tok_type != EXPR_LEX_ARROW
                 {
-                    let lambda_node = self.lambda_node.expect("a lambda's arguments are open");
+                    let lambda_node = self.lambda_node();
                     let mut fig = self.ast.fig(lambda_node);
                     fig.type_guesses.allow_lambda = false;
                     self.ast.set_data(lambda_node, ExprNodeData::Figure(fig));
@@ -676,8 +703,7 @@ impl<'a, 's> ExprParser<'a, 's> {
                         // Else it may appear that the possibly-lambda node is
                         // actually a dictionary or a curly-braces-name
                         // identifier.
-                        self.lambda_node = None;
-                        self.pt_stack.truncate(self.pt_stack.len() - 1);
+                        self.pop_lambda_arguments();
                     }
                 }
             }

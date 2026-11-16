@@ -19,9 +19,11 @@ use super::*;
 
 /// `,`: valid inside a call, a lambda argument list, a list or a dictionary.
 pub(super) fn comma(p: &mut ExprParser) -> Flow {
+    // `{a,,` gets here wanting a lambda argument, after the parse-type
+    // reconciliation has already reported it.
     debug_assert!(
-        !(p.want_node == E_NODE_VALUE && p.cur_pt == EPT_LAMBDA_ARGUMENTS),
-        "!(want_node == kENodeValue && cur_pt == kEPTLambdaArguments)"
+        !(p.want_node == E_NODE_VALUE && p.cur_pt == EPT_LAMBDA_ARGUMENTS) || p.ast.has_error(),
+        "a comma among lambda arguments follows an argument, or an error stands"
     );
     if p.want_node == E_NODE_VALUE {
         // Value level: a comma appearing here is not valid.
@@ -33,10 +35,10 @@ pub(super) fn comma(p: &mut ExprParser) -> Flow {
         p.want_node = E_NODE_OPERATOR;
     }
     if p.cur_pt == EPT_LAMBDA_ARGUMENTS {
-        let lambda_node = p.lambda_node.expect("lambda_node != NULL");
+        let lambda_node = p.lambda_node();
         debug_assert!(
-            p.ast.fig(lambda_node).type_guesses.allow_lambda,
-            "lambda_node->data.fig.type_guesses.allow_lambda"
+            p.ast.fig(lambda_node).type_guesses.allow_lambda || p.ast.has_error(),
+            "the open figure brace may still be a lambda, or an error stands"
         );
         p.select_figure_brace_type(lambda_node, EXPR_NODE_LAMBDA, hl!(p, Lambda));
     }
@@ -294,7 +296,18 @@ fn closing_bracket(p: &mut ExprParser) -> Flow {
                 p.hl_token(hl!(p, List));
             }
             EXPR_NODE_SUBSCRIPT => p.hl_token(hl!(p, SubscriptBracket)),
-            _ => unexpected = true,
+            _ => {
+                // No bracket opened this one: assume everything so far was
+                // meant to be enclosed in [], as the branch above and an
+                // unexpected `)` do. Left as it was, the next operator would
+                // take a finished `1 2` (or an unfinished `a is`) for an open
+                // one and splice itself into it.
+                let node = p.new_node(EXPR_NODE_LIST_LITERAL);
+                p.ast.set_len(node, 0);
+                p.ast.set_children(node, Some(new_top_node));
+                p.ast.set_slot(new_top_node_p, Some(node));
+                unexpected = true;
+            }
         }
     }
     if unexpected {
@@ -305,10 +318,9 @@ fn closing_bracket(p: &mut ExprParser) -> Flow {
     p.ast_stack.push(new_top_node_p);
     p.want_node = E_NODE_OPERATOR;
     if p.ast_stack.len() <= p.asgn_level {
-        debug_assert!(
-            p.ast_stack.len() == p.asgn_level,
-            "kv_size(ast_stack) == asgn_level"
-        );
+        // Usually exactly that level, but a closer that does not match the
+        // innermost opener (`[a{b]`, or one with nothing to close at all)
+        // unwinds past it.
         p.asgn_level = 0;
         if p.cur_pt == EPT_ASSIGNMENT {
             debug_assert!(p.ast.has_error(), "ast.err.msg");

@@ -3373,6 +3373,32 @@ describe('API', function()
       assert_alive()
     end)
 
+    it('reports an unmatched closer after a finished or unfinished operand', function()
+      -- Upstream segfaults on these: the next operator spliced itself into
+      -- the operand the closer left on the stack as if it were still open.
+      local function err(expr, flags)
+        local e = api.nvim_parse_expression(expr, flags or '', true).error
+        return e and { e.message, e.arg }
+      end
+      eq({ 'E15: Missing operator: %.*s', '2]3' }, err('1 2]3'))
+      eq({ 'E15: Missing operator: %.*s', '2}3' }, err('1 2}3'))
+      eq({ 'E15: Missing operator: %.*s', 'x]1' }, err('0x]1'))
+      eq({ 'E15: Expected value, got closing bracket: %.*s', ']!=b' }, err('a is]!=b'))
+      eq({ 'E15: Missing operator: %.*s', '2]3 is]4' }, err('1 2]3 is]4'))
+      -- A lambda argument list that already failed, then a nested brace or a
+      -- closer that unwinds past it.
+      local lambda = 'E15: Expected lambda arguments list or arrow: %.*s'
+      eq({ lambda, ',' }, err('{a,,'))
+      eq({ lambda, '=' }, err('{a,='))
+      eq({ lambda, '{,1' }, err('{a,{,1'))
+      eq({ lambda, ']->' }, err('{a,]->'))
+      eq({ 'E15: Environment variable name missing', '${]b' }, err('${]b', 'l'))
+      eq({ 'E15: Missing operator: %.*s', 'c' }, err('[a{b]c', 'l'))
+      -- Typed at the expression register, the prompt colours as it goes.
+      api.nvim_input(':<C-r>=1 2]3<C-u>a is]!=b<C-u>{a,{,1<Esc><Esc>')
+      assert_alive()
+    end)
+
     require('test.unit.viml.expressions.parser_tests')(it, _check_parsing, hl, fmtn)
   end)
 

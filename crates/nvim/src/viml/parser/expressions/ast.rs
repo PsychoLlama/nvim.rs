@@ -558,9 +558,11 @@ pub(super) fn viml_pexpr_handle_bop<'a>(
     }
     let top_node_p = top_node_p.expect("the loop ran at least once");
     let top_node = ast.filled(top_node_p);
-    if top_node_ass == E_OP_ASS_LEFT || top_node_lvl != bop_node_lvl {
+    if top_node_ass != E_OP_ASS_RIGHT || top_node_lvl != bop_node_lvl {
         // The operator takes the whole of what was unwound as its left
-        // operand, and stands where that used to.
+        // operand, and stands where that used to. A non-associative node of
+        // the same level only gets here as a finished operand (the first
+        // thing unwound), and is taken whole too.
         ast.set_slot(top_node_p, Some(bop_node));
         ast.set_children(bop_node, Some(top_node));
         debug_assert!(
@@ -570,21 +572,16 @@ pub(super) fn viml_pexpr_handle_bop<'a>(
         ast_stack.push(top_node_p);
         ast_stack.push(Slot::Next(top_node));
     } else {
-        assert!(
-            top_node_lvl == bop_node_lvl && top_node_ass == E_OP_ASS_RIGHT,
-            "top_node_lvl == bop_node_lvl && top_node_ass == kEOpAssRight"
-        );
         // Right-associative and equal: the operator steals the right operand
         // of the one above it and becomes that operand instead.
         let top_children = ast
             .first_child(top_node)
             .expect("a right-associative operator has its left operand");
-        let stolen = ast.next(top_children);
-        debug_assert!(
-            stolen.is_some(),
-            "top_node->children != NULL && top_node->children->next != NULL"
+        let stolen = ast.next(top_children).expect(
+            "a right-associative operator unwound past has its right operand \
+             (a closer with nothing to close wraps an unfinished one)",
         );
-        ast.set_children(bop_node, stolen);
+        ast.set_children(bop_node, Some(stolen));
         ast.set_slot(Slot::Next(top_children), Some(bop_node));
         let left = ast.filled(Slot::Children(bop_node));
         debug_assert!(ast.next(left).is_none(), "bop_node->children->next == NULL");
