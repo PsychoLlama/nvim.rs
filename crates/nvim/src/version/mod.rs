@@ -41,7 +41,7 @@ use crate::message::{msg_ext_set_kind, msg_str};
 use crate::option::defs::ShmFlag;
 use crate::option::vars::{P_SHM, p_ls, p_verbose};
 use crate::os::cshim::gettext;
-use crate::types::{Array, ExArg, OptInt};
+use crate::types::{Array, ExArg, Object, OptInt};
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::state::{UI_MESSAGES, UI_MULTIGRID};
 use crate::ui::ui_has;
@@ -286,14 +286,16 @@ pub(crate) fn list_in_columns(items: &[&CStr], current: c_int) {
 }
 
 /// Print the Lua runtime's own version string, which only it knows.
+///
+/// `jit` and `_VERSION` are globals a user can replace or break, so the
+/// line is left out when they do not give a string.
 pub(crate) fn list_lua_version() {
     const CODE: &CStr = c"return ((jit and jit.version) and jit.version or _VERSION)";
 
-    let ret = nlua_exec(CODE.to_bytes(), None, Array::new(), LuaRetMode::Object)
-        .expect("a literal chunk cannot fail");
-    let version = ret.as_string().expect("_VERSION is a string");
-    msg_str(version.as_cstr());
-    drop(ret);
+    let ret = nlua_exec(CODE.to_bytes(), None, Array::new(), LuaRetMode::Object);
+    if let Some(version) = ret.as_ref().ok().and_then(Object::as_string) {
+        msg_str(version.as_cstr());
+    }
 }
 
 /// The `:version` screen. `nvim -v` prints the same thing, and `nvim -V1 -v`

@@ -33,6 +33,7 @@
 
 mod tags;
 
+use crate::api_error;
 use crate::ascii::{ascii_isalpha, ascii_iswhite};
 use crate::buffer::{buf_is_help, find_buf, set_buflisted, wipe_buffer};
 use crate::charset::buf_init_chartab;
@@ -57,7 +58,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::state::mode::RESTART_EDIT;
 use crate::tag::{HelpTagMatch, TagCmd, do_tag, find_help_tag_matches};
-use crate::types::{ApiString, Handle, Key};
+use crate::types::{ApiString, ERROR_TYPE_EXCEPTION, Handle, Key};
 use crate::types::{Array, ArrayBuf, CmdModFlags, ExArg, Failed, Object, OptInt};
 use crate::ui::state::COLUMNS;
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
@@ -376,7 +377,17 @@ fn find_help_tags(subject: &[u8], keep_lang: bool) -> Option<Vec<Vec<u8>>> {
     let mut args = ArrayBuf::<1>::new();
     args.push(Object::string(ApiString::from_bytes(subject)));
     let chunk = c"return require'vim._core.help'.escape_subject(...)";
-    let res = match nlua_exec_cstr(chunk, args.array(), LuaRetMode::Object) {
+    // The module is a user's to replace, so its answer is checked rather
+    // than trusted: anything but a string is refused like a Lua error.
+    let res = nlua_exec_cstr(chunk, args.array(), LuaRetMode::Object).and_then(|value| {
+        value.into_string().ok_or_else(|| {
+            api_error!(
+                ERROR_TYPE_EXCEPTION,
+                "vim._core.help.escape_subject() must return a string"
+            )
+        })
+    });
+    let escaped = match res {
         Ok(value) => value,
         Err(mut err) => {
             emsg_multiline(err.message_or_empty(), Some(c"lua_error"), HLF_E, true);
@@ -384,15 +395,12 @@ fn find_help_tags(subject: &[u8], keep_lang: bool) -> Option<Vec<Vec<u8>>> {
             return None;
         }
     };
-    let escaped = res
-        .as_string()
-        .expect("`vim._core.help.escape_subject()` answers with a string");
     // The search pattern, cut to the size upstream's copy in the shared
     // `IObuff` had, and read as the C string it was there.
-    let escaped = escaped.as_bytes();
-    let escaped = &escaped[..escaped.len().min(IOSIZE as usize - 1)];
-    let pattern = XString::from_bytes(escaped.split(|&b| b == 0).next().unwrap_or_default());
-    drop(res);
+    let bytes = escaped.as_bytes();
+    let bytes = &bytes[..bytes.len().min(IOSIZE as usize - 1)];
+    let pattern = XString::from_bytes(bytes.split(|&b| b == 0).next().unwrap_or_default());
+    drop(escaped);
 
     let mut flags = TAG_HELP | TAG_REGEXP | TAG_NAMES | TAG_VERBOSE | TAG_NO_TAGFUNC;
     if keep_lang {

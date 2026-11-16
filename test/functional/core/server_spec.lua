@@ -219,6 +219,23 @@ describe('server', function()
     client:close()
   end)
 
+  it(
+    'serverlist({peer=true}) keeps its own servers when the peer helper answers garbage',
+    function()
+      clear()
+      local own = fn.serverlist()
+      for _, answer in ipairs({ '5', '{ 1 }', '{ "ok", {} }' }) do
+        n.exec_lua(
+          "package.loaded['vim._core.server'] = { serverlist = function() return "
+            .. answer
+            .. ' end }'
+        )
+        eq(own, fn.serverlist({ peer = true }))
+      end
+      n.assert_alive()
+    end
+  )
+
   it('removes stale socket files automatically #36581', function()
     -- Windows named pipes are ephemeral kernel objects that are automatically
     -- cleaned up when the process terminates. Unix domain sockets persist as

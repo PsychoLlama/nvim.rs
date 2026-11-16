@@ -313,13 +313,24 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 );
             }
             Ok(rv) => {
-                let peers = rv
-                    .as_array()
-                    .expect("`vim._core.server.serverlist()` answers with a list");
-                for item in peers {
-                    let addr = item
-                        .as_string()
-                        .expect("`serverlist()` answers with a list of strings");
+                // The module is a user's to replace, so a malformed answer is
+                // logged like a failure rather than trusted.
+                let peers = rv.as_array().and_then(|peers| {
+                    peers
+                        .iter()
+                        .map(Object::as_string)
+                        .collect::<Option<Vec<_>>>()
+                });
+                let Some(peers) = peers else {
+                    logmsg!(
+                        LOGLVL_ERR,
+                        c"f_serverlist",
+                        6338,
+                        "vim._core.serverlist failed: expected a list of strings"
+                    );
+                    return;
+                };
+                for addr in peers {
                     let addr = (!addr.is_null()).then(|| addr.as_cstr());
                     list.edit().push_str(addr);
                 }

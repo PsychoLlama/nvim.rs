@@ -181,6 +181,13 @@ describe('command-line option', function()
     matches('fall%-back for %$VIM: .*Run :checkhealth', n.spawn_wait('-V1', '-v').stdout)
   end)
 
+  it(':version leaves the Lua line out when `jit` and `_VERSION` give no string', function()
+    n.exec_lua('jit = nil; _VERSION = 3')
+    matches('Run ":verbose version"', fn.execute(':version'))
+    n.exec_lua('jit = setmetatable({}, { __index = function() error("boom") end })')
+    matches('Run ":verbose version"', fn.execute(':version'))
+  end)
+
   if is_os('win') then
     for _, prefix in ipairs({ '~/', '~\\' }) do
       it('expands ' .. prefix .. ' on Windows', function()

@@ -315,4 +315,17 @@ describe(':help', function()
     command('help …')
     eq('*…*', api.nvim_get_current_line())
   end)
+
+  it('refuses a subject escaper that answers something other than a string', function()
+    n.exec_lua(function()
+      require('vim._core.help').escape_subject = function()
+        return 1
+      end
+    end)
+    eq(
+      'Vim(help):vim._core.help.escape_subject() must return a string',
+      pcall_err(command, 'help foo')
+    )
+    n.assert_alive()
+  end)
 end)
