@@ -39,6 +39,28 @@ mod ranges;
 mod tree;
 
 pub use self::init::nlua_treesitter_init;
+
+/// Whether what the value at `at` points into is all still there: the
+/// first `depth` of its environment's tree, query and cursor (see
+/// [`cursor`]). The environment keeps them from the collector, but plain
+/// Lua can call one's `__gc` by hand (`getmetatable(tree).__gc(tree)`),
+/// which frees what a node or a match then reads.
+fn owners_live(stack: &mut Stack, at: At, depth: core::ffi::c_int) -> bool {
+    stack.push_environment(at);
+    let env = stack.top();
+    let mut live = true;
+    for index in 1..=depth {
+        stack.raw_get_index(env, index);
+        live &= match index {
+            1 => stack.is_live_userdata::<tree::Tree>(At::TOP),
+            2 => stack.is_live_userdata::<Query>(At::TOP),
+            _ => stack.is_live_userdata::<cursor::QueryCursor>(At::TOP),
+        };
+        stack.pop(1);
+    }
+    stack.pop(1);
+    live
+}
 use self::node::Node;
 use self::query::Query;
 

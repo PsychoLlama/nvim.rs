@@ -20,22 +20,28 @@
 use core::ffi::{CStr, c_int, c_void};
 
 use super::*;
-use crate::lua::stack::{Kind, Raise};
+use crate::lua::stack::{CollectedMark, Kind, Raise};
 use crate::lua_functions;
 use crate::memory::xfree;
 
-/// A node, as its userdatum holds it.
+/// A node, as its userdatum holds it, with the mark of the tree userdatum
+/// its environment keeps (and whose `TSTree` it points into).
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Node(pub TSNode);
+pub(crate) struct Node(pub TSNode, pub(crate) Option<CollectedMark>);
+
+/// The mark of the tree a node points into (see [`check_node`]); `None`
+/// reads as collected.
+pub(crate) type TreeMark = Option<CollectedMark>;
 
 impl Default for Node {
     /// The null node: what nothing points at.
     fn default() -> Node {
-        Node(TSNode {
+        let null = TSNode {
             context: [0; 4],
             id: core::ptr::null(),
             tree: core::ptr::null(),
-        })
+        };
+        Node(null, None)
     }
 }
 
@@ -95,7 +101,7 @@ lua_functions! {
 /// Push `node` as a userdatum sharing the environment of the userdatum at
 /// `owner` -- an absolute slot or an upvalue -- so it keeps the same tree
 /// alive; nil for the null node.
-pub(crate) fn push_node(stack: &mut Stack, node: TSNode, owner: At) {
+pub(crate) fn push_node(stack: &mut Stack, node: TSNode, owner: At, tree: TreeMark) {
     debug_assert!(
         owner.index() > 0 || owner.index() < -20,
         "the owner's slot does not move as the node is pushed"
@@ -106,14 +112,39 @@ pub(crate) fn push_node(stack: &mut Stack, node: TSNode, owner: At) {
         stack.push_nil();
         return;
     }
-    stack.new_userdata(Node(node));
+    stack.new_userdata(Node(node, tree));
     stack.push_environment(owner);
     stack.set_environment(At::from_top(2));
 }
 
-/// `luaL_checkudata` for a node: the node at `at`.
+/// `luaL_checkudata` for a node: the node at `at`, refusing one whose tree
+/// has been collected.
 pub(crate) fn check_node(stack: &mut Stack, at: At) -> Result<TSNode, Raise> {
-    Ok(stack.check_userdata::<Node>(at)?.0)
+    Ok(check_owner(stack, at)?.0)
+}
+
+/// [`check_node`], with the tree's mark for the nodes pushed from it.
+fn check_owner(stack: &mut Stack, at: At) -> Result<(TSNode, TreeMark), Raise> {
+    let Node(node, tree) = *stack.check_userdata::<Node>(at)?;
+    // SAFETY: the mark of the tree the node's environment refers to, which
+    // the node being here keeps allocated.
+    if tree.is_none_or(|tree| unsafe { tree.is_collected() }) {
+        return Err(Raise::argument(
+            at.index(),
+            "the node's tree has been collected",
+        ));
+    }
+    Ok((node, tree))
+}
+
+/// The mark of the tree in the environment of the userdatum at `owner` (a
+/// cursor or a match, whose environment starts with its tree).
+pub(crate) fn env_tree_mark(stack: &mut Stack, owner: At) -> TreeMark {
+    stack.push_environment(owner);
+    stack.raw_get_index(At::TOP, 1);
+    let mark = stack.collected_mark::<tree::Tree>(At::TOP);
+    stack.pop(2);
+    mark
 }
 
 /// Push each of `values` as an integer; answers how many.
@@ -129,10 +160,10 @@ fn push_related(
     stack: &mut Stack,
     step: unsafe extern "C" fn(TSNode) -> TSNode,
 ) -> Result<c_int, Raise> {
-    let node = check_node(stack, At::arg(1))?;
+    let (node, tree) = check_owner(stack, At::arg(1))?;
     // SAFETY: a node of a tree its userdatum keeps alive.
     let related = unsafe { step(node) };
-    push_node(stack, related, At::arg(1));
+    push_node(stack, related, At::arg(1), tree);
     Ok(1)
 }
 
@@ -247,7 +278,7 @@ fn node_symbol(stack: &mut Stack) -> Result<c_int, Raise> {
 
 /// The children whose field is the name in slot 2.
 fn node_field(stack: &mut Stack) -> Result<c_int, Raise> {
-    let node = check_node(stack, At::arg(1))?;
+    let (node, tree) = check_owner(stack, At::arg(1))?;
     // SAFETY: as above.
     let count = unsafe { ts_node_child_count(node) };
     // `strequal` on the C string `luaL_checklstring` answers.
@@ -261,7 +292,7 @@ fn node_field(stack: &mut Stack) -> Result<c_int, Raise> {
         if !field.is_null() && unsafe { c_bytes(field) } == wanted.as_slice() {
             // SAFETY: as above.
             let child = unsafe { ts_node_child(node, child_index) };
-            push_node(stack, child, At::arg(1));
+            push_node(stack, child, At::arg(1), tree);
             index += 1;
             stack.raw_set_index(At::from_top(2), index);
         }
@@ -302,20 +333,20 @@ fn node_has_error(stack: &mut Stack) -> Result<c_int, Raise> {
 }
 
 fn node_child(stack: &mut Stack) -> Result<c_int, Raise> {
-    let node = check_node(stack, At::arg(1))?;
+    let (node, tree) = check_owner(stack, At::arg(1))?;
     let index = wrap_u32(stack.to_integer(At::arg(2)));
     // SAFETY: as above.
     let child = unsafe { ts_node_child(node, index) };
-    push_node(stack, child, At::arg(1));
+    push_node(stack, child, At::arg(1), tree);
     Ok(1)
 }
 
 fn node_named_child(stack: &mut Stack) -> Result<c_int, Raise> {
-    let node = check_node(stack, At::arg(1))?;
+    let (node, tree) = check_owner(stack, At::arg(1))?;
     let index = wrap_u32(stack.to_integer(At::arg(2)));
     // SAFETY: as above.
     let child = unsafe { ts_node_named_child(node, index) };
-    push_node(stack, child, At::arg(1));
+    push_node(stack, child, At::arg(1), tree);
     Ok(1)
 }
 
@@ -329,34 +360,34 @@ fn point_range(stack: &Stack) -> (TSPoint, TSPoint) {
 }
 
 fn node_descendant_for_range(stack: &mut Stack) -> Result<c_int, Raise> {
-    let node = check_node(stack, At::arg(1))?;
+    let (node, tree) = check_owner(stack, At::arg(1))?;
     let (start, end) = point_range(stack);
     // SAFETY: as above.
     let child = unsafe { ts_node_descendant_for_point_range(node, start, end) };
-    push_node(stack, child, At::arg(1));
+    push_node(stack, child, At::arg(1), tree);
     Ok(1)
 }
 
 fn node_named_descendant_for_range(stack: &mut Stack) -> Result<c_int, Raise> {
-    let node = check_node(stack, At::arg(1))?;
+    let (node, tree) = check_owner(stack, At::arg(1))?;
     let (start, end) = point_range(stack);
     // SAFETY: as above.
     let child = unsafe { ts_node_named_descendant_for_point_range(node, start, end) };
-    push_node(stack, child, At::arg(1));
+    push_node(stack, child, At::arg(1), tree);
     Ok(1)
 }
 
 /// One step of `iter_children`: the next child and its field name.
 fn node_next_child(stack: &mut Stack) -> Result<c_int, Raise> {
     let index = wrap_u32(stack.to_integer(At::upvalue(1)));
-    let source = check_node(stack, At::upvalue(2))?;
+    let (source, tree) = check_owner(stack, At::upvalue(2))?;
     // SAFETY: a node of a tree its userdatum (the upvalue) keeps alive.
     if index >= unsafe { ts_node_child_count(source) } {
         return Ok(0);
     }
     // SAFETY: as above.
     let child = unsafe { ts_node_child(source, index) };
-    push_node(stack, child, At::upvalue(2));
+    push_node(stack, child, At::upvalue(2), tree);
     // SAFETY: as above; a field name is the language's, or null.
     unsafe { push_c_string(stack, ts_node_field_name_for_child(source, index)) };
     stack.push_integer(integer(index) + 1);
@@ -409,11 +440,11 @@ fn node_has_ancestor(stack: &mut Stack) -> Result<c_int, Raise> {
 }
 
 fn node_child_with_descendant(stack: &mut Stack) -> Result<c_int, Raise> {
-    let node = check_node(stack, At::arg(1))?;
+    let (node, tree) = check_owner(stack, At::arg(1))?;
     let descendant = check_node(stack, At::arg(2))?;
     // SAFETY: as above.
     let child = unsafe { ts_node_child_with_descendant(node, descendant) };
-    push_node(stack, child, At::arg(1));
+    push_node(stack, child, At::arg(1), tree);
     Ok(1)
 }
 
@@ -434,7 +465,7 @@ fn node_prev_named_sibling(stack: &mut Stack) -> Result<c_int, Raise> {
 }
 
 fn node_named_children(stack: &mut Stack) -> Result<c_int, Raise> {
-    let source = check_node(stack, At::arg(1))?;
+    let (source, tree) = check_owner(stack, At::arg(1))?;
     stack.new_table(0, 0);
     let mut index = 0;
     // SAFETY: as above.
@@ -444,7 +475,7 @@ fn node_named_children(stack: &mut Stack) -> Result<c_int, Raise> {
         let child = unsafe { ts_node_child(source, child_index) };
         // SAFETY: as above.
         if unsafe { ts_node_is_named(child) } {
-            push_node(stack, child, At::arg(1));
+            push_node(stack, child, At::arg(1), tree);
             index += 1;
             stack.raw_set_index(At::from_top(2), index);
         }
@@ -453,10 +484,10 @@ fn node_named_children(stack: &mut Stack) -> Result<c_int, Raise> {
 }
 
 fn node_root(stack: &mut Stack) -> Result<c_int, Raise> {
-    let node = check_node(stack, At::arg(1))?;
+    let (node, tree) = check_owner(stack, At::arg(1))?;
     // SAFETY: the node's tree, which its userdatum keeps alive.
     let root = unsafe { ts_tree_root_node(node.tree) };
-    push_node(stack, root, At::arg(1));
+    push_node(stack, root, At::arg(1), tree);
     Ok(1)
 }
 

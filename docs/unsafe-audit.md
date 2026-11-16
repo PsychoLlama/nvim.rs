@@ -9,7 +9,7 @@ have to change for it to go.
 
 Rust checks memory safety at compile time everywhere except inside `unsafe`
 code, where the programmer promises what the compiler cannot verify. In this
-tree that code is confined to **64 files**, holding **1,608 unchecked
+tree that code is confined to **64 files**, holding **1,612 unchecked
 statements** — every one of them on the _perimeter_ ([docs/perimeter.md](perimeter.md)),
 the list of modules where the program meets something it does not own. The
 other 1,284 source files of the editor (`crates/nvim/src`, 1,348 files) contain
@@ -50,10 +50,10 @@ falls into four classes:
 - Every file's count of unchecked statements is ratcheted: it may shrink and
   never grow without an explicit, justified override. A statement is what the
   code _does_ — splitting a block into smaller ones does not lower it.
-- Every `unsafe fn` (228) carries a `# Safety` section saying what its caller
+- Every `unsafe fn` (229) carries a `# Safety` section saying what its caller
   must guarantee; the ratchet fails on one without. An `unsafe fn` whose
   signature shows no raw pointer needs a row in
-  [docs/unsafe-fn-allowlist.md](unsafe-fn-allowlist.md) (four rows today).
+  [docs/unsafe-fn-allowlist.md](unsafe-fn-allowlist.md) (five rows today).
 - Debug builds add checks the release build compiles out: the main-thread
   and borrow checks of `GlobalCell`, the overlapping-edit check on Vimscript
   values, the Lua stack's consuming-operation check. The functional, old-style
@@ -70,8 +70,8 @@ unsafe_placement` lists any misplaced attribute (none);
 | row                                         | class    | files | statements | `unsafe fn`s | what it holds                                    |
 | ------------------------------------------- | -------- | ----: | ---------: | -----------: | ------------------------------------------------ |
 | `lua/ffi.rs`, `lua/executor/{luv,state}.rs` | foreign  |     3 |        105 |            8 | LuaJIT's declarations, luv's hooks, state making |
-| `lua/stack/`                                | foreign  |     5 |        110 |            6 | the typed Lua stack                              |
-| `lua/treesitter/`                           | foreign  |    10 |        203 |            9 | the tree-sitter library                          |
+| `lua/stack/`                                | foreign  |     5 |        113 |            7 | the typed Lua stack                              |
+| `lua/treesitter/`                           | foreign  |    10 |        204 |            9 | the tree-sitter library                          |
 | `event/`                                    | foreign  |    11 |        551 |           90 | libuv: loop, streams, timers, signals, children  |
 | `tui/{tui,input,output,events}.rs`          | foreign  |     4 |         69 |            6 | the terminal's libuv handles                     |
 | `xdiff/`                                    | foreign  |     1 |          1 |            0 | `isspace(3)`'s table                             |
@@ -102,7 +102,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 ### `lua/stack/` — the Lua stack
 
 - **What:** the one module that pushes, pops and reads LuaJIT's value stack
-  (`mod.rs` 62, `dispatch.rs` 24, `userdata.rs` 13, `debug.rs` 9,
+  (`mod.rs` 62, `dispatch.rs` 24, `userdata.rs` 16, `debug.rs` 9,
   `table.rs` 2). Every region is one LuaJIT call, a read of what one
   answered, a userdata block, or the read of the state's `top`/`base`
   fields. The rest of `lua/` reaches Lua only through this module and
@@ -115,22 +115,31 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   layout is read directly: LuaJIT is pinned by `nix/deps.json`, and
   `check_state_layout` aborts on every new state whose layout drifted. A Lua
   error (a C `longjmp`) is raised only after the Rust body has returned, so
-  no Rust frame is unwound by it.
+  no Rust frame is unwound by it. A userdata block holds its value beside a
+  collected record: `__gc` is reachable from plain Lua
+  (`getmetatable(x).__gc(x)`), so the first one drops the value and marks
+  the block, a second does nothing, and the accessors refuse a marked block
+  with a Lua error. A `CollectedMark` is that record read without a lookup,
+  sound while its holder keeps the userdatum reachable.
 - **Retires:** with LuaJIT. Not planned.
 
 ### `lua/treesitter/` — the tree-sitter library
 
 - **What:** parsers, trees, queries and cursors are C objects with C
   lifetimes, held by Lua userdata whose finaliser deletes them (`mod.rs` 76,
-  `node.rs` 37, `lang.rs` 24, `parser.rs` 20, `query.rs` 14, `cursor.rs` 12,
+  `node.rs` 38, `lang.rs` 24, `parser.rs` 20, `query.rs` 14, `cursor.rs` 12,
   `tree.rs` 8, `ranges.rs` 7, `logger.rs` 4, `init.rs` 1). The unsafe is the
   calls and the reads of the arrays and strings they answer.
-- **Contract:** a userdata's object lives until its finaliser runs, and a
-  query's strings and capture arrays are read only while the query is alive;
-  the Lua stack is reached through `lua/stack/` only.
-- **Known, upstream too:** `_ts_inspect_language`'s subtype off-by-one and an
-  unguarded re-entry of a parse from its own logger are upstream's
-  behaviour, kept.
+- **Contract:** a userdata's object lives until its first `__gc` (which
+  plain Lua can call early); a node, cursor or match that points into
+  another userdatum's object checks that userdatum's collected record before
+  every use (a node through its tree's `CollectedMark`), and a parse lends
+  its parser and old tree out of their userdata while the Lua log callback
+  can run. A query's strings and capture arrays are read only while the
+  query is alive; the Lua stack is reached through `lua/stack/` only.
+- **Known, upstream too:** `_ts_inspect_language`'s subtype off-by-one is
+  upstream's behaviour, kept. (A parse re-entered from its own logger is
+  refused: the parser is lent out.)
 - **Retires:** if the C library were replaced. Not planned.
 
 ### `event/` — libuv

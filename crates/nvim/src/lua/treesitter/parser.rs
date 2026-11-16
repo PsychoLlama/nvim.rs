@@ -31,7 +31,7 @@ use crate::lua::stack::{Kind, Raise};
 use crate::lua_functions;
 use crate::os::time::os_hrtime;
 use crate::types::LineNr;
-use crate::winlayer::{self, Buf};
+use crate::winlayer;
 
 /// A parser, as its userdatum owns it, with the logger it was given.
 /// Empty once collected.
@@ -53,6 +53,7 @@ impl Drop for Parser {
 
 impl Userdata for Parser {
     const METATABLE: &'static CStr = c"treesitter_parser";
+    const COLLECTED: Option<&'static str> = Some("Parser has been deleted");
 }
 
 lua_functions! {
@@ -94,7 +95,11 @@ pub(crate) fn create_parser(stack: &mut Stack) -> Result<c_int, Raise> {
 pub(crate) fn check_parser(stack: &mut Stack, at: At) -> Result<*mut TSParser, Raise> {
     match stack.check_userdata::<Parser>(at)?.parser {
         Some(parser) => Ok(parser.as_ptr()),
-        None => Err(Raise::argument(at.index(), "Parser has been deleted")),
+        // Lent to a running parse of its own (see `parser_parse`).
+        None => Err(Raise::argument(
+            at.index(),
+            "parser is in use by a running parse",
+        )),
     }
 }
 
@@ -110,7 +115,7 @@ const CHUNK_SIZE: usize = 256;
 /// answered, which tree-sitter reads until it asks again.
 #[derive(Debug)]
 struct BufferInput {
-    buffer: Buf,
+    buffer: Handle,
     chunk: [u8; CHUNK_SIZE],
 }
 
@@ -119,8 +124,8 @@ struct BufferInput {
 /// the last line has none).
 ///
 /// # Safety
-/// `payload` is the parse's [`BufferInput`], unaliased for the call, whose
-/// buffer stays live for the whole parse; `bytes_read` is writable.
+/// `payload` is the parse's [`BufferInput`], unaliased for the call;
+/// `bytes_read` is writable.
 /// Tree-sitter's `TSInput` contract.
 unsafe extern "C" fn input_cb(
     payload: *mut c_void,
@@ -130,10 +135,15 @@ unsafe extern "C" fn input_cb(
 ) -> *const c_char {
     // SAFETY: the caller's payload and out-parameter.
     let (input, bytes_read) = unsafe { (&mut *payload.cast::<BufferInput>(), &mut *bytes_read) };
-    let buffer = input.buffer;
+    *bytes_read = 0;
+    // Looked up afresh: a log callback runs Lua between two reads, and may
+    // have wiped the buffer (or unloaded it). The rest of the text is then
+    // simply not there.
+    let Some(buffer) = winlayer::buffer(input.buffer).filter(|b| b.b_ml.ml_mfp.is_some()) else {
+        return c"".as_ptr();
+    };
     let line_count = buffer.b_ml.ml_line_count;
     let row = i32::try_from(position.row).map_or(LineNr::MAX, LineNr::new);
-    *bytes_read = 0;
     if row >= line_count {
         return c"".as_ptr();
     }
@@ -188,7 +198,7 @@ unsafe extern "C" fn on_parser_progress(state: *mut TSParseState) -> bool {
 #[derive(Debug)]
 enum Source {
     String,
-    Buffer(Buf),
+    Buffer(Handle),
 }
 
 /// `parser:parse(old_tree, source, include_bytes, timeout_ns)`: the new
@@ -205,10 +215,8 @@ fn parser_parse(stack: &mut Stack) -> Result<c_int, Raise> {
         Kind::String => Source::String,
         Kind::Number => {
             let handle = wrap_u32(stack.to_integer(At::arg(3))).cast_signed();
-            // The parse runs no editor code, so the buffer the registry
-            // answers stays live for all of it.
             match winlayer::buffer(Handle::new(handle)) {
-                Some(buffer) => Source::Buffer(buffer),
+                Some(buffer) => Source::Buffer(buffer.handle()),
                 None => {
                     return Err(Raise::argument(
                         3,
@@ -230,7 +238,51 @@ fn parser_parse(stack: &mut Stack) -> Result<c_int, Raise> {
         .then(|| u64::try_from(stack.to_integer(At::arg(5)).cast_unsigned()).unwrap_or(u64::MAX));
 
     let log = LogScope::begin(stack, At::arg(1));
-    let new_tree = match source {
+    // Both userdata are lent out for the parse and given back after it: the
+    // log callback is Lua, which may call either one's `__gc` by hand
+    // (upstream then parsed with, and read the changed ranges from, freed
+    // memory). Given back to a collected userdatum, they are deleted then.
+    let lent_parser = stack
+        .to_userdata::<Parser>(At::arg(1))
+        .and_then(|userdatum| userdatum.parser.take());
+    let lent_tree = if old_tree.is_null() {
+        None
+    } else {
+        tree::lend(stack, At::arg(2))
+    };
+    let parsed = parse_lent(stack, parser, old_tree, &source, timeout, log);
+    if let Some(userdatum) = stack.to_userdata::<Parser>(At::arg(1)) {
+        userdatum.parser = lent_parser;
+    } else {
+        drop(Parser {
+            parser: lent_parser,
+            logger: None,
+        });
+    }
+    if !old_tree.is_null() {
+        tree::give_back(stack, At::arg(2), lent_tree);
+    }
+    let Some((new_tree, changed, count)) = parsed? else {
+        return Ok(0);
+    };
+    push_tree(stack, new_tree);
+    // SAFETY: the array `parse_lent` allocated for us.
+    unsafe { push_owned_ranges(stack, changed, count, include_bytes) };
+    Ok(2)
+}
+
+/// The parse itself, with the parser and the old tree lent out of their
+/// userdata: the new tree and the ranges that changed (allocated, handed
+/// over), or nothing when a timeout cancelled the parse.
+fn parse_lent(
+    stack: &mut Stack,
+    parser: *mut TSParser,
+    old_tree: *const TSTree,
+    source: &Source,
+    timeout: Option<u64>,
+    log: Option<LogScope>,
+) -> Result<Option<(*mut TSTree, *mut TSRange, u32)>, Raise> {
+    let new_tree = match *source {
         Source::String => {
             let text = stack.string(At::arg(3)).unwrap_or_default();
             // `(uint32_t)len`: the low 32 bits.
@@ -284,7 +336,7 @@ fn parser_parse(stack: &mut Stack) -> Result<c_int, Raise> {
                 "Language was unset, or has an incompatible ABI.",
             ));
         }
-        return Ok(0);
+        return Ok(None);
     }
     let mut count: u32 = 0;
     // SAFETY: the old tree and the new one; the array is allocated through
@@ -296,10 +348,7 @@ fn parser_parse(stack: &mut Stack) -> Result<c_int, Raise> {
             ts_tree_get_changed_ranges(old_tree, new_tree, &raw mut count)
         }
     };
-    push_tree(stack, new_tree);
-    // SAFETY: the array just allocated for us.
-    unsafe { push_owned_ranges(stack, changed, count, include_bytes) };
-    Ok(2)
+    Ok(Some((new_tree, changed, count)))
 }
 
 fn parser_reset(stack: &mut Stack) -> Result<c_int, Raise> {

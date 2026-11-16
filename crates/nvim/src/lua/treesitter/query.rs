@@ -178,10 +178,11 @@ fn query_error_message(source: &[u8], error_offset: c_int, error_type: TSQueryEr
 /// `luaL_checkudata` for a query: its `TSQuery *`, refusing a collected
 /// one.
 pub(crate) fn check_query(stack: &mut Stack, at: At) -> Result<*mut TSQuery, Raise> {
-    match stack.check_userdata::<Query>(at)?.0 {
-        Some(query) => Ok(query.as_ptr()),
-        None => Err(Raise::argument(at.index(), "TSQuery expected")),
-    }
+    let query = stack
+        .check_userdata::<Query>(at)?
+        .0
+        .expect("a query not collected owns its TSQuery");
+    Ok(query.as_ptr())
 }
 
 fn query_tostring(stack: &mut Stack) -> Result<c_int, Raise> {

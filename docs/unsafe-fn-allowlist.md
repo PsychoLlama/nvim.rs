@@ -51,14 +51,15 @@ A row that stops being needed has to leave in the same commit, the way a
 `PERIMETER` entry does.
 
 `unsafe_fns_without_raw_params` is 0 with this list as the floor, and every
-`unsafe fn` left in the tree — 228, all on the perimeter
+`unsafe fn` left in the tree — 229, all on the perimeter
 ([docs/unsafe-audit.md](unsafe-audit.md)) — has a `# Safety` section naming
 what its caller must hold. Adding a row lowers the count, so a row is a claim
 a reviewer reads: the bar is the four classes above and nothing softer.
 
-| item                 | file                                    | why the type system cannot hold it                                                                                                                |
-| -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TypVal::bit_copy`   | `crates/nvim/src/eval/typval/handle.rs` | `alloc:` duplicates the value's bits without touching its refcount, so exactly one of the two may ever be released.                               |
-| `try_to_free_memory` | `crates/nvim/src/memory/mod.rs`         | `alloc:` drops the scrollback and the memfile caches from inside an allocation.                                                                   |
-| `towlower`           | `crates/nvim/src/os/cshim.rs`           | `ffi:` stands in for the libc declaration under `cfg(miri)` and keeps its `unsafe`, or every caller's block becomes `unused_unsafe` in that lane. |
-| `towupper`           | `crates/nvim/src/os/cshim.rs`           | `ffi:` as [`towlower`].                                                                                                                           |
+| item                          | file                                    | why the type system cannot hold it                                                                                                                 |
+| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CollectedMark::is_collected` | `crates/nvim/src/lua/stack/userdata.rs` | `field:` reads the collected record through the mark's pointer into a userdata block, which only the Lua collector's reachability keeps allocated. |
+| `TypVal::bit_copy`            | `crates/nvim/src/eval/typval/handle.rs` | `alloc:` duplicates the value's bits without touching its refcount, so exactly one of the two may ever be released.                                |
+| `try_to_free_memory`          | `crates/nvim/src/memory/mod.rs`         | `alloc:` drops the scrollback and the memfile caches from inside an allocation.                                                                    |
+| `towlower`                    | `crates/nvim/src/os/cshim.rs`           | `ffi:` stands in for the libc declaration under `cfg(miri)` and keeps its `unsafe`, or every caller's block becomes `unused_unsafe` in that lane.  |
+| `towupper`                    | `crates/nvim/src/os/cshim.rs`           | `ffi:` as [`towlower`].                                                                                                                            |

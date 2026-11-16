@@ -207,4 +207,94 @@ describe('lua vim.mpack', function()
       end)
     )
   end)
+
+  -- Plain Lua can call a userdatum's `__gc` by hand; upstream then reads
+  -- freed memory (and frees it again on a second call).
+  it('refuses an object after its __gc', function()
+    eq(
+      {
+        'mpack.Session has been collected',
+        'mpack.Session has been collected',
+        'mpack.Session has been collected',
+        'mpack.Session has been collected',
+        'mpack.Unpacker has been collected',
+        'mpack.Packer has been collected',
+        'nvim_regex has been collected',
+      },
+      exec_lua(function()
+        local function gc(x)
+          getmetatable(x).__gc(x)
+          getmetatable(x).__gc(x)
+        end
+        local function err(make, use)
+          local x = make()
+          gc(x)
+          local ok, e = pcall(use, x)
+          return not ok and e:match('%(([^)]*)%)') or 'no error'
+        end
+        local Session, Unpacker, Packer = vim.mpack.Session, vim.mpack.Unpacker, vim.mpack.Packer
+        local function regex()
+          return vim.regex('a')
+        end
+        return {
+          err(Session, function(s)
+            return s:notify()
+          end),
+          err(Session, function(s)
+            return s:request()
+          end),
+          err(Session, function(s)
+            return s:reply(1)
+          end),
+          err(Session, function(s)
+            return s:receive('\145\1', 1)
+          end),
+          err(Unpacker, function(u)
+            return u('\1')
+          end),
+          err(Packer, function(p)
+            return p(1)
+          end),
+          err(regex, function(r)
+            return r:match_str('a')
+          end),
+        }
+      end)
+    )
+  end)
+
+  it('survives an ext callback that collects its own Unpacker or Packer', function()
+    eq(
+      { 1, 'mpack.Unpacker has been collected', 'mpack.Packer has been collected' },
+      exec_lua(function()
+        local function gc(x)
+          getmetatable(x).__gc(x)
+        end
+        local u
+        u = vim.mpack.Unpacker({
+          ext = {
+            [1] = function()
+              gc(u)
+              return 1
+            end,
+          },
+        })
+        local value = u('\212\1\1')
+        local _, e1 = pcall(u, '\1')
+        local mt = {}
+        local p
+        p = vim.mpack.Packer({
+          ext = {
+            [mt] = function()
+              gc(p)
+              return 1, ''
+            end,
+          },
+        })
+        p(setmetatable({}, mt))
+        local _, e2 = pcall(p, 1)
+        return { value, e1:match('%(([^)]*)%)'), e2:match('%(([^)]*)%)') }
+      end)
+    )
+  end)
 end)

@@ -61,12 +61,31 @@ pub(crate) fn push_tree(stack: &mut Stack, tree: *mut TSTree) {
     }
 }
 
-/// `luaL_checkudata` for a tree: its `TSTree *` (null once collected).
+/// Take the tree out of the (checked) tree userdatum at `at` for a parse
+/// that runs Lua; [`give_back`] returns it.
+pub(crate) fn lend(stack: &mut Stack, at: At) -> Option<NonNull<TSTree>> {
+    stack.to_userdata::<Tree>(at)?.0.take()
+}
+
+/// Return what [`lend`] took, or delete it when the userdatum was collected
+/// in the meantime.
+pub(crate) fn give_back(stack: &mut Stack, at: At, tree: Option<NonNull<TSTree>>) {
+    match stack.to_userdata::<Tree>(at) {
+        Some(userdatum) => userdatum.0 = tree,
+        None => drop(Tree(tree)),
+    }
+}
+
+/// `luaL_checkudata` for a tree: its `TSTree *`, refusing a collected one
+/// and one a running parse has lent out (see `parser_parse`).
 pub(crate) fn check_tree(stack: &mut Stack, at: At) -> Result<*const TSTree, Raise> {
-    let tree = stack.check_userdata::<Tree>(at)?;
-    Ok(tree
-        .0
-        .map_or(core::ptr::null(), |tree| tree.as_ptr().cast_const()))
+    match stack.check_userdata::<Tree>(at)?.0 {
+        Some(tree) => Ok(tree.as_ptr().cast_const()),
+        None => Err(Raise::argument(
+            at.index(),
+            "tree is in use by a running parse",
+        )),
+    }
 }
 
 fn tree_copy(stack: &mut Stack) -> Result<c_int, Raise> {
@@ -138,7 +157,8 @@ fn tree_root(stack: &mut Stack) -> Result<c_int, Raise> {
     let tree = check_tree(stack, At::arg(1))?;
     // SAFETY: as above.
     let root = unsafe { ts_tree_root_node(tree) };
-    stack.new_userdata(Node(root));
+    let mark = stack.collected_mark::<Tree>(At::arg(1));
+    stack.new_userdata(Node(root, mark));
     stack.new_table(1, 0);
     stack.push_value(At::arg(1));
     stack.raw_set_index(At::from_top(2), 1);

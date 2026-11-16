@@ -9,6 +9,28 @@
 //! something else owns) gets no `__gc`, so the collector has no finalizer
 //! to queue for it.
 //!
+//! # Collected
+//!
+//! `__gc` is an ordinary field of a metatable Lua can read, so plain Lua can
+//! call it on a live value: `getmetatable(x).__gc(x)`, then go on using `x`
+//! (upstream then used freed memory, and a second call freed it again). So
+//! the block remembers that it was collected, beside the value: the first
+//! `__gc` drops the value and marks the block, a second does nothing, and
+//! from then on [`Stack::to_userdata`] answers `None` and
+//! [`Stack::check_userdata`] raises "`<name>` has been collected" -- every
+//! method of every type gets the refusal from the one accessor it already
+//! calls. Two consequences for the types:
+//!
+//! - A method that runs Lua while it uses the value (a decoder, a log
+//!   callback) takes what it needs out of the value for the call and puts it
+//!   back through `to_userdata` afterwards: a `__gc` inside the call then
+//!   finds the value empty, and the put-back finds the block collected and
+//!   drops what it holds instead.
+//! - A value that points into another userdatum's resource (a tree-sitter
+//!   node into its tree) keeps that userdatum alive through its environment,
+//!   which stops the collector but not a hand-called `__gc`; its accessor
+//!   checks the owner with [`Stack::is_live_userdata`].
+//!
 //! What makes reading one back sound is that a metatable name belongs to one
 //! Rust type: the first `new_userdata::<T>` claims `T::METATABLE` for `T`,
 //! a second type that names the same metatable panics there, and
@@ -48,6 +70,41 @@ pub trait Userdata: Default + 'static {
     /// The name the metatable is registered under (`luaL_newmetatable`), and
     /// the type name `luaL_checkudata`'s message gives.
     const METATABLE: &'static CStr;
+
+    /// What [`Stack::check_userdata`] says of a value whose `__gc` already
+    /// ran; `None` for "`<METATABLE>` has been collected".
+    const COLLECTED: Option<&'static str> = None;
+}
+
+/// The bytes of a userdata: the value, and whether its `__gc` has run (see
+/// the module documentation).
+struct Slot<T> {
+    collected: bool,
+    value: T,
+}
+
+/// Where a userdatum records that its `__gc` ran, for a value that keeps
+/// that userdatum alive through its environment and checks the record on
+/// every use without looking the userdatum up again: a tree-sitter node,
+/// once per method, where [`Stack::is_live_userdata`]'s registry lookup
+/// would cost more than most methods themselves.
+#[derive(Clone, Copy, Debug)]
+pub struct CollectedMark(ptr::NonNull<bool>);
+
+impl CollectedMark {
+    /// Whether the userdatum the mark was taken from has been collected.
+    ///
+    /// # Safety
+    /// That userdatum's block is still allocated: whatever holds the mark
+    /// keeps the userdatum reachable (its environment refers to it), so the
+    /// collector has not freed it. A `__gc`, by hand or by the collector,
+    /// only sets the record.
+    pub unsafe fn is_collected(self) -> bool {
+        // SAFETY: the caller's; nothing holds a reference to the block
+        // while this reads (each access re-derives its own from the block
+        // pointer).
+        unsafe { self.0.as_ptr().read() }
+    }
 }
 
 /// Which Rust type each metatable name belongs to. A lock rather than a
@@ -163,38 +220,73 @@ impl Stack {
     pub fn new_userdata<T: Userdata>(&mut self, value: T) {
         const {
             // LuaJIT aligns a userdata's payload to 8 bytes.
-            assert!(align_of::<T>() <= 8, "LuaJIT cannot align this userdata");
+            assert!(
+                align_of::<Slot<T>>() <= 8,
+                "LuaJIT cannot align this userdata"
+            );
         }
         claimed::<T>(true);
-        let block = unsafe { lua_newuserdata(self.l(), size_of::<T>()) }.cast::<T>();
-        // SAFETY: a fresh block of `size_of::<T>()` bytes, aligned for `T`
-        // (checked above), that nothing else has seen.
-        unsafe { ptr::write(block, value) };
+        let block = unsafe { lua_newuserdata(self.l(), size_of::<Slot<T>>()) }.cast::<Slot<T>>();
+        let slot = Slot {
+            collected: false,
+            value,
+        };
+        // SAFETY: a fresh block of `size_of::<Slot<T>>()` bytes, aligned for
+        // it (checked above), that nothing else has seen.
+        unsafe { ptr::write(block, slot) };
         self.get_field(At::REGISTRY, T::METATABLE);
         self.set_metatable(At::from_top(2));
     }
 
-    /// The `T` at `at` when the slot holds one of `T`'s userdata.
+    /// The `T` at `at` when the slot holds one of `T`'s userdata, not yet
+    /// collected.
     pub fn to_userdata<T: Userdata>(&mut self, at: At) -> Option<&mut T> {
-        let block = self.userdata_block::<T>(at)?;
-        // SAFETY: `userdata_block` answers only a block `new_userdata::<T>`
-        // wrote; the borrow of `self` keeps the slot, and so the block,
-        // alive.
-        Some(unsafe { &mut *block })
+        let slot = self.userdata_slot::<T>(at)?;
+        (!slot.collected).then_some(&mut slot.value)
     }
 
-    /// `luaL_checkudata`: the `T` at `at`, or the error LuaJIT raises for it.
+    /// The [`CollectedMark`] of the `T` at `at`, collected or not.
+    pub fn collected_mark<T: Userdata>(&mut self, at: At) -> Option<CollectedMark> {
+        let block = self.userdata_block::<T>(at)?;
+        // SAFETY: a block `new_userdata::<T>` wrote (see `userdata_slot`);
+        // the field's address is taken without making a reference.
+        let mark = unsafe { &raw mut (*block).collected };
+        ptr::NonNull::new(mark).map(CollectedMark)
+    }
+
+    /// Whether the slot holds one of `T`'s userdata, not yet collected.
+    pub fn is_live_userdata<T: Userdata>(&mut self, at: At) -> bool {
+        self.to_userdata::<T>(at).is_some()
+    }
+
+    /// `luaL_checkudata`: the `T` at `at`, or the error LuaJIT raises for it
+    /// -- and an argument error for one already collected.
     pub fn check_userdata<T: Userdata>(&mut self, at: At) -> Result<&mut T, Raise> {
-        match self.userdata_block::<T>(at) {
-            // SAFETY: as in `to_userdata`.
-            Some(block) => Ok(unsafe { &mut *block }),
+        match self.userdata_slot::<T>(at) {
+            Some(slot) if !slot.collected => Ok(&mut slot.value),
+            Some(_) => Err(Raise::argument(
+                at.0,
+                match T::COLLECTED {
+                    Some(message) => message.to_owned(),
+                    None => format!("{} has been collected", T::METATABLE.to_string_lossy()),
+                },
+            )),
             None => Err(Raise::check(at, Check::Userdata(T::METATABLE))),
         }
     }
 
+    /// The slot of the `T` at `at`, collected or not.
+    fn userdata_slot<T: Userdata>(&mut self, at: At) -> Option<&mut Slot<T>> {
+        let block = self.userdata_block::<T>(at)?;
+        // SAFETY: `userdata_block` answers only a block `new_userdata::<T>`
+        // wrote; the borrow of `self` keeps the stack slot, and so the
+        // block, alive.
+        Some(unsafe { &mut *block })
+    }
+
     /// The block of the `T` at `at`, when the slot holds one of `T`'s
     /// userdata: `luaL_checkudata`'s test, after the claim.
-    fn userdata_block<T: Userdata>(&mut self, at: At) -> Option<*mut T> {
+    fn userdata_block<T: Userdata>(&mut self, at: At) -> Option<*mut Slot<T>> {
         // A full userdata whose metatable is the registry's `T::METATABLE`
         // (a light userdata has none of its own).
         let block = unsafe { luaL_testudata(self.l(), at.0, T::METATABLE.as_ptr()) };
@@ -203,11 +295,12 @@ impl Stack {
         }
         // `T` holds the claim on its metatable, so only `new_userdata::<T>`
         // made a userdata carrying it, and the block holds a `T`.
-        Some(block.cast::<T>())
+        Some(block.cast::<Slot<T>>())
     }
 }
 
-/// `__gc` for `T`'s metatable: drop the value, leaving `T::default()`.
+/// `__gc` for `T`'s metatable: drop the value, leaving `T::default()`, and
+/// mark the block collected; nothing the second time.
 ///
 /// # Safety
 /// LuaJIT's contract for a `lua_CFunction`.
@@ -215,7 +308,10 @@ unsafe extern "C-unwind" fn collect<T: Userdata>(state: *mut lua_State) -> c_int
     // SAFETY: the caller's state; the body owns its frame's only `Stack`.
     unsafe {
         Stack::entry(state, |stack| {
-            let value = stack.to_userdata::<T>(At::arg(1)).map(core::mem::take);
+            let value = stack.userdata_slot::<T>(At::arg(1)).and_then(|slot| {
+                let first = !core::mem::replace(&mut slot.collected, true);
+                first.then(|| core::mem::take(&mut slot.value))
+            });
             drop(value);
             Ok(0)
         })

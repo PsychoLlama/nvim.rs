@@ -89,11 +89,10 @@ lua_functions! {
     }
 }
 
-/// The session at slot 1, which every method has checked.
-fn session(stack: &mut Stack) -> &mut Session {
-    stack
-        .to_userdata::<Session>(At::arg(1))
-        .expect("checked on entry")
+/// The session at slot 1, which every method has checked -- but an ext
+/// decoder `receive` runs may have called its `__gc` since.
+fn session(stack: &mut Stack) -> Result<&mut Session, Raise> {
+    stack.check_userdata::<Session>(At::arg(1))
 }
 
 /// `mpack.Session([{unpack = <Unpacker>}])`.
@@ -144,7 +143,7 @@ pub fn receive(stack: &mut Stack) -> Result<c_int, Raise> {
 
     // The unpacker, if any, is a separate userdatum reached through this
     // session's private table; it stays on the stack while it works.
-    let unpacker_ref = session(&mut view).unpacker;
+    let unpacker_ref = session(&mut view)?.unpacker;
     let mut unpacker = None;
     let mut results = 3;
     if unpacker_ref != LUA_REFNIL {
@@ -160,16 +159,16 @@ pub fn receive(stack: &mut Stack) -> Result<c_int, Raise> {
 
     // A message is only complete when its body is too, unless there is no
     // unpacker to read a body with.
-    let unpacked = &session(&mut view).unpacked;
+    let unpacked = &session(&mut view)?.unpacked;
     let complete = unpacked.envelope != Err(Unreceived::Pending)
         && (unpacked.args_or_result != LUA_NOREF || unpacker.is_none());
     if complete {
-        if !push_message(&mut view, reg) {
+        if !push_message(&mut view, reg)? {
             return Err(Raise::message("invalid msgpack-rpc string"));
         }
-        session(&mut view).unpacked.envelope = Err(Unreceived::Pending);
+        session(&mut view)?.unpacked.envelope = Err(Unreceived::Pending);
         if unpacker.is_some() {
-            push_body(&mut view, reg);
+            push_body(&mut view, reg)?;
         }
     } else {
         for _ in 0..results - 1 {
@@ -192,9 +191,12 @@ fn read_message(
     input: &mut &[u8],
 ) -> Result<(), Raise> {
     loop {
-        let current = session(stack);
+        let current = session(stack)?;
         if current.unpacked.envelope == Err(Unreceived::Pending) {
-            let framer = current.session.as_mut().expect("a live session");
+            let framer = current
+                .session
+                .as_mut()
+                .expect("a session not collected has its framer");
             current.unpacked.envelope = framer.receive(input, &mut current.unpacked.msg);
             // With no unpacker the envelope *is* the message.
             if unpacker.is_none() || current.unpacked.envelope == Err(Unreceived::Pending) {
@@ -210,7 +212,7 @@ fn read_message(
         // The first value is the method (or the error), the second the
         // arguments (or the result); the second ends the message.
         let handle = reference(stack, reg);
-        let unpacked = &mut session(stack).unpacked;
+        let unpacked = &mut session(stack)?.unpacked;
         if unpacked.method_or_error == LUA_NOREF {
             unpacked.method_or_error = handle;
         } else {
@@ -223,8 +225,8 @@ fn read_message(
 /// Push the message kind and its id (or, for a response, the handle its
 /// request carried). Answers `false` for an envelope kind that is not one of
 /// the three.
-fn push_message(stack: &mut Stack, reg: At) -> bool {
-    let unpacked = &session(stack).unpacked;
+fn push_message(stack: &mut Stack, reg: At) -> Result<bool, Raise> {
+    let unpacked = &session(stack)?.unpacked;
     let (envelope, id, data) = (unpacked.envelope, unpacked.msg.id, unpacked.msg.data);
     match envelope {
         Ok(MessageKind::Request) => {
@@ -242,22 +244,23 @@ fn push_message(stack: &mut Stack, reg: At) -> bool {
         // Anything else is a malformed envelope. Upstream reports them all
         // the same way, on the grounds that the only sane response to
         // invalid msgpack-rpc is to close the connection.
-        Err(_) => return false,
+        Err(_) => return Ok(false),
     }
-    true
+    Ok(true)
 }
 
 /// Push the two decoded body values and release their references.
-fn push_body(stack: &mut Stack, reg: At) {
-    let unpacked = &session(stack).unpacked;
+fn push_body(stack: &mut Stack, reg: At) -> Result<(), Raise> {
+    let unpacked = &session(stack)?.unpacked;
     let (method_or_error, args_or_result) = (unpacked.method_or_error, unpacked.args_or_result);
     geti(stack, reg, method_or_error);
     geti(stack, reg, args_or_result);
     unreference(stack, reg, method_or_error);
     unreference(stack, reg, args_or_result);
-    let unpacked = &mut session(stack).unpacked;
+    let unpacked = &mut session(stack)?.unpacked;
     unpacked.method_or_error = LUA_NOREF;
     unpacked.args_or_result = LUA_NOREF;
+    Ok(())
 }
 
 /// `session:request([handle])`: the envelope of a fresh request, whose id is
@@ -278,7 +281,10 @@ pub fn request(stack: &mut Stack) -> Result<c_int, Raise> {
         handle
     };
     let mut buf = [0u8; ENVELOPE_MAX];
-    let framer = session(stack).session.as_mut().expect("a live session");
+    let framer = session(stack)?
+        .session
+        .as_mut()
+        .expect("a session not collected has its framer");
     let used = loop {
         let (result, used) = framer.request(&mut buf, i64::from(handle));
         if result != Err(Stop::Full) {
@@ -303,7 +309,10 @@ pub fn reply(stack: &mut Stack) -> Result<c_int, Raise> {
         return Err(Raise::argument(2, "invalid request id"));
     }
     let mut buf = [0u8; ENVELOPE_MAX];
-    let framer = session(stack).session.as_mut().expect("a live session");
+    let framer = session(stack)?
+        .session
+        .as_mut()
+        .expect("a session not collected has its framer");
     let (result, used) = framer.reply(&mut buf, float_as_u32(id));
     debug_assert_eq!(result, Ok(()));
     stack.push_bytes(&buf[..used]);
@@ -317,7 +326,10 @@ pub fn notify(stack: &mut Stack) -> Result<c_int, Raise> {
     }
     stack.check_userdata::<Session>(At::arg(1))?;
     let mut buf = [0u8; ENVELOPE_MAX];
-    let framer = session(stack).session.as_mut().expect("a live session");
+    let framer = session(stack)?
+        .session
+        .as_mut()
+        .expect("a session not collected has its framer");
     let (result, used) = framer.notify(&mut buf);
     debug_assert_eq!(result, Ok(()));
     stack.push_bytes(&buf[..used]);

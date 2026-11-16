@@ -27,7 +27,7 @@
 use core::ffi::{CStr, c_int};
 use core::ptr::NonNull;
 
-use super::node::{check_node, push_node};
+use super::node::{check_node, env_tree_mark, push_node};
 use super::query::check_query;
 use super::*;
 use crate::lua::stack::{Kind, Raise};
@@ -163,12 +163,32 @@ pub(crate) fn create_query_cursor(stack: &mut Stack) -> Result<c_int, Raise> {
 }
 
 /// `luaL_checkudata` for a cursor: its `TSQueryCursor *`, refusing a
-/// collected one.
+/// collected one, and one whose tree or query has been collected.
 fn check_cursor(stack: &mut Stack, at: At) -> Result<*mut TSQueryCursor, Raise> {
-    match stack.check_userdata::<QueryCursor>(at)?.0 {
-        Some(cursor) => Ok(cursor.as_ptr()),
-        None => Err(Raise::argument(at.index(), "TSQueryCursor expected")),
+    let cursor = stack
+        .check_userdata::<QueryCursor>(at)?
+        .0
+        .expect("a cursor not collected owns its TSQueryCursor");
+    if !owners_live(stack, at, 2) {
+        return Err(Raise::argument(
+            at.index(),
+            "the cursor's tree or query has been collected",
+        ));
     }
+    Ok(cursor.as_ptr())
+}
+
+/// `luaL_checkudata` for a match, refusing one whose tree, query or cursor
+/// (where its captures live) has been collected.
+fn check_match(stack: &mut Stack, at: At) -> Result<TSQueryMatch, Raise> {
+    let found = stack.check_userdata::<Match>(at)?.0;
+    if !owners_live(stack, at, 3) {
+        return Err(Raise::argument(
+            at.index(),
+            "the match's tree, query or cursor has been collected",
+        ));
+    }
+    Ok(found)
 }
 
 fn cursor_remove_match(stack: &mut Stack) -> Result<c_int, Raise> {
@@ -203,7 +223,8 @@ fn cursor_next_capture(stack: &mut Stack) -> Result<c_int, Raise> {
         *found.captures.add(capture_index as usize)
     };
     stack.push_integer(integer(capture.index) + 1);
-    push_node(stack, capture.node, At::arg(1));
+    let tree = env_tree_mark(stack, At::arg(1));
+    push_node(stack, capture.node, At::arg(1), tree);
     push_match(stack, found, At::arg(1));
     Ok(3)
 }
@@ -222,7 +243,7 @@ fn cursor_next_match(stack: &mut Stack) -> Result<c_int, Raise> {
 
 /// `match:info()`: its id and its one-based pattern index.
 fn match_info(stack: &mut Stack) -> Result<c_int, Raise> {
-    let found = stack.check_userdata::<Match>(At::arg(1))?.0;
+    let found = check_match(stack, At::arg(1))?;
     stack.push_integer(integer(found.id));
     stack.push_integer(integer(u32::from(found.pattern_index)) + 1);
     Ok(2)
@@ -230,7 +251,8 @@ fn match_info(stack: &mut Stack) -> Result<c_int, Raise> {
 
 /// `match:captures()`: `{[capture id] = {node, ..}}`.
 fn match_captures(stack: &mut Stack) -> Result<c_int, Raise> {
-    let found = stack.check_userdata::<Match>(At::arg(1))?.0;
+    let found = check_match(stack, At::arg(1))?;
+    let tree = env_tree_mark(stack, At::arg(1));
     stack.new_table(0, 0);
     let captures = if found.captures.is_null() {
         &[][..]
@@ -248,7 +270,7 @@ fn match_captures(stack: &mut Stack) -> Result<c_int, Raise> {
             stack.pop(1);
             stack.new_table(0, 0);
         }
-        push_node(stack, capture.node, At::arg(1));
+        push_node(stack, capture.node, At::arg(1), tree);
         let next = c_int::try_from(stack.raw_len(At::from_top(2)))
             .unwrap_or(c_int::MAX)
             .saturating_add(1);

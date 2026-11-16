@@ -384,16 +384,19 @@ pub fn unpack_into_registry(
         parser.grow();
     };
     let (buffer, failure) = decoder.finish();
-    let unpacker = stack
-        .to_userdata::<Unpacker>(at)
-        .expect("on the stack throughout");
-    unpacker.parser = Some(parser);
-    unpacker.string_buffer = buffer;
+    // A decoder that called the unpacker's `__gc` by hand took nothing (the
+    // parser and the buffer were out here); they go now instead.
+    if let Some(unpacker) = stack.to_userdata::<Unpacker>(at) {
+        unpacker.parser = Some(parser);
+        unpacker.string_buffer = buffer;
+        if failure.is_none() {
+            unpacker.unpacking = false;
+        }
+    }
     if let Some(failure) = failure {
         // As upstream, whose walk was left by a longjmp: still "working".
         return Err(failure.raise(stack));
     }
-    unpacker.unpacking = false;
     match status {
         Ok(()) => Ok(true),
         Err(Stop::Pending) => Ok(false),
@@ -554,15 +557,17 @@ fn packer_pack(stack: &mut Stack) -> Result<c_int, Raise> {
     // A packer's own parser grows on demand.
     let written = unparse_all(&mut parser, &mut encoder, true);
     let failure = encoder.finish();
-    let packer = stack
-        .to_userdata::<Packer>(At::arg(1))
-        .expect("on the stack throughout");
-    packer.parser = Some(parser);
+    // As in `unpack_into_registry`: an encoder may have collected the packer.
+    if let Some(packer) = stack.to_userdata::<Packer>(At::arg(1)) {
+        packer.parser = Some(parser);
+        if failure.is_none() {
+            packer.packing = false;
+        }
+    }
     if let Some(failure) = failure {
         // As upstream, whose walk was left by a longjmp: still "working".
         return Err(failure.raise(stack));
     }
-    packer.packing = false;
     let Ok(written) = written else {
         unreachable!("only a stopped walk fails, and it left its failure");
     };

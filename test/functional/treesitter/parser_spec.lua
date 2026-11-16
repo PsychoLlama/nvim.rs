@@ -127,6 +127,112 @@ describe('treesitter parser API', function()
     assert_alive()
   end)
 
+  -- Plain Lua can reach any userdatum's `__gc` (`getmetatable(x).__gc(x)`, or
+  -- `x:__gc()`). Upstream frees on that call and then goes on using the
+  -- memory: a tree's nodes, a cursor's tree and query, a match's cursor.
+  it('refuses a tree, query or cursor after its __gc, and what points into it', function()
+    local function after_gc(body)
+      return pcall_err(exec_lua, function(src)
+        vim.treesitter.language.add('c')
+        local function gc(x)
+          getmetatable(x).__gc(x)
+          getmetatable(x).__gc(x)
+        end
+        local tree = vim.treesitter.get_string_parser('int x; int y;', 'c'):parse()[1]
+        local query = vim._ts_parse_query('c', '(identifier) @id')
+        local function cursor()
+          return vim._create_ts_querycursor(tree:root(), query, {
+            start_row = 0,
+            start_col = 0,
+            end_row = 1,
+            end_col = 0,
+            match_limit = 256,
+          })
+        end
+        return loadstring(src)()(gc, tree, query, cursor)
+      end, body)
+    end
+    matches(
+      'treesitter_tree has been collected',
+      after_gc('return function(gc, tree) gc(tree); return tree:root() end')
+    )
+    matches(
+      "the node's tree has been collected",
+      after_gc(
+        'return function(gc, tree) local r = tree:root(); gc(tree); return r:child(0):type() end'
+      )
+    )
+    matches(
+      'treesitter_query has been collected',
+      after_gc('return function(gc, _, query) gc(query); return query:inspect() end')
+    )
+    matches(
+      "the cursor's tree or query has been collected",
+      after_gc(
+        'return function(gc, _, query, cursor) local c = cursor(); gc(query); return c:next_match() end'
+      )
+    )
+    matches(
+      "the cursor's tree or query has been collected",
+      after_gc(
+        'return function(gc, tree, _, cursor) local c = cursor(); gc(tree); return c:next_capture() end'
+      )
+    )
+    matches(
+      'treesitter_querycursor has been collected',
+      after_gc(
+        'return function(gc, _, _, cursor) local c = cursor(); gc(c); return c:next_match() end'
+      )
+    )
+    matches(
+      "the match's tree, query or cursor has been collected",
+      after_gc(
+        'return function(gc, _, _, cursor) local c = cursor(); local m = c:next_match(); gc(c); return m:captures() end'
+      )
+    )
+    assert_alive()
+  end)
+
+  it('survives a log callback that collects the parser, the old tree or the buffer', function()
+    insert(('int x;\n'):rep(50))
+    eq(
+      { 'Parser has been deleted', true, true },
+      exec_lua(function()
+        vim.treesitter.language.add('c')
+        local function gc(x)
+          getmetatable(x).__gc(x)
+        end
+        local parser = vim._create_ts_parser('c')
+        local old = parser:parse(nil, 'int x;', true)
+        parser:_set_logger(true, true, function()
+          gc(old)
+          gc(parser)
+        end)
+        parser:parse(old, 'int y;', true)
+        local _, err = pcall(parser.parse, parser, nil, 'x', true)
+
+        -- The buffer a parse reads is looked up again for every chunk.
+        local buf = vim.api.nvim_get_current_buf()
+        local p2 = vim._create_ts_parser('c')
+        p2:_set_logger(true, true, function()
+          if vim.api.nvim_buf_is_valid(buf) then
+            vim.cmd('enew | bwipe! ' .. buf)
+          end
+        end)
+        local tree = p2:parse(nil, buf, true)
+
+        -- A log callback that re-enters its own parser fails the parse.
+        local p3 = vim._create_ts_parser('c')
+        p3:_set_logger(true, true, function()
+          p3:parse(nil, 'x', true)
+        end)
+        local ok3 = pcall(p3.parse, p3, nil, 'int z;', true)
+        return { err:match('Parser has been deleted'), tree ~= nil, not ok3 }
+      end)
+    )
+    assert_alive()
+  end)
+
   it('respects eol settings when parsing buffer', function()
     insert([[
       int main() {

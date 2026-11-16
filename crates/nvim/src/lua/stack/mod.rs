@@ -130,7 +130,7 @@ pub use self::debug::Frame;
 use self::dispatch::Check;
 pub(crate) use self::dispatch::dispatch_entry;
 pub use self::dispatch::{Dispatch, Function, Raise};
-pub use self::userdata::Userdata;
+pub use self::userdata::{CollectedMark, Userdata};
 
 /// A C function Lua can call: the `lua_CFunction` signature, unwrapped.
 ///
