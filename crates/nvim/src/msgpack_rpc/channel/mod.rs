@@ -434,18 +434,24 @@ fn info_string<'a>(info: &'a ApiDict, key: &CStr) -> Option<&'a CStr> {
 /// The classification decides how responses are matched (see
 /// [`CallStack::find`]), so a peer that claims `msgpack-rpc` is taken at its
 /// word.
+///
+/// Only an RPC channel can call this, but an earlier call of the same
+/// request (`nvim_call_atomic`, `chanclose()`) may have closed it by now;
+/// the info then has no channel to describe and is dropped. Upstream
+/// aborts there.
 pub fn rpc_set_client_info(id: uint64_t, info: ApiDict) {
-    with_channel(id, |chan| {
-        assert!(
-            is_live_rpc(chan),
-            "client info for a channel that is not rpc"
-        );
+    let recorded = with_channel(id, |chan| {
+        if !is_live_rpc(chan) {
+            return false;
+        }
         // The dict being replaced was owned by the channel.
         chan.rpc.info = info;
         chan.rpc.client_type = classify_client(info_string(&chan.rpc.info, c"type"));
-    })
-    .expect("client info for a channel that is not rpc");
-    channel_info_changed(id, false);
+        true
+    });
+    if recorded == Some(true) {
+        channel_info_changed(id, false);
+    }
 }
 
 /// A copy of the string value `key` has in channel `id`'s client info, when

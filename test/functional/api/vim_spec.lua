@@ -6154,3 +6154,22 @@ describe('API', function()
     ]])
   end)
 end)
+
+describe('API over a raw channel', function()
+  before_each(clear)
+
+  it('nvim_set_client_info after the request closed its own channel', function()
+    -- The child closes its stdio channel, then is asked to describe it.
+    local status = exec_lua(function(prog)
+      local chan = vim.fn.jobstart({ prog, '--clean', '--embed', '--headless' }, { rpc = true })
+      pcall(vim.rpcrequest, chan, 'nvim_call_atomic', {
+        { 'nvim_command', { 'call chanclose(1)' } },
+        { 'nvim_set_client_info', { 'x', {}, 'remote', {}, {} } },
+      })
+      return vim.fn.jobwait({ chan }, 10000)[1]
+    end, n.nvim_prog)
+    -- 1 is how an embedded Nvim leaves when its channel closes (not 134).
+    eq(1, status)
+    n.assert_alive()
+  end)
+end)
