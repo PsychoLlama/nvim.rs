@@ -234,7 +234,7 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
         enter_buffer(if valid {
             buffer
         } else {
-            last_buf().expect("lastbuf != NULL")
+            last_buf().expect("the buffer list is never empty")
         });
         if old_tw != Buf::current().b_p_tw {
             recheck_colorcolumn(Win::current());

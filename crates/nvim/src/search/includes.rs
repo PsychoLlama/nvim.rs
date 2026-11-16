@@ -131,7 +131,9 @@ impl FileStack {
 
     /// The innermost open file, which the walk is reading.
     fn innermost(&mut self) -> &mut SearchedFile {
-        self.open.last_mut().expect("depth >= 0")
+        self.open
+            .last_mut()
+            .expect("the walk reads only while a file is open")
     }
 
     /// The name of the open file `id`.

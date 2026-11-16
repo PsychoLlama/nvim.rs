@@ -183,7 +183,8 @@ impl Relayout {
         if !self.curwin_moving_tp {
             return Ok(());
         }
-        let altwin = win_find_altwin(self.win, expect_tab(self.win_tp)).expect("altwin");
+        let altwin = win_find_altwin(self.win, expect_tab(self.win_tp))
+            .expect("win_can_move_tp allowed the move, so another window remains");
         win_goto(altwin);
         if Win::current_raw() == self.win.raw() {
             let handle = self.win_id.handle();
@@ -491,7 +492,10 @@ impl Refloat {
             return Ok(());
         }
         self.curwin_moving_tp = true;
-        win_goto(self.altwin.expect("altwin"));
+        win_goto(
+            self.altwin
+                .expect("win_can_move_tp allowed the move, so another window remains"),
+        );
         if self.win.is_current() {
             let handle = self.win.id().handle();
             let why = api_error!(

@@ -153,7 +153,7 @@ pub fn buflist_new(
     // fresh one. This is the ONLY place a buffer structure is allocated.
     let mut reusable = None;
     if flags & BLN_CURBUF != 0 && curbuf_reusable() {
-        let cur = current_buf().expect("curbuf != NULL");
+        let cur = current_buf().expect("the editor always has a current buffer");
         let bufref = BufRef::of(cur);
         trigger_undo_ftplugin(cur, current_win());
         // It is as if this buffer were deleted. Watch out for autocommands

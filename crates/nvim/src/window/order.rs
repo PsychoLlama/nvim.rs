@@ -214,7 +214,7 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
             wp2 = w1.prev();
             win_remove(w1, None);
             frp.unlink();
-            let first = parent.child().expect("frp->fr_parent->fr_child");
+            let first = parent.child().expect("a row or column has a child");
             let head = first.win().expect("a leaf frame holds a window");
             win_append(head.prev(), w1, None);
             first.prepend_sibling(frp);

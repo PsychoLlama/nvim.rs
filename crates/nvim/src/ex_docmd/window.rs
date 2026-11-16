@@ -448,7 +448,7 @@ fn resize(excmd: &mut ExArg) {
         // The count is a window number, clamped to the last window.
         let mut n = excmd.number2;
         let mut walk = windows();
-        wp = walk.next().expect("firstwin");
+        wp = walk.next().expect("a tab page always has a window");
         for next in walk {
             n -= 1;
             if n <= 0 {

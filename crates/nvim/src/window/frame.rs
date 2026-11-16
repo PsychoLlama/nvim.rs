@@ -253,7 +253,7 @@ impl FrameRef {
         if grand.fr_child == Some(parent.id()) {
             grand.fr_child = parent.fr_child;
         }
-        let first = parent.child().expect("frp2->fr_child");
+        let first = parent.child().expect("a row or column has a child");
         let mut first = first;
         first.fr_prev = parent.fr_prev;
         if let Some(mut before) = parent.prev() {

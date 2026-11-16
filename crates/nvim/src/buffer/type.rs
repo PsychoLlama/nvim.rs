@@ -255,7 +255,7 @@ fn check_changedtick_item(buffer: Buf) {
     }
     let key = c"changedtick";
     let vars = buffer.b_bufvar.di_tv.dict_ref();
-    let item = dict_find(vars, key.to_bytes()).expect("changedtick_di != NULL");
+    let item = dict_find(vars, key.to_bytes()).expect("every buffer's b: dict holds changedtick");
     assert!(
         item.di_tv.v_type() == VAR_NUMBER as _,
         "changedtick_di->di_tv.v_type() == VAR_NUMBER"

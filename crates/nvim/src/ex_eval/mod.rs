@@ -197,7 +197,11 @@ fn check_skip(cond: CondId) -> bool {
     DID_EMSG.get() != 0
         || GOT_INT.get()
         || DID_THROW.get()
-        || cond.with(|cs| cs.idx > 0 && !cs.flags[cs.top().expect("open") - 1].has(CsFlags::ACTIVE))
+        || cond.with(|cs| {
+            cs.idx > 0
+                && !cs.flags[cs.top().expect("idx > 0 means a conditional is open") - 1]
+                    .has(CsFlags::ACTIVE)
+        })
 }
 
 /// Whether to abort immediately: an error while aborting, an interrupt, or

@@ -590,7 +590,9 @@ pub(crate) fn terminal_get_line_attributes(
     linenr: c_int,
     term_attrs: &mut [c_int; TERM_ATTRS_MAX as usize],
 ) {
-    let mut term = buffer.terminal_handle().expect("buf->terminal");
+    let mut term = buffer
+        .terminal_handle()
+        .expect("the caller passes a terminal buffer");
     let (height, width) = term.size();
     debug_assert!(linenr != 0, "buffer line numbers are one-based");
 
@@ -681,7 +683,12 @@ pub(crate) fn terminal_buf(term: Term) -> BufferHandle {
 
 /// [`terminal_close`] of `buffer`'s terminal, which must be set.
 pub(crate) fn close_buf_terminal(buffer: Buf) {
-    terminal_close(buffer.terminal_handle().expect("buf->terminal"), -1);
+    terminal_close(
+        buffer
+            .terminal_handle()
+            .expect("the caller passes a terminal buffer"),
+        -1,
+    );
 }
 
 /// [`terminal_check_size`] of `buffer`'s terminal, when it has one.
