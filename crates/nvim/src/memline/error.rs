@@ -58,6 +58,11 @@ pub(crate) enum MemlineError {
     /// Block zero claims a page smaller than a swap file can have.
     #[error("{} has been damaged (page size is smaller than minimum value).", msg_cstr(.0.as_cstr()))]
     PageTooSmall(ThinCString),
+    /// Block zero claims a page larger than a swap file can have: a page is
+    /// allocated at that size before the file is read, so a corrupt header
+    /// must not reach it.
+    #[error("{} has been damaged (page size is larger than maximum value).", msg_cstr(.0.as_cstr()))]
+    PageTooLarge(ThinCString),
     /// The first data block could not be read.
     #[error("{}", tr!("E309: Unable to read block 1 from {}", msg_cstr(.0.as_cstr())))]
     NoBlockOne(ThinCString),
@@ -126,6 +131,15 @@ impl MemlineError {
                 msg_display(swap.as_cstr(), hl_id, true);
                 note(
                     c" has been damaged (page size is smaller than minimum value).\n",
+                    hl_id,
+                );
+                msg_end();
+            }
+            Self::PageTooLarge(swap) => {
+                msg_start();
+                msg_display(swap.as_cstr(), hl_id, true);
+                note(
+                    c" has been damaged (page size is larger than maximum value).\n",
                     hl_id,
                 );
                 msg_end();

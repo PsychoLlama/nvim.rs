@@ -26,7 +26,7 @@ use crate::cstr;
 use crate::env::{expand_env_within, home_to_tilde};
 use crate::fileio::{Loaded, ReadFlags};
 use crate::guard::Suppress;
-use crate::memfile::{BlockId, MemFile};
+use crate::memfile::{BlockId, MAX_SWAP_PAGE_SIZE, MemFile};
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
 use crate::os::fs::file_info;
@@ -376,6 +376,12 @@ fn check_block_zero(
         memfile.set_page_size(recorded_page_size);
         if memfile.mf_page_size < previous_page_size {
             return Err(MemlineError::PageTooSmall(swap()));
+        }
+        // The largest page `MemFile::open` would ever pick. Block zero's
+        // page is reallocated at this size below, so a corrupt header
+        // claiming gigabytes must stop here (upstream allocates it).
+        if u64::from(memfile.mf_page_size) > MAX_SWAP_PAGE_SIZE {
+            return Err(MemlineError::PageTooLarge(swap()));
         }
         let size = memfile.file_size();
         // Zero means no file, or an empty one.
