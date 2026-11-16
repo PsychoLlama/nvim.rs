@@ -686,6 +686,45 @@ mod tests {
         assert_eq!(scroll_vacated(rect(0, 4, 0, 8), -1, -2), rect(0, 1, 0, 2));
     }
 
+    /// A terminal with a screen, `rows` by `cols`, set up as `:terminal`
+    /// sets up its own.
+    fn screen_term(rows: c_int, cols: c_int) -> Box<VTerm> {
+        let mut vt = VTerm::new(rows, cols);
+        vt.set_utf8(true);
+        vt.obtain_screen();
+        vt.screen_enable_altscreen();
+        vt.obtain_screen().enable_reflow(true);
+        vt.screen_reset(true);
+        vt
+    }
+
+    #[test]
+    fn a_cursor_saved_below_a_shrunk_screen_is_restored_onto_it() {
+        let mut vt = screen_term(12, 20);
+        vt.input_write(b"\x1b[12;20H\x1b7");
+        vt.set_size(5, 10);
+        vt.input_write(b"\x1b8x");
+        let pos = vt.obtain_state().pos;
+        assert_eq!((pos.row, pos.col), (4, 9));
+    }
+
+    #[test]
+    fn a_margin_left_past_a_shrunk_screen_drops_the_region() {
+        let mut vt = screen_term(12, 66);
+        vt.input_write(b"\x1b[7r");
+        vt.set_size(4, 81);
+        vt.input_write(&[b'x'; 400]);
+        let state = vt.obtain_state();
+        assert_eq!((state.scrollregion_top, state.scrollregion_bottom), (0, -1));
+
+        let mut vt = screen_term(4, 20);
+        vt.input_write(b"\x1b[?69h\x1b[15s");
+        vt.set_size(4, 10);
+        vt.input_write(&[b'x'; 100]);
+        let state = vt.obtain_state();
+        assert_eq!((state.scrollregion_left, state.scrollregion_right), (0, -1));
+    }
+
     #[test]
     fn every_attribute_reports_the_kind_of_value_it_carries() {
         assert_eq!(attr_value_type(VTERM_ATTR_BOLD), VTERM_VALUETYPE_BOOL);

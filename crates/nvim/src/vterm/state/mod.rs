@@ -691,6 +691,27 @@ impl StateCx<'_> {
         if self.scrollregion_right > -1 {
             self.scrollregion_right = self.scrollregion_right.min(cols);
         }
+        // A margin the shrink left at or past the far edge leaves a region
+        // with no room in it, which DECSTBM/DECSLRM never accept: drop it
+        // back to the whole screen, as they do. Upstream keeps the inverted
+        // region and scrolls with a negative height.
+        if self.scroll_bottom() <= self.scrollregion_top {
+            self.scrollregion_top = 0;
+            self.scrollregion_bottom = -1;
+        }
+        let right = if self.scrollregion_right > -1 {
+            self.scrollregion_right
+        } else {
+            cols
+        };
+        if right <= self.scrollregion_left {
+            self.scrollregion_left = 0;
+            self.scrollregion_right = -1;
+        }
+        // The cursor DECSC saved must still be on the screen when DECRC puts
+        // it back (upstream reads past the line marks there).
+        self.saved.pos.row = self.saved.pos.row.clamp(0, (rows - 1).max(0));
+        self.saved.pos.col = self.saved.pos.col.clamp(0, (cols - 1).max(0));
 
         self.resize_consumer(rows, cols);
         self.follow_active_buffer();
