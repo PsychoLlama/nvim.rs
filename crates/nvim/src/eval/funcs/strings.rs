@@ -23,7 +23,7 @@ use crate::keycodes::escape_ks_bytes;
 use crate::mbyte::Codepoint;
 use crate::mbyte::{Converter, char_at, cluster_len, enc_locale, encode_char};
 use crate::memline::Lines;
-use crate::memory::{ThinCString, XString};
+use crate::memory::{ThinCString, XString, try_grow_zeroed};
 use crate::message::E_NO_SPELL;
 use crate::message::{emsg, special_keys_text};
 use crate::narrow::{len_as_int, len_as_integer, number_as_int};
@@ -148,7 +148,9 @@ fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     let src = args[0].list_shared();
     // The length hint is upstream's; a non-positive count contributes
     // nothing rather than a negative capacity.
-    let hint = VarNumber::from(n > 0) * n * VarNumber::from(list_len(args[0].list_ref()));
+    let hint = VarNumber::from(n > 0)
+        .saturating_mul(n)
+        .saturating_mul(VarNumber::from(list_len(args[0].list_ref())));
     tv_list_alloc_ret(result, isize::try_from(hint).unwrap_or(isize::MAX));
     let Some(out) = result.list_shared() else {
         return;
@@ -165,8 +167,12 @@ fn repeat_blob(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
         return;
     }
     // Upstream computes the total in `int`; a product that does not fit
-    // reads as non-positive and the repeat is dropped.
-    let len = number_as_int(len_as_integer(src.len()) * n);
+    // reads as non-positive and the repeat is dropped. One past even a
+    // `Number` (`repeat(0z01, v:numbermax)`) is dropped too.
+    let Some(len) = len_as_integer(src.len()).checked_mul(n) else {
+        return;
+    };
+    let len = number_as_int(len);
     if len <= 0 {
         return;
     }
@@ -189,8 +195,6 @@ fn repeat_string(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     }
     // Upstream's overflow guard, in `size_t` as upstream writes it: a
     // product that wrapped does not divide back to the source length.
-    // A product that fits is asked for in earnest, and reports E41 if
-    // the allocation fails.
     // `n` is positive here; a count past the address space is the
     // overflow the guard below refuses.
     let n = usize::try_from(n).unwrap_or(usize::MAX);
@@ -198,7 +202,17 @@ fn repeat_string(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     if len.wrapping_div(n) != slen {
         return;
     }
-    result.write_string(Some(p.repeat(n).into()));
+    // A product that fits is asked for in earnest. One the allocator
+    // refuses (`repeat('ab', v:numbermax)`) reports E342 and answers the
+    // null String, where upstream's `xmallocz` exits with E41.
+    let mut out = Vec::new();
+    if !try_grow_zeroed(&mut out, len) {
+        return;
+    }
+    for room in out.chunks_exact_mut(slen) {
+        room.copy_from_slice(p);
+    }
+    result.write_string(Some(out.into()));
 }
 
 /// `sha256({string})` — also accepts a Blob, whose bytes are hashed as they

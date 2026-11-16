@@ -347,11 +347,13 @@ fn next_search_hl_pos(item: &mut MatchItem, lnum: LineNr, mincol: ColNr) -> usiz
 
     let best = &item.mit_pos_array[found];
     // Column 0 means the whole line; otherwise the position is 1-based
-    // and `len` wide.
+    // and `len` wide. `matchaddpos()` keeps the length it was given (so
+    // `getmatches()` answers it back); one reaching past the last column
+    // ends there.
     let (start, end) = if best.col == ColNr::ZERO {
         (ColNr::ZERO, ColNr::MAX)
     } else {
-        (best.col - 1, best.col - 1 + best.len)
+        (best.col - 1, (best.col - 1).saturating_add(best.len))
     };
 
     let shl = &mut item.mit_hl;

@@ -286,20 +286,34 @@ fn parse_diff_ed(line: &[u8]) -> Option<DiffHunk> {
     if l1 < f1 || l2 < f2 {
         return None;
     }
-    Some(DiffHunk {
-        lnum_orig: if difftype == b'a' {
-            LineNr::new(f1 + 1)
+    // A line past `int` (`2147483647a1`) is in no buffer: not a hunk.
+    let range = |first: c_int, last: c_int, empty: bool| {
+        if empty {
+            Some((LineNr::new(first.checked_add(1)?), 0))
         } else {
-            LineNr::new(f1)
-        },
-        count_orig: if difftype == b'a' { 0 } else { l1 - f1 + 1 },
-        lnum_new: if difftype == b'd' {
-            LineNr::new(f2 + 1)
-        } else {
-            LineNr::new(f2)
-        },
-        count_new: if difftype == b'd' { 0 } else { l2 - f2 + 1 },
-    })
+            Some((LineNr::new(first), (last - first).checked_add(1)?))
+        }
+    };
+    let (lnum_orig, count_orig) = range(f1, l1, difftype == b'a')?;
+    let (lnum_new, count_new) = range(f2, l2, difftype == b'd')?;
+    DiffHunk {
+        lnum_orig,
+        count_orig,
+        lnum_new,
+        count_new,
+    }
+    .within_int()
+}
+
+impl DiffHunk {
+    /// The hunk, if both of its ranges end inside `int`; a diff output that
+    /// names lines past that (`@@ -2147483647,2 …`) describes no buffer, and
+    /// the line is not taken for a hunk.
+    fn within_int(self) -> Option<Self> {
+        self.lnum_orig.checked_add(self.count_orig)?;
+        self.lnum_new.checked_add(self.count_new)?;
+        Some(self)
+    }
 }
 
 /// `,N` at `at`: `N` and the offset past it, else `default` and `at`.
@@ -324,16 +338,17 @@ fn parse_diff_unified(line: &[u8]) -> Option<DiffHunk> {
     let (mut newline, at) = getdigits_int_at(rest, 0, true, 0);
     let (newcount, _) = number_after_comma(rest, at, 1);
     if oldcount == 0 {
-        oldline += 1;
+        oldline = oldline.checked_add(1)?;
     }
     if newcount == 0 {
-        newline += 1;
+        newline = newline.checked_add(1)?;
     }
-    Some(DiffHunk {
+    DiffHunk {
         lnum_orig: LineNr::new(oldline),
         count_orig: oldcount,
         // `@@ -1,2 +0,0 @@` deletes the whole file; line 0 is not a line.
         lnum_new: LineNr::new(newline.max(1)),
         count_new: newcount,
-    })
+    }
+    .within_int()
 }

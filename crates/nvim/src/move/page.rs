@@ -170,8 +170,9 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
         get_scroll_overlap(win, dir)
     };
     // `scroll_with_sms` corrects the count it was given, which upstream
-    // aliases with the count itself here.
-    let mut count = count * page;
+    // aliases with the count itself here. A count of pages past `int`
+    // lines (`999999999<C-f>`) scrolls as far as `int` does: to the end.
+    let mut count = count.saturating_mul(page);
     let did_move = scroll_with_sms(win, dir, count, &mut count);
 
     if did_move {

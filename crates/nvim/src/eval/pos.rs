@@ -66,7 +66,7 @@ pub fn buf_byteidx_to_charidx(buffer: Option<Buf>, mut lnum: LineNr, byteidx: c_
 }
 
 /// The byte index of character index `charidx` in a buffer line.
-pub fn buf_charidx_to_byteidx(buffer: Option<Buf>, mut lnum: LineNr, mut charidx: c_int) -> c_int {
+pub fn buf_charidx_to_byteidx(buffer: Option<Buf>, mut lnum: LineNr, charidx: c_int) -> c_int {
     let Some(buf) = buffer else {
         return -1;
     };
@@ -80,7 +80,8 @@ pub fn buf_charidx_to_byteidx(buffer: Option<Buf>, mut lnum: LineNr, mut charidx
     let line = lines.line(lnum);
     let mut t = 0usize;
     // The decrement is inside the condition, so a `charidx` of 0 or 1
-    // both answer byte 0.
+    // both answer byte 0, and so does a negative one.
+    let mut charidx = charidx.max(0);
     while t < line.len() && {
         charidx -= 1;
         charidx > 0

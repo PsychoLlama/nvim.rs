@@ -1602,6 +1602,7 @@ static const int CONV_TO_UTF8 = 1;
 static const int COPYID_INC = 2;
 static const int COPYID_MASK = -2;
 static const int COPY_INLINE = 64;
+static const int COUNT_HEADROOM = 70;
 static const int CPT_ABBR = 0;
 static const int CPT_COUNT = 4;
 static const int CPT_INFO = 3;

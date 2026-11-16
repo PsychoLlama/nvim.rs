@@ -275,7 +275,7 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         }
     }
 
-    let mut len: c_int = if args.len() > 2 {
+    let len = if args.len() > 2 {
         let mut charlen = number_as_int(tv_get_number(&args[2]));
         let mut len = 0;
         while charlen > 0 && nbyte + len < slen_int {
@@ -289,26 +289,33 @@ pub fn f_strcharpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             };
             charlen -= 1;
         }
-        len
+        i128::from(len)
     } else {
-        slen_int - nbyte // Default: everything from `nbyte` on.
+        i128::from(slen_int) - i128::from(nbyte) // Default: everything from `nbyte` on.
     };
 
-    // Only the overlap between the requested part and the string.
-    if nbyte < 0 {
-        len += nbyte;
-        nbyte = 0;
-    } else if as_index(nbyte) > slen {
-        nbyte = slen_int;
-    }
-    if len < 0 {
-        len = 0;
-    } else if nbyte + len > slen_int {
-        len = slen_int - nbyte;
-    }
+    let (start, len) = overlap(i128::from(nbyte), len, slen);
+    result.write_string(Some(ThinCString::from_bytes(&bytes[start..start + len])));
+}
 
-    let part = &bytes[as_index(nbyte)..as_index(nbyte + len)];
-    result.write_string(Some(ThinCString::from_bytes(part)));
+/// The part of a `slen`-byte string that `len` bytes from byte `start`
+/// cover, as its start and length: a start before the string eats into the
+/// length, and neither reaches past the end. The arguments are wide, so a
+/// start or length at the `Number` extremes means what it says
+/// (`strpart('abc', v:numbermin)` is the whole string, as is
+/// `strpart('abc', 1, v:numbermax)` from its second byte).
+fn overlap(mut start: i128, mut len: i128, slen: usize) -> (usize, usize) {
+    let slen_wide = i128::try_from(slen).expect("a string's length fits in i128");
+    if start < 0 {
+        len += start;
+        start = 0;
+    } else if start > slen_wide {
+        start = slen_wide;
+    }
+    len = len.clamp(0, slen_wide - start);
+    let start = usize::try_from(start).expect("a start clamped to the string fits it");
+    let len = usize::try_from(len).expect("a length clamped to the string fits it");
+    (start, len)
 }
 
 /// "strpart()" function: a substring measured in bytes, or -- with the
@@ -319,27 +326,19 @@ pub fn f_strpart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let slen = len_as_integer(bytes.len());
 
     let start = tv_get_number_chk(&args[1]);
-    let mut n = start.unwrap_or(0);
-    let mut len = if start.is_err() {
+    let n = i128::from(start.unwrap_or(0));
+    let len = if start.is_err() {
         0
     } else if args.len() > 2 {
-        tv_get_number(&args[2])
+        i128::from(tv_get_number(&args[2]))
     } else {
-        slen - n // Default: everything from `n` on.
+        i128::from(slen) - n // Default: everything from `n` on.
     };
 
     // Only the overlap between the requested part and the string.
-    if n < 0 {
-        len += n;
-        n = 0;
-    } else if n > slen {
-        n = slen;
-    }
-    if len < 0 {
-        len = 0;
-    } else if n + len > slen {
-        len = slen - n;
-    }
+    let (start, part_len) = overlap(n, len, bytes.len());
+    let n = len_as_integer(start);
+    let mut len = len_as_integer(part_len);
 
     if args.len() > 2 && args.len() > 3 {
         // `len` was a character count after all: re-measure it.

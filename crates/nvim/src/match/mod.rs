@@ -97,15 +97,19 @@ impl Win {
         }
         if id == -1 {
             id = self.w_next_match_id;
-            self.w_next_match_id += 1;
+            self.w_next_match_id = id.saturating_add(1);
         } else {
             if self.w_matches.iter().any(|item| item.mit_id == id) {
                 return Err(MatchError::IdTaken(id));
             }
             // Keep the auto-allocated ids above every hand-picked one, with
-            // room for a few more to be picked soon.
-            if self.w_next_match_id < id + 100 {
-                self.w_next_match_id = id + 100;
+            // room for a few more to be picked soon. One within 100 of
+            // `INT_MAX` leaves the counter where it is, as upstream's wrapped
+            // sum does.
+            if let Some(above) = id.checked_add(100)
+                && self.w_next_match_id < above
+            {
+                self.w_next_match_id = above;
             }
         }
 

@@ -511,12 +511,12 @@ impl KeyLoop {
             if CTERM_NORMAL_FG_COLOR.get() == 0 {
                 return Err(HighlightError::FgUnknown);
             }
-            CTERM_NORMAL_FG_COLOR.get() - 1
+            CTERM_NORMAL_FG_COLOR.get().wrapping_sub(1)
         } else if arg.eq_ignore_ascii_case(b"bg") {
             if CTERM_NORMAL_BG_COLOR.get() <= 0 {
                 return Err(HighlightError::BgUnknown);
             }
-            CTERM_NORMAL_BG_COLOR.get() - 1
+            CTERM_NORMAL_BG_COLOR.get().wrapping_sub(1)
         } else {
             let name = arg.to_vec();
             let name =
@@ -540,16 +540,20 @@ impl KeyLoop {
             color
         };
 
-        // Stored plus one, so that 0 can mean "NONE" (colour -1).
+        // Stored plus one, so that 0 can mean "NONE" (colour -1). The
+        // colour is only ever read back as its low 16 bits (`(int16_t)`), so
+        // the sum wraps: `ctermbg=2147483647` stores what `ctermbg=65535`
+        // does.
+        let stored = color.wrapping_add(1);
         if foreground {
-            with_group(self.id, |entry| entry.cterm_fg = color + 1);
+            with_group(self.id, |entry| entry.cterm_fg = stored);
             if self.is_normal_group {
-                CTERM_NORMAL_FG_COLOR.set(color + 1);
+                CTERM_NORMAL_FG_COLOR.set(stored);
             }
         } else {
-            with_group(self.id, |entry| entry.cterm_bg = color + 1);
+            with_group(self.id, |entry| entry.cterm_bg = stored);
             if self.is_normal_group {
-                CTERM_NORMAL_BG_COLOR.set(color + 1);
+                CTERM_NORMAL_BG_COLOR.set(stored);
                 self.guess_background(color);
             }
         }

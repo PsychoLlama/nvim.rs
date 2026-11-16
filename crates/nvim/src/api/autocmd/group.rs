@@ -46,11 +46,10 @@ pub fn nvim_create_augroup(
 pub fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
     let mut tstate: TryState = TryState::INIT;
     try_enter(&mut tstate);
-    let name = if id == 0 as Integer {
-        None
-    } else {
-        augroup_name(number_as_int(id))
-    };
+    // The id is narrowed first, as upstream's `(int)` does: one whose low
+    // 32 bits are zero (`2^32`) names no group either.
+    let id = number_as_int(id);
+    let name = if id == 0 { None } else { augroup_name(id) };
     augroup_del(name.as_deref(), false);
     try_leave(&tstate)?;
     Ok(())

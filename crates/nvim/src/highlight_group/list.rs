@@ -45,7 +45,8 @@ enum ListValue<'a> {
     /// `cterm=`/`gui=` would take. An empty set prints nothing.
     Attrs(HlAttrFlags),
     /// A colour number plus one, so that 0 means "not set" and prints
-    /// nothing.
+    /// nothing. The plus one wraps, so every `int` round-trips (a colour
+    /// of `INT_MAX` is stored as `INT_MIN`).
     Number(c_int),
     /// A ready-made string; `None` prints nothing.
     Text(Option<&'a CStr>),
@@ -61,7 +62,7 @@ impl<'a> ListValue<'a> {
         match *self {
             ListValue::Text(text) => text,
             ListValue::Number(0) => None,
-            ListValue::Number(value) => Some(buf.number(value - 1)),
+            ListValue::Number(value) => Some(buf.number(value.wrapping_sub(1))),
             ListValue::Attrs(bits) if bits.is_empty() => None,
             ListValue::Attrs(bits) => Some(buf.attrs(bits)),
         }
@@ -189,7 +190,7 @@ pub(crate) fn highlight_list_one(id: c_int) {
         (color(entry.rgb_fg_idx, entry.rgb_fg, &mut fg), c"guifg"),
         (color(entry.rgb_bg_idx, entry.rgb_bg, &mut bg), c"guibg"),
         (color(entry.rgb_sp_idx, entry.rgb_sp, &mut sp), c"guisp"),
-        (ListValue::Number(entry.blend + 1), c"blend"),
+        (ListValue::Number(entry.blend.wrapping_add(1)), c"blend"),
     ];
 
     let mut didh = false;

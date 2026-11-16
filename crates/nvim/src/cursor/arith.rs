@@ -103,17 +103,19 @@ pub enum ColAdd {
 }
 
 /// Whether the cursor's old virtual position survives the column clamp.
-/// `oldcoladd` is the *virtual* column it held — `col + coladd` before the
-/// clamp — and `col` the column it holds now.
+/// `oldcol` and `oldcoladd` are the column and offset it held before the
+/// clamp, and `col` the column it holds now. A virtual column past `int`
+/// (`cursor(1, 9, v:numbermax)`) is the overflow the C's guard drops.
 pub fn carried_coladd(oldcol: ColNr, oldcoladd: i32, col: ColNr, ve_all: bool) -> ColAdd {
     if oldcol == ColNr::MAX {
         ColAdd::Zero
     } else if !ve_all {
         ColAdd::Keep
-    } else if oldcoladd > col.get() {
-        ColAdd::Carry(oldcoladd - col.get())
     } else {
-        ColAdd::Zero
+        match oldcol.get().checked_add(oldcoladd) {
+            Some(vcol) if vcol > col.get() => ColAdd::Carry(vcol - col.get()),
+            _ => ColAdd::Zero,
+        }
     }
 }
 

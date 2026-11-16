@@ -66,7 +66,7 @@ pub fn parse_cino(buffer: Buf) {
     buffer.b_ind_func_type = sw; // t a function's type specification
     buffer.b_ind_cpp_baseclass = sw; // i a base class / constructor init
     buffer.b_ind_continuation = sw; // + a continuation line
-    buffer.b_ind_unclosed = sw * 2; // ( from the line with the open paren
+    buffer.b_ind_unclosed = sw.saturating_mul(2); // ( from the line with the open paren
     buffer.b_ind_unclosed2 = sw; // u for a paren that is itself unclosed
     buffer.b_ind_unclosed_noignore = 0; // U do not ignore a leading `(`
     buffer.b_ind_unclosed_wrapped = 0; // W a `(` last on its line

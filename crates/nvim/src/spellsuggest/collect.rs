@@ -81,6 +81,10 @@ fn rescore(word_score: c_int, sound_score: c_int) -> c_int {
     (3 * word_score + sound_score) / 4
 }
 
+/// How far above `su_maxcount` the list grows before it is cleaned up
+/// ([`clean_count`]'s 20 plus [`max_count`]'s 50).
+pub(super) const COUNT_HEADROOM: c_int = 70;
+
 /// How many suggestions to keep when the list is cleaned up. Always
 /// comfortably more than will be displayed, because a later pass can
 /// rescore them and change the order.

@@ -50,7 +50,10 @@ fn drag_target(args: &[TypVal]) -> Result<Option<(Win, c_int)>, Failed> {
         crate::semsg!("E1308: Cannot resize a window in another tab page");
         return Err(Failed);
     }
-    Ok(Some((wp, number_as_int(arg_number(args, 1)))))
+    // The drag measures a negative offset by negating it: `INT_MIN` drags
+    // as far as `-INT_MAX`, both past any screen.
+    let offset = number_as_int(arg_number(args, 1)).max(-c_int::MAX);
+    Ok(Some((wp, offset)))
 }
 
 /// `win_move_separator({nr}, {offset})` — drag a vertical separator.

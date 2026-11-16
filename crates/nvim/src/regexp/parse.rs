@@ -42,7 +42,9 @@ use crate::charset::{getdigits_int_at, hex2nr};
 pub(crate) fn multi_kind(c: c_int) -> Option<Multi> {
     // Only the magic forms count, so undo the marker rather than calling
     // `unmagic` — that would also accept the literal byte.
-    match c + 256 {
+    // A marker is a byte less 256; a character past `INT_MAX - 256` (a
+    // huge kitty key code point) is none.
+    match c.checked_add(256).unwrap_or(c_int::MIN) {
         x if x == c_int::from(b'@') || x == c_int::from(b'=') || x == c_int::from(b'?') => {
             Some(Multi::One)
         }

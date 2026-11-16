@@ -241,7 +241,7 @@ pub fn f_setcmdline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `setcmdpos()` function.
 pub fn f_setcmdpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let pos = number_as_int(tv_get_number(&args[0])) - 1;
+    let pos = number_as_int(tv_get_number(&args[0])).saturating_sub(1);
     if pos >= 0 {
         result.write_number(VarNumber::from(!set_cmdline_pos(pos)));
     }

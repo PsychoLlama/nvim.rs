@@ -528,7 +528,7 @@ pub fn check_cursor_col(win: Win) {
     let buf = win.buffer();
     let cursor = win.cursor();
     let oldcol = cursor.col();
-    let oldcoladd = cursor.col() + cursor.coladd();
+    let oldcoladd = cursor.coladd();
     let cur_ve_flags = win.ve_flags();
     let len = buf.line_len_raw(cursor.lnum());
 
@@ -547,7 +547,7 @@ pub fn check_cursor_col(win: Win) {
 
     match carried_coladd(
         oldcol,
-        oldcoladd.get(),
+        oldcoladd,
         cursor.col(),
         cur_ve_flags == OPT_VE_FLAG_ALL,
     ) {

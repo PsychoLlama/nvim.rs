@@ -147,8 +147,10 @@ pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
                 startpos = Buf::current().b_op_start;
             }
             change_cnt += 1;
+            // `g CTRL-A` over more lines than `int` has room for
+            // (`999999999g<C-a>` on three lines) adds `INT_MAX` from there.
             if g_cmd {
-                amount += prenum1;
+                amount = amount.saturating_add(prenum1);
             }
         }
         pos.lnum += 1;

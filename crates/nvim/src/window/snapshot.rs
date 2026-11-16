@@ -324,13 +324,11 @@ fn parse_colorcolumn(text: &[u8], tw: OptInt) -> Result<Vec<c_int>, OptError> {
             if tw == 0 {
                 skip = true; // 'textwidth' not set, skip this item
             } else {
-                debug_assert!(
-                    (col >= 0 && tw <= OptInt::from(c_int::MAX - col))
-                        || (col < 0 && tw >= OptInt::from(c_int::MIN - col)),
-                    "col + tw fits in an int"
-                );
-                col += number_as_int(tw);
-                skip = col < 0;
+                // `+2147483647` past a 'textwidth' is a column no screen
+                // reaches: it stays at the last one.
+                let sum = OptInt::from(col) + OptInt::from(number_as_int(tw));
+                col = c_int::try_from(sum).unwrap_or(c_int::MAX);
+                skip = sum < 0;
             }
         } else if at(i).is_ascii_digit() {
             (col, i) = getdigits_int_at(text, i, true, 0);

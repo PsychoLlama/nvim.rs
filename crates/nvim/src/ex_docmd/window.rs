@@ -464,16 +464,18 @@ fn resize(excmd: &mut ExArg) {
     // A non-number reads as zero, as `atol` does.
     let arg = excmd.line.arg;
     let mut n = number_as_int(getdigits_at(excmd.line.buffer_mut(), arg, false, 0).0);
+    // A relative size past `int` (`:resize +2147483647`) asks for as much as
+    // there is.
     if CMDMOD.with(|m| m.cmod_split) & WSP_VERT != 0 {
         if relative {
-            n += wp.w_width;
+            n = n.saturating_add(wp.w_width);
         } else if n == 0 && empty {
             n = COLUMNS.get();
         }
         setwidth_win(n, wp);
     } else {
         if relative {
-            n += wp.w_height;
+            n = n.saturating_add(wp.w_height);
         } else if n == 0 && empty {
             n = ROWS.get() - 1;
         }

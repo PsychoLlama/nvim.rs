@@ -47,7 +47,7 @@ const END_OF_LINE: ColNr = ColNr::MAX;
 
 /// `byte2line({byte})` — which line a byte offset falls in.
 pub fn f_byte2line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mut boff = number_as_int(arg_number(&args[0])) - 1;
+    let mut boff = number_as_int(arg_number(&args[0])).saturating_sub(1);
     result.write_number(if boff < 0 {
         -1
     } else {

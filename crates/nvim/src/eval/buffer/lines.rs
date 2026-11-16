@@ -32,17 +32,19 @@ pub(crate) fn set_buffer_lines(
     lines: &TypVal,
     result: &mut TypVal,
 ) {
-    let lnum: LineNr = lnum_arg + i32::from(append);
+    // Appending below the last representable line is past any buffer's end:
+    // it fails like any line past the end.
+    let lnum = lnum_arg.checked_add(i32::from(append));
     let is_curbuf: bool = buffer == Buf::current_or_none();
     let unloaded = |b: Buf| !is_curbuf && b.b_ml.ml_mfp.is_none();
     let Some(target) = buffer.filter(|&b| !unloaded(b)) else {
         result.write_number(1);
         return;
     };
-    if lnum < LineNr::ONE {
+    let Some(lnum) = lnum.filter(|&lnum| lnum >= LineNr::ONE) else {
         result.write_number(1);
         return;
-    }
+    };
     let cob = (!is_curbuf).then(|| SavedBufferState::prepare(target));
     let append_lnum: LineNr = if append {
         lnum - 1

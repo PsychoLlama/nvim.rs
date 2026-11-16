@@ -239,8 +239,9 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
     let old_state = STATE.get();
 
     // The length at which a line is formatted whether or not the
-    // paragraph has ended: 3 * 'textwidth'.
-    let max_len = comp_textwidth(true) * 3;
+    // paragraph has ended: 3 * 'textwidth', or never for a 'textwidth'
+    // that large.
+    let max_len = comp_textwidth(true).saturating_mul(3);
 
     let do_comments = has_format_option(FoFlag::Q_COMS);
     // Format comments with `n` or `2`.

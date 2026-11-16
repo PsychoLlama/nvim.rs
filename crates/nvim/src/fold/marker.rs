@@ -256,15 +256,17 @@ pub(super) fn foldlevel_marker(line: &mut FoldLine, startmarker: &[u8], endmarke
             at += startmarker.len();
             match marker_number(&text[at..]) {
                 // `{{{N` sets the level outright.
+                // Levels saturate: a `{{{2147483647 {{{` is as deep as it
+                // gets, and the fold tree stops at its own depth anyway.
                 Some(n) => {
                     line.lvl = n;
                     line.lvl_next = n;
-                    line.start = if n - start_lvl > 1 { n - start_lvl } else { 1 };
+                    line.start = n.saturating_sub(start_lvl).max(1);
                 }
                 None => {
-                    line.lvl += 1;
-                    line.lvl_next += 1;
-                    line.start += 1;
+                    line.lvl = line.lvl.saturating_add(1);
+                    line.lvl_next = line.lvl_next.saturating_add(1);
+                    line.start = line.start.saturating_add(1);
                 }
             }
         } else if rest.first() == endmarker.first() && rest.starts_with(endmarker) {

@@ -412,9 +412,16 @@ pub fn dict2hlattrs(
     }
 
     // Re-bias a colour number for storage: 0 is "unset", so every real
-    // number sits one higher.
+    // number sits one higher. The sum is narrowed to 16 bits, so it wraps
+    // with them (`ctermbg = 2147483647` biases as 65535 does).
     #[allow(clippy::cast_possible_truncation, reason = "C's `(int16_t)` narrowing")]
-    let bias = |c: int32_t| if c == -1 { 0 } else { (c + 1) as int16_t };
+    let bias = |c: int32_t| {
+        if c == -1 {
+            0
+        } else {
+            c.wrapping_add(1) as int16_t
+        }
+    };
     let mut hlattrs = HLATTRS_INIT;
     if use_rgb {
         // The gui bits stand in for the cterm ones unless a `cterm` key said

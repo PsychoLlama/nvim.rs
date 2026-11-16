@@ -427,7 +427,9 @@ fn spell_find_suggest(
         (len, attr) = Win::current().spell_check(bad, None, false);
         len_as_int(len)
     };
-    su.su_maxcount = maxcount;
+    // `spellsuggest(w, v:numbermax)` asks for every suggestion there is;
+    // the list's growth room above the count must still fit in an `int`.
+    su.su_maxcount = maxcount.min(c_int::MAX - collect::COUNT_HEADROOM);
     su.su_maxscore = SCORE_MAXINIT;
     su.su_badlen = su.su_badlen.min(MAXWLEN_INT - 1); // just in case
     let badlen = as_index(su.su_badlen);

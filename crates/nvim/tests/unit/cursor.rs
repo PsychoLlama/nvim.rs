@@ -234,8 +234,8 @@ fn the_mode_question_is_only_asked_when_it_matters() {
 // `if (oldcol == MAXCOL) coladd = 0; else if (cur_ve_flags == kOptVeFlagAll) {
 // if (oldcoladd > col) coladd = oldcoladd - col; else coladd = 0; }`
 //
-// `oldcoladd` is the C's `win->w_cursor.col + win->w_cursor.coladd` taken
-// before the clamp: the cursor's virtual column, not its offset.
+// The C's `oldcoladd` is `win->w_cursor.col + win->w_cursor.coladd` taken
+// before the clamp; here the function takes the two parts and adds them.
 
 #[test]
 fn the_end_of_the_line_drops_the_virtual_offset() {
@@ -255,7 +255,7 @@ fn a_partial_virtualedit_leaves_the_offset_alone() {
     // Only ve=all lets the cursor keep a position the text does not have;
     // under the other spellings the C touches nothing.
     assert_eq!(
-        carried_coladd(ColNr::new(3), 9, ColNr::new(5), false),
+        carried_coladd(ColNr::new(3), 6, ColNr::new(5), false),
         ColAdd::Keep
     );
 }
@@ -263,7 +263,7 @@ fn a_partial_virtualedit_leaves_the_offset_alone() {
 #[test]
 fn virtualedit_all_carries_the_distance_past_the_clamp() {
     assert_eq!(
-        carried_coladd(ColNr::new(3), 7, ColNr::new(5), true),
+        carried_coladd(ColNr::new(3), 4, ColNr::new(5), true),
         ColAdd::Carry(2)
     );
 }
@@ -272,12 +272,17 @@ fn virtualedit_all_carries_the_distance_past_the_clamp() {
 fn a_virtual_column_the_clamp_caught_up_with_is_dropped() {
     // Not a miscalculation, just nothing left to be virtual about.
     assert_eq!(
-        carried_coladd(ColNr::new(3), 5, ColNr::new(5), true),
+        carried_coladd(ColNr::new(3), 2, ColNr::new(5), true),
         ColAdd::Zero
     );
     // And the overflow guard the C's comment calls "a weird number".
     assert_eq!(
-        carried_coladd(ColNr::new(3), 4, ColNr::new(5), true),
+        carried_coladd(ColNr::new(3), 1, ColNr::new(5), true),
+        ColAdd::Zero
+    );
+    // A virtual column past `int` is the overflow that guard is for.
+    assert_eq!(
+        carried_coladd(ColNr::new(3), i32::MAX, ColNr::new(5), true),
         ColAdd::Zero
     );
 }

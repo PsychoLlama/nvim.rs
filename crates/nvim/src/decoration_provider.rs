@@ -481,18 +481,17 @@ pub(crate) fn decor_provider_invalidate_hl() {
 /// provider in between cannot leave a stale index behind; `f` must not run
 /// Lua.
 ///
-/// Namespace 0 is the global one and has no provider, so a caller asking for
-/// a non-positive id is a bug — but only a `debug_assert!`, because upstream
-/// spells it `assert(ns_id > 0)` (`v0.12.4:src/nvim/decoration_provider.c:305`)
-/// and that vanishes under `NDEBUG`. A release upstream nvim reached through
-/// `nvim_set_hl(-2, …)` appends a provider with a negative id and carries on;
-/// aborting instead would be a divergence, not a fix.
+/// Namespace 0 is the global one and is not meant to have a provider, but
+/// input reaches here with a non-positive id (`nvim_set_decoration_provider(0,
+/// {})`, `nvim_set_hl(-1, …)`), so it is not an invariant. Upstream's
+/// `assert(ns_id > 0)` (`v0.12.4:src/nvim/decoration_provider.c:305`)
+/// vanishes under `NDEBUG`, and a release upstream nvim appends a provider
+/// with that id and carries on; so does this.
 pub(crate) fn with_decor_provider<R>(
     ns_id: NS,
     force: bool,
     f: impl FnOnce(&mut DecorProvider) -> R,
 ) -> Option<R> {
-    debug_assert!(ns_id > Handle::NONE);
     let idx = provider_index(ns_id, force)?;
     Some(with_provider(idx, f))
 }

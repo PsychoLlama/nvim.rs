@@ -150,7 +150,8 @@ pub fn nvim_open_tabpage(
     let after = config.after.map_or(-1, number_as_int);
 
     let mut wp: Option<Win> = None;
-    let tp = api_try(|| win_new_tabpage(after + 1, None, enter, Some(&mut wp)))?;
+    // `after` past the last tab page is after the last one, `INT_MAX` too.
+    let tp = api_try(|| win_new_tabpage(after.saturating_add(1), None, enter, Some(&mut wp)))?;
     let Ok(tp) = tp else {
         return Err(Error::exception(c"Failed to create new tabpage"));
     };

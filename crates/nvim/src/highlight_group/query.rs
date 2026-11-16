@@ -230,7 +230,8 @@ pub(crate) fn highlight_color<'a>(
         return None;
     }
     if modec == c_int::from(b'c') {
-        let n = if fg { entry.cterm_fg } else { entry.cterm_bg } - 1;
+        // Stored plus one, wrapping (see `ListValue::Number`).
+        let n = if fg { entry.cterm_fg } else { entry.cterm_bg }.wrapping_sub(1);
         if n < 0 {
             return None;
         }

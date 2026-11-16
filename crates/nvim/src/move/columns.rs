@@ -345,7 +345,7 @@ pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let (lnum, col) = (tv_get_number(&args[1]), tv_get_number(&args[2]));
     let mut pos = Pos {
         lnum: number_as_lnum(lnum),
-        col: (number_as_col(col) - 1).max(ColNr::ZERO),
+        col: number_as_col(col).saturating_sub(1).max(ColNr::ZERO),
         coladd: 0,
     };
     if pos.lnum > wp.buffer().line_count() {

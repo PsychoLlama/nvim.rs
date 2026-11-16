@@ -907,8 +907,10 @@ pub(super) fn foldlevel_expr(line: &mut FoldLine) {
     match u8::try_from(verdict).unwrap_or(0) {
         b'a' => {
             // "a1": one level deeper from here on.
+            // Levels saturate (`a2147483647` twice): the fold tree stops
+            // at its own depth anyway.
             if line.lvl >= 0 {
-                line.lvl += n;
+                line.lvl = line.lvl.saturating_add(n);
                 line.lvl_next = line.lvl;
             }
             line.start = n;
@@ -916,8 +918,12 @@ pub(super) fn foldlevel_expr(line: &mut FoldLine) {
         b's' => {
             // "s1": one level shallower from the next line.
             if line.lvl >= 0 {
-                line.lvl_next = if n > line.lvl { 0 } else { line.lvl - n };
-                line.end = line.lvl_next + 1;
+                line.lvl_next = if n > line.lvl {
+                    0
+                } else {
+                    line.lvl.saturating_sub(n)
+                };
+                line.end = line.lvl_next.saturating_add(1);
             }
         }
         b'>' => {
@@ -928,7 +934,7 @@ pub(super) fn foldlevel_expr(line: &mut FoldLine) {
         }
         b'<' => {
             // "<1": a fold of level 1 ends here.
-            line.lvl_next = line.lvl.min(n - 1);
+            line.lvl_next = line.lvl.min(n.saturating_sub(1));
             line.end = n;
         }
         b'=' => {
