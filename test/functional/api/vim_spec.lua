@@ -6172,4 +6172,30 @@ describe('API over a raw channel', function()
     eq(1, status)
     n.assert_alive()
   end)
+
+  it('echoes a handle outside the editor range as its 32 bits', function()
+    t.skip(t.is_os('win'), 'raw stdio')
+    -- [0, 1, "nvim__id", [Buffer(0xffffff9c)]]: no client library sends
+    -- such a handle, so the request is spelled out byte by byte.
+    local out = exec_lua(function(prog)
+      local request = '\148\000\001\168nvim__id\145\199\005\000\206\255\255\255\156'
+      local reply = ''
+      local job = vim.fn.jobstart({ prog, '--clean', '--embed', '--headless' }, {
+        stdout_buffered = false,
+        on_stdout = function(_, data)
+          -- A job's lines carry each NUL byte as a "\n".
+          for i, line in ipairs(data) do
+            reply = reply .. (i > 1 and '\n' or '') .. line:gsub('\n', '\0')
+          end
+        end,
+      })
+      vim.fn.chansend(job, request)
+      vim.wait(10000, function()
+        return #reply >= 12
+      end)
+      vim.fn.jobstop(job)
+      return reply
+    end, n.nvim_prog)
+    eq('\148\001\001\192\199\005\000\206\255\255\255\156', out)
+  end)
 end)

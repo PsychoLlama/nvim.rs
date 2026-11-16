@@ -186,10 +186,14 @@ fn handles() {
     );
 }
 
+/// A client may send any number as a handle and have it echoed back; a
+/// negative one past the fixext1 range goes out as its 32 unsigned bits.
 #[test]
-#[should_panic(expected = "handles are allocated upward")]
-fn a_large_negative_handle_is_rejected() {
-    format::handle(0, -0x20);
+fn a_large_negative_handle_is_written_as_its_unsigned_bits() {
+    assert_eq!(
+        format::handle(0, -0x20).bytes(),
+        &[0xc7, 5, 0, 0xce, 0xff, 0xff, 0xff, 0xe0]
+    );
 }
 
 /// Packs one object through a heap-backed buffer and returns the bytes.

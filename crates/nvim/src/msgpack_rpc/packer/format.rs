@@ -351,10 +351,14 @@ pub fn ext_header(len: usize, ext_type: i8) -> Option<Item> {
 /// A buffer, window or tabpage handle, as a complete extension object.
 ///
 /// Small handles get a fixext1 carrying the raw byte — including the negative
-/// ones, which is why the range starts below zero even though the wider form
-/// asserts the handle is not negative. Anything larger is an ext8 wrapping the
-/// handle's [`uint`] encoding, so a two-byte handle spends an ext8 header
-/// where fixext2 would have done.
+/// ones, which is why the range starts below zero. Anything else is an ext8
+/// wrapping the [`uint`] encoding of the handle's 32 bits, so a two-byte
+/// handle spends an ext8 header where fixext2 would have done.
+///
+/// The editor allocates handles upward from zero, but a client can send any
+/// number as a handle and have it echoed back (`nvim__id`), and the decoder
+/// keeps it as it came; a larger negative one goes out as its unsigned bits,
+/// as C's `(uint32_t)` cast wrote it.
 pub fn handle(ext_type: i8, value: i32) -> Item {
     if (-0x1f..=0x7f).contains(&value) {
         return Item::of(&[
@@ -365,7 +369,6 @@ pub fn handle(ext_type: i8, value: i32) -> Item {
                 .cast_unsigned(),
         ]);
     }
-    assert!(value >= 0, "handles are allocated upward from zero");
     let payload = uint(value.cast_unsigned());
     let mut item = Item::of(&[
         tag::EXT8,
