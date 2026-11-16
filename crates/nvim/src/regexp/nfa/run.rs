@@ -348,9 +348,11 @@ pub(crate) fn failure_chance(states: &[NfaState], state: StateId, depth: c_int) 
 /// if there is none. The whole machine cannot match before the character
 /// every match must start with.
 pub(crate) fn skip_to_start(rex: Rex, c: c_int, colp: &mut ColNr) -> Result<(), Failed> {
-    let from = usize::try_from(*colp).unwrap_or(usize::MAX);
     let line = rex.line();
-    let rest = line.get(from..).unwrap_or(&line[line.len() - 1..]);
+    // A column past the line (or before it) searches from its NUL.
+    let last = line.len() - 1;
+    let from = usize::try_from(*colp).map_or(last, |col| col.min(last));
+    let rest = &line[from..];
     let found = cstrchr_line(rex, rest, c).ok_or(Failed)?;
     *colp += len_as_int(found);
     Ok(())

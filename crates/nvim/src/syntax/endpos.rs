@@ -89,6 +89,12 @@ impl SynState {
         ext: Option<&ExtMatch>,
     ) -> (bool, RegMMatch, Option<ExtMatchRef>) {
         let mut regmatch = empty_regmmatch();
+        // A negative leading context (`lc=-1`) starts the search after the
+        // current column, which can be past the end of the line: nothing
+        // matches there. (Upstream reads past the line's NUL.)
+        if col > ml_get_buf_len(self.buffer, lnum) {
+            return (false, regmatch, None);
+        }
         let mut block = self.block();
         let spp = block.pattern_mut(idx);
         regmatch.rmm_ic = spp.sp_ic;
