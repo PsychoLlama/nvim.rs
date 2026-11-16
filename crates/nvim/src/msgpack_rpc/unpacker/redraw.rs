@@ -17,6 +17,7 @@
 //! boundary.
 
 use crate::grid::schar_from_buf;
+use core::ffi::c_int;
 
 use crate::global_cell::GlobalCell;
 use crate::grid::defs::{GridLineEvent, RawLine};
@@ -68,6 +69,13 @@ enum Halt {
     Incomplete,
     /// The stream is not a well-formed redraw batch.
     Invalid,
+}
+
+/// An array header's length as the `int` count the decoder steps down.
+/// A server is input: a length past `INT_MAX` is no redraw batch (it
+/// would count down through `INT_MIN`).
+fn array_len(len: u32) -> Result<c_int, Halt> {
+    c_int::try_from(len).map_err(|_| Halt::Invalid)
 }
 
 /// The bytes still to be read, as libmpack's token reader wants them.
@@ -148,12 +156,12 @@ fn parse_redraw<'a>(
     );
 
     if stage == protocol::REDRAW_EVENTS {
-        *nevents = cursor.next(Kind::Array)?.len.cast_signed();
+        *nevents = array_len(cursor.next(Kind::Array)?.len)?;
         stage = protocol::REDRAW_CALL;
     }
 
     if stage == protocol::REDRAW_CALL {
-        *ncalls = cursor.next(Kind::Array)?.len.cast_signed();
+        *ncalls = array_len(cursor.next(Kind::Array)?.len)?;
         let had_calls = *ncalls;
         *ncalls -= 1;
         if had_calls == 0 {
@@ -186,7 +194,7 @@ fn parse_redraw<'a>(
         for slot in &mut g.args {
             *slot = cursor.next(Kind::Uint)?.lo.cast_signed();
         }
-        g.ncells = cursor.next(Kind::Array)?.len.cast_signed();
+        g.ncells = array_len(cursor.next(Kind::Array)?.len)?;
         g.icell = 0;
         g.coloff = 0;
         g.cur_attr = -1;
@@ -215,7 +223,7 @@ fn parse_redraw<'a>(
 /// form compact. A run of spaces at the end of the line is not written at
 /// all: it becomes the event's `clear_width`.
 fn parse_grid_line_cell(g: &mut GridLineEvent, cursor: &mut Cursor) -> Result<(), Halt> {
-    let arity = cursor.next(Kind::Array)?.len.cast_signed();
+    let arity = array_len(cursor.next(Kind::Array)?.len)?;
     if !(1..=3).contains(&arity) {
         return Err(Halt::Invalid);
     }
@@ -275,6 +283,16 @@ mod tests {
     /// to an integer at all.
     fn integer_of(object: Object) -> Option<Integer> {
         object.as_integer()
+    }
+
+    #[test]
+    fn an_array_longer_than_int_is_no_redraw_batch() {
+        assert!(matches!(array_len(0x7fff_ffff), Ok(c_int::MAX)));
+        assert!(matches!(array_len(0x8000_0000), Err(Halt::Invalid)));
+        // An `array 32` header of 2^31 items, as a hostile server sends it.
+        let bytes = [0xddu8, 0x80, 0x00, 0x00, 0x00];
+        let len = cursor(&bytes).next(Kind::Array).ok().map(|t| t.len);
+        assert!(matches!(array_len(len.unwrap()), Err(Halt::Invalid)));
     }
 
     #[test]
