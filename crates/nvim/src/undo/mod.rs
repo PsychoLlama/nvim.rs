@@ -559,7 +559,8 @@ fn record_entry(
 /// anything older than a hundred seconds, and "N seconds ago" for the rest.
 /// Empty when the clock time does not fit, as `strftime` answers it.
 pub(crate) fn undo_time_text(tt: time_t, room: usize) -> XString {
-    let age = os_time_raw() - tt;
+    // `tt` may come from an undo file, so any time at all.
+    let age = os_time_raw().saturating_sub(tt);
     if age < 100 {
         let seconds = int64_t::from(age);
         // A time in the future (a clock that moved back, an undo file from

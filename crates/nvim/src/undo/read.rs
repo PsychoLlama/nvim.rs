@@ -197,6 +197,13 @@ fn read_file_header(bi: &mut BufInfo) -> Result<FileHeader, UndoFileError> {
             header.last_save_nr = value;
         }
     }
+    // The buffer steps these from where the file leaves them.
+    if ![header.seq_last, header.seq_cur, header.last_save_nr]
+        .into_iter()
+        .all(is_counter)
+    {
+        return Err(UndoFileError::Corrupt(Corruption::Counter));
+    }
     Ok(header)
 }
 

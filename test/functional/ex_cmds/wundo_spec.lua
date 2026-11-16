@@ -101,11 +101,12 @@ describe('the undo file format', function()
     eq(states, reread)
   end)
 
-  -- Where each entry record of the file's first undo header starts: the
-  -- offset (1-based) of its `top` field. Walks the fixed layout the writer
-  -- lays down rather than searching for the magic, which may turn up
-  -- inside the hash.
-  local function first_header_entries(raw)
+  -- Where the file's first undo header record starts (the offset, 1-based,
+  -- of its first field after the magic), and where each of its entry
+  -- records starts (the offset of its `top` field). Walks the fixed layout
+  -- the writer lays down rather than searching for the magic, which may
+  -- turn up inside the hash.
+  local function first_header(raw)
     local at = 1
     local function u32()
       local b1, b2, b3, b4 = raw:byte(at, at + 3)
@@ -123,6 +124,7 @@ describe('the undo file format', function()
     at = at + 4 + 4 + 6 * 4 + 8
     trailer()
     assert(raw:sub(at, at + 1) == '\95\208', 'a header record follows the file header')
+    local header = at + 2
     at = at + 2 + 5 * 4 + 12 + 4 + 2 + 26 * 12 + 32 + 8
     trailer()
     local entries = {}
@@ -135,7 +137,7 @@ describe('the undo file format', function()
       end
     end
     assert(#entries > 0, 'the header carries an entry')
-    return entries
+    return header, entries
   end
 
   -- An entry covers the lines between its `top` and `bot`. A file whose
@@ -152,7 +154,8 @@ describe('the undo file format', function()
     command('set noundofile')
     local undofile = fn.undofile(target)
     local raw = t.read_file(undofile)
-    local top = first_header_entries(raw)[1]
+    local _, entries = first_header(raw)
+    local top = entries[1]
     for _, bad in ipairs({
       '\255\000\000\001', -- a negative top
       '\000\000\000\003\000\000\000\002', -- bot above top
@@ -166,6 +169,49 @@ describe('the undo file format', function()
       )
       command('silent! undo 0')
       eq({ 'alpha', 'gamma', 'last' }, fn.getline(1, '$'))
+    end
+  end)
+
+  -- The header's numbers are the file's word: a sequence or save number
+  -- the buffer could not step past is refused, and a cursor line or time
+  -- at the end of its range is used without overflowing.
+  it('reads header numbers at the ends of their range', function()
+    local target = tmpdir .. '/Xundo_numbers'
+    write_file(target, 'alpha\nbeta\ngamma\n')
+    command('edit ' .. fn.fnameescape(target))
+    command('normal! jdd')
+    command('write')
+    command('set noundofile')
+    local undofile = fn.undofile(target)
+    local raw = t.read_file(undofile)
+    local header = first_header(raw)
+    -- Offsets into the header record: the links and sequence number, the
+    -- cursor, its column, the flags, the marks, the Visual area, the time,
+    -- then the save number's optional field.
+    local seq, cursor, time = header + 16, header + 20, header + 20 + 12 + 4 + 2 + 26 * 12 + 32
+    local save_nr = time + 8 + 2
+    eq('\004\001', raw:sub(time + 8, time + 9), 'the save number follows the time')
+    local function patched(at, bytes)
+      write_file(undofile, raw:sub(1, at - 1) .. bytes .. raw:sub(at + #bytes), true)
+      command('bwipe!')
+      command('edit ' .. fn.fnameescape(target))
+      return 'rundo ' .. fn.fnameescape(undofile)
+    end
+    t.matches(
+      'E825: Corrupted undo file %(uh_seq%)',
+      t.pcall_err(command, patched(seq, '\127\255\255\255'))
+    )
+    t.matches(
+      'E825: Corrupted undo file %(counter%)',
+      t.pcall_err(command, patched(save_nr, '\128\000\000\000'))
+    )
+    for _, case in ipairs({
+      { cursor, '\127\255\255\255' }, -- the line the cursor goes back to
+      { time, '\128\000\000\000\000\000\000\000' }, -- when the change was
+    }) do
+      command(patched(case[1], case[2]))
+      command('undo 0')
+      eq({ 'alpha', 'beta', 'gamma' }, fn.getline(1, '$'))
     end
   end)
 end)

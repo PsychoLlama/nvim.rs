@@ -396,7 +396,7 @@ fn swap_marks(
 fn place_cursor(buffer: Buf, mut win: Win, cursor: Pos, cursor_vcol: ColNr) {
     // Off by exactly one line: put it back where the change started, which is
     // what the "o" command wants. Otherwise it goes to the first undone line.
-    if cursor.lnum + 1 == win.w_cursor.lnum && win.w_cursor.lnum > LineNr::ONE {
+    if win.w_cursor.lnum > LineNr::ONE && cursor.lnum == win.w_cursor.lnum - 1 {
         win.w_cursor.lnum -= 1;
     }
     if win.w_cursor.lnum > buffer.b_ml.ml_line_count {

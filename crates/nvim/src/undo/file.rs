@@ -257,7 +257,7 @@ pub(crate) fn unserialize_uhp(bi: &mut BufInfo) -> Result<UndoHeader, UndoFileEr
         seq: bi.read_4c(),
         ..Default::default()
     };
-    if uh.seq <= 0 {
+    if !is_counter(uh.seq) || uh.seq == 0 {
         return Err(UndoFileError::Corrupt(Corruption::UhSeq));
     }
     uh.cursor = unserialize_pos(bi);
@@ -276,12 +276,22 @@ pub(crate) fn unserialize_uhp(bi: &mut BufInfo) -> Result<UndoHeader, UndoFileEr
     let fields = optional_fields(bi).ok_or(UndoFileError::Corrupt(Corruption::Truncated))?;
     for (what, value) in fields {
         if what == UHP_SAVE_NR {
+            if !is_counter(value) {
+                return Err(UndoFileError::Corrupt(Corruption::Counter));
+            }
             uh.save_nr = value;
         }
     }
     unserialize_entries(bi, &mut uh)?;
     unserialize_extmarks(bi, &mut uh)?;
     Ok(uh)
+}
+
+/// Whether `n` is a value one of the buffer's undo counters (a sequence
+/// number, a save number) can hold: they count up from zero, one step at
+/// a time, and the next step must still fit.
+pub(crate) fn is_counter(n: c_int) -> bool {
+    (0..c_int::MAX).contains(&n)
 }
 
 /// The optional-field trailer both the file header and every undo header end
