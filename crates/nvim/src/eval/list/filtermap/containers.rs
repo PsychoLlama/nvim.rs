@@ -33,6 +33,7 @@ use crate::eval::list::{
     clear_vim_var, err, list_alloc_ret, number_arm, set_key_nr, set_key_string, set_key_type,
     set_val, string_bytes, string_tv,
 };
+use crate::eval::typval::DictKey;
 use crate::message::state::DID_EMSG;
 use crate::message::{E_INVALBLOB, E_STRING_REQUIRED};
 use crate::types::{TypVal, VAR_BOOL, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv};
@@ -71,6 +72,7 @@ pub(crate) fn filter_map_dict(
             break;
         }
         set_key_string(di.key());
+        let key = DictKey::new(di.key());
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
         di.set_val();
@@ -80,6 +82,12 @@ pub(crate) fn filter_map_dict(
             clear_tv(&mut newtv);
             break;
         }
+        if filtermap != FilterMap::MapNew && !di.still_holds(key.bytes()) {
+            // The callback unlocked the dict and removed the entry: there
+            // is nothing left to replace or remove.
+            clear_tv(&mut newtv);
+            continue;
+        }
         match filtermap {
             // map(): replace the dict item value.
             FilterMap::Map => di.set_tv(newtv),
@@ -87,7 +95,7 @@ pub(crate) fn filter_map_dict(
             FilterMap::MapNew => {
                 let added = d_ret
                     .expect("mapnew allocated one")
-                    .add_tv(di.key(), &newtv);
+                    .add_tv(key.bytes(), &newtv);
                 clear_tv(&mut newtv);
                 if !added {
                     break;
@@ -155,6 +163,13 @@ pub(crate) fn filter_map_blob(
             break;
         }
         if filtermap != FilterMap::Foreach {
+            if i >= b_ret.len() {
+                // The callback unlocked the blob and cut it short: this
+                // byte is gone, and so is the rest of the walk (upstream
+                // re-reads the length, but wrote past it first).
+                clear_tv(&mut newtv);
+                break;
+            }
             if newtv.v_type() != VAR_NUMBER && newtv.v_type() != VAR_BOOL {
                 clear_tv(&mut newtv);
                 err(E_INVALBLOB);
@@ -268,6 +283,7 @@ pub(crate) fn filter_map_list(
         l.set_lock(VarLock::Locked);
     }
 
+    let mark = l.mark();
     let mut idx = 0;
     let mut cur = l.first();
     while let Some(li) = cur {
@@ -278,6 +294,8 @@ pub(crate) fn filter_map_list(
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
         li.set_val();
+        let mark = mark.as_ref().expect("a list with an item is live");
+        mark.park(li);
         if !filter_map_one(expr, filtermap, &mut newtv, &mut rem) {
             break;
         }
@@ -285,6 +303,21 @@ pub(crate) fn filter_map_list(
             clear_tv(&mut newtv);
             break;
         }
+        // The callback may have unlocked the list and moved or removed the
+        // item.
+        let li = match mark.settle() {
+            Ok(li) => li,
+            Err(follower) => {
+                if filtermap == FilterMap::MapNew {
+                    l_ret.expect("mapnew allocated one").append_owned(newtv);
+                } else {
+                    clear_tv(&mut newtv);
+                }
+                cur = follower;
+                idx += 1;
+                continue;
+            }
+        };
         match filtermap {
             // map(): replace the list item value.
             FilterMap::Map => li.set_tv(newtv),

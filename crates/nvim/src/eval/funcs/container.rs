@@ -482,7 +482,10 @@ fn indexof_blob(b: Option<&Blob>, startidx: VarNumber, expr: &TypVal) -> VarNumb
     set_vim_var_type(Vv::Key, VAR_NUMBER);
     set_vim_var_type(Vv::Val, VAR_NUMBER);
     let called_emsg_start = CALLED_EMSG.get();
-    for idx in start..len {
+    // The length is re-read at every step, as upstream does: the predicate
+    // is the user's, and may shorten the blob.
+    let mut idx = start;
+    while idx < VarNumber::from(blob_len(Some(b))) {
         set_vim_var_nr(Vv::Key, idx);
         let at = c_int::try_from(idx).expect("a byte of the blob");
         set_vim_var_nr(Vv::Val, VarNumber::from(b.byte(at)));
@@ -493,6 +496,7 @@ fn indexof_blob(b: Option<&Blob>, startidx: VarNumber, expr: &TypVal) -> VarNumb
         if CALLED_EMSG.get() != called_emsg_start {
             return -1;
         }
+        idx += 1;
     }
     -1
 }

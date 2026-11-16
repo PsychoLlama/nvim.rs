@@ -69,8 +69,8 @@ use crate::os::cshim::gettext;
 use crate::os::libc::{ptrdiff_t, uint8_t};
 use crate::semsg;
 use crate::types::{
-    Blob, Dict, List, ListItem, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST, VAR_STRING, VarLock,
-    VarNumber, VarType, Vv,
+    Blob, Dict, List, ListItem, ListWatch, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST, VAR_STRING,
+    VarLock, VarNumber, VarType, Vv,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -255,6 +255,17 @@ impl<'a> ListArg<'a> {
         }
     }
 
+    /// Two `:for`-style cursors for a walk whose callback may edit the
+    /// list; see [`ItemMark`]. `None` for a NULL list, which has no items.
+    pub(crate) fn mark(self) -> Option<ItemMark<'a>> {
+        let mut list = self.get()?;
+        Some(ItemMark {
+            list: self,
+            cur: list.watch_add(),
+            next: list.watch_add(),
+        })
+    }
+
     /// Remove `item` and answer the one that followed it.
     #[inline(always)]
     pub(crate) fn remove_item(self, item: Item<'a>) -> Option<Item<'a>> {
@@ -344,6 +355,57 @@ impl<'a> Item<'a> {
     pub(crate) fn equals(self, needle: &TypVal, ic: bool) -> bool {
         let list = self.list.0.expect("an item of a live list");
         equal(&list.items()[self.at].li_tv, needle, ic)
+    }
+}
+
+/// Where the item a callback ran for is once the callback has returned.
+///
+/// The walks lock the list, but the callback can `:unlockvar` it and then
+/// remove anything -- the item itself included (upstream then wrote into,
+/// or stepped from, a freed item). Two cursors stand on the item and on its
+/// follower; the removal shifts both like a `:for` loop's, so they meet
+/// exactly when the item is gone.
+#[derive(Debug)]
+pub(crate) struct ItemMark<'a> {
+    list: ListArg<'a>,
+    cur: u32,
+    next: u32,
+}
+
+impl<'a> ItemMark<'a> {
+    /// Stand on `item` before its callback runs.
+    pub(crate) fn park(&self, item: Item<'a>) {
+        let mut list = self.list.get().expect("a marked list is live");
+        let follower = item.at + 1;
+        let next = if follower < list.items().len() {
+            index_of(follower)
+        } else {
+            ListWatch::ENDED
+        };
+        list.set_watch_index(self.cur, index_of(item.at));
+        list.set_watch_index(self.next, next);
+    }
+
+    /// The parked item where it now stands, or -- when the callback removed
+    /// it -- `Err` with whatever followed it.
+    pub(crate) fn settle(&self) -> Result<Item<'a>, Option<Item<'a>>> {
+        let list = self.list.0.expect("a marked list is live");
+        let (cur, next) = (list.watch_index(self.cur), list.watch_index(self.next));
+        match usize::try_from(cur) {
+            // An edit that did not shift the cursors leaves them anywhere;
+            // one past the end has nothing to stand on.
+            Ok(at) if cur != next => self.list.at(at).ok_or(None),
+            _ => Err(usize::try_from(next).ok().and_then(|at| self.list.at(at))),
+        }
+    }
+}
+
+impl Drop for ItemMark<'_> {
+    fn drop(&mut self) {
+        if let Some(mut list) = self.list.get() {
+            list.watch_remove(self.cur);
+            list.watch_remove(self.next);
+        }
     }
 }
 
@@ -479,6 +541,16 @@ impl<'a> DictItemRef<'a> {
     fn read(self) -> &'a DictItem {
         let dict: &'a Dict = self.0;
         dict.item_at(self.1).expect("an entry of the walk's dict")
+    }
+
+    /// Whether the entry still stands in its slot under `key`, once a
+    /// callback has run. The table lock keeps entries from moving, but a
+    /// callback that `:unlockvar`s the dict can remove this one, and an add
+    /// can then reuse its slot (upstream wrote into the freed entry).
+    #[inline(always)]
+    pub(crate) fn still_holds(self, key: &[u8]) -> bool {
+        let dict: &Dict = self.0;
+        dict.item_at(self.1).is_some_and(|item| item.key() == key)
     }
 
     /// The key: the item's own bytes, without the terminator.

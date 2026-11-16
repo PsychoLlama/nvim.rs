@@ -544,14 +544,17 @@ struct FuzzyItem {
 /// matches, best first.
 ///
 /// The list is reached through its handle afresh for every item, because a
-/// `text_cb` runs user code that may edit it.
+/// `text_cb` runs user code that may edit it. Only the items it had at the
+/// start are visited, as upstream sized its result for: a `text_cb` that
+/// appends one item per call would otherwise never finish.
 fn fuzzy_match_in_list(list: &ListRef, request: &Request) -> Vec<FuzzyItem> {
     let mut numbuf = NumBuf::new();
     let pattern = request.pattern;
     let mut found: Vec<FuzzyItem> = Vec::new();
     let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
+    let len = list.items().len();
     let mut at = 0;
-    while at < list.items().len() {
+    while at < len.min(list.items().len()) {
         if request.limit > 0 && found.len() >= as_index(request.limit) {
             break;
         }

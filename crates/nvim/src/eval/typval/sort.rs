@@ -341,7 +341,8 @@ pub(crate) fn do_uniq(list: &ListRef, info: &mut SortInfo<'_>) {
             ];
             compare_user(info, argv)
         };
-        if res == 0 {
+        // A comparator may have cut the list short.
+        if res == 0 && at < list.len() {
             list.remove_at(at);
         } else {
             at += 1;

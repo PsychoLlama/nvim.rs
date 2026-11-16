@@ -78,3 +78,119 @@ describe('Dictionary iteration order', function()
     eq(expected, eval('keys(g:d)'))
   end)
 end)
+
+-- filter()/map()/foreach() lock what they walk, but the callback can
+-- `:unlockvar` it and then edit it. Upstream then wrote into (or stepped
+-- from) a freed item; here the walk carries on from wherever the edit left
+-- it, and an item the callback removed is neither replaced nor removed again.
+describe('a callback that unlocks the container being walked', function()
+  local exec = n.exec
+
+  it('may empty a List under map()/filter()/foreach()/mapnew()', function()
+    exec([[
+      func Empty(i, v)
+        unlockvar g:l
+        call remove(g:l, 0, -1)
+        return 9
+      endfunc
+    ]])
+    for _, fn in ipairs({ 'map', 'filter', 'foreach' }) do
+      command('let g:l = [1, 2, 3, 4]')
+      command('call ' .. fn .. "(g:l, function('Empty'))")
+      eq({}, eval('g:l'), fn)
+    end
+    command('let g:l = [1, 2, 3, 4]')
+    eq({ 9 }, eval("mapnew(g:l, function('Empty'))"))
+  end)
+
+  it('maps the item where the edit moved it, and skips one it removed', function()
+    exec([[
+      func DropFirst(i, v)
+        if a:i == 1
+          unlockvar g:l
+          call remove(g:l, 0)
+        endif
+        return a:v * 10
+      endfunc
+      func PushFront(i, v)
+        if a:i == 0
+          unlockvar g:l
+          call insert(g:l, 0)
+        endif
+        return a:v * 10
+      endfunc
+      func DropSelf(i, v)
+        if a:v == 2
+          unlockvar g:l
+          call remove(g:l, index(g:l, 2))
+        endif
+        return 0
+      endfunc
+    ]])
+    command('let g:l = [1, 2, 3, 4]')
+    eq({ 20, 30, 40 }, eval("map(g:l, function('DropFirst'))"))
+    command('let g:l = [1, 2, 3]')
+    eq({ 0, 10, 20, 30 }, eval("map(g:l, function('PushFront'))"))
+    command('let g:l = [1, 2, 3]')
+    eq({}, eval("filter(g:l, function('DropSelf'))"))
+  end)
+
+  it('may empty a Dictionary under map()/filter()/foreach()/mapnew()', function()
+    exec([[
+      func Empty(k, v)
+        unlockvar g:d
+        for k in keys(g:d) | call remove(g:d, k) | endfor
+        return 0
+      endfunc
+      func Refill(k, v)
+        unlockvar g:d
+        for k in keys(g:d) | call remove(g:d, k) | endfor
+        let g:d.zz = 5
+        return 7
+      endfunc
+    ]])
+    for _, fn in ipairs({ 'map', 'filter', 'foreach' }) do
+      command("let g:d = {'a': 1, 'b': 2, 'c': 3}")
+      command('call ' .. fn .. "(g:d, function('Empty'))")
+      eq({}, eval('g:d'), fn)
+    end
+    command("let g:d = {'a': 1, 'b': 2, 'c': 3}")
+    eq(1, eval("len(mapnew(g:d, function('Empty')))"))
+    -- A key added in a slot the walk has yet to reach is visited.
+    command("let g:d = {'a': 1, 'b': 2, 'c': 3}")
+    eq({ zz = 7 }, eval("map(g:d, function('Refill'))"))
+  end)
+
+  it('may empty a Blob under map()/filter()/mapnew()', function()
+    exec([[
+      func Empty(i, v)
+        unlockvar g:b
+        call remove(g:b, 0, -1)
+        return 9
+      endfunc
+    ]])
+    for _, fn in ipairs({ 'map', 'filter' }) do
+      command('let g:b = 0z01020304')
+      command('call ' .. fn .. "(g:b, function('Empty'))")
+      eq('0z', eval('string(g:b)'), fn)
+    end
+    command('let g:b = 0z01020304')
+    eq('0z09020304', eval("string(mapnew(g:b, function('Empty')))"))
+  end)
+
+  it('indexof() and uniq() survive a callback that shortens the list', function()
+    command('let g:b = 0z01020304')
+    eq(-1, eval('indexof(g:b, {i, v -> remove(g:b, 0, -1) is 0})'))
+    command('let g:l = [1, 1, 1, 1]')
+    eq({}, eval('uniq(g:l, {a, b -> len(remove(g:l, 0, -1)) * 0})'))
+  end)
+
+  it('matchfuzzy() visits only the items the list had', function()
+    command("let g:l = [{'t': 'aa'}, {'t': 'ab'}]")
+    eq(
+      2,
+      eval("len(matchfuzzy(g:l, 'a', {'text_cb': {v -> add(g:l, {'t': 'ax'}) is 0 ? 'a' : 'a'}}))")
+    )
+    eq(4, eval('len(g:l)'))
+  end)
+end)
