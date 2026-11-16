@@ -1535,6 +1535,7 @@ static const int CI_WHAT_MODE = 1;
 static const int CI_WHAT_PREINSERTED_TEXT = 64;
 static const int CI_WHAT_PUM_VISIBLE = 2;
 static const int CI_WHAT_SELECTED = 8;
+static const int CLAIM_STEP = 65536;
 static const int CLASS_BLANK = 0;
 static const int CLASS_EMOJI = 3;
 static const int CLASS_PUNCT = 1;

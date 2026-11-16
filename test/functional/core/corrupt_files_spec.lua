@@ -89,4 +89,89 @@ describe('a corrupt file claiming a huge size', function()
     local out = recover_patched([[raw:sub(1, 12) .. '\240\255\255\255' .. raw:sub(17)]])
     t.matches('has been damaged %(page size is larger than maximum value%)', out)
   end)
+  it('in an undo file line length', function()
+    -- The header's `U` line length (byte 47, big-endian) is read straight
+    -- after the hash, so a file that passes the hash check claims 2 GiB
+    -- for it and holds nothing.
+    local out = capped([[
+      vim.fn.writefile({ 'alpha', 'beta' }, DIR .. '/text')
+      vim.cmd.edit(DIR .. '/text')
+      vim.cmd('normal! ggdd')
+      vim.cmd.wundo(DIR .. '/good.un~')
+      local f = assert(io.open(DIR .. '/good.un~', 'rb'))
+      local raw = f:read('*a')
+      f:close()
+      f = assert(io.open(DIR .. '/bad.un~', 'wb'))
+      f:write(raw:sub(1, 47) .. '\127\255\255\240')
+      f:close()
+      local ok, err = pcall(vim.cmd.rundo, DIR .. '/bad.un~')
+      io.stdout:write(tostring(ok), ' ', tostring(err))
+    ]])
+    -- It ends where the line should be, which is no line, and the fields
+    -- after it read as the end of the file.
+    t.matches('^false Vim:E825: Corrupted undo file', out)
+  end)
+
+  it('in a ShaDa entry length', function()
+    -- A register entry (type 5), timestamp 0, claiming 2 GiB of body.
+    local out = capped([[
+      local f = assert(io.open(DIR .. '/bad.shada', 'wb'))
+      f:write('\005\000\206\127\255\255\240')
+      f:close()
+      local _, err = pcall(vim.cmd.rshada, { DIR .. '/bad.shada', bang = true })
+      io.stdout:write(err)
+    ]])
+    t.matches('E576: .*occupies 2147483632 bytes, but file ended earlier', out)
+  end)
+
+  it('in a spell file tree length', function()
+    -- No sections, then a case-folded tree claiming 2 GiB entries: two
+    -- arrays of that many were allocated before a node was read.
+    local out = capped([[
+      vim.fn.mkdir(DIR .. '/spell', 'p')
+      local f = assert(io.open(DIR .. '/spell/en.utf-8.spl', 'wb'))
+      f:write('VIMspell\050\255\127\255\255\240\001\000')
+      f:close()
+      vim.o.runtimepath = DIR
+      vim.o.spelllang = 'en'
+      local _, err = pcall(vim.cmd, 'set spell')
+      io.stdout:write(err)
+    ]])
+    t.matches('E758: Truncated spell file', out)
+  end)
+
+  it('in msgpack string, binary and extension headers', function()
+    -- `vim.mpack.decode` and an `Unpacker` fed one piece: each header
+    -- claims 4 GiB of payload and three bytes follow.
+    local out = capped([[
+      for _, head in ipairs({ '\219', '\198', '\201' }) do
+        local claim = head .. '\255\255\255\240abc'
+        io.stdout:write(select(2, pcall(vim.mpack.decode, claim)), '|')
+        io.stdout:write(tostring(vim.mpack.Unpacker()(claim)), '|')
+      end
+    ]])
+    eq(('incomplete msgpack string|nil|'):rep(3), out)
+  end)
+
+  it('in an RPC request', function()
+    -- [0, 1, "nvim_eval", [<str 32 claiming 4 GiB>]], then three bytes of
+    -- it, and the same with the claim as a map key: the server waits for
+    -- the rest instead of reserving the claim.
+    local alive = n.exec_lua(function(argv, env)
+      local answers = {}
+      for _, arg in ipairs({ '\219\255\255\255\240abc', '\129\219\255\255\255\240abc' }) do
+        local job = vim.fn.jobstart(argv, { env = env })
+        vim.fn.chansend(job, '\148\000\001\169nvim_eval\145' .. arg)
+        vim.wait(500)
+        answers[#answers + 1] = vim.fn.jobwait({ job }, 0)[1]
+        vim.fn.jobstop(job)
+      end
+      return answers
+    end, { 'prlimit', '--as=' .. CAP, n.nvim_prog, '--clean', '--embed', '--headless' }, {
+      NVIM_LOG_FILE = dir .. '/nvim.log',
+      XDG_STATE_HOME = dir .. '/state',
+    })
+    -- -1: still running.
+    eq({ -1, -1 }, alive)
+  end)
 end)

@@ -46,6 +46,7 @@ use std::fs::File;
 use std::io::{BufReader, ErrorKind, Read};
 use std::path::Path;
 
+use crate::memory::claimed::read_claimed;
 use crate::os::libc::time_t;
 
 /// Why a `.spl` or `.sug` could not be read any further.
@@ -194,11 +195,22 @@ impl Spl {
         }
     }
 
-    /// `n` bytes as a fresh buffer.
+    /// `n` bytes as a fresh buffer. `n` is the file's claim, so the
+    /// buffer grows as the bytes arrive ([`read_claimed`]).
     pub(super) fn read_bytes(&mut self, n: usize) -> SplResult<Vec<u8>> {
-        let mut buf = vec![0u8; n];
-        self.read_exact(&mut buf)?;
-        Ok(buf)
+        read_claimed(n, |piece| self.read_exact(piece))
+    }
+
+    /// How many bytes the file has left, or `None` when it is not a
+    /// regular file and cannot say.
+    pub(super) fn remaining(&mut self) -> Option<u64> {
+        let size = self.file.get_ref().metadata().ok()?;
+        if !size.is_file() {
+            return None;
+        }
+        let at = std::io::Seek::stream_position(&mut self.file).ok()?;
+        let pending = u64::from(self.pending.is_some());
+        Some(size.len().saturating_sub(at) + pending)
     }
 
     /// As [`Spl::read_bytes`], and reject an embedded NUL.
@@ -220,11 +232,12 @@ impl Spl {
     /// said how long the string was and then did not have it, which upstream
     /// reports by loading nothing and saying nothing.
     pub(super) fn read_string(&mut self, n: usize) -> SplResult<Vec<u8>> {
-        let mut buf = vec![0u8; n];
-        for slot in &mut buf {
-            *slot = self.getc().ok_or(SpellReadError::Other)?;
-        }
-        Ok(buf)
+        read_claimed(n, |piece| {
+            for slot in piece {
+                *slot = self.getc().ok_or(SpellReadError::Other)?;
+            }
+            Ok(())
+        })
     }
 
     /// A length in `cnt_bytes` bytes, then that many bytes of string.

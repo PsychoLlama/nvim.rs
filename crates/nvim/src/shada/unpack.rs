@@ -23,6 +23,7 @@ use crate::api::private::helpers::StringArray;
 use crate::api::private::keyset::{KeySet, Slot};
 use crate::eval::decode::unpack_typval;
 use crate::fileio::buffered::ReadFile;
+use crate::memory::claimed::read_claimed;
 use crate::mpack::mpack_core::Stop;
 use crate::mpack::token::{self, Kind, Read, Tok};
 use crate::types::{ApiString, Integer, TypVal};
@@ -413,8 +414,17 @@ impl<'a> Source<'a> {
                 held.expect("the source holds the whole entry"),
             ));
         }
-        let mut owned = vec![0u8; len];
-        self.read_exact(&mut owned)?;
+        // The length is the entry header's claim: read it piece by piece
+        // rather than allocating it, and say the whole claim when the
+        // file ends short of it.
+        let owned = read_claimed(len, |piece| {
+            self.read_exact(piece).map_err(|status| match status {
+                ReadStatus::NotShada(ShadaError::ReadShort(_)) => {
+                    ReadStatus::NotShada(ShadaError::ReadShort(len as u64))
+                }
+                other => other,
+            })
+        })?;
         Ok(Cow::Owned(owned))
     }
 

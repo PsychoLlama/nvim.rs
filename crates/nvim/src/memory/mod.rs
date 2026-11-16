@@ -723,6 +723,7 @@ pub unsafe fn strnequal(a: *const c_char, b: *const c_char, n: usize) -> bool {
 
 pub mod alloc_log;
 pub mod blocks;
+pub(crate) mod claimed;
 pub(crate) mod handoff;
 pub mod thin_cstring;
 pub mod xstring;

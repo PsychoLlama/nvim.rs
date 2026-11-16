@@ -602,6 +602,15 @@ fn spell_read_tree(
     if len == 0 {
         return Ok(());
     }
+    // Every entry takes at least a byte of the file, and both arrays are
+    // allocated at the claimed length before any is read: a length the
+    // rest of the file cannot hold is a truncated tree, not an allocation.
+    if spl
+        .remaining()
+        .is_some_and(|left| left < len.cast_unsigned().into())
+    {
+        return Err(SpellReadError::Trunc);
+    }
 
     // Both arrays are `len` entries and nothing else reaches them until
     // the tree is read, so every index a corrupt file names is checked by

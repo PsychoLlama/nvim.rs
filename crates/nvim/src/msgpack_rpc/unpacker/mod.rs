@@ -354,8 +354,13 @@ pub(crate) enum Building {
     Array(Vec<Object>),
     /// A map being filled, frozen into an [`ApiDict`] when it is done.
     Dict(Vec<KeyValuePair>),
-    /// A `str` or `bin` that is a map's key, collected straight into one.
+    /// A `str` or `bin` that is a map's key short enough to sit in the
+    /// key itself, collected straight into one.
     Key(DictKey),
+    /// A longer key's bytes so far. Collected apart because its length is
+    /// the peer's claim, which must not size the key before the bytes
+    /// arrive.
+    LongKey(Vec<u8>),
     /// A string value's bytes so far.
     Text(XString),
     /// An extension object: its payload so far, and the value it decodes
@@ -400,6 +405,7 @@ impl BodyWalk<'_> {
                     // entry's key empty, as it always has.
                     let key = match value {
                         Building::Key(key) => key,
+                        Building::LongKey(bytes) => DictKey::new(&bytes),
                         _ => DictKey::EMPTY,
                     };
                     entries.push(KeyValuePair {
@@ -434,8 +440,17 @@ impl crate::mpack::object::Decode<Building> for BodyWalk<'_> {
         match tok.kind {
             // A key goes straight into its slot's own storage; a value
             // collects into a string the API will hand out terminated.
-            Some(Kind::Bin | Kind::Str) if is_key => Building::Key(DictKey::zeroed(len)),
-            Some(Kind::Bin | Kind::Str) => Building::Text(XString::with_capacity(len)),
+            // The length is the peer's claim, and the bytes may still be on
+            // their way: reserve no more than a step of it up front.
+            Some(Kind::Bin | Kind::Str) if is_key && len <= DictKey::INLINE_MAX => {
+                Building::Key(DictKey::zeroed(len))
+            }
+            Some(Kind::Bin | Kind::Str) if is_key => {
+                Building::LongKey(Vec::with_capacity(len.min(RESERVE_MAX)))
+            }
+            Some(Kind::Bin | Kind::Str) => {
+                Building::Text(XString::with_capacity(len.min(RESERVE_MAX)))
+            }
             Some(Kind::Ext) => Building::Ext(Box::new(ExtPayload {
                 bytes: [0; EXT_PAYLOAD_MAX],
                 value: Object::Nil,
@@ -473,7 +488,7 @@ fn finished(data: Building) -> Option<Object> {
         Building::Dict(entries) => Some(Object::dict(ApiDict::from(entries))),
         Building::Ext(ext) => Some(ext.value),
         Building::Text(text) => Some(Object::string(ApiString::from_xstring(text))),
-        Building::Key(_) | Building::Nothing => None,
+        Building::Key(_) | Building::LongKey(_) | Building::Nothing => None,
     }
 }
 
@@ -490,6 +505,7 @@ fn copy_chunk(parent: &mut Node<Building>, chunk: &[u8]) {
     match &mut parent.data {
         Building::Text(text) => text.push_bytes(chunk),
         Building::Key(key) => key.bytes_mut()[pos..pos + chunk.len()].copy_from_slice(chunk),
+        Building::LongKey(bytes) => bytes.extend_from_slice(chunk),
         Building::Ext(ext) => {
             if pos + chunk.len() > EXT_PAYLOAD_MAX {
                 ext.value = Object::Nil;

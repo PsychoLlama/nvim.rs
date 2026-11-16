@@ -31,6 +31,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::memory::claimed::CLAIM_STEP;
 use crate::narrow::float_as_int;
 use core::ffi::c_int;
 
@@ -142,8 +143,10 @@ impl Decode<NodeRefs> for LuaDecoder<'_> {
             Some(TokenKind::Bin | TokenKind::Str | TokenKind::Ext) => {
                 // Only the header is known here; `exit` pushes the string
                 // once every chunk has been copied in.
+                // The length is the input's claim; the chunks grow the
+                // buffer as they land.
                 self.buffer.clear();
-                self.buffer.reserve(tok.len as usize);
+                self.buffer.reserve((tok.len as usize).min(CLAIM_STEP));
             }
             Some(TokenKind::Array | TokenKind::Map) => {
                 // The container has to outlive this call, so it goes into the

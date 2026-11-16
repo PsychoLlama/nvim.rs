@@ -31,6 +31,7 @@ use super::format::*;
 use super::*;
 use crate::memory::ThinCString;
 use crate::memory::XString;
+use crate::memory::claimed::read_claimed;
 use crate::option::split_option_part;
 use crate::option::vars::P_UDIR;
 use crate::os::fs::{dir_exists, mkdir_recurse, path_exists};
@@ -494,13 +495,14 @@ pub(crate) fn unserialize_visualinfo(bi: &mut BufInfo) -> VisualInfo {
 
 /// Reads a `len`-byte string, or `None` if the file ran out.
 ///
+/// The length is the file's claim (up to 2 GiB), so the buffer grows as
+/// the bytes arrive rather than being allocated at it: see
+/// [`read_claimed`].
+///
 /// A NUL inside the bytes ends the string there, as every reader of
 /// upstream's `xmemdupz` copy measured it with `strlen`.
 pub(crate) fn undo_read_string(bi: &mut BufInfo, len: size_t) -> Option<XString> {
-    let mut bytes = vec![0u8; len];
-    if !bi.read(&mut bytes) {
-        return None;
-    }
+    let mut bytes = read_claimed(len, |piece| bi.read(piece).then_some(()).ok_or(())).ok()?;
     if let Some(nul) = bytes.iter().position(|&b| b == 0) {
         bytes.truncate(nul);
     }

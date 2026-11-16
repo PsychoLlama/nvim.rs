@@ -22,6 +22,7 @@ use crate::api::keysets::{
 use crate::cmdhist::HIST_SEARCH;
 use crate::eval::decode::decode_string;
 use crate::memory::XString;
+use crate::memory::claimed::claimed_capacity;
 use crate::narrow::{number_as_col, number_as_lnum};
 use crate::types::{ApiDict, ColNr, Integer, LineNr, VAR_TYPE_BLOB};
 use core::ffi::CStr;
@@ -278,7 +279,8 @@ fn parse_buffer_list(pos: u64, cursor: &mut Cursor) -> Parsed2 {
     let Some(len) = cursor.array() else {
         return Err(fault(EntryFault::BufferListNotArray, pos));
     };
-    let mut items = Vec::with_capacity(len);
+    // Each item is a map, at least one byte of the entry.
+    let mut items = Vec::with_capacity(claimed_capacity(len, cursor.left(), 1));
     for _ in 0..len {
         let mut it = KeyDict__shada_buflist_item::default();
         let mut extra = None;
