@@ -276,10 +276,20 @@ release), `nvim_set_client_info` on a channel the same request closed
 refused like a Lua error), `:version` after tampering with `jit`/`_VERSION`
 (line left out), an `envp` entry with no `=` (skipped), a `TermRequest`
 reported against a reopened terminal (no shift), and `syn match … lc=-1`
-(no match past the line).
+(no match past the line). Then the parser and walk family: an unmatched
+`]`/`}` after an operand (`1 2]3`, `a is]!=b`) and its lambda-argument
+siblings (`{a,{,1`, `{a,]->`) are parse errors; a `filter()`/`map()`/
+`foreach()` callback that `:unlockvar`s and edits its container, and the
+same edit from `indexof()`, `uniq()` and `matchfuzzy()` callbacks, are
+walked through rather than read past; and a userdatum whose `__gc` plain
+Lua called by hand (`vim.mpack` objects, `vim.regex`, every tree-sitter
+object, and the nodes, cursors and matches that point into one) raises
+"… has been collected" instead of panicking or using freed memory.
 
 What could not be classed: `viml/parser/expressions/ast.rs:182` (may fire
-in release after the `1 2]3` family mis-wires a node), and two low-
+in release after the `1 2]3` family mis-wires a node; that family no
+longer does, and the bounded enumeration that checked it never reached
+the assert), and two low-
 confidence underflows (`register/yank.rs:194`, `indent/mod.rs:430`). The
 `debugger` `>frame +N` overflow could not be driven headless.
 
