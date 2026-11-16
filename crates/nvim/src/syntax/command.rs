@@ -198,7 +198,7 @@ fn buf_chartab() -> [uint8_t; 32] {
 /// Put `table` back as the current buffer's character table.
 fn set_buf_chartab(table: [uint8_t; 32]) {
     Buf::current().b_chartab = ::core::array::from_fn(|i| {
-        uint64_t::from_ne_bytes(table[i * 8..i * 8 + 8].try_into().unwrap())
+        uint64_t::from_ne_bytes(::core::array::from_fn(|j| table[i * 8 + j]))
     });
 }
 

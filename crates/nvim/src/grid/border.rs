@@ -80,7 +80,7 @@ fn get_bordertext_col(total_col: c_int, text_width: c_int, align: AlignTextPos) 
         ALIGN_LEFT => 1,
         ALIGN_CENTER => ((total_col - text_width) / 2 + 1).max(1),
         ALIGN_RIGHT => (total_col - text_width + 1).max(1),
-        _ => unreachable!(),
+        _ => unreachable!("border text is aligned left, center or right, not {align}"),
     }
 }
 

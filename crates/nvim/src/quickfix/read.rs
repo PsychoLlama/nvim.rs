@@ -226,7 +226,7 @@ impl Reader {
     /// One line from a Vimscript string, up to and including its newline.
     fn read_text(&mut self) -> Status {
         let Source::Text(text, at) = &mut self.source else {
-            unreachable!()
+            unreachable!("read_text reads only a Vimscript string source")
         };
         let rest = &text[*at..];
         let rest = &rest[..c_len(rest)];
@@ -252,7 +252,7 @@ impl Reader {
     /// skipped.
     fn read_list(&mut self) -> Status {
         let Source::List(list, at) = &mut self.source else {
-            unreachable!()
+            unreachable!("read_list reads only a Vimscript list source")
         };
         let items = list_items(Some(list));
         while items
@@ -273,7 +273,7 @@ impl Reader {
     /// One line of the buffer range.
     fn read_buffer(&mut self) -> Status {
         let Source::Buffer { buf, lnum, last } = &mut self.source else {
-            unreachable!()
+            unreachable!("read_buffer reads only a buffer source")
         };
         if *lnum > *last {
             return Status::EndOfInput;
@@ -288,7 +288,7 @@ impl Reader {
     /// `at`. `false` at the end of the file.
     fn fgets_at(&mut self, at: usize, size: usize) -> bool {
         let Source::File(file) = &mut self.source else {
-            unreachable!()
+            unreachable!("only a file source reads with fgets")
         };
         if !file.fgets(&mut self.chunk, size) {
             return false;
@@ -349,7 +349,7 @@ impl Reader {
             // does. This must not use the line buffer: it still holds the
             // 4095 bytes that were kept.
             let Source::File(file) = &mut self.source else {
-                unreachable!()
+                unreachable!("only a file source has a line too long to keep")
             };
             let mut scrap = Vec::new();
             while file.fgets(&mut scrap, READ_CHUNK) {

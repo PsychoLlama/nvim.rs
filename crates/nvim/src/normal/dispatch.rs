@@ -358,7 +358,7 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
         match slot {
             Slot::NChar => ns.ca.nchar = cp,
             Slot::Extra => ns.ca.extra_char = cp,
-            Slot::None => unreachable!(),
+            Slot::None => unreachable!("a character is only read for a slot that takes it"),
         }
 
         if slot == Slot::Extra

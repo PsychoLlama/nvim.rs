@@ -315,7 +315,11 @@ impl Tensor<'_> {
 pub fn linematch_nbuffers(diff_blk: &[&[u8]], diff_len: &[c_int], iwhite: bool) -> Vec<c_int> {
     let ndiffs = diff_len.len();
     debug_assert!(ndiffs <= LN_MAX_BUFS);
-    assert_eq!(diff_blk.len(), ndiffs);
+    assert_eq!(
+        diff_blk.len(),
+        ndiffs,
+        "one block of text per buffer line count"
+    );
 
     let mut memsize = 1usize;
     let mut max_decisions = 0usize;

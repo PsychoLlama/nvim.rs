@@ -227,6 +227,9 @@ const fn table() -> [EvalFuncDef; 645] {
     base = fill(&mut table, base, table_1::PART);
     base = fill(&mut table, base, table_2::PART);
     base = fill(&mut table, base, table_3::PART);
-    assert!(base == 644);
+    assert!(
+        base == 644,
+        "the generated parts fill the builtin table exactly"
+    );
     table
 }

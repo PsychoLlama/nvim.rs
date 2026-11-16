@@ -501,7 +501,12 @@ pub fn generate(
         )
         .unwrap();
     }
-    writeln!(out, "    assert!(base == {});\n    table\n}}", rows.len()).unwrap();
+    writeln!(
+        out,
+        "    assert!(base == {}, \"the generated parts fill the builtin table exactly\");\n    table\n}}",
+        rows.len()
+    )
+    .unwrap();
 
     files.insert(
         0,

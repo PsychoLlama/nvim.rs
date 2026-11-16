@@ -225,7 +225,7 @@ pub(crate) fn api_typename(t: ObjectType) -> &'static CStr {
         OBJECT_TYPE_BUFFER => c"Buffer",
         OBJECT_TYPE_WINDOW => c"Window",
         OBJECT_TYPE_TABPAGE => c"Tabpage",
-        _ => unreachable!(),
+        _ => unreachable!("an ObjectType is one of the nine above, not {t}"),
     }
 }
 

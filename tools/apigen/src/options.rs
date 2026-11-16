@@ -1739,7 +1739,7 @@ pub fn generate(
         .unwrap();
     }
     out.push_str(
-        "    assert!(base == OPT_COUNT as usize);\n\
+        "    assert!(base == OPT_COUNT as usize, \"the generated parts fill the option table exactly\");\n\
          \x20   let mut i = 0;\n\
          \x20   while i < table.len() {\n\
          \x20       assert!(\n\

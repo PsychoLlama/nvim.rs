@@ -318,7 +318,7 @@ impl SynState {
         let buf_chartab = &mut buffer.b_chartab;
         *chartab = *buf_chartab;
         *buf_chartab = ::core::array::from_fn(|i| {
-            uint64_t::from_ne_bytes(installed[i * 8..i * 8 + 8].try_into().unwrap())
+            uint64_t::from_ne_bytes(::core::array::from_fn(|j| installed[i * 8 + j]))
         });
     }
 

@@ -723,6 +723,9 @@ mod tests {
             "{text}"
         );
         // And a room too small for the clock time leaves nothing.
-        assert!(undo_time_text(0, 5).is_empty());
+        assert!(
+            undo_time_text(0, 5).is_empty(),
+            "too little room for the clock time"
+        );
     }
 }

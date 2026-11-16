@@ -185,7 +185,10 @@ pub(crate) const fn table() -> [VimOption; OPT_COUNT as usize] {
     base = fill(&mut table, base, table_3::PART);
     base = fill(&mut table, base, table_4::PART);
     base = fill(&mut table, base, table_5::PART);
-    assert!(base == OPT_COUNT as usize);
+    assert!(
+        base == OPT_COUNT as usize,
+        "the generated parts fill the option table exactly"
+    );
     let mut i = 0;
     while i < table.len() {
         assert!(
