@@ -686,12 +686,15 @@ impl DictKey {
 
     /// The key as a C string, for a caller that wants one rather than a
     /// pointer.  Validating, and therefore linear: not for a probe.
+    ///
+    /// A key from an API dictionary may hold a NUL of its own (`{["a\0b"] =
+    /// 1}` from Lua); the C string stops there, as C's `strlen` read it.
     pub fn as_c_str(&self) -> &::core::ffi::CStr {
         let with_nul = match self {
             DictKey::Inline { len, bytes } => &bytes[..usize::from(*len) + 1],
             DictKey::Heap(boxed) => boxed,
         };
-        ::core::ffi::CStr::from_bytes_with_nul(with_nul).expect("a key is NUL-terminated once")
+        ::core::ffi::CStr::from_bytes_until_nul(with_nul).expect("a key ends in a NUL")
     }
     /// A key of `len` bytes, every one of them NUL, and a pointer the
     /// caller may write those `len` bytes through.
@@ -800,4 +803,17 @@ pub struct DictItem {
     pub di_lock: VarLock,
     pub di_flags: uint8_t,
     pub di_key: DictKey,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DictKey;
+
+    #[test]
+    fn a_key_holding_a_nul_reads_as_a_c_string_up_to_it() {
+        assert_eq!(DictKey::new(b"a\0b").as_c_str(), c"a");
+        let long = [b"x".repeat(30), b"\0tail".to_vec()].concat();
+        assert_eq!(DictKey::new(&long).as_c_str().to_bytes(), &long[..30]);
+        assert_eq!(DictKey::new(b"plain").as_c_str(), c"plain");
+    }
 }

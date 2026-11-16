@@ -1727,6 +1727,10 @@ describe('API', function()
       api.nvim_set_var('dict_empty_key', { [''] = 'empty key' })
       eq({ [''] = 'empty key' }, api.nvim_get_var('dict_empty_key'))
 
+      -- A key holding a NUL is cut there, as C's strlen read it.
+      exec_lua([[vim.api.nvim_set_var('dict_nul_key', { ['a\0b'] = 1 })]])
+      eq({ a = 1 }, api.nvim_get_var('dict_nul_key'))
+
       -- Set locked g: var.
       command('lockvar lua')
       eq('Key is locked: lua', pcall_err(api.nvim_del_var, 'lua'))
