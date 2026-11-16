@@ -364,7 +364,9 @@ fn get_maxbacktrace_level(sname: Option<&[u8]>) -> c_int {
 fn do_setdebugtracelevel(arg: &[u8]) {
     let (level, relative) = (atoi(arg), arg.first() == Some(&b'+'));
     if relative || level < 0 {
-        DEBUG_BACKTRACE_LEVEL.set(DEBUG_BACKTRACE_LEVEL.get() + level);
+        // `>frame +2147483647` goes as far up as there is; the check below
+        // clamps to the stack.
+        DEBUG_BACKTRACE_LEVEL.set(DEBUG_BACKTRACE_LEVEL.get().saturating_add(level));
     } else {
         DEBUG_BACKTRACE_LEVEL.set(level);
     }

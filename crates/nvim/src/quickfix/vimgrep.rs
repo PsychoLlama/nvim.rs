@@ -278,7 +278,9 @@ fn match_buflines(
                         fname: Some(fname),
                         bufnum,
                         lnum,
-                        col: first + col.get() + 1,
+                        // Only a line past 2 GiB could carry the sum past
+                        // `int`; the column stops at the last one.
+                        col: first.saturating_add(col.get()).saturating_add(1),
                         ..NewEntry::new(line.as_cstr())
                     },
                 );

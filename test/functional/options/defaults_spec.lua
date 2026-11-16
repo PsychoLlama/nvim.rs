@@ -1045,6 +1045,14 @@ describe('stdpath()', function()
     t.matches([=[[/\\]relative%-appname.[^/\\]+]=], api.nvim_get_vvar('servername'))
   end)
 
+  -- Upstream builds the directory in a 1 KiB scratch buffer and asserts the
+  -- name leaves room; nothing here is a fixed buffer.
+  it('$NVIM_APPNAME longer than a scratch buffer', function()
+    local appname = ('abcdefgh/'):rep(150) .. 'x'
+    clear({ args_rm = { '--listen' }, env = { NVIM_APPNAME = appname, XDG_DATA_HOME = '/x' } })
+    eq('/x/' .. appname, t.fix_slashes(fn.stdpath('data')))
+  end)
+
   describe('returns a String', function()
     describe('with "config"', function()
       it('knows XDG_CONFIG_HOME', function()

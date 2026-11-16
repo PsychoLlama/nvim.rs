@@ -18,7 +18,6 @@ use crate::cstr;
 use crate::env::{XdgVar, expand_env};
 use crate::fileio::vim_gettempdir;
 use crate::memory::{ThinCString, XString};
-use crate::message::IOSIZE;
 use crate::os::env::{ENV_SEPCHAR, env_exists, env_get_bounded, getenv_owned};
 use crate::path::{concat_fnames, path_fnamecmp, path_is_absolute};
 use core::ffi::CStr;
@@ -161,11 +160,10 @@ pub(crate) fn xdg_var(idx: XdgVar) -> Option<ThinCString> {
 /// `{xdg_directory}/$NVIM_APPNAME`, or `None` when the directory is unset.
 pub(crate) fn xdg_home(idx: XdgVar) -> Option<XString> {
     let dir = xdg_var(idx);
+    // Upstream builds this in `IObuff` and asserts the name leaves room
+    // there; the name comes from the environment, and nothing here is a
+    // fixed buffer, so a long one is just a long path.
     let appname = get_appname(false);
-    // Windows appends "-data" to the data/state homes; the headroom upstream
-    // needed for that in `IObuff` is asserted on every platform.
-    let iosize = usize::try_from(IOSIZE).expect("the scratch buffer has a positive size");
-    debug_assert!(appname.count_bytes() < iosize - c"-data".count_bytes() - 1);
     Some(concat_fnames(
         dir?.as_cstr().to_bytes(),
         appname.to_bytes(),

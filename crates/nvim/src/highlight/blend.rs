@@ -249,7 +249,13 @@ fn cterm2rgb(nr: c_int) -> RgbValue {
         [255, 255, 255],
     ];
 
-    let nr = usize::try_from(nr).expect("a cterm colour number is never negative");
+    // A negative number is input, not a broken invariant: `nvim_set_hl`
+    // stores `ctermfg = -5` biased as it is, and `:hi ctermfg=40000` keeps
+    // its low 16 bits, which read back negative. Like a number past 255 it
+    // names no colour (upstream indexes its tables with it).
+    let Ok(nr) = usize::try_from(nr) else {
+        return 0;
+    };
     let [r, g, b] = if nr < 16 {
         ANSI[nr]
     } else if nr < 232 {
@@ -277,6 +283,7 @@ mod tests {
         assert_eq!(cterm2rgb(232), 0x080808); // first grey step
         assert_eq!(cterm2rgb(255), 0xeeeeee); // last grey step
         assert_eq!(cterm2rgb(256), 0); // past the end
+        assert_eq!(cterm2rgb(-4), 0); // before the start
     }
 
     #[test]

@@ -109,13 +109,13 @@ pub fn param_groups(param: Option<&[u8]>) -> (c_int, Option<c_int>) {
     let mut groups = bytes.split(|&b| b == b':').map(|group| {
         let mut value: c_int = 0;
         for &byte in group {
-            // `parse` only ever admits digits and ':' into a parameter.
-            debug_assert!(byte.is_ascii_digit());
-            // A terminal can send arbitrarily many digits; upstream wrapped
-            // rather than trapping, and a debug build of this tree would panic.
-            value = value
-                .wrapping_mul(10)
-                .wrapping_add(c_int::from(byte - b'0'));
+            // A byte `parse` skips (`<` or a control byte after the first
+            // digit, `CSI 1<2u`) stays inside the parameter, and counts as
+            // its distance from '0', as upstream's release build reads it.
+            // A terminal can send arbitrarily many digits: the value stops
+            // at the `int` bounds.
+            let digit = i16::from(byte) - i16::from(b'0');
+            value = value.saturating_mul(10).saturating_add(c_int::from(digit));
         }
         value
     });
@@ -201,8 +201,16 @@ mod tests {
     }
 
     #[test]
-    fn a_long_run_of_digits_wraps_instead_of_trapping() {
-        assert_eq!(param_groups(Some(b"99999999999999999999")).0, 1661992959);
+    fn a_skipped_byte_or_a_huge_number_stays_in_the_parameter() {
+        // `parse` leaves bytes it does not know inside the parameter.
+        let bytes = b"\x1b[1<2;3\x014u";
+        let seq = parse(bytes, 2).unwrap();
+        // "1<2": 1, then 1 * 10 + ('<' - '0'), then that * 10 + 2.
+        assert_eq!(
+            args(&seq, bytes),
+            [Some(222), Some((3 * 10 + (1 - 48)) * 10 + 4)]
+        );
+        assert_eq!(param_groups(Some(b"99999999999")), (c_int::MAX, None));
     }
 
     #[test]

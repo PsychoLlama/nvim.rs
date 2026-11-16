@@ -190,8 +190,11 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
                 let mut bd = charwise_block_def(region.start, region.end, lnum, region.inclusive);
                 let mut text = Buf::current().lines();
                 let line = text.line(lnum);
-                // The region may reach past the end of a short line.
-                let rest = line.len() - usize::try_from(bd.textcol).expect("a column");
+                // The region may reach past the end of a short line; its
+                // start does not (`charwise_block_def` clamps it onto the line).
+                let textcol = usize::try_from(bd.textcol)
+                    .expect("charwise_block_def clamps the start column onto the line");
+                let rest = line.len() - textcol;
                 bd.textlen = bd.textlen.min(c_int::try_from(rest).unwrap_or(c_int::MAX));
                 lines.push(yank_copy_line(line, &bd, false));
             }
