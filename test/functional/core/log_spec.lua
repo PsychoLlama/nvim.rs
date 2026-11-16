@@ -101,10 +101,12 @@ describe('log', function()
   end)
 
   it('warns when $NVIM_LOG_FILE is inaccessible', function()
+    -- The fallback is $XDG_STATE_HOME/nvim/nvim.log: the sandbox's, not the
+    -- user's (an `env` table replaces the environment, keeping only $HOME).
     clear({
       args_rm = { '-u' },
       args = { '--clean' },
-      env = { NVIM_LOG_FILE = '/foo/bar' },
+      env = { NVIM_LOG_FILE = '/foo/bar', XDG_STATE_HOME = os.getenv('XDG_STATE_HOME') },
     })
     t.retry(nil, nil, function()
       t.matches('log: "/foo/bar" not accessible, logging to', n.exec_capture('messages'))
