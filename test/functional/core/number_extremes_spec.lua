@@ -50,6 +50,15 @@ describe('a number at the ends of int', function()
       t.matches('E342: Out of memory!', t.pcall_err(eval, "repeat('ab', v:numbermax)"))
     end)
 
+    it('repeats a List', function()
+      -- Room for every item is asked for up front, so a count no memory
+      -- holds is refused rather than grown into until the process dies.
+      -- E342 is said once per process, hence a case of its own.
+      t.matches('E342: Out of memory!', t.pcall_err(eval, 'repeat([1, 2], v:numbermax)'))
+      eq({ 1, 2, 1, 2 }, eval('repeat([1, 2], 2)'))
+      eq({}, eval('repeat([1, 2], v:numbermin)'))
+    end)
+
     it('names a match', function()
       fn.setline(1, 'abc')
       eq(INT_MAX, fn.matchadd('Search', 'b', 10, INT_MAX))

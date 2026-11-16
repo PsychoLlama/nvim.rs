@@ -23,7 +23,7 @@ use crate::keycodes::escape_ks_bytes;
 use crate::mbyte::Codepoint;
 use crate::mbyte::{Converter, char_at, cluster_len, enc_locale, encode_char};
 use crate::memline::Lines;
-use crate::memory::{ThinCString, XString, try_grow_zeroed};
+use crate::memory::{ThinCString, XString, try_grow_zeroed, try_reserve_items};
 use crate::message::E_NO_SPELL;
 use crate::message::{emsg, special_keys_text};
 use crate::narrow::{len_as_int, len_as_integer, number_as_int};
@@ -155,6 +155,14 @@ fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     let Some(out) = result.list_shared() else {
         return;
     };
+    // Room for every item is asked for up front, as the String form does:
+    // a count no memory holds (`repeat([1, 2], v:numbermax)`) reports E342
+    // and answers the empty List, where upstream allocates item by item
+    // until `xmalloc` exits with E41.
+    let total = usize::try_from(hint).unwrap_or(usize::MAX);
+    if !try_reserve_items(&mut out.edit().lv_items, total) {
+        return;
+    }
     for _ in 0..n.max(0) {
         list_extend(out, src, None);
     }
