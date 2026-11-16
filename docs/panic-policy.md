@@ -95,15 +95,48 @@ A panic raised while the hook runs does not come back into it: the standard
 library aborts on a panic inside a panic hook. Either way the process ends,
 and the log already has the first message.
 
+### Off the main thread
+
+Rust code runs on other threads in two ways, both started from Lua:
+`vim.uv.new_thread()` runs a fresh Lua state on its own OS thread, and
+`vim.uv.new_work()` runs one on a libuv pool thread. Each state gets the
+Rust-backed helpers (`vim.mpack`, `vim.json`, `vim.base64`, `vim._get_runtime`,
+the `require` loader), and its error path posts back to the main loop. The
+editor starts no `std::thread` of its own and has no TUI thread: the TUI is
+a separate process (`ui_client`), single-threaded.
+
+Such a thread must not touch editor state, so its hook does not clean up.
+It logs the panic (step 1), leaves its message for the main thread, posts
+the cleanup as a job on the main loop's fast queue (the same inbox and
+`uv_async_send` every worker uses to post back), and waits. The main thread
+runs the job the next time it polls its loop: between commands, during
+`:sleep`, and at every `os_breakcheck()` in a long Vimscript loop. The job
+does what step 2 does — the TUI client gives the terminal back, the
+message is printed, the swap files are written out — and aborts. The
+panicking thread waits 5 s for the job to start and then 10 s for it to
+finish, then prints the message and aborts on its own (see the gap below).
+Two panicking threads both post; `begin_emergency_exit` lets one cleanup
+through. A main-thread panic while a worker waits does the cleanup itself.
+
+`nvim__panic(message, true)` panics on a new thread and returns, so the
+test below covers this path too. With the job never posted, the test times
+out waiting for `[Process exited 134]`: the server sits for the 5 s grace
+instead.
+
 ### Known gaps
 
-- **A panic off the main thread** (libuv pool work, `vim.uv.new_thread`
-  states) logs, writes stderr and aborts. It touches no editor state, because
-  that state belongs to the main thread, which is still running. Swap files
-  are only as recent as their last sync (`'updatecount'`/`'updatetime'`), and
-  a TUI client's terminal is not restored.
-- **A second thread panicking while the first runs the hook** waits up to
-  10 s for the first to abort, then aborts itself.
+- **A panic off the main thread whose main thread never polls.** The
+  hand-off (below) needs the main thread to reach its event loop within
+  5 s. A tight Lua loop with no `os_breakcheck()`, a blocking system call,
+  or the main thread joining the very thread that panicked keeps it away;
+  the panicking thread then prints its message and aborts, and the swap
+  files are as recent as their last sync (`'updatecount'`/`'updatetime'`),
+  as after `SIGKILL`.
+- **No test panics the TUI client process itself.** The client loads no
+  config and talks only to its server, so there is no honest way to ask it to
+  panic; a trigger would be a test-only hook in its input path. The client
+  path (`ui_client_stop()`, then the message) is the same code the
+  deadly-signal path runs there.
 - **If the cleanup itself breaks** (the panic was inside the memfile code, or
   a non-`GlobalCell` tracker such as a value's edit loan objects), the
   in-hook panic aborts. The swap files on disk are then as recent as the last
@@ -114,17 +147,19 @@ and the log already has the first message.
 ### The test
 
 `test/functional/ex_cmds/swapfile_preserve_recover_spec.lua`, "panic in the
-server preserves the swap file and logs the message", does the following:
+server preserves the swap file and logs the message" and "panic off the main
+thread ...", does the following:
 
 1. Starts a TUI client in a `:terminal`, with its own log.
 2. Edits a buffer below `'updatecount'`.
-3. Calls `nvim__panic`.
+3. Calls `nvim__panic`, on the main thread or on a new one.
 4. Asserts `[Process exited 134]`, the message in the log, and that a second
    Nvim recovers the edit from the swap file.
 
-`nvim__panic(message)` is the deliberate trigger: an internal `nvim__*` method
-(no metadata, no compatibility, like `nvim__id`/`nvim__screenshot`) that does
-nothing except `panic!`. Any API client could already end the server
+`nvim__panic(message, thread)` is the deliberate trigger: an internal
+`nvim__*` method (no metadata, no compatibility, like
+`nvim__id`/`nvim__screenshot`) that does nothing except `panic!`, on a new
+thread when `thread` is true. Any API client could already end the server
 (`:qa!`, `os.exit()`), so it adds no new power.
 
 ## The rule for authors

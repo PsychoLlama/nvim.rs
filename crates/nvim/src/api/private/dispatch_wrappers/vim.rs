@@ -315,13 +315,16 @@ pub fn handle_nvim__invalidate_glyph_cache(
 pub fn handle_nvim__panic(channel_id: uint64_t, args: Array) -> Result<Object, Error> {
     let mut args = args;
     log_invoke(c"handle_nvim__panic", c"nvim__panic", line!(), channel_id);
-    if args.len() != 1 {
-        return Err(wrong_arity(1, args.len()));
+    if args.len() != 2 {
+        return Err(wrong_arity(2, args.len()));
     }
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim__panic", c"String"));
     };
-    nvim__panic(arg_1);
+    let Some(arg_2) = as_boolean(args[1].take()) else {
+        return Err(wrong_type(2, c"nvim__panic", c"Boolean"));
+    };
+    nvim__panic(arg_1, arg_2);
     Ok(Object::Nil)
 }
 

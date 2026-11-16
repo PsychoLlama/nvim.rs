@@ -42,7 +42,7 @@ pub(crate) static BINDINGS: [Binding; 182] = [
     ),
     Binding::deferred::<11>(c"nvim__ns_get", 1, 1, convert_nvim__ns_get),
     Binding::deferred::<12>(c"nvim__ns_set", 2, 0, convert_nvim__ns_set),
-    Binding::deferred::<13>(c"nvim__panic", 1, 0, convert_nvim__panic),
+    Binding::deferred::<13>(c"nvim__panic", 2, 0, convert_nvim__panic),
     Binding::deferred::<14>(c"nvim__redraw", 1, 0, convert_nvim__redraw),
     Binding::deferred::<15>(
         c"nvim__runtime_inspect",

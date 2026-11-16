@@ -489,7 +489,7 @@ pub(super) const PART: [EvalFuncDef; 171] = [
         BaseArg::At(1),
         Some(f_shiftwidth),
     ),
-    api(c"nvim__panic", 1, 19),
+    api(c"nvim__panic", 2, 19),
     api(c"nvim__stats", 0, 20),
     builtin(
         c"timer_pause",

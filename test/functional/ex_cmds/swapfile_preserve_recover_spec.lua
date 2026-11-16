@@ -214,32 +214,43 @@ describe("preserve and (R)ecover with custom 'directory'", function()
   -- A panic ends the process the way a deadly signal does
   -- (docs/panic-policy.md): the server writes its swap files out and aborts,
   -- the TUI client gives the terminal back and exits with the server's
-  -- status, and the log has the panic's message.
-  it('panic in the server preserves the swap file and logs the message', function()
-    local testlog = uv.cwd() .. '/Xtest_panic_log'
-    finally(function()
-      os.remove(testlog)
+  -- status, and the log has the panic's message. A panic on another thread
+  -- hands the cleanup to the main thread, with the same result.
+  for _, case in ipairs({
+    { thread = false, name = 'main' },
+    { thread = true, name = 'nvim__panic' },
+  }) do
+    local where = case.thread and 'off the main thread' or 'in the server'
+    it('panic ' .. where .. ' preserves the swap file and logs the message', function()
+      local testlog = uv.cwd() .. '/Xtest_panic_log'
+      finally(function()
+        os.remove(testlog)
+      end)
+      local screen0 = Screen.new()
+      local child_server = new_pipename()
+      fn.jobstart({ nvim_prog, '-u', 'NONE', '-i', 'NONE', '--listen', child_server }, {
+        term = true,
+        env = { VIMRUNTIME = os.getenv('VIMRUNTIME'), NVIM_LOG_FILE = testlog },
+      })
+      screen0:expect({ any = pesc('[No Name]') }) -- Wait for the child process to start.
+      local child_session = n.connect(child_server)
+      set_session(child_session)
+      local swappath1 = setup_swapname()
+      -- The insert is below 'updatecount', so only the hook's sync can have
+      -- put it in the swap file.
+      n.async_meths.nvim__panic('on purpose', case.thread)
+      set_session(nvim0)
+      -- 128 + SIGABRT: the server aborted, and the client passes its status on.
+      screen0:expect({ any = '%[Process exited 134%]' })
+      t.assert_log(
+        'panic: thread .' .. case.name .. '. panicked at .*\nnvim__panic: on purpose',
+        testlog,
+        1000
+      )
+      neq(nil, uv.fs_stat(swappath1))
+      test_recover(swappath1)
     end)
-    local screen0 = Screen.new()
-    local child_server = new_pipename()
-    fn.jobstart({ nvim_prog, '-u', 'NONE', '-i', 'NONE', '--listen', child_server }, {
-      term = true,
-      env = { VIMRUNTIME = os.getenv('VIMRUNTIME'), NVIM_LOG_FILE = testlog },
-    })
-    screen0:expect({ any = pesc('[No Name]') }) -- Wait for the child process to start.
-    local child_session = n.connect(child_server)
-    set_session(child_session)
-    local swappath1 = setup_swapname()
-    -- The insert is below 'updatecount', so only the hook's sync can have
-    -- put it in the swap file.
-    n.async_meths.nvim__panic('on purpose')
-    set_session(nvim0)
-    -- 128 + SIGABRT: the server aborted, and the client passes its status on.
-    screen0:expect({ any = '%[Process exited 134%]' })
-    t.assert_log('panic: thread .main. panicked at .*\nnvim__panic: on purpose', testlog, 1000)
-    neq(nil, uv.fs_stat(swappath1))
-    test_recover(swappath1)
-  end)
+  end
 
   for _, ext in ipairs({ false, true }) do
     it('manual :recover with multiple swapfiles' .. (ext and 'with ext_messages' or ''), function()

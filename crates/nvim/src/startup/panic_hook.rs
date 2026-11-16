@@ -9,6 +9,10 @@
 //! It never returns, so nothing unwinds: no destructor runs over the broken
 //! state, and the unwind never reaches an `extern "C"` frame.
 //!
+//! A panic on another thread cannot touch the editor's state, so it hands
+//! the same cleanup to the main thread's loop and waits for it to abort the
+//! process (see [`hand_off_to_main`]).
+//!
 //! The policy, and why it is a hook rather than `panic = "abort"`, is
 //! `docs/panic-policy.md`.
 
@@ -25,13 +29,14 @@ use std::backtrace::Backtrace;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::panic::PanicHookInfo;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::thread::{self, ThreadId};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use super::UI_CLIENT_CHANNEL_ID;
 use super::exit::{begin_emergency_exit, preserve_swap_files, restore_stdin};
+use crate::event::r#loop::schedule_fast_job;
 use crate::ui_client::ui_client_stop;
 
 /// The thread that installed the hook: the main thread, the only one that
@@ -39,12 +44,24 @@ use crate::ui_client::ui_client_stop;
 /// `nvim_mainthread`, whose flag a release build never sets.
 static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 
-/// Set by the first panic to reach the hook, on any thread.
-static PANICKING: AtomicBool = AtomicBool::new(false);
+/// Set once the main thread has started the cleanup, from its own panic or
+/// from another thread's hand-off. A thread waiting on it then gives the
+/// cleanup longer to finish.
+static CLEANING_UP: AtomicBool = AtomicBool::new(false);
 
-/// How long a second thread's panic waits for the first one's cleanup to
-/// abort the process before it aborts it itself.
-const SECOND_PANIC_GRACE: Duration = Duration::from_secs(10);
+/// The message of a panic off the main thread, for the main thread to print
+/// once the terminal is back. Taken by whichever side prints it.
+static OFF_THREAD_REPORT: Mutex<Option<String>> = Mutex::new(None);
+
+/// How long a panic off the main thread waits for the main thread to pick
+/// up the cleanup. The main thread polls its loop between commands and at
+/// every `os_breakcheck()`, so this is only spent in full when it is stuck:
+/// blocked in a system call, or waiting on the very thread that panicked.
+const HANDOFF_GRACE: Duration = Duration::from_secs(5);
+
+/// How long it then waits for a cleanup that has started to abort the
+/// process. Writing the swap files out is a sync per buffer.
+const CLEANUP_GRACE: Duration = Duration::from_secs(10);
 
 /// Make every panic end the process through [`on_panic`]. Called first
 /// thing in `main`, on the main thread.
@@ -63,25 +80,12 @@ pub(super) fn install_panic_hook() {
 /// state) does not come back here: the standard library aborts the process
 /// on a panic inside the hook. Either way the process ends.
 fn on_panic(info: &PanicHookInfo<'_>, report: &(dyn Fn(&PanicHookInfo<'_>) + Sync + Send)) -> ! {
-    if PANICKING.swap(true, Ordering::SeqCst) {
-        // Another thread is already handling a panic and will abort the
-        // process when its cleanup is done; stay out of its way, but do not
-        // trust it to finish.
-        thread::sleep(SECOND_PANIC_GRACE);
-        std::process::abort();
-    }
-
     // The log first: it is not the terminal, and whatever goes wrong in the
     // cleanup below, the message and where it came from are already out.
     write_to_log(info);
 
-    let on_main_thread = MAIN_THREAD.get() == Some(&thread::current().id());
-    if !on_main_thread {
-        // Editor state belongs to the main thread, which is still running
-        // whatever it was running; reaching into it from here would race.
-        // The swap files on disk are as recent as the last sync.
-        report(info);
-        std::process::abort();
+    if MAIN_THREAD.get() != Some(&thread::current().id()) {
+        hand_off_to_main(info);
     }
 
     // The panic may have fired inside a `GlobalCell::with`/`with_mut`. Its
@@ -97,14 +101,75 @@ fn on_panic(info: &PanicHookInfo<'_>, report: &(dyn Fn(&PanicHookInfo<'_>) + Syn
         report(info);
         std::process::abort();
     }
+    clean_up_and_abort(|| report(info));
+}
 
+/// A panic on another thread (a `vim.uv.new_thread` state, libuv pool
+/// work): editor state belongs to the main thread, which is still running
+/// whatever it was running, so reaching into it from here would race.
+/// Instead ask the main thread to run the cleanup from its loop, and give
+/// it time to abort the process. If it never does (stuck, or waiting on this
+/// thread), abort anyway: the swap files are then as recent as their last
+/// sync.
+fn hand_off_to_main(info: &PanicHookInfo<'_>) -> ! {
+    let current = thread::current();
+    let text = format!(
+        "thread '{}' {info}\n",
+        current.name().unwrap_or("<unnamed>")
+    );
+    *OFF_THREAD_REPORT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(text);
+    schedule_fast_job(Box::new(clean_up_after_another_thread));
+
+    let started = Instant::now();
+    while !CLEANING_UP.load(Ordering::SeqCst) && started.elapsed() < HANDOFF_GRACE {
+        thread::sleep(Duration::from_millis(20));
+    }
+    if CLEANING_UP.load(Ordering::SeqCst) {
+        thread::sleep(CLEANUP_GRACE);
+    }
+    print_off_thread_report();
+    std::process::abort();
+}
+
+/// The main thread's half of [`hand_off_to_main`], run from its loop's fast
+/// queue.
+fn clean_up_after_another_thread() {
+    // Whatever the loop was inside of never resumes: see `on_panic`.
+    #[cfg(debug_assertions)]
+    nvim_mainthread::BorrowTable::forget_all();
+    if !begin_emergency_exit() {
+        // A deadly signal or an out-of-memory exit is already preserving,
+        // and ends the process itself.
+        return;
+    }
+    clean_up_and_abort(print_off_thread_report);
+}
+
+/// Print the message [`hand_off_to_main`] left, if nobody has yet.
+fn print_off_thread_report() {
+    let text = OFF_THREAD_REPORT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    if let Some(text) = text {
+        _ = std::io::stderr().write_all(text.as_bytes());
+    }
+}
+
+/// On the main thread, once [`begin_emergency_exit`] has said this is the
+/// way out: give the terminal back, `report` the panic on it, write the swap
+/// files out and abort.
+fn clean_up_and_abort(report: impl FnOnce()) -> ! {
+    CLEANING_UP.store(true, Ordering::SeqCst);
     let ui_client = UI_CLIENT_CHANNEL_ID.get() != 0;
     if ui_client {
         // Leave the alternate screen and raw mode, so the message can be
         // read and the shell gets a sane terminal back.
         ui_client_stop();
     }
-    report(info);
+    report();
     if !ui_client {
         // A UI client has no buffers of its own; its server keeps them.
         preserve_swap_files(true);

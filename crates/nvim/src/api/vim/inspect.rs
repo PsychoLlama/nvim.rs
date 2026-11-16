@@ -202,12 +202,19 @@ pub fn nvim__unpack(str: ApiString) -> Result<Object, Error> {
 
 /// Panic with `message`, on purpose: the functional suite's way to see a
 /// panic end the process the way `docs/panic-policy.md` says it does (the
-/// swap files preserved, the message in the log). Nothing else calls it.
+/// swap files preserved, the message in the log). With `thread`, the panic
+/// is on a new thread and this returns, so the main thread is in its loop
+/// when the hook hands it the cleanup. Nothing else calls it.
 // `nvim__panic` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
-pub fn nvim__panic(message: ApiString) {
-    panic!(
-        "nvim__panic: {}",
-        String::from_utf8_lossy(message.as_bytes())
-    );
+pub fn nvim__panic(message: ApiString, thread: Boolean) {
+    let message = String::from_utf8_lossy(message.as_bytes()).into_owned();
+    if thread {
+        // Not joined: the hook aborts the process from either thread.
+        _ = std::thread::Builder::new()
+            .name("nvim__panic".to_owned())
+            .spawn(move || panic!("nvim__panic: {message}"));
+        return;
+    }
+    panic!("nvim__panic: {message}");
 }
