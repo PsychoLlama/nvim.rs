@@ -285,6 +285,17 @@ walked through rather than read past; and a userdatum whose `__gc` plain
 Lua called by hand (`vim.mpack` objects, `vim.regex`, every tree-sitter
 object, and the nodes, cursors and matches that point into one) raises
 "… has been collected" instead of panicking or using freed memory.
+Then corrupt files: an undo file is refused (E825) when an entry's line
+numbers fit no buffer, a sequence or save number could not be stepped, or
+the header links do not make a tree (a cycle hung `:undo 0`); a spell
+tree whose shared sub-tree index is not a node start, a cycle, or too deep
+is E759; a `REP` list may hold its full 65,535 items; and a swap file's
+page size above the maximum is refused like one below the minimum. A
+length or count a file or peer claims no longer sizes an allocation before
+the bytes are there (undo lines, ShaDa entries, spell strings and trees,
+msgpack strings over RPC and in `vim.mpack`): the rule and its helpers are
+`memory/claimed.rs`, and `test/functional/core/corrupt_files_spec.lua`
+reads each such file in a child capped at 1 GiB.
 
 What could not be classed: `viml/parser/expressions/ast.rs:182` (may fire
 in release after the `1 2]3` family mis-wires a node; that family no
