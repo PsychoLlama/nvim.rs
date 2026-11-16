@@ -13,6 +13,11 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 
+# Before anything moves XDG_STATE_HOME: the user's own log, which no test
+# child may write to (checked when the run ends).
+source "$root/scripts/user-log-guard.sh"
+user_log_mark
+
 test_type=${1:-}
 case "$test_type" in
   functional|unit|benchmark) shift ;;
@@ -120,10 +125,13 @@ if [[ ${#paths[@]} -eq 0 ]]; then
 fi
 
 cd "$xdg"
-exec "$NVIM_PRG" -ll "$root/test/runner.lua" -v \
+status=0
+"$NVIM_PRG" -ll "$root/test/runner.lua" -v \
   --helper="$root/test/$test_type/preload.lua" \
   --lpath="$root/crates/nvim/src/?.lua" \
   --lpath="$root/runtime/lua/?.lua" \
   --lpath='?.lua' \
   "${args[@]}" \
-  "${paths[@]}"
+  "${paths[@]}" || status=$?
+user_log_check || ((status)) || status=1
+exit "$status"

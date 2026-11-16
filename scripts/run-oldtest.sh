@@ -35,6 +35,10 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 
+# The user's own log, which no test child may write to (checked at the end).
+source "$root/scripts/user-log-guard.sh"
+user_log_mark
+
 if [[ $# -eq 0 ]]; then
   echo "usage: $0 <all|test_name...|clean>" >&2
   exit 64
@@ -90,8 +94,12 @@ if (( ${#bad[@]} )); then
 fi
 
 make=(make -C "$testdir" NVIM_PRG="$NVIM_PRG")
+status=0
 if [[ $# -eq 1 && $1 == all ]]; then
   "${make[@]}" clean
-  exec "${make[@]}"
+  "${make[@]}" || status=$?
+else
+  "${make[@]}" "$@" || status=$?
 fi
-exec "${make[@]}" "$@"
+user_log_check || ((status)) || status=1
+exit "$status"

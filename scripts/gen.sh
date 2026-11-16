@@ -56,6 +56,11 @@ else
   fi
 fi
 
+# A debug build logs from startup on, and prep-test-tree.sh calls this before
+# the harnesses export their sandbox: without a log of its own, every
+# regeneration wrote DBG lines into the user's $XDG_STATE_HOME/nvim/nvim.log.
+export NVIM_LOG_FILE=${NVIM_LOG_FILE:-$root/target/gen-nvim.log}
+
 # run <script> <output> <inputs...>: regenerate <output> from <inputs> with
 # src/gen/<script>, unless it is already newer than every input (and the
 # binary, and the generator itself).

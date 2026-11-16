@@ -177,6 +177,12 @@ REPO=${REPO:-$(cd "$T/../.." && pwd)}
 LOGDIR=${BATTERY_LOGDIR:-$REPO/target/battery-logs}
 mkdir -p "$LOGDIR"
 cd "$REPO" || exit 1
+# A row that does not sandbox its children (`env -i` with XDG_* under its
+# work dir) would otherwise log into the user's own Nvim log; the guard
+# fails the battery if anything still does.
+. "$REPO/scripts/user-log-guard.sh"
+user_log_mark
+export NVIM_LOG_FILE=${NVIM_LOG_FILE:-$LOGDIR/$LABEL.nvim.log}
 
 fail=0
 run() { # name script
@@ -319,6 +325,7 @@ else
   diff -a "$PBASE" "$LOGDIR/$LABEL.p.txt" | head -40
   fail=1
 fi
+user_log_check || fail=1
 echo "BATTERY_EXIT=$fail"
 # ...and exit with it.  Up to P20-4 this script printed the verdict and
 # then returned 0, so `diffbattery.sh x || echo broken` never fired and
