@@ -179,7 +179,103 @@ thread when `thread` is true. Any API client could already end the server
 
 ## Census
 
-_To be filled by the census: `expect`/`unwrap`/`unreachable!`/indexing by
-module, sorted by whether user input reaches each site. Rough counts at
-`cbf4850257` (`crates/nvim/src`, tests included): ~1,395 `.expect(`,
-139 `.unwrap()`, 167 `unreachable!`, 64 `panic!`._
+Taken 2026-11-15. `just ratchet --dimension panic_sites` prints today's
+counts per file and module; `--dimension bare_panics` lists each bare site.
+
+### What was counted
+
+Every explicit panic outside test code (inline `#[cfg(test)]` modules,
+files pulled in by `#[cfg(test)] mod x;`, `build.rs` are skipped) and
+outside `const` assertions, which fail the build instead:
+
+| kind                                          |     sites |
+| --------------------------------------------- | --------: |
+| `.expect(..)`                                 |     1,213 |
+| `unreachable!`                                |       165 |
+| always-on `assert!`/`assert_eq!`/`assert_ne!` |       122 |
+| `panic!`/`todo!`/`unimplemented!`             |        42 |
+| `.unwrap()`                                   |         2 |
+| **explicit**                                  | **1,544** |
+| bare (says nothing about what broke)          |        14 |
+| indexing/slicing expressions (heuristic)      |    ~9,700 |
+
+Arithmetic overflow is not a panic in a release build (no
+`overflow-checks`): it wraps, as C's signed overflow does in practice. A
+debug build panics on it. It is classed by probe, not by site.
+
+### Method
+
+1. **Reading.** Every explicit site was read in context and classed
+   _input_ (some user input can make it fire), _invariant_ (the code around
+   it guarantees it) or _unknown_, with the error shape its caller could
+   carry. Module families were read separately; the input sites were then
+   reproduced where that was cheap.
+2. **Probes** (headless debug binary, 4 GiB address-space cap):
+   - every `nvim_*` function, one argument at a time at an extreme
+     (0, -1, ±2^31, ±2^53, ±2^63, huge/NUL/invalid strings, odd
+     containers, every keyset key);
+   - every Vimscript builtin with 1–4 arguments, one at a time at an
+     extreme (`v:numbermax`/`v:numbermin`, ±2^31, 2^32, odd strings, lists,
+     dicts, blobs, `v:null`, funcrefs);
+   - truncations and byte flips (every position up to 4 KiB, then every
+     7th) of a ShaDa file, an undo file, a swap file, a `.spl` file, msgpack
+     and JSON, read back through `:rshada!`, `:rundo`+`:undo`, `:recover!`,
+     spell checking and suggestion, `msgpackparse()`/`vim.mpack.decode`,
+     `json_decode()`/`vim.json.decode`;
+   - per family: autocommand re-entrancy (an autocommand closing the
+     window/buffer/tab or deleting the group being worked on), completion
+     callbacks, Ex ranges and counts at the extremes, `'errorformat'` and
+     hostile error files, escape sequences, decoration providers, a seeded
+     marktree stress, ~100k random expressions through
+     `nvim_parse_expression`.
+3. **Indexing** cannot be classed site by site. It was ranked by where
+   external bytes and user numbers arrive (the file readers, the RPC
+   unpacker, the expression parser, the regexp engines, the vterm parser),
+   and found by the probes. Every indexing panic the probes found is in
+   that set.
+
+### Result
+
+| class                            | explicit sites |
+| -------------------------------- | -------------: |
+| input, reproduced                |             27 |
+| input, judged by reading only    |              4 |
+| input, only with ≥ 2 GiB of data |             10 |
+| unknown                          |              3 |
+| invariant                        |         ~1,500 |
+
+Plus, found only by probing: 6 input-reachable index panics in release
+(a `:terminal` program that saves the cursor or sets a top margin and is
+then shrunk, a corrupt undo file, a corrupt `.spl` tree, `syn match …
+lc=-1`, a dangling highlight link), about 35 debug-only overflows on user
+numbers, and 7 `debug_assert!`s that user input reaches.
+
+The input sites by module (every other module: all invariant):
+
+| module                      | explicit | input | how it is reached                                                                                                                                             |
+| --------------------------- | -------: | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `eval`                      |      189 |     7 | `filter()`/`map()` callback unlocking and shrinking its container; an API dict key with a NUL; an overridden internal Lua module; an `envp` entry with no `=` |
+| `msgpack_rpc`               |       48 |     7 | an out-of-range handle in an RPC ext; `nvim_set_client_info` after `chanclose` in one `nvim_call_atomic`; ≥ 4 GiB replies                                     |
+| `mpack`                     |       24 |     6 | a `vim.mpack` object used after calling its `__gc` by hand                                                                                                    |
+| `memline`                   |       25 |     5 | ≥ 2 GiB lines only                                                                                                                                            |
+| `highlight_group`           |        9 |     3 | `:hi ctermfg=` past 16 bits; a dangling `link` (both fixed)                                                                                                   |
+| `shada`                     |       42 |     2 | an empty block register's width -1, written and read (fixed)                                                                                                  |
+| `viml`                      |       34 |     2 | an unmatched `]`/`}` between two values (`1 2]3`), even typed at `<C-r>=`                                                                                     |
+| `version`                   |        5 |     2 | `:version` after tampering with `jit`/`_VERSION`                                                                                                              |
+| `api`                       |      130 |     2 | `ModeChanged` closing `nvim_set_current_win`'s target (fixed); `nvim__panic` (deliberate)                                                                     |
+| `spellfile`, `spellsuggest` |       25 |     2 | a spell file with more than 32,767 `REP` items                                                                                                                |
+| `terminal`                  |       22 |     1 | a deferred `TermRequest` reported against a new terminal on the same buffer                                                                                   |
+| `help`, `highlight`         |        9 |     2 | an overridden help helper; a negative cterm colour under 'winblend' (unverified)                                                                              |
+
+What could not be classed: `viml/parser/expressions/ast.rs:182` (may fire
+in release after the `1 2]3` family mis-wires a node), and two low-
+confidence underflows (`register/yank.rs:194`, `indent/mod.rs:430`). The
+`debugger` `>frame +N` overflow could not be driven headless.
+
+The pattern is clear. Explicit panics are almost all honest invariants:
+1,500 of 1,544, with messages that name the invariant in all but about 150.
+What input reaches is concentrated in a few families: values a user callback
+or Lua override hands back unchecked, readers that size or index from a
+file's own fields, and user numbers at the `int` extremes. The work list
+for the conversion slices is kept outside the tree, with each site's
+reproducer.
