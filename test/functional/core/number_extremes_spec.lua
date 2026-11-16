@@ -71,7 +71,10 @@ describe('a number at the ends of int', function()
 
     it('asks for suggestions', function()
       command('set spell spelllang=en')
-      eq('table', type(fn.spellsuggest('helo', INT_MAX)))
+      -- A word with hundreds of suggestions rather than thousands: the count
+      -- is clamped where it comes in whatever the word, and ranking every
+      -- suggestion for 'helo' took 5 s under ASan.
+      t.ok(#fn.spellsuggest('zebrra', INT_MAX) > 0)
     end)
   end)
 
