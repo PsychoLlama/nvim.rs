@@ -267,13 +267,6 @@ fn graft(mut headers: Vec<UndoHeader>, header: FileHeader) -> Result<(), UndoFil
         uh.alt_prev = resolve(seq, uh.alt_prev);
     }
 
-    let mut buf = Buf::current();
-    u_blockfree(buf);
-    // The links already name these headers; the store is what turns a
-    // name back into one.
-    for uh in headers {
-        buf.adopt_header(Box::new(uh));
-    }
     // `unserialize_uhp` refuses a header whose sequence number is not
     // positive, so a number the set holds is always a usable link.
     let head = |seq: c_int| {
@@ -283,6 +276,17 @@ fn graft(mut headers: Vec<UndoHeader>, header: FileHeader) -> Result<(), UndoFil
             UndoLink::NONE
         }
     };
+    if !is_tree(&headers, head(header.old_head)) {
+        return Err(UndoFileError::Corrupt(Corruption::TreeShape));
+    }
+
+    let mut buf = Buf::current();
+    u_blockfree(buf);
+    // The links already name these headers; the store is what turns a
+    // name back into one.
+    for uh in headers {
+        buf.adopt_header(Box::new(uh));
+    }
     buf.b_u_oldhead = head(header.old_head);
     buf.b_u_newhead = head(header.new_head);
     buf.b_u_curhead = head(header.cur_head);
@@ -301,4 +305,48 @@ fn graft(mut headers: Vec<UndoHeader>, header: FileHeader) -> Result<(), UndoFil
     buf.b_u_save_nr_cur = header.last_save_nr;
     buf.b_u_synced = true;
     Ok(())
+}
+
+/// Whether `headers`' links make the tree an undo tree is: what upstream's
+/// `u_check_tree` (compiled only under `U_DEBUG`) checks.
+///
+/// From the oldest header, `prev` leads to the next newer change and
+/// `alt_next` to the next alternative branch, and every header points back
+/// along the way it was reached: its `next` to the header it is newer
+/// than, its `alt_prev` to the branch before it. Every header is reached
+/// exactly once. Each link resolves on its own, so a corrupt file could
+/// otherwise link them into a cycle that every walk of the tree (`:undo 0`,
+/// `undotree()`, `:earlier`) follows for ever.
+fn is_tree(headers: &[UndoHeader], old_head: UndoLink) -> bool {
+    if headers.is_empty() {
+        return true;
+    }
+    let at: std::collections::HashMap<c_int, usize> = headers
+        .iter()
+        .enumerate()
+        .map(|(i, uh)| (uh.seq, i))
+        .collect();
+    let mut reached = vec![false; headers.len()];
+    let mut count = 0;
+    // A header still to visit, the `next` it must have, and the
+    // `alt_prev` it must have. Iterative: a long history is a deep tree.
+    let mut todo = vec![(old_head, UndoLink::NONE, UndoLink::NONE)];
+    while let Some((link, next, alt_prev)) = todo.pop() {
+        let Some(&i) = at.get(&link.seq()).filter(|_| link.is_some()) else {
+            return false;
+        };
+        let uh = &headers[i];
+        if reached[i] || uh.next != next || uh.alt_prev != alt_prev {
+            return false;
+        }
+        reached[i] = true;
+        count += 1;
+        if uh.alt_next.is_some() {
+            todo.push((uh.alt_next, uh.next, link));
+        }
+        if uh.prev.is_some() {
+            todo.push((uh.prev, link, UndoLink::NONE));
+        }
+    }
+    count == headers.len()
 }

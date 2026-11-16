@@ -214,4 +214,34 @@ describe('the undo file format', function()
       eq({ 'alpha', 'beta', 'gamma' }, fn.getline(1, '$'))
     end
   end)
+
+  -- Each link resolves on its own, so a file whose two headers name each
+  -- other as both older and newer used to load, and `:undo 0` followed the
+  -- cycle for ever.
+  it('refuses headers whose links do not make a tree', function()
+    local target = tmpdir .. '/Xundo_cycle'
+    write_file(target, 'alpha\nbeta\ngamma\n')
+    command('edit ' .. fn.fnameescape(target))
+    command('normal! dd')
+    command('let &undolevels = &undolevels')
+    command('normal! dd')
+    command('write')
+    command('set noundofile')
+    local undofile = fn.undofile(target)
+    local raw = t.read_file(undofile)
+    local header = first_header(raw)
+    local b1, b2, b3, b4 = raw:byte(header + 16, header + 19)
+    local other = 3 - (((b1 * 256 + b2) * 256 + b3) * 256 + b4)
+    local link = '\000\000\000' .. string.char(other)
+    -- `next` and `prev` both name the other header.
+    write_file(undofile, raw:sub(1, header - 1) .. link .. link .. raw:sub(header + 8), true)
+    command('bwipe!')
+    command('edit ' .. fn.fnameescape(target))
+    t.matches(
+      'E825: Corrupted undo file %(tree shape%)',
+      t.pcall_err(command, 'rundo ' .. fn.fnameescape(undofile))
+    )
+    command('undo 0')
+    eq({ 'gamma' }, fn.getline(1, '$'))
+  end)
 end)
