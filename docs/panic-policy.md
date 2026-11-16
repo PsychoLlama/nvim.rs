@@ -179,8 +179,10 @@ thread when `thread` is true. Any API client could already end the server
 
 ## Census
 
-Taken 2026-11-15. `just ratchet --dimension panic_sites` prints today's
-counts per file and module; `--dimension bare_panics` lists each bare site.
+Taken 2026-11-15 and worked through by 2026-11-16: every input-reachable
+site it found is converted or accepted below. `just ratchet --dimension
+panic_sites` prints today's counts per file and module; `--dimension
+bare_panics` lists each bare site.
 
 ### What was counted
 
@@ -188,16 +190,16 @@ Every explicit panic outside test code (inline `#[cfg(test)]` modules,
 files pulled in by `#[cfg(test)] mod x;`, `build.rs` are skipped) and
 outside `const` assertions, which fail the build instead:
 
-| kind                                          |     sites |
-| --------------------------------------------- | --------: |
-| `.expect(..)`                                 |     1,213 |
-| `unreachable!`                                |       165 |
-| always-on `assert!`/`assert_eq!`/`assert_ne!` |       122 |
-| `panic!`/`todo!`/`unimplemented!`             |        42 |
-| `.unwrap()`                                   |         2 |
-| **explicit**                                  | **1,544** |
-| bare (says nothing about what broke)          |        14 |
-| indexing/slicing expressions (heuristic)      |    ~9,700 |
+| kind                                          | at the census |       now |
+| --------------------------------------------- | ------------: | --------: |
+| `.expect(..)`                                 |         1,213 |     1,208 |
+| `unreachable!`                                |           165 |       165 |
+| always-on `assert!`/`assert_eq!`/`assert_ne!` |           122 |       119 |
+| `panic!`/`todo!`/`unimplemented!`             |            42 |        42 |
+| `.unwrap()`                                   |             2 |         0 |
+| **explicit**                                  |     **1,544** | **1,534** |
+| bare (says nothing about what broke)          |            14 |         0 |
+| indexing/slicing expressions (heuristic)      |        ~9,700 |    ~9,840 |
 
 Arithmetic overflow is not a panic in a release build (no
 `overflow-checks`): it wraps, as C's signed overflow does in practice. A
@@ -236,78 +238,86 @@ debug build panics on it. It is classed by probe, not by site.
 
 ### Result
 
-| class                            | explicit sites |
-| -------------------------------- | -------------: |
-| input, reproduced                |             27 |
-| input, judged by reading only    |              4 |
-| input, only with ≥ 2 GiB of data |             10 |
-| unknown                          |              3 |
-| invariant                        |         ~1,500 |
+| class at the census              | explicit sites | outcome                                |
+| -------------------------------- | -------------: | -------------------------------------- |
+| input, reproduced                |             27 | converted, each with a regression test |
+| input, judged by reading only    |              4 | converted (3) or found invariant (1)   |
+| input, only with ≥ 2 GiB of data |             10 | accepted (below)                       |
+| unknown                          |              3 | reclassified (below)                   |
+| invariant                        |         ~1,500 | kept; messages name the invariant      |
 
-Plus, found only by probing: 6 input-reachable index panics in release
-(a `:terminal` program that saves the cursor or sets a top margin and is
-then shrunk, a corrupt undo file, a corrupt `.spl` tree, `syn match …
-lc=-1`, a dangling highlight link), about 35 debug-only overflows on user
-numbers, and 7 `debug_assert!`s that user input reaches.
+Found only by probing, and also all converted: 6 input-reachable index
+panics in release, about 35 debug-only overflows on user numbers (plus
+the fold, 'diffexpr', undo-time and redraw-decoder siblings found while
+fixing them), and 7 `debug_assert!`s user input reached.
 
-The input sites by module (every other module: all invariant):
+The input sites by module, as found (every other module: all invariant):
 
-| module                      | explicit | input | how it is reached                                                                                                                                             |
+| module                      | explicit | input | how it was reached                                                                                                                                            |
 | --------------------------- | -------: | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `eval`                      |      189 |     7 | `filter()`/`map()` callback unlocking and shrinking its container; an API dict key with a NUL; an overridden internal Lua module; an `envp` entry with no `=` |
 | `msgpack_rpc`               |       48 |     7 | an out-of-range handle in an RPC ext; `nvim_set_client_info` after `chanclose` in one `nvim_call_atomic`; ≥ 4 GiB replies                                     |
 | `mpack`                     |       24 |     6 | a `vim.mpack` object used after calling its `__gc` by hand                                                                                                    |
 | `memline`                   |       25 |     5 | ≥ 2 GiB lines only                                                                                                                                            |
-| `highlight_group`           |        9 |     3 | `:hi ctermfg=` past 16 bits; a dangling `link` (both fixed)                                                                                                   |
-| `shada`                     |       42 |     2 | an empty block register's width -1, written and read (fixed)                                                                                                  |
+| `highlight_group`           |        9 |     3 | `:hi ctermfg=` past 16 bits; a dangling `link`                                                                                                                |
+| `shada`                     |       42 |     2 | an empty block register's width -1, written and read                                                                                                          |
 | `viml`                      |       34 |     2 | an unmatched `]`/`}` between two values (`1 2]3`), even typed at `<C-r>=`                                                                                     |
 | `version`                   |        5 |     2 | `:version` after tampering with `jit`/`_VERSION`                                                                                                              |
-| `api`                       |      130 |     2 | `ModeChanged` closing `nvim_set_current_win`'s target (fixed); `nvim__panic` (deliberate)                                                                     |
+| `api`                       |      130 |     2 | `ModeChanged` closing `nvim_set_current_win`'s target; `nvim__panic` (deliberate)                                                                             |
 | `spellfile`, `spellsuggest` |       25 |     2 | a spell file with more than 32,767 `REP` items                                                                                                                |
 | `terminal`                  |       22 |     1 | a deferred `TermRequest` reported against a new terminal on the same buffer                                                                                   |
-| `help`, `highlight`         |        9 |     2 | an overridden help helper; a negative cterm colour under 'winblend' (unverified)                                                                              |
+| `help`, `highlight`         |        9 |     2 | an overridden help helper; a negative cterm colour under 'winblend'                                                                                           |
 
-Converted since the census (each with a regression test): the two
-`:terminal` resize panics (the resize clamps the saved cursor and drops a
-margin left past the edge), the API dict key with a NUL (cut there, as
-C's `strlen`), the out-of-range RPC handle (echoed as its 32 bits, as C
-release), `nvim_set_client_info` on a channel the same request closed
-(dropped), the overridden `vim._core` serverlist and help helpers (logged;
-refused like a Lua error), `:version` after tampering with `jit`/`_VERSION`
-(line left out), an `envp` entry with no `=` (skipped), a `TermRequest`
-reported against a reopened terminal (no shift), and `syn match … lc=-1`
-(no match past the line). Then the parser and walk family: an unmatched
-`]`/`}` after an operand (`1 2]3`, `a is]!=b`) and its lambda-argument
-siblings (`{a,{,1`, `{a,]->`) are parse errors; a `filter()`/`map()`/
-`foreach()` callback that `:unlockvar`s and edits its container, and the
-same edit from `indexof()`, `uniq()` and `matchfuzzy()` callbacks, are
-walked through rather than read past; and a userdatum whose `__gc` plain
-Lua called by hand (`vim.mpack` objects, `vim.regex`, every tree-sitter
-object, and the nodes, cursors and matches that point into one) raises
-"… has been collected" instead of panicking or using freed memory.
-Then corrupt files: an undo file is refused (E825) when an entry's line
-numbers fit no buffer, a sequence or save number could not be stepped, or
-the header links do not make a tree (a cycle hung `:undo 0`); a spell
-tree whose shared sub-tree index is not a node start, a cycle, or too deep
-is E759; a `REP` list may hold its full 65,535 items; and a swap file's
-page size above the maximum is refused like one below the minimum. A
-length or count a file or peer claims no longer sizes an allocation before
-the bytes are there (undo lines, ShaDa entries, spell strings and trees,
-msgpack strings over RPC and in `vim.mpack`): the rule and its helpers are
-`memory/claimed.rs`, and `test/functional/core/corrupt_files_spec.lua`
-reads each such file in a child capped at 1 GiB.
+### What was converted
 
-What could not be classed: `viml/parser/expressions/ast.rs:182` (may fire
-in release after the `1 2]3` family mis-wires a node; that family no
-longer does, and the bounded enumeration that checked it never reached
-the assert), and two low-
-confidence underflows (`register/yank.rs:194`, `indent/mod.rs:430`). The
-`debugger` `>frame +N` overflow could not be driven headless.
+Each family below became an error, a clamp or a refusal with a
+regression test; the commits carry the detail.
 
-The pattern is clear. Explicit panics are almost all honest invariants:
-1,500 of 1,544, with messages that name the invariant in all but about 150.
-What input reaches is concentrated in a few families: values a user callback
-or Lua override hands back unchecked, readers that size or index from a
-file's own fields, and user numbers at the `int` extremes. The work list
-for the conversion slices is kept outside the tree, with each site's
-reproducer.
+| family                          | shape now                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:terminal` resize              | the saved cursor is clamped and a margin left past the edge is dropped                                                                                                                                                                                                                                                                          |
+| values Lua or a peer hands back | a dict key with a NUL is cut there; an RPC handle is echoed as its 32 bits; client info for a closed channel is dropped; an overridden `vim._core` helper is refused like a Lua error; `:version` leaves out a tampered line                                                                                                                    |
+| parser and walks                | an unmatched `]`/`}` after an operand is a parse error; a `filter()`/`map()`/`foreach()`/`indexof()`/`uniq()`/`matchfuzzy()` callback that edits its container is walked through; a userdatum whose `__gc` plain Lua called raises "… has been collected"                                                                                       |
+| corrupt files                   | undo files with impossible line numbers, counters or links are E825; spell trees with a bad shared index are E759; a swap page size above the maximum is refused; a claimed length never sizes an allocation before the bytes are there (`memory/claimed.rs`)                                                                                   |
+| numbers at the `int` extremes   | the number is clamped where it enters (a builtin's argument, a count, an option value, a fold level, a 'diffexpr' hunk), or the sum is taken wide (`strpart()`, undo time steps), so the arithmetic downstream stays in range; wrapping is kept only where the value is modular anyway (a cterm colour read back as 16 bits, a ±1 storage bias) |
+| input-reached `debug_assert!`s  | each was either an input check in the wrong place (`nvim_del_augroup_by_id(2^32)`, a CSI parameter holding a skipped byte, a 'colorcolumn' past `int`) or was wrong (`$NVIM_APPNAME`'s length guarded a buffer the port does not have; a non-positive decoration-provider namespace is accepted by upstream's release build) and went           |
+
+`test/functional/core/number_extremes_spec.lua` holds the `int`-extreme
+reproducers and `test/functional/core/corrupt_files_spec.lua` the
+claimed-length ones.
+
+### Accepted, and why
+
+- **≥ 2 GiB of data** (`memline` line lengths, `Blob::len_int`, the RPC
+  packer's 4 GiB string/container headers): the `expect` names the limit
+  ("a line shorter than INT_MAX", "a blob shorter than 2 GiB", "string
+  too long for msgpack"). Reaching one takes a 2 GiB line or blob in
+  memory; upstream's `int` lengths are undefined there too. Converting
+  them means a `Result` through every memline and blob writer.
+- **Allocation failure in Rust code** is std's abort ("memory allocation
+  of N bytes failed"), not `preserve_exit(E41)`: no swap files are
+  written. `repeat([1, 2], v:numbermax)` reaches it (upstream exits with
+  E41 there). Fixing it is a global allocator concern, not a site.
+- **Hangs that are not panics**, upstream-shaped: 'shiftwidth' or
+  'softtabstop' at `INT_MAX` builds an indent of hundreds of megabytes,
+  as do `:left`/`:right` with a huge width and `a\{2147483647}`.
+- **Off the main thread**, see [the known gaps](#known-gaps).
+- **`debug` and `ffi` Lua** are out of the threat model: with them a
+  script can break any invariant, in upstream as here.
+- Reclassified: the yank's `line.len() - textcol` is an invariant
+  (`charwise_block_def` clamps the start onto the line); the expression
+  parser's `check_children` assert is an invariant once the `1 2]3`
+  family stopped mis-wiring nodes; `get_indent`'s column count overflows
+  only past a 2 GiB indent (the hang above).
+
+### Using the dimensions
+
+- `panic_sites` is a listing, not a ratchet: a new invariant gets a new
+  `expect`, and that is fine. Read it when a module changes hands, or to
+  find where external bytes meet explicit panics.
+- `bare_panics` is ratcheted at 0. A panic must say what broke: write the
+  invariant (`expect("a row or column has a child")`), not the call
+  ("checked", "fits", a pasted C condition).
+- An input-reachable site is a bug whatever the dimension says. Find
+  them the way the census did: probe the extremes, mutate the files,
+  replay the reproducer on a debug and a release build.
