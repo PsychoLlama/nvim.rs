@@ -111,20 +111,11 @@ impl Closest {
 }
 
 /// Whether `val` is at least as near `target` as `closest` is —
-/// `|val - target| <= |closest - target|`, spelled in differences that are
-/// known non-negative rather than through `abs`, as the C spells it.
+/// `|val - target| <= |closest - target|`. The distances are unsigned: an
+/// undo file's header times are whatever its bytes say, `i64::MIN`
+/// included, and a signed difference of those overflows.
 fn approaches(val: time_t, target: time_t, closest: time_t) -> bool {
-    let from_val = if val > target {
-        val - target
-    } else {
-        target - val
-    };
-    let from_closest = if closest > target {
-        closest - target
-    } else {
-        target - closest
-    };
-    from_val <= from_closest
+    val.abs_diff(target) <= closest.abs_diff(target)
 }
 
 /// The buffer counters a move through the tree navigates by.
@@ -246,32 +237,29 @@ fn aim_for(
     } else if file && step < 0 {
         // Back to a previous write. Changes made since the last one count as
         // a file write of their own, so that ":earlier 1f" undoes them.
-        let target = counters
-            .save_nr_cur
-            .wrapping_add(step)
-            .wrapping_add(c_int::from(!saved_above));
+        let target =
+            time_t::from(counters.save_nr_cur) + time_t::from(step) + time_t::from(!saved_above);
         if target <= 0 {
             // Before the first write is before the oldest change, and only a
             // sequence number can name that.
             aim.file = false;
         }
-        time_t::from(target)
+        target
     } else if file {
         // Forward to a newer write.
-        let target = counters.save_nr_cur.wrapping_add(step);
-        if target > counters.save_nr_last {
+        let target = time_t::from(counters.save_nr_cur) + time_t::from(step);
+        if target > time_t::from(counters.save_nr_last) {
             // After the last write is after the newest change; likewise.
             aim.file = false;
-            time_t::from(counters.seq_last + 1)
+            time_t::from(counters.seq_last) + 1
         } else {
-            time_t::from(target)
+            target
         }
     } else {
-        // `step` is a user count, so this is `int` arithmetic that wraps, as
-        // it does in the C. `:later 2147483647` runs past `INT_MAX` and
-        // lands below zero, where the clamp below has nothing to say; what
-        // catches it is the search's own fallback to the nearest header.
-        time_t::from(counters.seq_cur.wrapping_add(step))
+        // `step` is a user count: the sum is taken wide, so `:later
+        // 2147483647` aims past the newest change and the clamp below
+        // brings it back (upstream's `int` sum is undefined there).
+        time_t::from(counters.seq_cur) + time_t::from(step)
     };
     if step < 0 {
         aim.target = aim.target.max(0);
@@ -282,9 +270,9 @@ fn aim_for(
     let closest = if aim.sec {
         os_time_raw().saturating_add(1)
     } else if aim.file {
-        time_t::from(counters.save_nr_last + 2)
+        time_t::from(counters.save_nr_last) + 2
     } else {
-        time_t::from(counters.seq_last + 2)
+        time_t::from(counters.seq_last) + 2
     };
     aim.target = aim.target.min(closest - 1);
     (aim, closest)
@@ -590,17 +578,25 @@ mod tests {
     }
 
     #[test]
-    fn a_forward_step_past_int_max_wraps_and_is_not_clamped() {
-        // The C's `int` arithmetic, kept: the sum runs past `INT_MAX` and
-        // lands below zero, where the clamp has nothing to say. Nothing in
-        // the tree carries that number, so the search's second round falls
-        // back to the header nearest it, which is the newest one.
-        let (aim, _) = aim_for(counters(), c_int::MAX, false, false, false, false);
-        assert_eq!(
-            aim.target,
-            time_t::from(counters().seq_cur.wrapping_add(c_int::MAX))
-        );
-        assert!(aim.target < 0);
+    fn a_forward_step_past_int_max_is_clamped_like_any_other() {
+        // The sum is taken wide, so it does not wrap below zero.
+        let (aim, closest) = aim_for(counters(), c_int::MAX, false, false, false, false);
+        assert_eq!(aim.target, closest - 1);
+        // Nor does a write count, or a buffer at the top of its counters.
+        let (aim, _) = aim_for(counters(), c_int::MAX, false, true, false, false);
+        assert_eq!(aim.target, 9);
+        let top = UndoCounters {
+            seq_cur: c_int::MAX - 1,
+            seq_last: c_int::MAX - 1,
+            save_nr_cur: c_int::MAX - 1,
+            save_nr_last: c_int::MAX - 1,
+            ..counters()
+        };
+        let (aim, closest) = aim_for(top, c_int::MAX, false, false, false, false);
+        assert_eq!(closest, time_t::from(c_int::MAX) + 1);
+        assert_eq!(aim.target, time_t::from(c_int::MAX));
+        let (aim, _) = aim_for(top, c_int::MIN, false, true, false, false);
+        assert_eq!(aim.target, 0);
     }
 
     #[test]
@@ -661,6 +657,9 @@ mod tests {
         // Further away on either side does not.
         assert!(!approaches(13, 10, 12));
         assert!(!approaches(7, 10, 12));
+        // Header times at the extremes of `time_t` are measured too.
+        assert!(approaches(time_t::MAX, 0, time_t::MIN));
+        assert!(!approaches(time_t::MIN, 1, time_t::MAX));
     }
 
     #[test]

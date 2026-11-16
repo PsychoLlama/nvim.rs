@@ -215,6 +215,41 @@ describe('the undo file format', function()
     end
   end)
 
+  -- A time step measures each header's distance from the time it aims at,
+  -- and a header's time is whatever the file says.
+  it('steps by time past headers from the ends of time', function()
+    local target = tmpdir .. '/Xundo_time'
+    write_file(target, 'alpha\nbeta\ngamma\ndelta\n')
+    command('edit ' .. fn.fnameescape(target))
+    command('normal! jdd')
+    command('normal! dd')
+    command('write')
+    command('set noundofile')
+    local undofile = fn.undofile(target)
+    local raw = t.read_file(undofile)
+    local time = first_header(raw) + 20 + 12 + 4 + 2 + 26 * 12 + 32
+    for _, stamp in ipairs({
+      '\128\000\000\000\000\000\000\000',
+      '\127\255\255\255\255\255\255\255',
+    }) do
+      write_file(undofile, raw:sub(1, time - 1) .. stamp .. raw:sub(time + #stamp), true)
+      command('bwipe!')
+      command('edit ' .. fn.fnameescape(target))
+      command('rundo ' .. fn.fnameescape(undofile))
+      eq({ 'alpha', 'delta' }, fn.getline(1, '$'))
+      command('earlier 10s')
+      command('earlier 2147483647s')
+      eq({ 'alpha', 'beta', 'gamma', 'delta' }, fn.getline(1, '$'))
+      -- Which state is "latest" by time depends on the stamp; that the
+      -- step lands on one is the point.
+      command('later 2147483647s')
+      -- And a count past the newest change goes to the newest change.
+      command('undo 0')
+      command('later 2147483647')
+      eq({ 'alpha', 'delta' }, fn.getline(1, '$'))
+    end
+  end)
+
   -- Each link resolves on its own, so a file whose two headers name each
   -- other as both older and newer used to load, and `:undo 0` followed the
   -- cycle for ever.
