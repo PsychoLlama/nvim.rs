@@ -210,6 +210,42 @@ describe('spellfile', function()
     end)
   end)
 
+  -- `REP`'s two-byte count goes up to 65535, and so may an item's index
+  -- into the list: `:mkspell` writes such lists itself. The per-byte start
+  -- index and the suggestion walk's cursor were 16-bit, so the load
+  -- refused to believe it (a panic) and upstream's walk wraps negative.
+  it('reads and suggests from a REP list of more than 32767 items', function()
+    local count = 33000
+    local items = {}
+    for i = 1, count do
+      items[i] = '\006' .. ('a%05d'):format(i) .. '\001z'
+    end
+    -- The one item for 'x', past index 32767: "xq" is "ab", the only word.
+    items[#items + 1] = '\002xq\002ab'
+    local rep = string.char(math.floor((count + 1) / 256), (count + 1) % 256) .. table.concat(items)
+    local function be4(v)
+      return string.char(0, math.floor(v / 65536) % 256, math.floor(v / 256) % 256, v % 256)
+    end
+    write_file(
+      testdir .. '/spell/en.utf-8.spl',
+      spellheader
+        .. '\004\000'
+        .. be4(#rep)
+        .. rep
+        .. '\255'
+        .. be4(6)
+        .. '\001a\001b\001\000'
+        .. be4(0)
+        .. be4(0),
+      true
+    )
+    api.nvim_set_option_value('runtimepath', testdir, {})
+    api.nvim_set_option_value('spelllang', 'en', {})
+    n.command('set spell')
+    eq({ '', '' }, fn.spellbadword('ab'))
+    eq('ab', fn.spellsuggest('xq', 5)[1])
+  end)
+
   it('can be set to an absolute path', function()
     local fname = fn.fnamemodify(testdir .. '/spell/spell.add', ':p')
     api.nvim_set_option_value('spellfile', fname, {})

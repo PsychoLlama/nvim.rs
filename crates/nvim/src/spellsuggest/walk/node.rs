@@ -84,7 +84,7 @@ impl Walk<'_> {
         // The tree index is this level's node plus a child number the
         // node's own length byte bounds.
         let node_len = c_int::from(self.byte_at(node)); // bytes in this node
-        let at = node + SpellIdx::from(self.stack[level].child); // the current byte
+        let at = node + self.stack[level].child; // the current byte
 
         if self.stack[level].prefix_depth == PFD_PREFIXTREE {
             self.prefix_tree_node(entry_state, node_len, at);
@@ -93,7 +93,7 @@ impl Walk<'_> {
 
         // The `||` short circuit is what keeps the read from happening once
         // the child number has run past the node's own length byte.
-        if c_int::from(self.stack[level].child) > node_len || self.byte_at(at) != 0 {
+        if self.stack[level].child > node_len || self.byte_at(at) != 0 {
             // Past the bytes in the node and/or past its NUL bytes.
             self.stack[level].state = State::EndNul;
             self.stack[level].saved_badflags = saved_flags(self.su.su_badflags);
@@ -119,7 +119,7 @@ impl Walk<'_> {
         while nul_count < node_len && self.byte_at(at + nul_count) == 0 {
             nul_count += 1;
         }
-        self.stack[level].child += i16::try_from(nul_count).expect("a node has at most 255 bytes");
+        self.stack[level].child += nul_count;
 
         // Always past the NUL bytes now.
         self.stack[level].state = State::EndNul;

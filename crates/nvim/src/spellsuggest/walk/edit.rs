@@ -37,7 +37,7 @@
 use crate::getchar::state::GOT_INT;
 use crate::mbyte::{c_cluster_len, char_at, utf_iscomposing_legacy, utf8len_tab};
 use crate::narrow::as_index;
-use crate::spell::{SpellIdx, WordFlags};
+use crate::spell::WordFlags;
 use crate::spellsuggest::score::{SOUND_VOWEL, similar_chars};
 use crate::spellsuggest::walk::{
     DIFF_INSERT, DIFF_NONE, DIFF_YES, FLAG_DID_DEL, State, Walk, char_back, frame_pos,
@@ -91,7 +91,7 @@ impl Walk<'_> {
         let node = self.stack[level].node;
 
         // A node's first byte is the count of children that follow it.
-        if c_int::from(self.stack[level].child) > c_int::from(self.byte_at(node)) {
+        if self.stack[level].child > c_int::from(self.byte_at(node)) {
             // Every byte of this node has been taken. Where the bad
             // word has already been changed, skip the other tricks.
             self.stack[level].state = if self.stack[level].bad_idx >= self.stack[level].change_from
@@ -103,7 +103,7 @@ impl Walk<'_> {
             return;
         }
 
-        let at = node + SpellIdx::from(self.stack[level].child);
+        let at = node + self.stack[level].child;
         self.stack[level].child += 1;
         let byte = self.byte_at(at);
 
@@ -303,12 +303,12 @@ impl Walk<'_> {
         // Skip over the NUL bytes.
         let node = self.stack[level].node;
         loop {
-            if c_int::from(self.stack[level].child) > c_int::from(self.byte_at(node)) {
+            if self.stack[level].child > c_int::from(self.byte_at(node)) {
                 // Only NUL bytes at this node.
                 self.stack[level].state = State::Swap;
                 return;
             }
-            if self.byte_at(node + SpellIdx::from(self.stack[level].child)) != 0 {
+            if self.byte_at(node + self.stack[level].child) != 0 {
                 // Found a byte to insert.
                 self.stack[level].state = State::Ins;
                 return;
@@ -328,13 +328,13 @@ impl Walk<'_> {
 
         // `node` is a node the walk arrived at, and a node's first
         // byte is the count of children that follow it.
-        if c_int::from(self.stack[level].child) > c_int::from(self.byte_at(node)) {
+        if self.stack[level].child > c_int::from(self.byte_at(node)) {
             // Every byte of this node has been tried.
             self.stack[level].state = State::Swap;
             return;
         }
 
-        let at = node + SpellIdx::from(self.stack[level].child);
+        let at = node + self.stack[level].child;
         self.stack[level].child += 1;
 
         // A bounds check the tree itself should have made unnecessary;

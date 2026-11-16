@@ -44,7 +44,6 @@ use std::collections::hash_map::Entry;
 use crate::mbyte::{c_cluster_len, char_at, char_len, encode_char, utf_char2len};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
-use crate::os::libc::int16_t;
 use crate::spell::{RepItem, SalFirst, SalItem, SpellLang};
 use crate::spell::{ascii_spell_chartab, count_common_word};
 
@@ -126,7 +125,7 @@ pub(super) fn read_prefcond_section(spl: &mut Spl, slang: &mut SpellLang) -> Spl
 pub(super) fn read_rep_section(
     spl: &mut Spl,
     out: &mut Vec<RepItem>,
-    first: &mut [int16_t; 256],
+    first: &mut [c_int; 256],
 ) -> SplResult<()> {
     let cnt = spl.get2c()?;
 
@@ -154,7 +153,7 @@ pub(super) fn read_rep_section(
     for (i, item) in items.iter().enumerate() {
         let lead = usize::from(item.from.first().copied().unwrap_or(0));
         if first[lead] == -1 {
-            first[lead] = int16_t::try_from(i).expect("fewer items than a short holds");
+            first[lead] = c_int::try_from(i).expect("a two-byte count fits an int");
         }
     }
     *out = items;

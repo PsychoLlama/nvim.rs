@@ -202,8 +202,9 @@ pub(crate) struct Frame {
     pub node: SpellIdx,
     /// Which child of the node is being tried, counted from the node's
     /// length byte. `REP` reuses it as an index into the `REP` list, which
-    /// is why it is wider than a byte.
-    pub child: i16,
+    /// is why it is wider than a byte: a `REP` list may hold up to 65535
+    /// items, the most its two-byte count can say.
+    pub child: c_int,
     /// How far into `fword`, the case-folded bad word, this level is.
     pub bad_idx: u8,
     /// The `bad_idx` from which bytes may still be changed. Everything

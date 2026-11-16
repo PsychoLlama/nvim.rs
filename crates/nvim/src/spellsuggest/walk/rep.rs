@@ -30,6 +30,7 @@ use crate::narrow::len_as_int;
 use crate::spell::RepItem;
 use crate::spellsuggest::SCORE_REP;
 use crate::spellsuggest::walk::{State, Walk, frame_pos};
+use core::ffi::c_int;
 
 impl<'a> Walk<'a> {
     /// Decide whether trying `REP` items here is worth it at all, and if
@@ -80,14 +81,16 @@ impl<'a> Walk<'a> {
         let bad_idx = self.stack[level].bad_idx as usize;
         let items = self.rep_items();
 
-        while (usize::from(self.stack[level].child.cast_unsigned())) < items.len() {
-            let item = &items[usize::from(self.stack[level].child.cast_unsigned())];
+        while let Some(item) = usize::try_from(self.stack[level].child)
+            .ok()
+            .and_then(|at| items.get(at))
+        {
             self.stack[level].child += 1;
 
             if item.from[0] != self.fword[bad_idx] {
                 // Past every item that could match.
                 self.stack[level].child =
-                    i16::try_from(items.len()).expect("a REP list is shorter than 32768 items");
+                    c_int::try_from(items.len()).expect("a REP list holds at most 65535 items");
                 break;
             }
             if !self.fword[bad_idx..].starts_with(&item.from) || !self.try_deeper(SCORE_REP) {
@@ -116,7 +119,7 @@ impl<'a> Walk<'a> {
 
         // The state test tells "the list ran out" apart from "an item
         // matched and pushed a level", which left it at `RepUndo`.
-        if usize::from(self.stack[level].child.cast_unsigned()) >= items.len()
+        if usize::try_from(self.stack[level].child).is_ok_and(|at| at >= items.len())
             && self.stack[level].state == State::Rep
         {
             self.stack[level].state = State::Final;
@@ -129,7 +132,9 @@ impl<'a> Walk<'a> {
         let level = self.depth;
         let bad_idx = self.stack[level].bad_idx as usize;
         // `child` still points just past the item that was applied.
-        let item = &self.rep_items()[usize::from(self.stack[level].child.cast_unsigned()) - 1];
+        let applied = usize::try_from(self.stack[level].child - 1)
+            .expect("a REP item was applied at this level, so `child` is past it");
+        let item = &self.rep_items()[applied];
         let (from_len, to_len) = (item.from.len(), item.to.len());
 
         if from_len != to_len {

@@ -42,7 +42,7 @@ use crate::memline::{Lines, ml_replace_owned};
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::narrow::{const_len_as_int, len_as_int};
-use crate::os::libc::{int16_t, time_t, uint8_t};
+use crate::os::libc::{time_t, uint8_t};
 use crate::semsg;
 use crate::winlayer::Win;
 use core::ffi::CStr;
@@ -547,7 +547,7 @@ pub struct SpellLang {
     /// the reason [`SpellLang::sl_compprog`] is one.
     pub sl_prefprog: Vec<core::cell::RefCell<Option<crate::regexp::OwnedProg>>>,
     pub sl_rep: Vec<RepItem>,
-    pub sl_rep_first: [int16_t; 256],
+    pub sl_rep_first: [::core::ffi::c_int; 256],
     /// The `SAL` rules, grouped by the low byte of their first character.
     pub sl_sal: Vec<SalItem>,
     /// `SOFOFROM`/`SOFOTO`'s table for characters at or above 256: one
@@ -562,7 +562,7 @@ pub struct SpellLang {
     pub sl_rem_accents: bool,
     pub sl_sofo: bool,
     pub sl_repsal: Vec<RepItem>,
-    pub sl_repsal_first: [int16_t; 256],
+    pub sl_repsal_first: [::core::ffi::c_int; 256],
     pub sl_nosplitsugs: bool,
     pub sl_nocompoundsugs: bool,
     pub sl_sugtime: time_t,
