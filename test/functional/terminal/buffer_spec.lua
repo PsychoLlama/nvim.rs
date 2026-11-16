@@ -707,6 +707,32 @@ describe(':terminal buffer', function()
       eq(expected, eval('v:termrequest'))
     end)
 
+    it('queued by a terminal closed and reopened on the same buffer', function()
+      -- The request counts the first terminal's evicted scrollback rows; the
+      -- second terminal on the buffer has evicted none.
+      local cursor = exec_lua(function()
+        vim.api.nvim_create_autocmd('TermRequest', {
+          callback = function(ev)
+            _G.cursor = ev.data.cursor
+          end,
+        })
+        local buf = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_set_current_buf(buf)
+        vim.bo[buf].scrollback = 1
+        local chan = vim.api.nvim_open_term(buf, {})
+        vim.bo[buf].scrollback = 1
+        vim.api.nvim_chan_send(chan, string.rep('x\r\n', 300) .. '\027]7;foo\027\\')
+        vim.fn.chanclose(chan)
+        vim.api.nvim_open_term(buf, {})
+        vim.wait(1000, function()
+          return _G.cursor ~= nil
+        end)
+        return _G.cursor
+      end)
+      eq('table', type(cursor))
+      assert_alive()
+    end)
+
     it('synchronization #27572', function()
       command('autocmd! nvim.terminal TermRequest')
       local term = exec_lua([[

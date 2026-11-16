@@ -127,9 +127,12 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
     set_vim_var_string(Vv::Termrequest, Some(sequence.as_bytes()));
 
     // Rows evicted since the sequence arrived have shifted every buffer
-    // line up by one.
-    let scrolled = i64::try_from(term.sb.deleted() - request.sb_deleted)
-        .expect("a scrollback row count fits an i64");
+    // line up by one. A count below the request's means the sequence came
+    // from an earlier terminal on this buffer (closed and reopened while it
+    // was queued): none of the rows it counted are here to have moved.
+    // (Upstream's `size_t` subtraction wraps there.)
+    let scrolled = term.sb.deleted().saturating_sub(request.sb_deleted);
+    let scrolled = i64::try_from(scrolled).expect("a scrollback row count fits an i64");
     let mut cursor = ArrayBuf::<2>::new();
     cursor.push(Object::integer(i64::from(request.line) - scrolled));
     cursor.push(Object::integer(i64::from(request.col)));
