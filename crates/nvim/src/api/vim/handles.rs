@@ -87,7 +87,11 @@ pub fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
         if !w.w_buffer.is_current() {
             reset_visual_and_resel();
         }
-        let tab = win_find_tabpage(w.id()).expect("a live window is on a tab page");
+        // Ending Visual mode fires `ModeChanged`, whose autocommand may
+        // have closed `w`: then there is nothing left to enter.
+        let Some(tab) = win_find_tabpage(w.id()) else {
+            return;
+        };
         goto_tabpage_win(tab, w);
     })?;
     Ok(())

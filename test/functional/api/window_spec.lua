@@ -28,6 +28,22 @@ local assert_alive = n.assert_alive
 describe('API/win', function()
   before_each(clear)
 
+  it('nvim_set_current_win() when ending Visual mode closes the target', function()
+    -- Leaving Visual mode for another buffer fires ModeChanged, and its
+    -- autocommand closing the target used to panic.
+    exec([[
+      call setline(1, ['aaa', 'bbb'])
+      vsplit | enew | let g:W = win_getid() | wincmd p
+      autocmd ModeChanged *:n ++once call win_execute(g:W, 'close')
+      vnoremap x <Cmd>call nvim_set_current_win(g:W)<CR>
+    ]])
+    local before = api.nvim_get_current_win()
+    feed('vx')
+    assert_alive()
+    eq(before, api.nvim_get_current_win())
+    eq(false, api.nvim_win_is_valid(api.nvim_get_var('W')))
+  end)
+
   describe('get_buf', function()
     it('works', function()
       eq(curbuf(), api.nvim_win_get_buf(api.nvim_list_wins()[1]))
