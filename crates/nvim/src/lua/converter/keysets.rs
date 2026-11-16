@@ -22,6 +22,7 @@ use super::{
     pop_object, pop_string, push_array, push_dict, push_object, push_string, push_type_index,
     push_value_index,
 };
+use crate::api::private::helpers::object_to_hl_id;
 use crate::api::private::keyset::{FieldKind, KeySet, Slot};
 use crate::api_error;
 use crate::highlight_group::syn_check_group;
@@ -30,6 +31,7 @@ use crate::lua::stack::{At, Kind, Stack};
 use crate::message_fmt::msg_bytes;
 use crate::types::{
     ERROR_TYPE_VALIDATION, Error, Integer, OBJECT_TYPE_ARRAY, OBJECT_TYPE_DICT, OBJECT_TYPE_FLOAT,
+    Object,
 };
 
 /// The three api types that need a name of their own on the Lua side, both
@@ -116,6 +118,14 @@ pub(crate) fn pop_keydict(
                     };
                     stack.pop(1);
                     *slot = Some(id);
+                }
+                // An id is kept only if it names a group, as msgpack-RPC's
+                // `object_to_hl_id` keeps it; anything else is no group.
+                // Upstream stored any number here, and a `link` to a group
+                // past the table was later read past `hl_table`.
+                Slot::Integer(slot) if field.kind == FieldKind::HlGroup => {
+                    let id = object_to_hl_id(&Object::integer(pop_integer(stack)?), field.name)?;
+                    *slot = Some(Integer::from(id));
                 }
                 Slot::Integer(slot) => *slot = Some(pop_integer(stack)?),
                 Slot::Boolean(slot) => *slot = Some(pop_boolean_strict(stack)?),

@@ -626,6 +626,25 @@ describe('API: get highlight', function()
     eq({ link = 'GlTarget' }, api.nvim_get_hl(ns, { name = 'GlSource' }))
   end)
 
+  it('takes a link to a group id that does not exist as no link', function()
+    -- Through msgpack-RPC and through Lua alike: an id past the table names
+    -- no group. A Lua number used to be stored as it was, and the dangling
+    -- link was then followed past the table.
+    api.nvim_set_hl(0, 'Foo', { link = 100000 })
+    eq({}, api.nvim_get_hl(0, { name = 'Foo' }))
+    n.exec_lua(function()
+      vim.api.nvim_set_hl(0, 'Foo', { link = 100000 })
+      vim.api.nvim_set_hl(0, 'Foo', { link_global = 100001 })
+    end)
+    eq({}, api.nvim_get_hl(0, { name = 'Foo' }))
+    command('hi Foo')
+    n.exec_lua(function()
+      vim.api.nvim_set_hl(0, 'Foo', { update = true, fg = '#ff0000' })
+    end)
+    eq({ fg = tonumber('ff0000', 16) }, api.nvim_get_hl(0, { name = 'Foo' }))
+    assert_alive()
+  end)
+
   it("doesn't contain unset groups", function()
     local id = api.nvim_get_hl_id_by_name '@foobar.hubbabubba'
     ok(id > 0)
