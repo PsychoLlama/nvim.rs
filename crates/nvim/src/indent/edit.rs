@@ -330,7 +330,8 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     // No character starts at that column, so make one: insert the spaces
     // the cursor needs to sit where it was asked to.
     win.w_cursor.col = ColNr::new(new_cursor_col);
-    let ptrlen = usize::try_from(win.w_virtcol.get() - vcol).expect("non-negative");
+    let ptrlen = usize::try_from(win.w_virtcol.get() - vcol)
+        .expect("the cursor's virtual column is past the last character start");
     ins_str(&vec![b' '; ptrlen]);
     new_cursor_col + len_as_int(ptrlen)
 }

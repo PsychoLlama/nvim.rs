@@ -184,10 +184,11 @@ fn put_edit(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Result<boo
 /// even when "options" is not in 'sessionoptions'.
 fn put_help_edit(out: &mut SessionFile, window: Win) -> Written {
     let curtag = if 0 < window.w_tagstackidx && window.w_tagstackidx <= window.w_tagstacklen {
-        window.w_tagstack[usize::try_from(window.w_tagstackidx - 1).expect("checked above")]
-            .tagname
-            .as_ref()
-            .map_or(&b""[..], |tagname| tagname.as_bytes())
+        window.w_tagstack[usize::try_from(window.w_tagstackidx - 1)
+            .expect("the tag stack index is in 1..=len, tested above")]
+        .tagname
+        .as_ref()
+        .map_or(&b""[..], |tagname| tagname.as_bytes())
     } else {
         b""
     };

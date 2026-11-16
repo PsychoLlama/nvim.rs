@@ -266,7 +266,10 @@ pub(crate) fn eval_index_inner(
         VAR_DICT => {
             let key = match key {
                 Some(key) => key,
-                None => match numbuf2.string_chk(var1.expect("checked")).ok() {
+                None => match numbuf2
+                    .string_chk(var1.expect("a Dict index without a key name has a first index"))
+                    .ok()
+                {
                     Some(key) => key.to_bytes(),
                     None => return Err(Failed),
                 },

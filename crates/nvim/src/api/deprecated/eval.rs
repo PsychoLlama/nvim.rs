@@ -83,7 +83,9 @@ pub fn nvim_call_atomic(channel_id: uint64_t, calls: Array) -> Result<Array, Err
                 break;
             }
         };
-        let dispatch = handler.fn_0.expect("non-null function pointer");
+        let dispatch = handler
+            .fn_0
+            .expect("every API method row names its handler");
         let result = match dispatch(channel_id, args.clone()) {
             Ok(rv) => rv,
             Err(e) => {

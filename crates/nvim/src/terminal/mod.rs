@@ -333,7 +333,7 @@ pub(crate) fn terminal_close(mut term: Term, status: c_int) {
             // Read out before the call: the channel's close callback is free
             // to free the terminal.
             let (close_cb, owner) = (term.opts.close_cb, term.opts.owner);
-            close_cb.expect("non-null function pointer")(owner);
+            close_cb.expect("every terminal's channel sets a close callback")(owner);
         }
     } else if !only_destroy {
         // The status line says "running"; it no longer is.
@@ -502,7 +502,7 @@ fn terminal_send(term: Term, data: &[u8]) {
     }
     // Read out before the call: the channel's write callback may re-enter.
     let (write_cb, owner) = (term.opts.write_cb, term.opts.owner);
-    write_cb.expect("non-null function pointer")(data, owner);
+    write_cb.expect("every terminal's channel sets a write callback")(data, owner);
 }
 
 /// Redraw after the child closed a synchronized-output frame.

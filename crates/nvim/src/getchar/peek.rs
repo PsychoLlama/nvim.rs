@@ -108,7 +108,8 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
                     last_non_white_start(lines.line(lnum), cursor_col)
                 };
                 win.w_wcol = start.map_or(0, |start| {
-                    let len = ColNr::try_from(start).expect("a column");
+                    let len =
+                        ColNr::try_from(start).expect("a byte offset in a line fits a column");
                     win_line_prefix_cells(win, lnum, len).get()
                 });
 
@@ -130,7 +131,7 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
             // double-width character.
             let mut lines = Lines::current();
             let line = lines.line(lnum);
-            let at = usize::try_from(col).expect("a column");
+            let at = usize::try_from(col).expect("the cursor column is never negative");
             let start = at - head_off(line, at);
             if cells_at(line.get(start..).unwrap_or_default()) > 1 {
                 win.w_wcol -= 1;

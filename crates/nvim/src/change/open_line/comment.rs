@@ -163,7 +163,8 @@ fn plan_start_or_middle(
         END_COMMENT_PENDING.set(lead_end.last().copied().filter(|&b| b != 0));
     }
 
-    let lead_len = usize::try_from(plan.lead_len).expect("non-negative");
+    let lead_len =
+        usize::try_from(plan.lead_len).expect("a comment leader's length is never negative");
 
     // The comment already ends on this line, so it needs no leader.
     if dir == FORWARD {
@@ -476,7 +477,8 @@ pub(crate) fn build_leader(
     } = ctx;
     let repl = plan.repl.text();
     let repl_len = repl.map_or(0, <[u8]>::len);
-    let mut lead_len = usize::try_from(plan.lead_len).expect("non-negative");
+    let mut lead_len =
+        usize::try_from(plan.lead_len).expect("a comment leader's length is never negative");
     let mut extra_space = plan.extra_space;
 
     // Upstream's allocation: the leader, its replacement, the space, what

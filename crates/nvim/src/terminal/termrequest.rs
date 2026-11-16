@@ -181,7 +181,7 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
         // Read out before the call: the channel's close callback is free to
         // free the terminal.
         let (close_cb, owner) = (term.opts.close_cb, term.opts.owner);
-        close_cb.expect("non-null function pointer")(owner);
+        close_cb.expect("every terminal's channel sets a close callback")(owner);
     }
 }
 

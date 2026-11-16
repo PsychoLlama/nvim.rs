@@ -240,7 +240,10 @@ fn mark_adjust_term(buffer: Buf, line2: LineNr, amount: i32) {
 /// and more terminal output arriving in the middle would be appended at the
 /// wrong place.
 pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
-    let read_pause = term.opts.read_pause_cb.expect("non-null function pointer");
+    let read_pause = term
+        .opts
+        .read_pause_cb
+        .expect("every terminal's channel sets a read-pause callback");
     read_pause(true, term.opts.owner);
 
     // Rows evicted since the last refresh are gone from the buffer's top;

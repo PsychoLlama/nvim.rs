@@ -353,7 +353,12 @@ fn dbg_parsearg(arg: &[u8], list: BreakList) -> Result<Breakpoint, Failed> {
         // not carry it.
         XString::from_bytes(rest.strip_prefix(b"g:").unwrap_or(rest))
     } else if here {
-        XString::from_cstr(Buf::current().name.full().expect("checked above"))
+        XString::from_cstr(
+            Buf::current()
+                .name
+                .full()
+                .expect("`here` is refused above when the buffer has no name"),
+        )
     } else if kind == DBG_EXPR {
         // Its first value is the baseline the next check compares to.
         value = eval_expr_no_emsg(rest);

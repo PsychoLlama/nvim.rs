@@ -660,8 +660,14 @@ impl FindContext {
         path_end: &mut usize,
         file_path: &mut Candidate,
     ) -> Result<bool, TooLong> {
-        let start_dir = self.start_dir.as_mut().expect("checked by the caller");
-        let stopdirs = self.stopdirs.as_deref().expect("checked by the caller");
+        let start_dir = self
+            .start_dir
+            .as_mut()
+            .expect("step_up runs only on a search with a start directory");
+        let stopdirs = self
+            .stopdirs
+            .as_deref()
+            .expect("step_up runs only on a search with stop directories");
 
         // path_end sits on the terminator until the first step up, and
         // on the last character after that.

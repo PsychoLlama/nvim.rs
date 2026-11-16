@@ -764,7 +764,7 @@ fn event_wanted(event: AutoEvent) -> bool {
 
 /// `n` in decimal, for the one-number event names.
 fn number_name(n: c_int) -> CString {
-    CString::new(n.to_string()).expect("digits")
+    CString::new(n.to_string()).expect("a decimal number holds no NUL")
 }
 
 /// Exit the editor: every window is gone.

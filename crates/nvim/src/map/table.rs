@@ -247,7 +247,8 @@ mod tests {
             let idx = probe(&buckets, n_buckets - 1, key.map_hash(), true, |slot| {
                 keys[slot as usize] == key
             });
-            buckets[idx as usize] = u32::try_from(k).expect("fits") + 1;
+            buckets[idx as usize] =
+                u32::try_from(k).expect("a table holds fewer than u32::MAX keys") + 1;
         }
         buckets
     }

@@ -331,7 +331,7 @@ pub(crate) fn terminal_enter() -> bool {
         // Read out before the call: the channel's close callback is free to
         // free the terminal.
         let (close_cb, owner) = (s.term.opts.close_cb, s.term.opts.owner);
-        close_cb.expect("non-null function pointer")(owner);
+        close_cb.expect("every terminal's channel sets a close callback")(owner);
         if buf_handle != Handle::NONE {
             let _ = do_buffer(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle.get(), 1);
         }
@@ -399,7 +399,7 @@ fn terminal_check_focus(s: &mut TerminalState) -> bool {
             // Read out before the call: the channel's close callback is
             // free to free the terminal.
             let (close_cb, owner) = (s.term.opts.close_cb, s.term.opts.owner);
-            close_cb.expect("non-null function pointer")(owner);
+            close_cb.expect("every terminal's channel sets a close callback")(owner);
             s.close = false;
         }
         s.term = current_buf()
@@ -540,7 +540,7 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
         // Read out before the call: the channel's resume callback may
         // re-enter.
         let (resume_cb, owner) = (s.term.opts.resume_cb, s.term.opts.owner);
-        resume_cb.expect("non-null function pointer")(owner);
+        resume_cb.expect("every terminal's channel sets a resume callback")(owner);
         terminal_set_state(s.term, false);
     } else {
         if s.term.closed {

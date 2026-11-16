@@ -324,7 +324,10 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
     if need_hide && !buffer.is_some_and(buf_hide) && forceit == 0 {
         if (p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) && p_write() {
             let bufref = BufRef::of_opt(buffer);
-            dialog_changed(buffer.expect("checked above"), false);
+            dialog_changed(
+                buffer.expect("need_hide is only set for an existing buffer"),
+                false,
+            );
             // The dialog may have wiped the buffer, or written it.
             buffer = bufref.get();
             if buffer.is_some_and(buf_is_changed) {

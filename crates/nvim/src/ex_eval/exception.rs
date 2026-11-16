@@ -414,7 +414,10 @@ pub(super) fn throw_exception(thrown: Thrown, cmdname: Option<&CStr>) -> Result<
     let head = messages.entries.first_mut();
     let (throw_name, throw_lnum) = match head {
         Some(head) if head.sfile.is_some() => {
-            let name = head.sfile.take().expect("checked");
+            let name = head
+                .sfile
+                .take()
+                .expect("the match guard saw the source name set");
             (name, head.slnum)
         }
         _ => {

@@ -376,6 +376,8 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
 /// behalf of Vimscript, and convert its answer to a value.
 pub(crate) fn call_handler_for_vimscript(row: usize, args: Array) -> Result<TypVal, Error> {
     let handler = crate::api::private::dispatch::METHOD_HANDLERS[row];
-    let call = handler.fn_0.expect("non-null function pointer");
+    let call = handler
+        .fn_0
+        .expect("every API method row names its handler");
     call(crate::api::private::helpers::VIML_INTERNAL_CALL, args).map(TypVal::from)
 }

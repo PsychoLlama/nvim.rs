@@ -271,7 +271,12 @@ pub(crate) fn ui_client_run() -> ! {
     // Published before the loop turns: a callback that runs during
     // `tui_wait_ready` can reach `ui_client_stop`, which needs it.
     TUI.set(Some(Tui::start()));
-    let started = TUI.with(|started| started.as_ref().expect("just set").wait_ready());
+    let started = TUI.with(|started| {
+        started
+            .as_ref()
+            .expect("the TUI was published on the line above")
+            .wait_ready()
+    });
     let term = started.term.as_deref();
     ui_client_attach(started.width, started.height, term, started.rgb);
 

@@ -189,7 +189,7 @@ fn refresh_size(mut term: Term) -> bool {
     // Read out before the call: the channel is free to re-enter.
     let (resize_cb, owner) = (term.opts.resize_cb, term.opts.owner);
     let (width, height) = (number_as_u16(width.into()), number_as_u16(height.into()));
-    resize_cb.expect("non-null function pointer")(width, height, owner);
+    resize_cb.expect("every terminal's channel sets a resize callback")(width, height, owner);
     true
 }
 

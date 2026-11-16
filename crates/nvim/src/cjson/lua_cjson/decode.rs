@@ -853,7 +853,12 @@ mod tests {
             if matches!(token, Token::End) {
                 return None;
             }
-            Some(token.name().to_str().expect("ASCII"))
+            Some(
+                token
+                    .name()
+                    .to_str()
+                    .expect("token names are ASCII literals"),
+            )
         })
         .collect();
         assert_eq!(

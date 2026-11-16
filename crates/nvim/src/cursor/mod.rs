@@ -330,7 +330,8 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
                 // Past the end of the line: pad it out with spaces.
                 let correct = wcol - col;
                 let size = i64::from(idx) + i64::from(correct);
-                let size = usize::try_from(size).expect("STRICT_ADD overflow");
+                let size = usize::try_from(size)
+                    .expect("padding past the line end gives a non-negative size");
                 let spaces = usize::try_from(correct).expect("a column past the cursor");
                 let newline = padded(line, size, idx.as_usize(), spaces, 0, 0);
                 replace_padded(lnum, newline, idx.get(), 0, correct);
@@ -344,7 +345,8 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
                     return false;
                 }
                 let size = i64::from(linelen) - 1 + i64::from(csize);
-                let size = usize::try_from(size).expect("STRICT_ADD overflow");
+                let size = usize::try_from(size)
+                    .expect("a line with a character to split has a non-negative size");
                 let tail = usize::try_from(linelen - idx - 1).expect("STRICT_SUB overflow");
                 let spaces = usize::try_from(csize).expect("a character's width");
                 let newline = padded(line, size, idx.as_usize(), spaces, 1, tail);

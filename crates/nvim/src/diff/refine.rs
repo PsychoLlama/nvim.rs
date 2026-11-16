@@ -355,7 +355,9 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
             continue;
         }
         let start = new_diff.df_lnum[i].index();
-        let end = start + usize::try_from(new_diff.df_count[i]).expect("non-negative");
+        let end = start
+            + usize::try_from(new_diff.df_count[i])
+                .expect("a diff block's line count is never negative");
         match map.get(start) {
             Some(e) => {
                 change.dc_start[i] = e.byte_start;

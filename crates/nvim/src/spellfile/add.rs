@@ -95,7 +95,9 @@ pub fn spell_add_word(word: &[u8], what: SpellAddType, idx: c_int, undo: bool) {
             };
             INT_WORDLIST.set(Some(name));
         }
-        INT_WORDLIST.with(Clone::clone).expect("just set")
+        INT_WORDLIST
+            .with(Clone::clone)
+            .expect("the internal word list was named on the line above")
     } else {
         // Give 'spellfile' a sensible default if it has none.
         if Win::current().syn_block().b_p_spf.first_byte() == 0 {

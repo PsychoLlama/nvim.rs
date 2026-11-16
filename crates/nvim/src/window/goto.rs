@@ -245,7 +245,9 @@ fn neighbor(
                 }
             }
             if c_int::from(nfr.fr_layout) == axis.own() && backwards {
-                fr = frames(Some(fr)).last().expect("at least one");
+                fr = frames(Some(fr))
+                    .last()
+                    .expect("a frame's sibling list holds at least itself");
             }
             nfr = fr;
         }

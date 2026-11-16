@@ -360,7 +360,7 @@ pub fn unpack_into_registry(
 ) -> Result<bool, Raise> {
     let unpacker = stack
         .to_userdata::<Unpacker>(at)
-        .expect("checked by the caller");
+        .expect("the caller checked the argument is an Unpacker");
     if unpacker.unpacking {
         return Err(Raise::message(
             "Unpacker instance already working. Use another Unpacker or mpack.decode() if you \
@@ -538,7 +538,7 @@ fn packer_pack(stack: &mut Stack) -> Result<c_int, Raise> {
     let root = reference(stack, reg);
     let packer = stack
         .to_userdata::<Packer>(At::arg(1))
-        .expect("checked above");
+        .expect("the argument was checked to be a Packer above");
     if packer.packing {
         return Err(Raise::message(
             "Packer instance already working. Use another Packer or mpack.encode() if you need \

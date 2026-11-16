@@ -612,7 +612,12 @@ mod tests {
     /// Which option word a command-line tail names, and what kind it is.
     fn flag_of(rest: &str) -> Option<(&'static str, OptArg)> {
         let f = find_flag(rest.as_bytes(), false)?;
-        Some((f.name.to_str().expect("ASCII"), f.arg))
+        Some((
+            f.name
+                .to_str()
+                .expect("the :syntax option words are ASCII literals"),
+            f.arg,
+        ))
     }
 
     #[test]

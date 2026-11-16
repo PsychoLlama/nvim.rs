@@ -553,7 +553,9 @@ fn split_frame(
         let frp = if same_axis {
             let first = top.child().expect("a row or column has a child");
             if flags & WSP_BOT != 0 {
-                frames(Some(first)).last().expect("at least one")
+                frames(Some(first))
+                    .last()
+                    .expect("a frame's sibling list holds at least itself")
             } else {
                 first
             }

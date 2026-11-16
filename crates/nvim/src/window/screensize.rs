@@ -275,7 +275,7 @@ struct Subject {
 impl Subject {
     fn of(win: Win) -> Self {
         Subject {
-            winid: CString::new(win.handle.to_string()).expect("digits"),
+            winid: CString::new(win.handle.to_string()).expect("a decimal window id holds no NUL"),
             bufref: BufRef::of_opt(win.buffer_or_none()),
         }
     }

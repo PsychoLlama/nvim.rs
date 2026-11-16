@@ -92,7 +92,7 @@ fn char_cells(line: &[u8], at: usize, cur_char: int32_t) -> c_int {
     if cur_char < 0 {
         INVALID_BYTE_CELLS
     } else if (1..0x80).contains(&cur_char) {
-        byte2cells(u8::try_from(cur_char).expect("ASCII"))
+        byte2cells(u8::try_from(cur_char).expect("a code point in 1..0x80 is one byte"))
     } else {
         let byte = byte_at(line, at);
         if byte < 0x80 {

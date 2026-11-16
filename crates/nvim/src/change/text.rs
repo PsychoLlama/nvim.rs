@@ -100,7 +100,8 @@ fn vreplace_extent(new: &[u8], col: usize) -> (usize, usize) {
         oldlen += cluster_len(at);
         // Took off a bit too much: pad with spaces.
         if vcol > new_vcol {
-            newlen += usize::try_from(vcol - new_vcol).expect("non-negative");
+            newlen += usize::try_from(vcol - new_vcol)
+                .expect("the padding is taken only when vcol is past new_vcol");
         }
     }
 
@@ -290,7 +291,9 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
         let mut lines = Buf::current().lines();
         let line = lines.line(lnum);
         let at = col.as_usize();
-        if cluster_len(&line[at..]) >= usize::try_from(count).expect("non-negative") {
+        if cluster_len(&line[at..])
+            >= usize::try_from(count).expect("a character count to delete is never negative")
+        {
             let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
             if composes_with(line, at, at + char_len(&line[at..]), &mut state) {
                 // Walk to the last composing character; there can be several.
@@ -298,7 +301,8 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
                 loop {
                     col = ColNr::from_index(n);
                     count = len_as_int(char_len(&line[n..]));
-                    n += usize::try_from(count).expect("non-negative");
+                    n += usize::try_from(count)
+                        .expect("a character's byte length is never negative");
                     if !composes_with(line, col.as_usize(), n, &mut state) {
                         break;
                     }
@@ -344,8 +348,8 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
             .expect("an allocated line is owned");
         let (col, count, movelen) = (
             col.as_usize(),
-            usize::try_from(count).expect("non-negative"),
-            usize::try_from(movelen).expect("non-negative"),
+            usize::try_from(count).expect("a character count to delete is never negative"),
+            usize::try_from(movelen).expect("the bytes after the deletion are never negative"),
         );
         line.copy_within(col + count..col + count + movelen, col);
         buffer.b_ml.set_cached_len(newlen + 1);

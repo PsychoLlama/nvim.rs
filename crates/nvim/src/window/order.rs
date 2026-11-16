@@ -198,7 +198,9 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
             frp.unlink();
             debug_assert!(parent.child().is_some(), "frp->fr_parent->fr_child");
             // Find the last frame and append the removed window after it.
-            let last = frames(Some(frp)).last().expect("at least one");
+            let last = frames(Some(frp))
+                .last()
+                .expect("a frame's sibling list holds at least itself");
             win_append(last.win(), w1, None);
             last.append_sibling(w1.frame());
             wp1 = Some(w1);
@@ -207,7 +209,7 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
             // Last window becomes first window.
             let frp = frames(Some(Win::current().frame()))
                 .last()
-                .expect("at least one");
+                .expect("a frame's sibling list holds at least itself");
             let w1 = frp.win().expect("a leaf frame holds a window");
             wp2 = w1.prev();
             win_remove(w1, None);

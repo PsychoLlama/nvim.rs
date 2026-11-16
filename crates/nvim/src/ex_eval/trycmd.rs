@@ -347,7 +347,7 @@ pub(crate) fn ex_finally(excmd: &mut ExArg) {
         excmd.errmsg = Some(c"E606: :finally without :try".to_owned());
         return;
     };
-    let at = usize::try_from(idx).expect("checked");
+    let at = usize::try_from(idx).expect("the :try level found is never negative");
 
     let (missing, has_finally) = cond.with(|cs| {
         let missing = (!cs.top_flags().has(CsFlags::TRY)).then(|| get_end_emsg(cs));
@@ -498,7 +498,7 @@ pub(crate) fn ex_endtry(excmd: &mut ExArg) {
         // Report eap->errmsg even if there already was an error.
         DID_EMSG.set(0);
     }
-    let at = usize::try_from(idx).expect("checked");
+    let at = usize::try_from(idx).expect("the :try level found is never negative");
 
     // With no finally clause, show the user when debugging that the end
     // of the try conditional has been reached. Do that on normal control

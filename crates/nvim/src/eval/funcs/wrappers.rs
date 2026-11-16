@@ -150,7 +150,9 @@ pub(crate) fn call_internal_func_named(name: &CStr, args: &[TypVal], result: &mu
         Err(WrongArity::TooFew) => return FCERR_TOOFEW,
         Err(WrongArity::TooMany) => return FCERR_TOOMANY,
     }
-    let func = fdef.func.expect("non-null function pointer");
+    let func = fdef
+        .func
+        .expect("every builtin table row names its function");
     func(args, result, fdef.data);
     FCERR_NONE
 }
@@ -189,7 +191,9 @@ pub(crate) fn call_internal_method_named(
     frame.push_borrowed(&*base);
     frame.extend_borrowed(after);
 
-    let func = fdef.func.expect("non-null function pointer");
+    let func = fdef
+        .func
+        .expect("every builtin table row names its function");
     func(frame.args(), result, fdef.data);
     FCERR_NONE
 }
@@ -290,7 +294,7 @@ pub fn float_op_wrapper(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData
             let EvalFuncData::Float(op) = fptr else {
                 unreachable!("a float builtin's row carries its operation")
             };
-            op.expect("non-null function pointer")(f)
+            op.expect("a float builtin's row names its operation")(f)
         }
         Err(_) => 0.0,
     };
