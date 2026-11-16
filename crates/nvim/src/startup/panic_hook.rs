@@ -84,8 +84,13 @@ fn on_panic(info: &PanicHookInfo<'_>, report: &(dyn Fn(&PanicHookInfo<'_>) + Syn
     // cleanup below, the message and where it came from are already out.
     write_to_log(info);
 
-    if MAIN_THREAD.get() != Some(&thread::current().id()) {
-        hand_off_to_main(info);
+    if main_thread_is_current() == Some(false) {
+        let current = thread::current();
+        let text = format!(
+            "thread '{}' {info}\n",
+            current.name().unwrap_or("<unnamed>")
+        );
+        hand_off_to_main(text, clean_up_after_another_thread);
     }
 
     // The panic may have fired inside a `GlobalCell::with`/`with_mut`. Its
@@ -104,23 +109,30 @@ fn on_panic(info: &PanicHookInfo<'_>, report: &(dyn Fn(&PanicHookInfo<'_>) + Syn
     clean_up_and_abort(|| report(info));
 }
 
-/// A panic on another thread (a `vim.uv.new_thread` state, libuv pool
+/// Whether this is the main thread, the only one that may touch editor
+/// state. `None` before [`install_panic_hook`] ran, which is also the case
+/// in lib tests and the unit suite: no `main`, no emergency exit.
+pub(super) fn main_thread_is_current() -> Option<bool> {
+    MAIN_THREAD
+        .get()
+        .map(|main| *main == thread::current().id())
+}
+
+/// An emergency on another thread (a `vim.uv.new_thread` state, libuv pool
 /// work): editor state belongs to the main thread, which is still running
 /// whatever it was running, so reaching into it from here would race.
-/// Instead ask the main thread to run the cleanup from its loop, and give
-/// it time to abort the process. If it never does (stuck, or waiting on this
-/// thread), abort anyway: the swap files are then as recent as their last
-/// sync.
-fn hand_off_to_main(info: &PanicHookInfo<'_>) -> ! {
-    let current = thread::current();
-    let text = format!(
-        "thread '{}' {info}\n",
-        current.name().unwrap_or("<unnamed>")
-    );
+/// Instead ask the main thread to run `cleanup` from its loop, and give it
+/// time to end the process. If it never does (stuck, or waiting on this
+/// thread), print `text` and abort anyway: the swap files are then as
+/// recent as their last sync.
+///
+/// `cleanup` starts with [`begin_emergency_exit`] and then runs
+/// [`clean_up`], which tells this thread to give it the longer grace.
+pub(super) fn hand_off_to_main(text: String, cleanup: fn()) -> ! {
     *OFF_THREAD_REPORT
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(text);
-    schedule_fast_job(Box::new(clean_up_after_another_thread));
+    schedule_fast_job(Box::new(cleanup));
 
     let started = Instant::now();
     while !CLEANING_UP.load(Ordering::SeqCst) && started.elapsed() < HANDOFF_GRACE {
@@ -147,8 +159,14 @@ fn clean_up_after_another_thread() {
     clean_up_and_abort(print_off_thread_report);
 }
 
+/// Tell a thread waiting in [`hand_off_to_main`] that the main thread has
+/// started the cleanup, so it should give it the longer grace.
+fn mark_cleaning_up() {
+    CLEANING_UP.store(true, Ordering::SeqCst);
+}
+
 /// Print the message [`hand_off_to_main`] left, if nobody has yet.
-fn print_off_thread_report() {
+pub(super) fn print_off_thread_report() {
     let text = OFF_THREAD_REPORT
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -162,7 +180,16 @@ fn print_off_thread_report() {
 /// way out: give the terminal back, `report` the panic on it, write the swap
 /// files out and abort.
 fn clean_up_and_abort(report: impl FnOnce()) -> ! {
-    CLEANING_UP.store(true, Ordering::SeqCst);
+    clean_up(report);
+    std::process::abort();
+}
+
+/// What every emergency exit does on the main thread, once
+/// [`begin_emergency_exit`] has said it is the way out: give the terminal
+/// back, `report` on it, write the swap files out and put stdin back. The
+/// caller then ends the process.
+pub(super) fn clean_up(report: impl FnOnce()) {
+    mark_cleaning_up();
     let ui_client = UI_CLIENT_CHANNEL_ID.get() != 0;
     if ui_client {
         // Leave the alternate screen and raw mode, so the message can be
@@ -175,7 +202,6 @@ fn clean_up_and_abort(report: impl FnOnce()) -> ! {
         preserve_swap_files(true);
     }
     restore_stdin();
-    std::process::abort();
 }
 
 /// Append the panic, its thread and a backtrace to the log file.
@@ -186,25 +212,36 @@ fn clean_up_and_abort(report: impl FnOnce()) -> ! {
 /// `log_init` chose and published as `$NVIM_LOG_FILE`; with none, the
 /// backtrace goes to stderr instead.
 fn write_to_log(info: &PanicHookInfo<'_>) {
-    let mut text = Vec::new();
+    let current = thread::current();
+    let thread = current.name().unwrap_or("<unnamed>");
+    let mut text = log_line_start("panic");
     // `writeln!` into a `Vec` cannot fail.
+    _ = writeln!(text, "thread '{thread}' {info}");
+    _ = writeln!(text, "stack backtrace:\n{}", Backtrace::force_capture());
+    append_to_log(&text);
+}
+
+/// The start of an emergency's log line, in the shape `logmsg!` writes:
+/// `ERR <unix seconds> nvim.<pid> <what>: `.
+pub(super) fn log_line_start(what: &str) -> Vec<u8> {
     let seconds = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
-    let current = thread::current();
-    let thread = current.name().unwrap_or("<unnamed>");
-    _ = writeln!(
-        text,
-        "ERR {seconds} nvim.{pid} panic: thread '{thread}' {info}",
-        pid = std::process::id(),
-    );
-    _ = writeln!(text, "stack backtrace:\n{}", Backtrace::force_capture());
+    format!(
+        "ERR {seconds} nvim.{pid} {what}: ",
+        pid = std::process::id()
+    )
+    .into_bytes()
+}
 
+/// Append `text` to the log file `log_init` chose and published as
+/// `$NVIM_LOG_FILE`, or write it to stderr when there is none.
+pub(super) fn append_to_log(text: &[u8]) {
     let appended = std::env::var_os("NVIM_LOG_FILE")
         .filter(|path| !path.is_empty())
         .and_then(|path| OpenOptions::new().append(true).create(true).open(path).ok())
-        .is_some_and(|mut file| file.write_all(&text).is_ok());
+        .is_some_and(|mut file| file.write_all(text).is_ok());
     if !appended {
-        _ = std::io::stderr().write_all(&text);
+        _ = std::io::stderr().write_all(text);
     }
 }

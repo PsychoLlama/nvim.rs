@@ -86,6 +86,7 @@ use crate::startup::buffers::{
 };
 use crate::startup::config::{exe_commands, exe_pre_commands, source_startup_scripts};
 use crate::startup::exit::{getout, os_exit};
+use crate::startup::out_of_memory::take_reserve;
 use crate::startup::panic_hook::install_panic_hook;
 use crate::startup::remote::remote_request;
 use crate::startup::usage::{mainerr, print_mainerr};
@@ -558,6 +559,9 @@ pub fn main() {
     // Before anything that could panic: a panic ends the process, and the
     // hook is what preserves the swap files on the way out.
     install_panic_hook();
+    // Before the first allocation that could fail: the room the
+    // out-of-memory exit frees to run in.
+    take_reserve();
     let argv: Vec<CString> = std::env::args_os()
         .map(|arg| CString::new(arg.into_vec()).expect("an argument holds no NUL"))
         .collect();

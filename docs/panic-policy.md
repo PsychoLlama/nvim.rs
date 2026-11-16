@@ -162,6 +162,69 @@ thread ...", does the following:
 thread when `thread` is true. Any API client could already end the server
 (`:qa!`, `os.exit()`), so it adds no new power.
 
+## Allocation failure
+
+A Rust allocation (`Vec`, `String`, `Box` growing) that `malloc` refuses
+takes the same way out as `xmalloc`'s `E41`, not the standard library's
+bare abort ("memory allocation of N bytes failed", no swap files, the
+terminal left raw). Stable Rust has no allocation-error hook
+(`alloc_error_hook` is nightly), so the global allocator (`allocator.rs`)
+does it: after `malloc` it already answers, one null check, and on null an
+out-of-line call into `startup/out_of_memory.rs`, which:
+
+1. **Once only.** A second failure while the first is on its way out (the
+   way out running dry, or another thread) aborts at once. So does one
+   that finds a deadly signal or a panic already preserving.
+2. **Frees a reserve.** `main` takes 256 KiB (`calloc`'d, untouched, so
+   address space rather than memory) right after installing the panic
+   hook. Released first, it gives the log line, the hand-off and the
+   memfile sync room to allocate.
+3. **Logs** `ERR <secs> nvim.<pid> out of memory: thread '<name>' failed
+to allocate <N> bytes` (no backtrace: symbolising one allocates
+   megabytes).
+4. **Off the main thread**, hands the rest to the main thread exactly as
+   a panic does ([above](#off-the-main-thread)), with the same 5 s / 10 s
+   graces and the same gap.
+5. **On the main thread**, runs the panic hook's cleanup: forget the debug
+   borrow tracker, `ui_client_stop()` in a TUI client, print `E41: Out of
+memory!`, write the swap files out (`Nvim: preserving files...`), put
+   stdin back.
+6. **Exits 1**, upstream's status for `E41` (`preserve_exit` → `getout(1)`),
+   rather than aborting: the editor's invariants held, only memory ran
+   out.
+
+Two things differ from upstream's `xmalloc` failure path, on purpose:
+
+- **No retry after freeing editor memory.** Upstream first calls
+  `try_to_free_memory` (drop the scrollback, release memfile blocks) and
+  tries again. Freeing those is sound only when nothing borrows them,
+  which `xmalloc`'s callers promise (its `# Safety`) and a safe
+  `Vec::push` cannot: the retry would run inside whatever borrow the
+  pushing code holds. The `xmalloc` family itself still retries.
+- **No `getout()`**: no `VimLeave`, no ShaDa write. The allocation failed
+  in the middle of Rust code, possibly inside a `GlobalCell` borrow, so
+  like the panic hook this runs no user code from there.
+
+A request that asks to fail still fails: `memory::try_reserve_items` and
+`try_grow_zeroed` make their `try_reserve` inside `startup::fallibly`, so
+the allocator answers null and the caller reports `E342` and carries on
+(`repeat('ab', v:numbermax)`, `repeat([1, 2], v:numbermax)`). A
+`try_reserve` made outside it, including the standard library's own
+(`Read::read_to_end`), takes the `E41` exit like any other request. A
+process that never ran `main` (lib tests, the unit suite) keeps the
+standard library's behaviour.
+
+The success path is unchanged in cost: the null check sits where the
+caller's own already was, and the failure branch is `#[cold]`,
+`#[inline(never)]`.
+
+`test/functional/ex_cmds/swapfile_preserve_recover_spec.lua`, "allocation
+failure in the server preserves the swap file", runs a TUI client and its
+server under `prlimit --as=1G`, asks for a 2 GB Blob, and asserts
+`[Process exited 1]`, the log line, and that a second Nvim recovers the
+edit from the swap file. It skips under ASan, whose shadow does not fit
+the cap.
+
 ## The rule for authors
 
 - **A broken invariant** (something no input can reach if the rest of the
@@ -294,10 +357,6 @@ claimed-length ones.
   too long for msgpack"). Reaching one takes a 2 GiB line or blob in
   memory; upstream's `int` lengths are undefined there too. Converting
   them means a `Result` through every memline and blob writer.
-- **Allocation failure in Rust code** is std's abort ("memory allocation
-  of N bytes failed"), not `preserve_exit(E41)`: no swap files are
-  written. `repeat([1, 2], v:numbermax)` reaches it (upstream exits with
-  E41 there). Fixing it is a global allocator concern, not a site.
 - **Hangs that are not panics**, upstream-shaped: 'shiftwidth' or
   'softtabstop' at `INT_MAX` builds an indent of hundreds of megabytes,
   as do `:left`/`:right` with a huge width and `a\{2147483647}`.

@@ -252,6 +252,47 @@ describe("preserve and (R)ecover with custom 'directory'", function()
     end)
   end
 
+  -- A Rust allocation that fails takes upstream's E41 way out, not the
+  -- standard library's bare abort: swap files written, terminal given
+  -- back, exit 1, a line in the log (docs/panic-policy.md).
+  it('allocation failure in the server preserves the swap file', function()
+    -- Under ASan the child reserves terabytes of shadow up front, which the
+    -- cap refuses before the editor starts.
+    skip(t.is_asan(), 'the address-space cap does not fit ASan')
+    local testlog = uv.cwd() .. '/Xtest_oom_log'
+    finally(function()
+      os.remove(testlog)
+    end)
+    local screen0 = Screen.new()
+    local child_server = new_pipename()
+    -- The client is capped, and its server inherits the cap.
+    fn.jobstart({
+      'prlimit',
+      '--as=' .. 1024 * 1024 * 1024,
+      nvim_prog,
+      '-u',
+      'NONE',
+      '-i',
+      'NONE',
+      '--listen',
+      child_server,
+    }, {
+      term = true,
+      env = { VIMRUNTIME = os.getenv('VIMRUNTIME'), NVIM_LOG_FILE = testlog },
+    })
+    screen0:expect({ any = pesc('[No Name]') }) -- Wait for the child process to start.
+    local child_session = n.connect(child_server)
+    set_session(child_session)
+    local swappath1 = setup_swapname()
+    -- A 2 GB Blob, past the cap: one Rust allocation the allocator refuses.
+    n.async_meths.nvim_command('let g:big = repeat(0z01, 2000000000)')
+    set_session(nvim0)
+    screen0:expect({ any = '%[Process exited 1%]' })
+    t.assert_log('out of memory: thread .main. failed to allocate 2000000000 bytes', testlog, 100)
+    neq(nil, uv.fs_stat(swappath1))
+    test_recover(swappath1)
+  end)
+
   for _, ext in ipairs({ false, true }) do
     it('manual :recover with multiple swapfiles' .. (ext and 'with ext_messages' or ''), function()
       local swappath1 = setup_swapname()

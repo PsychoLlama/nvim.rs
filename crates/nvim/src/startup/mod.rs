@@ -51,6 +51,7 @@ mod config;
 mod entry;
 mod eventloop;
 mod exit;
+mod out_of_memory;
 mod panic_hook;
 mod remote;
 mod usage;
@@ -58,6 +59,7 @@ mod usage;
 pub use self::entry::*;
 pub use self::eventloop::MAIN_LOOP;
 pub use self::exit::*;
+pub(crate) use self::out_of_memory::{allocation_failed, fallibly};
 
 /// The parsed command line: what `main` was asked to do.
 ///

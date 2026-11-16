@@ -47,7 +47,7 @@ use crate::message::clear_sb_text;
 use crate::message::state::EMSG_SILENT;
 use crate::os::cshim::gettext;
 use crate::os::libc::size_t;
-use crate::startup::preserve_exit;
+use crate::startup::{fallibly, preserve_exit};
 use ::libc::{calloc, free, malloc, realloc};
 
 /// Ask the editor to give memory back: drop the scrollback, release
@@ -266,16 +266,33 @@ pub(crate) fn qsort_by<T: Copy, F: FnMut(&T, &T) -> core::cmp::Ordering>(
 /// False, with `bytes` unchanged, when the memory could not be had.
 pub(crate) fn try_grow_zeroed(bytes: &mut Vec<u8>, len: usize) -> bool {
     let more = len.saturating_sub(bytes.len());
-    if bytes.try_reserve_exact(more).is_err() {
-        // SAFETY: an allocation is what is under way, on the main thread.
-        unsafe { try_to_free_memory() };
-        if bytes.try_reserve_exact(more).is_err() {
-            do_outofmem_msg(len);
-            return false;
-        }
+    if !try_reserve_items(bytes, more) {
+        return false;
     }
     bytes.resize(len, 0);
     true
+}
+
+/// Make room in `items` for `more` items the way upstream's
+/// `verbose_try_malloc` allocates: retried once after asking the editor for
+/// memory back, and reported to the user (`E342`) when even that did not
+/// help. False, with `items` unchanged, when the memory could not be had;
+/// the request never ends the process.
+pub(crate) fn try_reserve_items<T>(items: &mut Vec<T>, more: usize) -> bool {
+    if fallibly(|| items.try_reserve_exact(more)).is_ok() {
+        return true;
+    }
+    // SAFETY: an allocation is what is under way, on the main thread.
+    unsafe { try_to_free_memory() };
+    if fallibly(|| items.try_reserve_exact(more)).is_ok() {
+        return true;
+    }
+    let bytes = items
+        .len()
+        .saturating_add(more)
+        .saturating_mul(size_of::<T>().max(1));
+    do_outofmem_msg(bytes);
+    false
 }
 
 /// `malloc` that never fails: an allocation that cannot be served ends the

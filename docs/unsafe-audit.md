@@ -220,7 +220,9 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   the C boundary in either direction without a copy; adopting a `malloc`
   block as a smaller-capacity `Vec` is sound because `free` and `realloc`
   ignore the stated size. The `GlobalAlloc` trait's own contract covers the
-  rest.
+  rest. A refused request calls out (cold, out of line) to the safe
+  out-of-memory exit (`startup/out_of_memory.rs`); the allocator holds no
+  state, so that exit may allocate through it again.
 - **Retires:** never.
 
 ### `memory/` — `xmalloc`, the block pool, owned C strings

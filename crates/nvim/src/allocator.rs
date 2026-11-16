@@ -24,6 +24,14 @@
 //! would make handing its pointers to `free` (or `malloc`'s to `Box`)
 //! undefined. Bottoming out in malloc directly is the whole point.
 //!
+//! # Failure
+//!
+//! A request `malloc` refuses ends the process the way `xmalloc` does
+//! (`E41`, swap files written: `startup/out_of_memory.rs`), not with the
+//! standard library's bare abort. A `try_reserve` made through
+//! `startup::fallibly` still gets its null, and so does every request in a
+//! process that never ran `main`.
+//!
 //! # Boundary
 //!
 //! The four libc calls below are this file's only raw operations.
@@ -46,6 +54,8 @@
 )]
 
 use core::alloc::{GlobalAlloc, Layout};
+
+use crate::startup::allocation_failed;
 
 /// Alignment `malloc` already guarantees. Larger requests go through
 /// `posix_memalign`; `free` accepts pointers from either source.
@@ -89,6 +99,20 @@ fn calloc_aligned(size: usize, align: usize) -> *mut u8 {
     }
 }
 
+/// `malloc` refused `size` bytes: end the process the way `xmalloc` does
+/// (`E41`, swap files written), unless the request asked to fail or there is
+/// no editor to preserve. Returns only for those, and the allocator answers
+/// null.
+///
+/// Calling into the editor from inside the allocator is sound here because
+/// this allocator holds no state of its own: the way out may allocate and
+/// free through it again.
+#[cold]
+#[inline(never)]
+fn refused(size: usize) {
+    allocation_failed(size);
+}
+
 // SAFETY: blocks satisfy the requested size and alignment, stay valid until
 // released through this same impl, and null reports failure.
 unsafe impl GlobalAlloc for LibcAllocator {
@@ -96,14 +120,23 @@ unsafe impl GlobalAlloc for LibcAllocator {
     ///
     /// As [`GlobalAlloc::alloc`]: `layout` must have a non-zero size.
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        malloc_aligned(layout.size(), layout.align())
+        let block = malloc_aligned(layout.size(), layout.align());
+        // The success path's one null check; the failure is out of line.
+        if block.is_null() {
+            refused(layout.size());
+        }
+        block
     }
 
     /// # Safety
     ///
     /// As [`GlobalAlloc::alloc_zeroed`]: `layout` must have a non-zero size.
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        calloc_aligned(layout.size(), layout.align())
+        let block = calloc_aligned(layout.size(), layout.align());
+        if block.is_null() {
+            refused(layout.size());
+        }
+        block
     }
 
     /// # Safety
@@ -112,23 +145,33 @@ unsafe impl GlobalAlloc for LibcAllocator {
     /// for `layout` and has not released, and `new_size` must be a valid size for
     /// `layout`'s alignment.
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let fast = layout.align() <= MALLOC_ALIGN;
+        // Over-aligned, `realloc` would not preserve the alignment, so the
+        // move is by hand into a fresh block.
+        let fresh = if fast {
+            core::ptr::null_mut()
+        } else {
+            malloc_aligned(new_size, layout.align())
+        };
         // SAFETY: by the trait contract `ptr` came from this allocator with
         // `layout`, so from `malloc` on the fast path — and on the
-        // over-aligned path (where `realloc` would not preserve the
-        // alignment, so the move is by hand) it is live, at least
-        // `layout.size()` bytes long, distinct from the fresh block, and
-        // ours to release.
-        unsafe {
-            if layout.align() <= MALLOC_ALIGN {
-                return libc::realloc(ptr.cast(), new_size).cast();
+        // over-aligned path it is live, at least `layout.size()` bytes long,
+        // distinct from the fresh block, and ours to release.
+        let new_ptr = unsafe {
+            if fast {
+                libc::realloc(ptr.cast(), new_size).cast()
+            } else {
+                if !fresh.is_null() {
+                    core::ptr::copy_nonoverlapping(ptr, fresh, layout.size().min(new_size));
+                    self.dealloc(ptr, layout);
+                }
+                fresh
             }
-            let new_ptr = malloc_aligned(new_size, layout.align());
-            if !new_ptr.is_null() {
-                core::ptr::copy_nonoverlapping(ptr, new_ptr, layout.size().min(new_size));
-                self.dealloc(ptr, layout);
-            }
-            new_ptr
+        };
+        if new_ptr.is_null() {
+            refused(new_size);
         }
+        new_ptr
     }
 
     /// # Safety

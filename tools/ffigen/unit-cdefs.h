@@ -3913,6 +3913,7 @@ static const int REPTERM_DO_LT = 2;
 static const int REPTERM_FROM_PART = 1;
 static const int REPTERM_NO_SIMPLIFY = 8;
 static const int REPTERM_NO_SPECIAL = 4;
+static const int RESERVE_BYTES = 262144;
 static const int RESERVE_MAX = 65536;
 static const int RESIZE_EVENTS = 2048;
 static const int REUSE_MAX = 4;
