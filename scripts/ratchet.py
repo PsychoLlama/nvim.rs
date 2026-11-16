@@ -871,6 +871,18 @@ plus these whole-tree metrics, which are not per-file:
                         field an FFI struct needs for its layout stays; the
                         rest retire as their functions stop handing text
                         around by pointer.
+                      bare_panics  explicit panics that do not say what
+                        broke: `.unwrap()`, `.expect("")`, `unreachable!()`/
+                        `panic!()`/`todo!()` with no text, an always-on
+                        `assert!` with no message. Outside `#[cfg(test)]`
+                        code and build scripts; a `const` assertion is the
+                        compiler's and is skipped. docs/panic-policy.md:
+                        an invariant's panic names the invariant, because
+                        the message is what the log shows. The total of all
+                        explicit panics is listed, not ratcheted
+                        (`--dimension panic_sites`; see PANIC_SITE): an
+                        invariant's `expect("..")` is the policy's own
+                        spelling. `--dimension bare_panics` lists each site.
 
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
@@ -1810,6 +1822,41 @@ INSTRUMENTS = {
 # `break 'outer`/`continue 'outer`, not a goto. Listed, not ratcheted --
 # rewriting one as a flag would be worse code to feed a needle.
 LABELED_LOOPS = re.compile(r"'[A-Za-z_][A-Za-z0-9_]*\s*:\s*(?:loop|while|for)\b")
+# The explicit panics (docs/panic-policy.md, "Census"): `.expect(`/
+# `.expect_err(`, `.unwrap()`/`.unwrap_err()`, `unreachable!`, `panic!`/
+# `todo!`/`unimplemented!`, and the always-on `assert!`/`assert_eq!`/
+# `assert_ne!` (`debug_assert*` is a debug build's only, so the `\w`
+# lookbehind leaves it out). Listed per file and module by `--dimension
+# panic_sites`; only the *bare* ones -- a site that does not say what broke
+# -- are ratcheted (`bare_panics`). The total is not: an invariant's
+# `expect("…")` is the policy's own spelling, and a needle on the total
+# would pay for `unwrap_or_default()` hiding a broken invariant, or for an
+# index that panics with no text at all.
+PANIC_KINDS = ("expect", "unwrap", "unreachable", "panic", "assert")
+PANIC_SITE = re.compile(
+    r"\.(?P<expect>expect(?:_err)?)\s*\("
+    r"|\.(?P<unwrap>unwrap(?:_err)?)\s*\(\s*\)"
+    r"|(?<![\w.])(?P<unreachable>unreachable)!\s*[(\[{]"
+    r"|(?<![\w.])(?P<panic>panic|todo|unimplemented)!\s*[(\[{]"
+    r"|(?<![\w.])(?P<assert>assert(?:_eq|_ne)?)!\s*[(\[{]"
+)
+# A `const` item's initialiser or an inline `const { .. }` block: evaluated at
+# compile time, so an assertion there fails the build rather than the editor.
+# A `const fn` is not one -- called at run time, it panics at run time.
+CONST_CONTEXT = re.compile(
+    r"\bconst\s*\{|\bconst\s+[A-Za-z_][A-Za-z0-9_]*\s*:[^=;{]*=\s*(\{)?"
+)
+# An indexing or slicing expression, roughly: `[` straight after an
+# identifier, `)` or `]`. Types (`&[u8]`, `: [u8; 4]`, `<[T]>`), attributes
+# (`#[`) and macros (`vec![`) do not match; an array type straight after a
+# name (`fn f() -> T[..]` is not Rust) cannot occur. A heuristic for ranking
+# modules, never a count to ratchet.
+INDEX_SITE = re.compile(r"[A-Za-z0-9_)\]]\s*\[")
+# `#[cfg(test)] mod name;`: a file of tests measured on its own.
+CFG_TEST_MOD_DECL = re.compile(
+    r"#\[cfg\(test\)\]\s*(?:#\[[^\]]*\]\s*)*(?:pub\s*(?:\([^)]*\)\s*)?)?"
+    r"mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;"
+)
 # `types/`: c2rust's one `types_defs.h`-sized namespace. Phase 34 moves each
 # type next to the code that owns it, so the number is the count of *files*
 # still living there, not of the types inside them.
@@ -2097,6 +2144,7 @@ INSTRUMENT_KEYS = (
     "types_files",
     "untested_dirs",
     "cchar_scratch",
+    "bare_panics",
 )
 
 FORBID = "#![forbid(unsafe_code)]"
@@ -3980,6 +4028,7 @@ def instrument_sites(tree, sources, wrappers=None):
                 tested.add(top)
     for top in tops - tested - UNTESTED_EXEMPT.keys():
         sites["untested_dirs"][top] = 1
+    sites["bare_panics"] = bare_panic_sites(tree, sources)
     return sites
 
 
@@ -3997,6 +4046,164 @@ def labeled_loops(tree):
     return collections.Counter(
         {f: n for f, m in tree.items() if (n := len(LABELED_LOOPS.findall(m)))}
     )
+
+
+def test_only_files(tree):
+    """The files a `#[cfg(test)] mod name;` declaration pulls in: `name.rs` or
+    `name/mod.rs` beside a `mod.rs`/`lib.rs`, under `stem/` beside any other
+    file. Their code never reaches the binary, so the panic listing skips
+    them, as it skips an inline `#[cfg(test)] mod name { .. }` -- and a
+    crate's `build.rs`."""
+    found = set()
+    for file, masked in tree.items():
+        here = file.rsplit("/", 1)[0]
+        stem = file.rsplit("/", 1)[-1].removesuffix(".rs")
+        base = here if stem in ("mod", "lib") else f"{here}/{stem}"
+        for match in CFG_TEST_MOD_DECL.finditer(masked):
+            found.add(f"{base}/{match.group(1)}.rs")
+            found.add(f"{base}/{match.group(1)}/mod.rs")
+    # A build script runs in cargo, not in the editor.
+    found.update(f for f in tree if f.endswith("/build.rs"))
+    return found & tree.keys()
+
+
+def call_args(masked, source, open_at):
+    """The top-level arguments of the call whose `(`/`[`/`{` is at
+    `open_at`, as (start, stop) spans; a trailing comma adds none. Split on
+    the masked text, so a comma inside a string cannot split one; judged
+    empty on the source, where a string argument is not blank."""
+    close_at = balanced(masked, open_at, "([{", ")]}") - 1
+    spans, depth, start = [], 0, open_at + 1
+    for at in range(open_at + 1, close_at):
+        c = masked[at]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        elif c == "," and depth == 0:
+            spans.append((start, at))
+            start = at + 1
+    spans.append((start, close_at))
+    return [s for s in spans if source[s[0] : s[1]].strip()]
+
+
+def panic_sites_in(source, masked):
+    """Yield (line, kind, bare) for every explicit panic in one file outside
+    its `#[cfg(test)]` modules. `bare` is a site that says nothing about
+    what broke: `.unwrap()`, `.expect("")`, `unreachable!()`/`panic!()`/
+    `todo!()` with no text, an `assert!` with no message. A compile-time
+    `const` assertion is not a runtime panic and is skipped."""
+    starts = [0, *(m.end() for m in re.finditer("\n", masked))]
+    tests = test_module_lines(masked)
+    consts = []
+    for match in CONST_CONTEXT.finditer(masked):
+        if masked[match.end() - 1] == "{":
+            consts.append((match.end() - 1, matching_brace(masked, match.end() - 1)))
+        else:
+            consts.append((match.end(), statement_end(masked, match.end())))
+    for match in PANIC_SITE.finditer(masked):
+        line = bisect_right(starts, match.start()) - 1
+        if line in tests:
+            continue
+        kind = match.lastgroup
+        if kind == "assert":
+            if any(a <= match.start() < b for a, b in consts):
+                continue
+            wanted = 1 if match.group(kind) == "assert" else 2
+            bare = len(call_args(masked, source, match.end() - 1)) <= wanted
+        elif kind == "unwrap":
+            bare = True
+        elif kind == "expect":
+            close_at = balanced(masked, match.end() - 1, "([{", ")]}") - 1
+            bare = source[match.end() : close_at].strip() == '""'
+        else:
+            bare = not call_args(masked, source, match.end() - 1)
+        yield line + 1, kind, bare
+
+
+def panic_census(tree, sources):
+    """{file: Counter(kind -> n, "bare" -> n, "index" -> n)} over every
+    file that is not test-only. `index` is the INDEX_SITE heuristic."""
+    skip = test_only_files(tree)
+    census = {}
+    for file, masked in tree.items():
+        if file in skip:
+            continue
+        counts = collections.Counter()
+        for _, kind, bare in panic_sites_in(sources[file], masked):
+            counts[kind] += 1
+            counts["bare"] += bare
+        tests = test_module_lines(masked)
+        if tests:
+            kept = "\n".join(
+                "" if n in tests else text for n, text in enumerate(masked.split("\n"))
+            )
+        else:
+            kept = masked
+        counts["index"] = len(INDEX_SITE.findall(kept))
+        if +counts:
+            census[file] = counts
+    return census
+
+
+def bare_panic_sites(tree, sources):
+    """The ratcheted `bare_panics` per file."""
+    return collections.Counter(
+        {f: c["bare"] for f, c in panic_census(tree, sources).items() if c["bare"]}
+    )
+
+
+def panic_report(tree, sources, each_bare=False):
+    """`--dimension panic_sites`: the explicit panics per file and per
+    top-level module, by kind, with the bare ones and the indexing estimate
+    beside them (unratcheted but for `bare`; see PANIC_SITE).
+    `--dimension bare_panics` lists each bare site's line instead."""
+    if each_bare:
+        skip = test_only_files(tree)
+        total = 0
+        for file in sorted(tree):
+            if file in skip:
+                continue
+            for line, kind, bare in panic_sites_in(sources[file], tree[file]):
+                if bare:
+                    total += 1
+                    print(f"  {file}:{line}: {kind}")
+        print(f"bare_panics: {total}")
+        return
+    census = panic_census(tree, sources)
+    columns = (*PANIC_KINDS, "bare", "index")
+
+    def row(counts, unit):
+        cells = "".join(f" {counts[k]:>11}" for k in columns)
+        explicit = sum(counts[k] for k in PANIC_KINDS)
+        return f"  {explicit:>8}{cells}  {unit}"
+
+    header = f"  {'explicit':>8}" + "".join(f" {k:>11}" for k in columns)
+    total = sum((c for c in census.values()), collections.Counter())
+    explicit = sum(total[k] for k in PANIC_KINDS)
+    print(
+        f"panic_sites: {explicit} explicit ({total['bare']} bare) across "
+        f"{sum(1 for c in census.values() if any(c[k] for k in PANIC_KINDS))} "
+        f"files; ~{total['index']} index expressions"
+    )
+    print(header + "  file")
+    order = sorted(census.items(), key=lambda kv: -sum(kv[1][k] for k in PANIC_KINDS))
+    for file, counts in order:
+        if any(counts[k] for k in PANIC_KINDS):
+            print(row(counts, file))
+    modules = collections.defaultdict(collections.Counter)
+    for file, counts in census.items():
+        if file.startswith(CRATE_SRC):
+            rest = file[len(CRATE_SRC) :]
+            modules[rest.split("/", 1)[0].removesuffix(".rs")] += counts
+        else:
+            modules[file.split("/", 2)[1] + " (crate)"] += counts
+    print("by module:")
+    print(header + "  module")
+    for module, counts in sorted(
+        modules.items(), key=lambda kv: -sum(kv[1][k] for k in PANIC_KINDS)
+    ):
+        print(row(counts, module))
 
 
 def unit_covers(stem, tops):
@@ -4319,6 +4526,7 @@ WHOLE_TREE_LABEL = {
     "types_files": "files under types/",
     "untested_dirs": "top-level modules with no test of any kind",
     "cchar_scratch": "fixed-size `[c_char; N]` buffers",
+    "bare_panics": "explicit panics that do not say what broke",
 }
 # The C-vocabulary subset of the above, for the run's summary line.
 VOCABULARY_KEYS = (
@@ -5556,6 +5764,44 @@ SELF_TEST_LABELED_LOOPS = [
     ),
 ]
 
+# Each explicit panic as (kind, bare): a message makes a site not bare, a
+# string argument with a comma in it is still one argument, a `const`
+# assertion and a `debug_assert!` are not sites, and a test module is skipped.
+SELF_TEST_PANIC_SITES = [
+    (
+        "fn f() {\n"
+        "    a.unwrap();\n"
+        '    b.expect("");\n'
+        '    c.expect("the editor always has a window");\n'
+        "    unreachable!();\n"
+        '    unreachable!("never {x}", x = 1);\n'
+        "    panic!();\n"
+        "    assert!(x);\n"
+        '    assert!(x, "x, y");\n'
+        '    assert_eq!(a, f(b, c), "same");\n'
+        "    assert_ne!(a, b);\n"
+        "    debug_assert!(x);\n"
+        '    assert!(if p { q } else { r }, "either");\n'
+        "}\n"
+        "const _: () = assert!(size_of::<u8>() == 1);\n"
+        "const _: () = { assert!(true); };\n"
+        "#[cfg(test)]\nmod tests {\n    fn t() { x.unwrap(); }\n}\n",
+        [
+            ("unwrap", True),
+            ("expect", True),
+            ("expect", False),
+            ("unreachable", True),
+            ("unreachable", False),
+            ("panic", True),
+            ("assert", True),
+            ("assert", False),
+            ("assert", False),
+            ("assert", True),
+            ("assert", False),
+        ],
+    ),
+]
+
 # A `Failed` made in a body that says nothing and passes nothing on; one
 # after a message, one passed on with `?`/`map_err`, a pattern, a
 # comparison and test code are not.
@@ -5662,6 +5908,9 @@ def self_test():
     for source, expected in SELF_TEST_SILENT_FAILED:
         got = silent_failed(mask(source))
         assert got == expected, f"silent_failed={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_PANIC_SITES:
+        got = [(k, b) for _, k, b in panic_sites_in(source, mask(source))]
+        assert got == expected, f"panic_sites={got}, want {expected}, for {source!r}"
     for source, expected in SELF_TEST_LABELED_LOOPS:
         got = len(LABELED_LOOPS.findall(mask(source)))
         assert got == expected, f"labeled_loops={got}, want {expected}, for {source!r}"
@@ -5908,6 +6157,9 @@ def main():
         return
     if dimension == "silent_failed":
         breakdown({dimension: silent_failed_sites(tree)}, dimension)
+        return
+    if dimension in ("panic_sites", "bare_panics"):
+        panic_report(tree, sources, each_bare=dimension == "bare_panics")
         return
     if dimension is not None:
         breakdown(sites, dimension)
