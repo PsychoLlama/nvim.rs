@@ -3907,6 +3907,7 @@ static const int RELATIVE_INDENT_PENALTY = -4;
 static const int RELATIVE_INDENT_WITH_BLANK_PENALTY = 10;
 static const int RELATIVE_OUTDENT_PENALTY = 24;
 static const int RELATIVE_OUTDENT_WITH_BLANK_PENALTY = 17;
+static const int REPEAT_MAX_POSTFIX = 65536;
 static const int REPLACE_FLAG = 256;
 static const int REPORT_SIZE_IN_CELLS = 48;
 static const int REPTERM_DO_LT = 2;

@@ -284,5 +284,26 @@ describe('a number at the ends of int', function()
       command('left 9999')
       eq(9999, fn.indent(1))
     end)
+
+    it('is a pattern repeat count', function()
+      fn.setline(1, 'aaa')
+      -- The automatic engine hands it to the backtracker, which counts.
+      for _, engine in ipairs({ '', [[\%#=1]] }) do
+        eq(0, fn.search(engine .. [[a\{2147483647}]]))
+        eq(0, fn.search(engine .. [[\(ab\)\{2147483647}]]))
+        eq(0, fn.search(engine .. [[\(a\{1000}\)\{1000}]]))
+        eq('', fn.matchstr('aaa', engine .. [[a\{-2147483647,}]]))
+      end
+      -- The NFA engine alone says the program is too long.
+      for _, pat in ipairs({ [[a\{2147483647}]], [[a\{1,2147483647}]], [[\(a\{1000}\)\{1000}]] }) do
+        refused('E339', function()
+          fn.search([[\%#=2]] .. pat)
+        end)
+      end
+      -- Counts real patterns use are unchanged.
+      eq('aaa', fn.matchstr('xaaaay', [[\%#=2a\{2,3}]]))
+      fn.setline(1, ('a'):rep(3001))
+      eq(1, fn.search([[\%#=2a\{3000}]]))
+    end)
   end)
 end)

@@ -482,6 +482,8 @@ This happens on systems with 16 bit ints: The compiled regexp pattern is
 longer than about 65000 characters.  Try using a shorter pattern.
 It also happens when the offset of a rule doesn't fit in the space available.
 Try simplifying the pattern.
+The NFA engine also says it for a |/\{| count that would write out more than
+65536 items of pattern; lower the count.
 
 							*E45*  >
   'readonly' option is set (add ! to override)

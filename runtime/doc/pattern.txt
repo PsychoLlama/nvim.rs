@@ -655,6 +655,10 @@ overview.
 \{-}	matches 0 or more of the preceding atom, as few as possible
 
 	n and m are positive decimal numbers or zero
+
+	The NFA engine writes out one copy of the atom per count.  A count
+	that would make the pattern longer than 65536 items is |E339| for it; with 'regexpengine' at 0 the backtracking engine,
+	which counts instead, takes the pattern.
 								*non-greedy*
 	If a "-" appears immediately after the "{", then a shortest match
 	first algorithm is used (see example below).  In particular, "\{-}" is

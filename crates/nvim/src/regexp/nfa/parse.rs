@@ -37,6 +37,14 @@ use crate::regexp::{
 const AUTO_MAX_REPEAT: c_int = 500;
 const AUTO_MAX_SPAN: c_int = 200;
 
+/// The most postfix items `\{n,m}` may expand a pattern to, and so the most
+/// copies of its atom: the NFA counterpart of the backtracker's 16-bit node
+/// offsets, past which it says "E339: Pattern too long". Each copy is states
+/// and thread-list slots, so `a\{2147483647}` used to re-parse its atom
+/// until memory ran out. Past it the automatic engine hands the pattern to
+/// the backtracker, which counts instead of copying.
+const REPEAT_MAX_POSTFIX: usize = 1 << 16;
+
 /// The lookaround `\@=`, `\@!`, `\@<=`, `\@<!` and `\@>` operators.
 ///
 /// The two "just before" forms take the optional width `\@123<=` gives,
@@ -139,6 +147,24 @@ fn counted_repeat(
         return Err(CompileError::Declined);
     }
 
+    // Too many copies to build: the backtracker can still take the pattern
+    // when nothing in it needs this engine.
+    let too_long = |rc: &RegCompiler| {
+        if rc.re_flags & RE_AUTO != 0 && !rc.wants_nfa {
+            CompileError::Declined
+        } else {
+            CompileError::TooLong
+        }
+    };
+    let copies = if maxval == MAX_LIMIT {
+        minval.saturating_add(1)
+    } else {
+        maxval
+    };
+    if usize::try_from(copies).is_ok_and(|copies| copies > REPEAT_MAX_POSTFIX) {
+        return Err(too_long(rc));
+    }
+
     rc.post.truncate(atom_start);
     // Where the pattern continues, to be restored once the copies are out.
     let mut after_atom = ParseState::default();
@@ -153,6 +179,9 @@ fn counted_repeat(
         restore_parse_state(rc, before_atom);
         let copy_start = rc.post.len();
         regatom(rc)?;
+        if rc.post.len() > REPEAT_MAX_POSTFIX {
+            return Err(too_long(rc));
+        }
         if i + 1 > minval {
             if maxval == MAX_LIMIT {
                 // An open-ended bound: the last copy stands for all of them.
