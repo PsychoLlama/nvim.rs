@@ -147,8 +147,18 @@ pub(crate) fn validate_num_option(opt_idx: OptIndex, newval: &mut OptInt) -> Res
     }
     let errmsg = match opt_idx {
         OPT_HELPHEIGHT | OPT_TITLELEN | OPT_UPDATECOUNT | OPT_REPORT | OPT_UPDATETIME
-        | OPT_SIDESCROLL | OPT_FOLDLEVEL | OPT_SHIFTWIDTH | OPT_TEXTWIDTH | OPT_WRITEDELAY
+        | OPT_SIDESCROLL | OPT_FOLDLEVEL | OPT_TEXTWIDTH | OPT_WRAPMARGIN | OPT_WRITEDELAY
         | OPT_TIMEOUTLEN | OPT_CMDHEIGHT => bounded(value, 0, too_small(), OptInt::MAX, invalid()),
+        // An indent step as wide as a tab stop may be, no wider.
+        OPT_SHIFTWIDTH => bounded(value, 0, too_small(), OptInt::from(TABSTOP_MAX), invalid()),
+        // Any negative 'softtabstop' means "use 'shiftwidth'".
+        OPT_SOFTTABSTOP => bounded(
+            value,
+            OptInt::MIN,
+            invalid(),
+            OptInt::from(TABSTOP_MAX),
+            invalid(),
+        ),
         OPT_CMDWINHEIGHT => bounded(value, 1, too_small(), OptInt::MAX, invalid()),
         // The four window-size options each cross-check their partner.
         OPT_WINHEIGHT if value >= 1 && p_wmh() > value => Err(E_WINHEIGHT.into()),

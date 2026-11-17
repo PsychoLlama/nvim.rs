@@ -18,6 +18,7 @@
 
 use super::*;
 use crate::charset::{atoi, getdigits_int_at};
+use crate::option::TABSTOP_MAX;
 use crate::optionstr::OptString;
 use crate::winlayer::Buf;
 use core::ffi::c_int;
@@ -32,14 +33,8 @@ use core::ffi::c_int;
 /// the letter is unknown -- the grammar is parsed first and dispatched
 /// second, which is why `set cinoptions=Z9` is accepted.
 ///
-/// A value outside `int` range **aborts the process** (O-B15-4), through
-/// `getdigits_int`'s strict arm: c2rust rendered upstream's C `assert()` as
-/// an unconditional `assert!`, where release C truncates silently.  Left as
-/// it is deliberately.  The defect is that one `assert!` and not this call --
-/// `set shiftwidth=2147483647` aborts through the same path -- so clamping
-/// here would hide one spelling of a tree-wide divergence and leave the rest.
-/// Phase 16 owns the `assert!`/`debug_assert!` sweep; `fmtsweep`'s s91 pins
-/// eleven aborted cases until then.
+/// A value [`cino_amounts_fit`] refuses never gets here: the option setter
+/// checks it first.
 pub fn parse_cino(buffer: Buf) {
     let sw = get_sw_value(buffer);
     // A copy of the option: the fields below are written through the same
@@ -182,6 +177,79 @@ pub fn parse_cino(buffer: Buf) {
 
         if byte_at(cino, i) == b',' {
             i += 1;
+        }
+    }
+}
+
+/// Whether every number in a 'cinoptions' value is one the indenter can
+/// use: a whole part of at most [`TABSTOP_MAX`] and a fraction of at most
+/// four digits. An amount is an indent, and a larger one only ever built a
+/// line of megabytes of white space; the line counts (`)`, `*`) never need
+/// that many either.
+///
+/// Every digit run is checked, wherever it sits, so the test does not have
+/// to agree with [`parse_cino`] on which byte is a letter.
+pub(crate) fn cino_amounts_fit(value: &[u8]) -> bool {
+    let mut i = 0;
+    while i < value.len() {
+        if !value[i].is_ascii_digit() {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < value.len() && value[i].is_ascii_digit() {
+            i += 1;
+        }
+        let digits = &value[start..i];
+        let fits = if start > 0 && value[start - 1] == b'.' {
+            digits.len() <= 4
+        } else {
+            let significant = &digits[digits.iter().take_while(|&&d| d == b'0').count()..];
+            significant.len() <= 4
+                && significant
+                    .iter()
+                    .fold(0, |n, &d| n * 10 + c_int::from(d - b'0'))
+                    <= TABSTOP_MAX
+        };
+        if !fits {
+            return false;
+        }
+    }
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cino_amounts_fit;
+
+    #[test]
+    fn amounts_up_to_the_tab_stop_bound_fit() {
+        for value in [
+            &b""[..],
+            b">4,n-2,{.5s",
+            b">9999,(09999",
+            b"c.2500s",
+            b"Z9",
+            b"g0,)200,*500",
+        ] {
+            assert!(
+                cino_amounts_fit(value),
+                "{}",
+                String::from_utf8_lossy(value)
+            );
+        }
+        for value in [
+            &b">10000"[..],
+            b">2147483647",
+            b"n-99999",
+            b">1.99999s",
+            b"(4,)100000",
+        ] {
+            assert!(
+                !cino_amounts_fit(value),
+                "{}",
+                String::from_utf8_lossy(value)
+            );
         }
     }
 }

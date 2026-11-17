@@ -111,11 +111,15 @@ describe('a number at the ends of int', function()
   end)
 
   describe('as an option value', function()
-    it('is a shiftwidth or textwidth', function()
-      command('set shiftwidth=2147483647 textwidth=2147483647')
+    it('is a textwidth', function()
+      command('set textwidth=2147483647')
       fn.setline(1, 'aaa bbb ccc')
       command('normal! gqq')
       eq({ 'aaa bbb ccc' }, fn.getline(1, '$'))
+      -- `:center` takes its width from 'textwidth', counted as 9999.
+      fn.setline(1, 'x')
+      command('center')
+      eq(4999, fn.indent(1))
     end)
 
     it('is a colorcolumn past textwidth', function()
@@ -204,5 +208,81 @@ describe('a number at the ends of int', function()
     eq(0, eval([["a" =~ "x\xfd\xbf\xbf\xbf\xbf\xbf*"]]))
     command('set regexpengine=1')
     eq(0, eval([["a" =~ "x\xfd\xbf\xbf\xbf\xbf\xbf*"]]))
+  end)
+
+  -- Before these were bounded, each built megabytes of white space per line
+  -- (or a pattern program per repeat) until the editor hung or ran out of
+  -- memory.
+  describe('as a width that sizes white space', function()
+    local function refused(errnr, set)
+      t.matches(errnr .. ':', t.pcall_err(set))
+    end
+
+    it('is refused past 9999 as an option, from every entry point', function()
+      for _, name in ipairs({ 'shiftwidth', 'softtabstop' }) do
+        local before = api.nvim_get_option_value(name, {})
+        for _, set in ipairs({
+          function()
+            command('set ' .. name .. '=10000')
+          end,
+          function()
+            command('setlocal ' .. name .. '=' .. INT_MAX)
+          end,
+          function()
+            api.nvim_set_option_value(name, 10000, {})
+          end,
+          function()
+            exec_lua('vim.o[...] = 10000', name)
+          end,
+          function()
+            exec_lua('vim.bo[...] = 10000', name)
+          end,
+          function()
+            command('let &' .. name .. ' = 10000')
+          end,
+        }) do
+          refused('E474', set)
+          eq(before, api.nvim_get_option_value(name, {}))
+        end
+      end
+      command('set shiftwidth=9999 softtabstop=9999 softtabstop=-1')
+      eq(9999, api.nvim_get_option_value('shiftwidth', {}))
+
+      refused('E474', function()
+        command('set cinoptions=>10000')
+      end)
+      refused('E474', function()
+        command('set cinoptions=>1.99999s')
+      end)
+      command('set cinoptions=>9999,n-9999,(2s,.5s')
+      refused('E487', function()
+        command('set wrapmargin=-1')
+      end)
+    end)
+
+    it('is refused past 9999 in a modeline', function()
+      local file = t.tmpname()
+      t.write_file(file, 'x\n/* vim: set sw=10000 cino=>99999: */\n')
+      finally(function()
+        os.remove(file)
+      end)
+      command('set modeline')
+      command('silent! edit ' .. file)
+      eq(8, api.nvim_get_option_value('shiftwidth', { buf = 0 }))
+      eq('', api.nvim_get_option_value('cinoptions', { buf = 0 }):match('99999') or '')
+      t.matches('E474:', eval('v:errmsg'))
+    end)
+
+    it('is refused past 9999 by :left, :center and :right', function()
+      fn.setline(1, 'x')
+      for _, cmd in ipairs({ 'left 10000', 'center ' .. INT_MAX, 'right 4294967297' }) do
+        refused('E475', function()
+          command(cmd)
+        end)
+        eq({ 'x' }, fn.getline(1, '$'))
+      end
+      command('left 9999')
+      eq(9999, fn.indent(1))
+    end)
   end)
 end)

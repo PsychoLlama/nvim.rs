@@ -35,7 +35,7 @@ use crate::fold::{
 };
 use crate::guard::SECURE;
 use crate::indent::{TabStopArray, replace_tabstop_array, tabstop_set};
-use crate::indent_c::parse_cino;
+use crate::indent_c::{cino_amounts_fit, parse_cino};
 use crate::mark::defs::{FileMark, FileMarkView};
 use crate::mbyte::c_cluster_len;
 use crate::mbyte::canonize;
@@ -176,7 +176,12 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
     Ok(())
 }
 
+/// 'cinoptions': refused when an amount is past the bound, else parsed into
+/// the buffer's indent fields.
 pub fn did_set_cinoptions(args: &mut OptSet) -> Result<(), OptError> {
+    if !cino_amounts_fit(new_bytes(args)) {
+        return invalid();
+    }
     parse_cino(args.os_buf);
     Ok(())
 }

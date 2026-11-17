@@ -6003,6 +6003,7 @@ vim.go.sr = vim.go.shiftround
 --- by 'cindent', `<<`, `>>`, etc.
 --- If set to 0, Vim uses the current 'tabstop' value.  Use `shiftwidth()`
 --- to obtain the effective value in scripts.
+--- The value must be at most 9999, as for 'tabstop'.
 ---
 --- @type integer
 vim.o.shiftwidth = 8
@@ -6349,6 +6350,7 @@ vim.wo.sms = vim.wo.smoothscroll
 --- A value of 0 disables this behaviour.  A negative value makes Vim use
 --- 'shiftwidth'.  If you plan to use 'sts' and 'shiftwidth' with
 --- different values, you might consider setting 'smarttab'.
+--- The value must be at most 9999, as for 'tabstop'.
 ---
 --- The 'L' flag in 'cpoptions' alters tab behavior when 'list' is
 --- enabled.  See also `ins-expandtab` and user manual section `30.5` for
@@ -8384,6 +8386,7 @@ vim.wo.wrap = vim.o.wrap
 --- Options that add a margin, such as 'number' and 'foldcolumn', cause
 --- the text width to be further reduced.
 --- When 'textwidth' is non-zero, this option is not used.
+--- The value must not be negative.
 --- See also 'formatoptions' and `ins-textwidth`.
 ---
 --- @type integer

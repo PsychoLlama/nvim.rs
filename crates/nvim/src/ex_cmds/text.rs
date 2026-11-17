@@ -34,10 +34,13 @@ use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_iscomposing_
 use crate::memline::Lines;
 use crate::message::IOSIZE;
 use crate::message::{msg, msg_multiline, msg_sb_eol};
+use crate::message_fmt::msg_bytes;
 use crate::narrow::number_as_int;
+use crate::option::TABSTOP_MAX;
 use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
 use crate::plines::linetabsize_text;
+use crate::semsg;
 use crate::types::{CmdIdx, ColNr, ExArg, Key};
 use crate::undo::u_save;
 use crate::winlayer::{Buf, Win};
@@ -202,8 +205,15 @@ pub fn ex_align(excmd: &mut ExArg) {
         excmd.cmdidx = cmdidx;
     }
 
-    // `atoi`: `strtol` cut to an `int`.
-    let arg_width = number_as_int(crate::charset::skip::decimal(excmd.line.arg()).0);
+    // A width or indent past the bound only ever built megabytes of white
+    // space per line, so it is refused, as `:retab` refuses such a stop.
+    let (arg_width, _, _) = crate::charset::skip::decimal(excmd.line.arg());
+    if arg_width > i64::from(TABSTOP_MAX) {
+        let shown = msg_bytes(excmd.line.arg());
+        semsg!("E475: Invalid argument: {shown}");
+        return;
+    }
+    let arg_width = number_as_int(arg_width);
     let mut indent = 0;
     let mut width = 0;
     if cmdidx == CmdIdx::left {
@@ -211,11 +221,13 @@ pub fn ex_align(excmd: &mut ExArg) {
         indent = arg_width.max(0);
     } else {
         // If 'textwidth' is set use it, else if 'wrapmargin' is set use it;
-        // on an invalid value use 80.
+        // on an invalid value use 80. A 'textwidth' past the bound is a
+        // wrap threshold, not a request for that much padding: it counts as
+        // the bound.
         width = if arg_width > 0 {
             arg_width
         } else {
-            number_as_int(Buf::current().b_p_tw)
+            number_as_int(Buf::current().b_p_tw.min(i64::from(TABSTOP_MAX)))
         };
         if width == 0 && Buf::current().b_p_wm > 0 {
             width = Win::current().w_view_width - number_as_int(Buf::current().b_p_wm);

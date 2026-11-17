@@ -139,6 +139,8 @@ In the list below,
 there is an 's' after the number, Vim multiplies the number by 'shiftwidth':
 "1s" is 'shiftwidth', "2s" is two times 'shiftwidth', etc.  You can use a
 decimal point, too: "-0.5s" is minus half a 'shiftwidth'.
+N is at most 9999 and a fraction has at most four digits; a larger value
+is refused with E474.
 The examples below assume a 'shiftwidth' of 4.
 							*cino->*
 	>N    Amount added for "normal" indent.  Used after a line that should

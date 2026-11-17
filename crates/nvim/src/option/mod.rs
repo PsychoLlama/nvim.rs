@@ -155,7 +155,10 @@ pub(crate) const LISPWORD_VALUE: &::core::ffi::CStr = c"defun,define,defmacro,se
 /// "unlimited" spelling becomes this.
 pub(crate) const SB_MAX: c_int = 1000000 as c_int;
 pub(crate) const MAX_NUMBERWIDTH: c_int = 20 as c_int;
-/// The largest width a single stop may name.
+/// The largest width a single stop may name, and the bound on every other
+/// number that sizes white space by itself: 'shiftwidth', 'softtabstop',
+/// each 'cinoptions' amount and the width `:left`/`:center`/`:right` take.
+/// A larger one only ever built an indent of megabytes, line by line.
 pub(crate) const TABSTOP_MAX: c_int = 9999 as c_int;
 pub(crate) const DFLT_ERRORFILE: &::core::ffi::CStr = c"errors.err";
 pub(crate) const DFLT_HELPFILE: &::core::ffi::CStr = c"$VIMRUNTIME/doc/help.txt";

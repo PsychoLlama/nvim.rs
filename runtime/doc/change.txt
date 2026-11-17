@@ -1404,15 +1404,19 @@ The next three commands always work on whole lines.
 :[range]ce[nter] [width]				*:ce* *:center*
 			Center lines in [range] between [width] columns
 			(default 'textwidth' or 80 when 'textwidth' is 0).
+			[width] is at most 9999, else E475; a larger
+			'textwidth' counts as 9999.
 
 :[range]ri[ght] [width]					*:ri* *:right*
 			Right-align lines in [range] at [width] columns
 			(default 'textwidth' or 80 when 'textwidth' is 0).
+			[width] is at most 9999, as for |:center|.
 
 							*:le* *:left*
 :[range]le[ft] [indent]
 			Left-align lines in [range].  Sets the indent in the
-			lines to [indent] (default 0).
+			lines to [indent] (default 0).  [indent] is at most
+			9999, else E475.
 
 							*gq*
 gq{motion}		Format the lines that {motion} moves over.

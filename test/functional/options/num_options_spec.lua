@@ -38,6 +38,11 @@ describe(':set validation', function()
   it('setlocal and setglobal validate values', function()
     should_fail('shiftwidth', -10, 'E487')
     should_succeed('shiftwidth', 0)
+    should_succeed('shiftwidth', 9999)
+    should_fail('shiftwidth', 10000, 'E474')
+    should_succeed('softtabstop', 9999)
+    should_fail('softtabstop', 10000, 'E474')
+    should_fail('wrapmargin', -1, 'E487')
     should_fail('tabstop', -10, 'E487')
     should_fail('winheight', -10, 'E487')
     should_fail('winheight', 0, 'E487')
@@ -109,12 +114,12 @@ describe(':set validation', function()
   -- The numeric fields inside these string options are read by getdigits(),
   -- whose strict arm used to abort the process on anything outside the
   -- target width -- reachable from a modeline, so a one-line denial of
-  -- service. They saturate now.
+  -- service. They saturate now; 'cinoptions' refuses an amount past 9999.
   it('numbers inside string options saturate instead of aborting', function()
     local huge = '2147483648' -- INT_MAX + 1
     local vast = '99999999999999999999999' -- past intmax_t
     for _, value in ipairs({ huge, vast }) do
-      command('set cinoptions=>' .. value)
+      matches('E474:', pcall_err(command, 'set cinoptions=>' .. value))
       command('set breakindentopt=shift:' .. value .. ',min:' .. value)
       command('set spellsuggest=best,' .. value)
       command('set comments=s' .. value .. ':xx')
