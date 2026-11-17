@@ -336,14 +336,15 @@ The input sites by module, as found (every other module: all invariant):
 Each family below became an error, a clamp or a refusal with a
 regression test; the commits carry the detail.
 
-| family                          | shape now                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:terminal` resize              | the saved cursor is clamped and a margin left past the edge is dropped                                                                                                                                                                                                                                                                          |
-| values Lua or a peer hands back | a dict key with a NUL is cut there; an RPC handle is echoed as its 32 bits; client info for a closed channel is dropped; an overridden `vim._core` helper is refused like a Lua error; `:version` leaves out a tampered line                                                                                                                    |
-| parser and walks                | an unmatched `]`/`}` after an operand is a parse error; a `filter()`/`map()`/`foreach()`/`indexof()`/`uniq()`/`matchfuzzy()` callback that edits its container is walked through; a userdatum whose `__gc` plain Lua called raises "… has been collected"                                                                                       |
-| corrupt files                   | undo files with impossible line numbers, counters or links are E825; spell trees with a bad shared index are E759; a swap page size above the maximum is refused; a claimed length never sizes an allocation before the bytes are there (`memory/claimed.rs`)                                                                                   |
-| numbers at the `int` extremes   | the number is clamped where it enters (a builtin's argument, a count, an option value, a fold level, a 'diffexpr' hunk), or the sum is taken wide (`strpart()`, undo time steps), so the arithmetic downstream stays in range; wrapping is kept only where the value is modular anyway (a cterm colour read back as 16 bits, a ±1 storage bias) |
-| input-reached `debug_assert!`s  | each was either an input check in the wrong place (`nvim_del_augroup_by_id(2^32)`, a CSI parameter holding a skipped byte, a 'colorcolumn' past `int`) or was wrong (`$NVIM_APPNAME`'s length guarded a buffer the port does not have; a non-positive decoration-provider namespace is accepted by upstream's release build) and went           |
+| family                          | shape now                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:terminal` resize              | the saved cursor is clamped and a margin left past the edge is dropped                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| values Lua or a peer hands back | a dict key with a NUL is cut there; an RPC handle is echoed as its 32 bits; client info for a closed channel is dropped; an overridden `vim._core` helper is refused like a Lua error; `:version` leaves out a tampered line                                                                                                                                                                                                                                                                                                                                              |
+| parser and walks                | an unmatched `]`/`}` after an operand is a parse error; a `filter()`/`map()`/`foreach()`/`indexof()`/`uniq()`/`matchfuzzy()` callback that edits its container is walked through; a userdatum whose `__gc` plain Lua called raises "… has been collected"                                                                                                                                                                                                                                                                                                                 |
+| corrupt files                   | undo files with impossible line numbers, counters or links are E825; spell trees with a bad shared index are E759; a swap page size above the maximum is refused; a claimed length never sizes an allocation before the bytes are there (`memory/claimed.rs`)                                                                                                                                                                                                                                                                                                             |
+| numbers at the `int` extremes   | the number is clamped where it enters (a builtin's argument, a count, an option value, a fold level, a 'diffexpr' hunk), or the sum is taken wide (`strpart()`, undo time steps), so the arithmetic downstream stays in range; wrapping is kept only where the value is modular anyway (a cterm colour read back as 16 bits, a ±1 storage bias)                                                                                                                                                                                                                           |
+| white-space widths and repeats  | 'shiftwidth' and 'softtabstop' are at most 9999 like 'tabstop', a 'cinoptions' amount past 9999 and a negative 'wrapmargin' are refused at `:set` (every entry point, modelines included); `:left`/`:center`/`:right` refuse a width past 9999 (E475, as `:retab` does) and count a larger 'textwidth' as 9999; an NFA `\{n,m}` that would write out more than 65,536 items is handed to the backtracker under 'regexpengine' 0 and is E339 otherwise. Each used to build an indent (or a program) of hundreds of megabytes; upstream hangs or runs out of memory on them |
+| input-reached `debug_assert!`s  | each was either an input check in the wrong place (`nvim_del_augroup_by_id(2^32)`, a CSI parameter holding a skipped byte, a 'colorcolumn' past `int`) or was wrong (`$NVIM_APPNAME`'s length guarded a buffer the port does not have; a non-positive decoration-provider namespace is accepted by upstream's release build) and went                                                                                                                                                                                                                                     |
 
 `test/functional/core/number_extremes_spec.lua` holds the `int`-extreme
 reproducers and `test/functional/core/corrupt_files_spec.lua` the
@@ -357,9 +358,15 @@ claimed-length ones.
   too long for msgpack"). Reaching one takes a 2 GiB line or blob in
   memory; upstream's `int` lengths are undefined there too. Converting
   them means a `Result` through every memline and blob writer.
-- **Hangs that are not panics**, upstream-shaped: 'shiftwidth' or
-  'softtabstop' at `INT_MAX` builds an indent of hundreds of megabytes,
-  as do `:left`/`:right` with a huge width and `a\{2147483647}`.
+- **Work a count asks for, which CTRL-C stops**: `2147483647ix<Esc>`,
+  `2147483647.`, `2147483647p` of a line, `>>` repeated by a script. Each
+  is what was asked for, done one step at a time, and each checks for
+  CTRL-C between steps. (The white-space widths and repeat counts that
+  built megabytes in one step are bounded; see the table above.)
+- **A count whose text fits upstream's own limit**: `2147483647p` of one
+  character builds a line of 2 GiB, which E1240 allows (it refuses past
+  `INT_MAX` bytes, as upstream does). It is the ≥ 2 GiB case above, and
+  where memory runs out first it is the allocation-failure exit.
 - **Off the main thread**, see [the known gaps](#known-gaps).
 - **`debug` and `ffi` Lua** are out of the threat model: with them a
   script can break any invariant, in upstream as here.
@@ -367,7 +374,7 @@ claimed-length ones.
   (`charwise_block_def` clamps the start onto the line); the expression
   parser's `check_children` assert is an invariant once the `1 2]3`
   family stopped mis-wiring nodes; `get_indent`'s column count overflows
-  only past a 2 GiB indent (the hang above).
+  only past a 2 GiB indent: a 2 GiB line, the first case above.
 
 ### Using the dimensions
 
