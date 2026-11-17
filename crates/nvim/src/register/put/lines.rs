@@ -23,11 +23,13 @@
 
 use crate::cursor::getvpos;
 use crate::extmark::{EXTMARK_NOOP, EXTMARK_UNDO};
+use crate::getchar::state::GOT_INT;
 use crate::indent::SIN_NOMARK;
 use crate::mbyte::head_off;
 use crate::memory::XString;
 use crate::narrow::len_as_int;
 use crate::normal::defs::MotionType;
+use crate::os::input::line_breakcheck;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -303,8 +305,15 @@ impl Put {
         // At least one line goes in. A charwise register breaks the first
         // one in two.
         // A line that cannot be appended ends the put where it got to: the
-        // marks below still cover what went in.
+        // marks below still cover what went in. So does CTRL-C after the
+        // first copy, which is how `2147483647p` is stopped.
         'copies: for cnt in 1..=self.count {
+            if cnt > 1 {
+                line_breakcheck();
+                if GOT_INT.get() {
+                    break 'copies;
+                }
+            }
             let mut i: size_t = 0;
             if self.kind == MotionType::CharWise {
                 lnum = new_cursor.lnum;

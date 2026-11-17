@@ -103,6 +103,17 @@ describe('a number at the ends of int', function()
       eq({ '1000000000', '1999999999', '2147483648' }, fn.getline(1, '$'))
     end)
 
+    it('puts lines until CTRL-C', function()
+      fn.setline(1, 'x')
+      command('normal! yy')
+      n.feed('2147483647p')
+      -- Let the put start: a CTRL-C already in the typeahead flushes it.
+      vim.uv.sleep(200)
+      n.feed('<C-c>')
+      local lines = api.nvim_buf_line_count(0)
+      t.ok(lines > 1 and lines < INT_MAX)
+    end)
+
     it('places a tab page', function()
       command('tabnew')
       local tab = api.nvim_open_tabpage(0, false, { after = INT_MAX })
