@@ -7,8 +7,13 @@
 //! `snprintf` -- and the rewrite onto a typed argument array has to
 //! reproduce them byte for byte. A digest that changes is a behaviour
 //! change, to be explained or fixed, never re-recorded to make the test
-//! pass. With `PRINTF_ORACLE_DUMP=<file>` set, every case is also written
-//! out one per line, so two builds' answers can be diffed.
+//! pass. The two biggest oracles are split over several tests so that the
+//! runner can spread them; each part resumes the digest where the part
+//! before it stopped, so the chain still ends at the value recorded whole.
+//! With `PRINTF_ORACLE_DUMP=<file>` set, every case is also written out one
+//! per line, so two builds' answers can be diffed; run the cases one at a
+//! time then (`just cargo-unit printf_oracle -j1`) so that lines do not
+//! interleave.
 
 #![cfg(not(miri))]
 
@@ -286,46 +291,114 @@ fn doubles() -> Vec<f64> {
     out
 }
 
-#[test]
-fn float_conversions() {
-    let _editor = editor_lock();
+/// The conversions `float_conversions_*` split the float cases over, one
+/// test each, so that the runner can spread them across cores; the `*`
+/// precisions are the last part.
+const FLOAT_SPECS: [&str; 6] = ["f", "F", "e", "E", "g", "G"];
+
+/// Where each part of the float cases leaves the digest. Each part resumes
+/// from the one before it, so the last is the single value recorded from
+/// upstream's formatter before the cases were split, and a change anywhere
+/// in the chain is still a behaviour change.
+const FLOAT_CHAIN: [u64; 7] = [
+    0x62cc4284fdf8e7bb,
+    0x29e57ef1037311cd,
+    0xf95de274c852ef40,
+    0x345ffd51bb32754d,
+    0x9592232fb1e6514e,
+    0x43505a7c2a07c00d,
+    0xeaca050400d1e242,
+];
+
+/// Run part `part` of the float cases (a conversion of `FLOAT_SPECS`, or
+/// past them the `*` precisions) from `digest`.
+fn float_part(part: usize, digest: Digest) -> Digest {
     let mut r = Runner::new(false);
+    r.digest = digest;
     let values = doubles();
-    for spec in ["f", "F", "e", "E", "g", "G"] {
-        for flags in ["", "-", "+", " ", "0", "#", "+0", "- "] {
-            for width in ["", "1", "12", "30"] {
-                for prec in [
-                    "", ".0", ".1", ".3", ".6", ".10", ".17", ".25", ".60", ".400",
-                ] {
-                    let f = format!("<%{flags}{width}{prec}{spec}>");
-                    let fc = c(&f);
-                    let fp = fc.as_bytes();
-                    for &v in &values {
-                        let label = || format!("{f} {v:e}");
-                        r.case(label, &|b| format_into!(b, fp, v));
-                    }
+    let Some(spec) = FLOAT_SPECS.get(part) else {
+        // `*` precisions on floats, and positional ones.
+        for f in ["%.*f", "%.*e", "%.*g", "%*.*G", "%1$.*2$f", "%2$*1$.3e"] {
+            let fc = c(f);
+            let fp = fc.as_bytes();
+            for &v in &values[..60] {
+                let label = || format!("{f} {v:e}");
+                if f.starts_with("%*") {
+                    r.case(label, &|b| format_into!(b, fp, 14 as c_int, 5 as c_int, v));
+                } else if f.starts_with("%2$") {
+                    r.case(label, &|b| format_into!(b, fp, 14 as c_int, v));
+                } else if f.starts_with("%1$") {
+                    r.case(label, &|b| format_into!(b, fp, v, 7 as c_int));
+                } else {
+                    r.case(label, &|b| format_into!(b, fp, 5 as c_int, v));
+                }
+            }
+        }
+        return r.digest;
+    };
+    for flags in ["", "-", "+", " ", "0", "#", "+0", "- "] {
+        for width in ["", "1", "12", "30"] {
+            for prec in [
+                "", ".0", ".1", ".3", ".6", ".10", ".17", ".25", ".60", ".400",
+            ] {
+                let f = format!("<%{flags}{width}{prec}{spec}>");
+                let fc = c(&f);
+                let fp = fc.as_bytes();
+                for &v in &values {
+                    let label = || format!("{f} {v:e}");
+                    r.case(label, &|b| format_into!(b, fp, v));
                 }
             }
         }
     }
-    // `*` precisions on floats, and positional ones.
-    for f in ["%.*f", "%.*e", "%.*g", "%*.*G", "%1$.*2$f", "%2$*1$.3e"] {
-        let fc = c(f);
-        let fp = fc.as_bytes();
-        for &v in &values[..60] {
-            let label = || format!("{f} {v:e}");
-            if f.starts_with("%*") {
-                r.case(label, &|b| format_into!(b, fp, 14 as c_int, 5 as c_int, v));
-            } else if f.starts_with("%2$") {
-                r.case(label, &|b| format_into!(b, fp, 14 as c_int, v));
-            } else if f.starts_with("%1$") {
-                r.case(label, &|b| format_into!(b, fp, v, 7 as c_int));
-            } else {
-                r.case(label, &|b| format_into!(b, fp, 5 as c_int, v));
-            }
-        }
-    }
-    assert_eq!(r.digest.value(), 0xeaca050400d1e242, "float conversions");
+    r.digest
+}
+
+/// Run part `part` of the float cases from where the part before it left
+/// the digest, and check where it leaves it.
+fn check_float_part(part: usize) {
+    let _editor = editor_lock();
+    let from = match part {
+        0 => Digest::new(),
+        _ => Digest::resume(FLOAT_CHAIN[part - 1]),
+    };
+    let got = float_part(part, from).value();
+    assert_eq!(got, FLOAT_CHAIN[part], "float conversions, part {part}");
+}
+
+#[test]
+fn float_conversions_f() {
+    check_float_part(0);
+}
+
+#[test]
+fn float_conversions_upper_f() {
+    check_float_part(1);
+}
+
+#[test]
+fn float_conversions_e() {
+    check_float_part(2);
+}
+
+#[test]
+fn float_conversions_upper_e() {
+    check_float_part(3);
+}
+
+#[test]
+fn float_conversions_g() {
+    check_float_part(4);
+}
+
+#[test]
+fn float_conversions_upper_g() {
+    check_float_part(5);
+}
+
+#[test]
+fn float_conversions_star_precisions() {
+    check_float_part(6);
 }
 
 #[test]
@@ -529,18 +602,140 @@ fn positional_and_mixed_arguments() {
     assert_eq!(r.digest.value(), 0xf2131e8a16617898, "positional arguments");
 }
 
-/// Vimscript's `printf()`: its answer as `string()` renders it and the
-/// error it raised, folded in.
-#[test]
-fn vimscript_printf() {
-    let editor = editor_lock();
-    let probe = Probe::new(&editor);
-    let mut d = Digest::new();
-    let mut out = dump();
-    let mut exprs: Vec<String> = Vec::new();
-    for spec in [
-        "d", "i", "u", "o", "x", "X", "b", "B", "c", "s", "S", "f", "F", "e", "E", "g", "G",
-    ] {
+/// The conversions `vimscript_printf_*` split the generated `printf()`
+/// calls over, one test per group, so that the runner can spread them
+/// across cores; the hand-written edge cases are the last part.
+const VIMSCRIPT_PARTS: [&[&str]; 7] = [
+    &["d", "i", "u"],
+    &["o", "x", "X"],
+    &["b", "B", "c"],
+    &["s", "S"],
+    &["f", "F"],
+    &["e", "E"],
+    &["g", "G"],
+];
+
+/// Where each part of the `printf()` calls leaves the digest; see
+/// `FLOAT_CHAIN`.
+const VIMSCRIPT_CHAIN: [u64; 8] = [
+    0xc91ad09b4b301c85,
+    0x615a598079b626e5,
+    0xec03200daff57ac5,
+    0xd04681ccdebaedac,
+    0xd5052e93b4d2ee6c,
+    0xa4979ed27c590b6c,
+    0xb652e3874bfee72c,
+    0x93a18330a79ba5bd,
+];
+
+/// The arguments every generated `printf()` call is tried with.
+const VIMSCRIPT_ARGS: [&str; 17] = [
+    "0",
+    "42",
+    "-42",
+    "0x7fffffffffffffff",
+    "-0x8000000000000000",
+    "3.75",
+    "-0.0",
+    "1.0e21",
+    "'12ab'",
+    "'漢語'",
+    "'é'",
+    "[1, 'a']",
+    "{'k': 1}",
+    "v:true",
+    "v:null",
+    "0z0102",
+    "function('tr')",
+];
+
+/// The `printf()` calls written out by hand: errors, positional arguments,
+/// limits, and the odd conversions the generated ones do not reach.
+const VIMSCRIPT_EDGE_CASES: &[&str] = &[
+    "printf('%d')",
+    "printf('%d %d', 1)",
+    "printf('%d', 1, 2)",
+    "printf('%s')",
+    "printf('%f', 'x')",
+    "printf('%f', [])",
+    "printf('%d', 1.5)",
+    "printf('%d', [])",
+    "printf('%c', 0x1f600)",
+    "printf('%c%c', 0xe9, 65)",
+    "printf('%1$s %2$s', 'a', 'b')",
+    "printf('%2$s %1$s', 'a', 'b')",
+    "printf('%1$s %s', 'a', 'b')",
+    "printf('%s %1$s', 'a', 'b')",
+    "printf('%1$s %3$s', 'a', 'b', 'c')",
+    "printf('%3$s', 'a', 'b')",
+    "printf('%1$s', 'a', 'b')",
+    "printf('%1$d %1$s', 1)",
+    "printf('%1$*2$d', 5, 9)",
+    "printf('%2$*1$d', 9, 5)",
+    "printf('%1$*2$d %2$s', 5, 9)",
+    "printf('%1$*2$.*3$f', 1.5, 9, 3)",
+    "printf('%0$d', 1)",
+    "printf('%01$d', 1)",
+    "printf('%1$5$d', 1)",
+    "printf('%1$*d', 1, 2)",
+    "printf('%*1$d', 1, 2)",
+    "printf('%9999999999d', 1)",
+    "printf('%.9999999999d', 1)",
+    "printf('%*d', 9999999999, 1)",
+    "printf('%.*d', 9999999999, 1)",
+    "printf('%1048577d', 1)",
+    "printf('%1048576d', 1)->len()",
+    "printf('%-*S|', 6, '漢語')",
+    "printf('%3S', \"\\xe9\\xe8\\xfc\")",
+    "printf('%.3S|', '漢語x')",
+    "printf('%5.1S|', '😀👍🏽')",
+    "printf('%y')",
+    "printf('%')",
+    "printf('100%%')",
+    "printf('%5%|')",
+    "printf('%s', repeat('ab', 300))",
+    "printf('%.*s', 3, 'abcdef')",
+    "printf('%-10.3s|', 'abcdef')",
+    "printf('%10.3s|', 'abcdef')",
+    "printf('%#o %#x %#X %#b %#B', 8, 255, 255, 5, 5)",
+    "printf('%#o', 0)",
+    "printf('%.0d|%.0x|%#.0o', 0, 0, 0)",
+    "printf('%+.3f %+.3e %+.3g', 1.0, 1.0, 1.0)",
+    "printf('%g %g %g %g', 1.0e21, 1.0e-5, 100000.0, 1.0e7)",
+    "printf('%e %E', 1.0e-300, 1.0e300)",
+    "printf('%f', 1.0e308)",
+    "printf('%f %e %g', 1.0/0, -1.0/0, 0.0/0)",
+    "printf('%5f|%-5f|%+f|% f', 1.0/0, -1.0/0, 1.0/0, 1.0/0)",
+    "printf('%F %E %G', 1.0/0, -1.0/0, 0.0/0)",
+    "printf('%010.3f|%-010.3f|%+010.3f', -1.5, -1.5, 1.5)",
+    "printf('%f', 5.0e-324)",
+    "printf('%.400f', 1.0)->len()",
+    "printf('%.400e', 1.0)->len()",
+    "printf('%s', 1.5)",
+    "printf('%s', -0.0)",
+    "printf('%s %s', v:true, v:null)",
+    "printf('%d', '0x10')",
+    "printf('%d', ' 12')",
+    "printf('%x', -1)",
+    "printf('%u', -1)",
+    "printf('%hd', 70000)",
+    "printf('%hu', -1)",
+    "printf('%lld %llu %zd %zu', -1, -1, -1, -1)",
+    "printf(\"%s\\x00%s\", 'a', 'b')",
+    "printf('%s', \"a\\nb\")",
+];
+
+/// The `printf()` calls of part `part`: every flag, width, precision and
+/// length over the part's conversions, or past them the edge cases.
+fn vimscript_exprs(part: usize) -> Vec<String> {
+    let Some(specs) = VIMSCRIPT_PARTS.get(part) else {
+        return VIMSCRIPT_EDGE_CASES
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+    };
+    let mut exprs = Vec::new();
+    for spec in *specs {
         for flags in ["", "-", "+", " ", "#", "0", "-0"] {
             for width in ["", "5", "*"] {
                 for prec in ["", ".0", ".2", ".*"] {
@@ -551,25 +746,7 @@ fn vimscript_printf() {
                             .filter(|s| s.contains('*'))
                             .map(|_| "-7")
                             .collect();
-                        for arg in [
-                            "0",
-                            "42",
-                            "-42",
-                            "0x7fffffffffffffff",
-                            "-0x8000000000000000",
-                            "3.75",
-                            "-0.0",
-                            "1.0e21",
-                            "'12ab'",
-                            "'漢語'",
-                            "'é'",
-                            "[1, 'a']",
-                            "{'k': 1}",
-                            "v:true",
-                            "v:null",
-                            "0z0102",
-                            "function('tr')",
-                        ] {
+                        for arg in VIMSCRIPT_ARGS {
                             let mut args = stars.clone();
                             args.push(arg);
                             exprs.push(format!("printf('{f}', {})", args.join(", ")));
@@ -579,89 +756,74 @@ fn vimscript_printf() {
             }
         }
     }
-    for e in [
-        "printf('%d')",
-        "printf('%d %d', 1)",
-        "printf('%d', 1, 2)",
-        "printf('%s')",
-        "printf('%f', 'x')",
-        "printf('%f', [])",
-        "printf('%d', 1.5)",
-        "printf('%d', [])",
-        "printf('%c', 0x1f600)",
-        "printf('%c%c', 0xe9, 65)",
-        "printf('%1$s %2$s', 'a', 'b')",
-        "printf('%2$s %1$s', 'a', 'b')",
-        "printf('%1$s %s', 'a', 'b')",
-        "printf('%s %1$s', 'a', 'b')",
-        "printf('%1$s %3$s', 'a', 'b', 'c')",
-        "printf('%3$s', 'a', 'b')",
-        "printf('%1$s', 'a', 'b')",
-        "printf('%1$d %1$s', 1)",
-        "printf('%1$*2$d', 5, 9)",
-        "printf('%2$*1$d', 9, 5)",
-        "printf('%1$*2$d %2$s', 5, 9)",
-        "printf('%1$*2$.*3$f', 1.5, 9, 3)",
-        "printf('%0$d', 1)",
-        "printf('%01$d', 1)",
-        "printf('%1$5$d', 1)",
-        "printf('%1$*d', 1, 2)",
-        "printf('%*1$d', 1, 2)",
-        "printf('%9999999999d', 1)",
-        "printf('%.9999999999d', 1)",
-        "printf('%*d', 9999999999, 1)",
-        "printf('%.*d', 9999999999, 1)",
-        "printf('%1048577d', 1)",
-        "printf('%1048576d', 1)->len()",
-        "printf('%-*S|', 6, '漢語')",
-        "printf('%3S', \"\\xe9\\xe8\\xfc\")",
-        "printf('%.3S|', '漢語x')",
-        "printf('%5.1S|', '😀👍🏽')",
-        "printf('%y')",
-        "printf('%')",
-        "printf('100%%')",
-        "printf('%5%|')",
-        "printf('%s', repeat('ab', 300))",
-        "printf('%.*s', 3, 'abcdef')",
-        "printf('%-10.3s|', 'abcdef')",
-        "printf('%10.3s|', 'abcdef')",
-        "printf('%#o %#x %#X %#b %#B', 8, 255, 255, 5, 5)",
-        "printf('%#o', 0)",
-        "printf('%.0d|%.0x|%#.0o', 0, 0, 0)",
-        "printf('%+.3f %+.3e %+.3g', 1.0, 1.0, 1.0)",
-        "printf('%g %g %g %g', 1.0e21, 1.0e-5, 100000.0, 1.0e7)",
-        "printf('%e %E', 1.0e-300, 1.0e300)",
-        "printf('%f', 1.0e308)",
-        "printf('%f %e %g', 1.0/0, -1.0/0, 0.0/0)",
-        "printf('%5f|%-5f|%+f|% f', 1.0/0, -1.0/0, 1.0/0, 1.0/0)",
-        "printf('%F %E %G', 1.0/0, -1.0/0, 0.0/0)",
-        "printf('%010.3f|%-010.3f|%+010.3f', -1.5, -1.5, 1.5)",
-        "printf('%f', 5.0e-324)",
-        "printf('%.400f', 1.0)->len()",
-        "printf('%.400e', 1.0)->len()",
-        "printf('%s', 1.5)",
-        "printf('%s', -0.0)",
-        "printf('%s %s', v:true, v:null)",
-        "printf('%d', '0x10')",
-        "printf('%d', ' 12')",
-        "printf('%x', -1)",
-        "printf('%u', -1)",
-        "printf('%hd', 70000)",
-        "printf('%hu', -1)",
-        "printf('%lld %llu %zd %zu', -1, -1, -1, -1)",
-        "printf(\"%s\\x00%s\", 'a', 'b')",
-        "printf('%s', \"a\\nb\")",
-    ] {
-        exprs.push(e.to_string());
-    }
-    for e in &exprs {
+    exprs
+}
+
+/// Run part `part` of the `printf()` calls from `digest`: each answer as
+/// `string()` renders it and the error it raised, folded in.
+fn vimscript_part(probe: &Probe, part: usize, mut digest: Digest) -> Digest {
+    let mut out = dump();
+    for e in &vimscript_exprs(part) {
         let got = probe.eval(e);
         let err = probe.error_from(&format!("call {e}"));
-        d.bytes(got.as_bytes());
-        d.bytes(err.as_bytes());
+        digest.bytes(got.as_bytes());
+        digest.bytes(err.as_bytes());
         if let Some(out) = &mut out {
             let _ = writeln!(out, "{e}\t{got}\t{err}");
         }
     }
-    assert_eq!(d.value(), 0x93a18330a79ba5bd, "printf()");
+    digest
+}
+
+/// Vimscript's `printf()`, part `part`: run from where the part before it
+/// left the digest, and check where it leaves it.
+fn check_vimscript_part(part: usize) {
+    let editor = editor_lock();
+    let probe = Probe::new(&editor);
+    let from = match part {
+        0 => Digest::new(),
+        _ => Digest::resume(VIMSCRIPT_CHAIN[part - 1]),
+    };
+    let got = vimscript_part(&probe, part, from).value();
+    assert_eq!(got, VIMSCRIPT_CHAIN[part], "printf(), part {part}");
+}
+
+#[test]
+fn vimscript_printf_decimal() {
+    check_vimscript_part(0);
+}
+
+#[test]
+fn vimscript_printf_octal_and_hex() {
+    check_vimscript_part(1);
+}
+
+#[test]
+fn vimscript_printf_binary_and_char() {
+    check_vimscript_part(2);
+}
+
+#[test]
+fn vimscript_printf_string() {
+    check_vimscript_part(3);
+}
+
+#[test]
+fn vimscript_printf_fixed() {
+    check_vimscript_part(4);
+}
+
+#[test]
+fn vimscript_printf_exponent() {
+    check_vimscript_part(5);
+}
+
+#[test]
+fn vimscript_printf_general() {
+    check_vimscript_part(6);
+}
+
+#[test]
+fn vimscript_printf_edge_cases() {
+    check_vimscript_part(7);
 }

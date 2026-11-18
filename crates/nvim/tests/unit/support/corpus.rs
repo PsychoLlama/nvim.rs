@@ -169,6 +169,14 @@ impl Digest {
         Digest(0xcbf2_9ce4_8422_2325)
     }
 
+    /// Pick a digest up where another left off (its `value()`), so that one
+    /// oracle split over several tests still folds into the one number it
+    /// was recorded as.
+    #[allow(dead_code, reason = "the split oracles are not built under Miri")]
+    pub(crate) fn resume(value: u64) -> Digest {
+        Digest(value)
+    }
+
     /// Fold one answer in.
     pub(crate) fn add(&mut self, value: i64) {
         for byte in value.to_le_bytes() {

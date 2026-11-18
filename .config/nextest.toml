@@ -19,3 +19,22 @@ fail-fast = false
 failure-output = "final"
 status-level = "slow"
 final-status-level = "slow"
+
+# The long cases start first, so that the thousand that take milliseconds
+# fill the cores around them instead of a long one starting late and
+# finishing alone. The slowest (15-25 s beside eleven others, from a timing
+# run) go before the rest of the corpus oracles and regexp sweeps (5-15 s).
+[[profile.default.overrides]]
+filter = """
+    test(=getchar_oracle::key_buffers_over_the_corpus)
+    | test(=regexp::refusals_report_once)
+    | test(=filename_oracle::filename_expansion)
+    | test(=regexp::deeply_nested_and_deeply_repeated_patterns_terminate)
+    | test(=sign_oracle::sign_text_over_the_corpus)
+    | test(=mapping_oracle::mapping_tables_over_the_corpus)
+"""
+priority = 20
+
+[[profile.default.overrides]]
+filter = 'test(/_oracle::/) | test(/^regexp::/)'
+priority = 10
