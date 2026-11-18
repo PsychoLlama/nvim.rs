@@ -123,6 +123,7 @@ fi
 # ignored leftovers of an in-place run: a stale test_*.res would make make
 # skip its test. The run root mirrors test/old, not just the testdir:
 # test_syntax views ../memfile_test.c.
+mkdir -p "$run_dir"
 (cd "$root/test/old" && git ls-files -z --cached --others --exclude-standard) |
   tar -C "$root/test/old" --null --no-recursion -T - -cf - | tar -C "$run_dir" -xf -
 
