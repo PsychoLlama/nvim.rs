@@ -31,14 +31,17 @@ M.translations_enabled = false
 -- must skip under ASan because redzones/quarantine distort their measurements.
 M.is_asan = os.getenv('NVIM_TEST_ASAN') == '1'
 M.is_zig_build = false
--- Must match the VTERM_TEST_FILE define in scripts/build-unit-fixtures.sh;
--- the vterm fixture (unit-fixtures.so) writes there.
-M.vterm_test_file = root .. '/target/vterm_test_output'
+-- The vterm fixture (unit-fixtures.so) logs its callbacks to
+-- $VTERM_TEST_FILE (scripts/run-tests.sh puts it in the run's root), else to
+-- the VTERM_TEST_FILE define in scripts/build-unit-fixtures.sh.
+M.vterm_test_file = os.getenv('VTERM_TEST_FILE') or (root .. '/target/vterm_test_output')
 M.test_lua_prg = deps_prefix and (deps_prefix .. '/bin/luajit') or nil
 M.test_luajit_prg = M.test_lua_prg
--- target/ is dressed up as a CMake-style build dir (runtime/, lib/nvim/) by
--- scripts/prep-test-tree.sh.
-M.test_build_dir = root .. '/target'
+-- target/ is dressed up as a CMake-style build dir (bin/, runtime/,
+-- lib/nvim/) by scripts/prep-test-tree.sh; $NVIM_TEST_BUILD_DIR names another
+-- tree laid out the same way (the ASan recipes use target/asan/tree, so they
+-- never relink the target/bin/nvim a plain run is testing).
+M.test_build_dir = os.getenv('NVIM_TEST_BUILD_DIR') or (root .. '/target')
 M.test_source_path = root
 
 return M

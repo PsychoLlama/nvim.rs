@@ -2,9 +2,18 @@
 
 #include "vterm_test.h"
 
+// The callback log: $VTERM_TEST_FILE, which scripts/run-tests.sh points into
+// the run's own root so two unit runs never share it; the path compiled in by
+// scripts/build-unit-fixtures.sh is the fallback.
+static const char *vterm_test_file(void)
+{
+  const char *path = getenv("VTERM_TEST_FILE");
+  return path != NULL ? path : VTERM_TEST_FILE;
+}
+
 int parser_text(const char bytes[], size_t len, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "text ");
   size_t i;
   for (i = 0; i < len; i++) {
@@ -30,7 +39,7 @@ static void printchars(const char *s, size_t len, FILE *f)
 int parser_csi(const char *leader, const long args[], int argcount, const char *intermed,
                char command, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "csi %02x", command);
 
   if (leader && leader[0]) {
@@ -66,7 +75,7 @@ int parser_csi(const char *leader, const long args[], int argcount, const char *
 
 int parser_osc(int command, VTermStringFragment frag, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "osc ");
 
   if (frag.initial) {
@@ -91,7 +100,7 @@ int parser_osc(int command, VTermStringFragment frag, void *user)
 
 int parser_dcs(const char *command, size_t commandlen, VTermStringFragment frag, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "dcs ");
 
   if (frag.initial) {
@@ -115,7 +124,7 @@ int parser_dcs(const char *command, size_t commandlen, VTermStringFragment frag,
 
 int parser_apc(VTermStringFragment frag, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "apc ");
 
   if (frag.initial) {
@@ -136,7 +145,7 @@ int parser_apc(VTermStringFragment frag, void *user)
 
 int parser_pm(VTermStringFragment frag, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "pm ");
 
   if (frag.initial) {
@@ -157,7 +166,7 @@ int parser_pm(VTermStringFragment frag, void *user)
 
 int parser_sos(VTermStringFragment frag, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "sos ");
 
   if (frag.initial) {
@@ -178,7 +187,7 @@ int parser_sos(VTermStringFragment frag, void *user)
 
 int selection_set(VTermSelectionMask mask, VTermStringFragment frag, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "selection-set mask=%04X ", mask);
   if (frag.initial) {
     fprintf(f, "[");
@@ -195,7 +204,7 @@ int selection_set(VTermSelectionMask mask, VTermStringFragment frag, void *user)
 
 int selection_query(VTermSelectionMask mask, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "selection-query mask=%04X\n", mask);
 
   fclose(f);
@@ -230,7 +239,7 @@ int state_putglyph(VTermGlyphInfo *info, VTermPos pos, void *user)
     return 1;
   }
 
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "putglyph ");
   print_schar(f, info->schar);
   fprintf(f, " %d %d,%d", info->width, pos.row, pos.col);
@@ -254,7 +263,7 @@ bool want_state_movecursor;
 VTermPos state_pos;
 int state_movecursor(VTermPos pos, VTermPos oldpos, int visible, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   state_pos = pos;
 
   if (want_state_movecursor) {
@@ -272,7 +281,7 @@ int state_scrollrect(VTermRect rect, int downward, int rightward, void *user)
     return 0;
   }
 
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
 
   fprintf(f, "scrollrect %d..%d,%d..%d => %+d,%+d\n",
           rect.start_row, rect.end_row, rect.start_col, rect.end_col,
@@ -289,7 +298,7 @@ int state_moverect(VTermRect dest, VTermRect src, void *user)
     return 0;
   }
 
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "moverect %d..%d,%d..%d -> %d..%d,%d..%d\n",
           src.start_row,  src.end_row,  src.start_col,  src.end_col,
           dest.start_row, dest.end_row, dest.start_col, dest.end_col);
@@ -300,7 +309,7 @@ int state_moverect(VTermRect dest, VTermRect src, void *user)
 
 void print_color(const VTermColor *col)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   if (VTERM_COLOR_IS_RGB(col)) {
     fprintf(f, "rgb(%d,%d,%d", col->rgb.red, col->rgb.green, col->rgb.blue);
   } else if (VTERM_COLOR_IS_INDEXED(col)) {
@@ -358,7 +367,7 @@ int state_settermprop(VTermProp prop, VTermValue *val, void *user)
   }
 
   int errcode = 0;
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
 
   VTermValueType type = vterm_get_prop_type(prop);
   switch (type) {
@@ -398,7 +407,7 @@ int state_erase(VTermRect rect, int selective, void *user)
     return 1;
   }
 
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
 
   fprintf(f, "erase %d..%d,%d..%d%s\n",
           rect.start_row, rect.end_row, rect.start_col, rect.end_col,
@@ -487,7 +496,7 @@ int state_sb_clear(void *user)
     return 1;
   }
 
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "sb_clear\n");
   fclose(f);
 
@@ -506,7 +515,7 @@ int screen_sb_pushline(int cols, const VTermScreenCell *cells, void *user)
     eol--;
   }
 
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "sb_pushline %d =", cols);
   for (int c = 0; c < eol; c++) {
     fprintf(f, " ");
@@ -536,7 +545,7 @@ int screen_sb_popline(int cols, VTermScreenCell *cells, void *user)
     cells[col].width = 1;
   }
 
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "sb_popline %d\n", cols);
   fclose(f);
   return 1;
@@ -548,7 +557,7 @@ int screen_sb_clear(void *user)
     return 1;
   }
 
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "sb_clear\n");
   fclose(f);
   return 0;
@@ -556,7 +565,7 @@ int screen_sb_clear(void *user)
 
 void term_output(const char *s, size_t len, void *user)
 {
-  FILE *f = fopen(VTERM_TEST_FILE, "a");
+  FILE *f = fopen(vterm_test_file(), "a");
   fprintf(f, "output ");
   for (size_t i = 0; i < len; i++) {
     fprintf(f, "%x%s", (unsigned char)s[i], i < len - 1 ? "," : "\n");

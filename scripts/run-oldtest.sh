@@ -5,10 +5,11 @@
 #
 #   all         the whole suite, always from scratch
 #   <names...>  only the named tests, e.g. test_arglist
-#   clean       delete test artifacts, run nothing
+#   clean       delete the run's copy of the testdir, run nothing
 #
 # $NVIM_PRG selects the binary under test (default target/debug/nvim); the ASan
-# recipes point it at their own build.
+# recipes point it at their own build. Every run executes in a fresh copy of
+# the testdir under $NVIM_OLDTEST_RUN_DIR (default target/oldtest; see below).
 #
 # The mode is mandatory because the obvious invocation — no arguments, meaning
 # "run everything" — could report a green suite while executing nothing. make's
@@ -26,7 +27,8 @@
 # Exit code 0, indistinguishable from a real pass, and that is the steady state
 # — any tree that has run the suite once is warm.
 #
-# `all` therefore cleans first rather than exposing the incrementality. Resuming
+# Every run therefore starts from a fresh copy rather than exposing the
+# incrementality. Resuming
 # has no value here: the summary can only describe the tests that ran in the
 # current pass, so a partial run cannot produce a trustworthy full-suite result
 # no matter how much work it skips. Named tests are unaffected either way, since
@@ -44,21 +46,36 @@ if [[ $# -eq 0 ]]; then
   exit 64
 fi
 
-# Lays out target/ the way the suite expects: $BUILD_DIR/runtime and
+# Lays out the build dir the way the suite expects: $BUILD_DIR/runtime and
 # $BUILD_DIR/lib/nvim, both added to &runtimepath by runtest.vim. runnvim.sh
 # derives $BUILD_DIR from $NVIM_PRG as its parent's parent.
-"$root/scripts/prep-test-tree.sh"
+if [[ ${NVIM_TEST_SKIP_PREP:-} != 1 ]]; then
+  "$root/scripts/prep-test-tree.sh" oldtest
+fi
 
 NVIM_PRG=${NVIM_PRG:-$root/target/debug/nvim}
-
-# The log path is fixed when Nvim starts; setup.vim's `let $NVIM_LOG_FILE`
-# comes too late. Without this a debug build logs every test's DBG lines to
-# the user's own $XDG_STATE_HOME/nvim/nvim.log.
-export NVIM_LOG_FILE=${NVIM_LOG_FILE:-$root/target/oldtest-nvim.log}
 if [[ ! -x $NVIM_PRG ]]; then
   echo "$0: $NVIM_PRG not found; run \`just build\` first" >&2
   exit 66
 fi
+
+# The run root. The suite does not run in test/old/testdir but in a fresh
+# copy of it, <run root>/testdir: every test deletes X* in its cwd before it
+# starts and appends to a shared `messages`, so two runs in one directory
+# wreck each other. The tests reach the tree as ../../../runtime (and
+# ../../../crates), so the root sits exactly two levels below the repo root:
+# target/oldtest by default, target/<anything> for another run beside it.
+run_dir=$(realpath -m "${NVIM_OLDTEST_RUN_DIR:-$root/target/oldtest}")
+if [[ $(realpath -m "$run_dir/../..") != "$root" ]]; then
+  echo "$0: NVIM_OLDTEST_RUN_DIR=$run_dir must sit two levels below $root" >&2
+  echo "  (e.g. $root/target/oldtest-2): the tests reach the runtime as ../../../runtime" >&2
+  exit 64
+fi
+
+# The log path is fixed when Nvim starts; setup.vim's `let $NVIM_LOG_FILE`
+# comes too late. Without this a debug build logs every test's DBG lines to
+# the user's own $XDG_STATE_HOME/nvim/nvim.log.
+export NVIM_LOG_FILE=${NVIM_LOG_FILE:-$run_dir/nvim.log}
 
 testdir=$root/test/old/testdir
 
@@ -93,13 +110,29 @@ if (( ${#bad[@]} )); then
   exit 64
 fi
 
-make=(make -C "$testdir" NVIM_PRG="$NVIM_PRG")
+run_testdir=$run_dir/testdir
+rm -rf "$run_testdir"
+if [[ $# -eq 1 && $1 == clean ]]; then
+  exit 0
+fi
+
+# Copy what the checkout holds (tracked and untracked-but-not-ignored, so a
+# test being written is included), never the ignored leftovers of an
+# in-place run: a stale test_*.res would make make skip its test.
+mkdir -p "$run_testdir"
+(cd "$testdir" && git ls-files -z --cached --others --exclude-standard) |
+  tar -C "$testdir" --null --no-recursion -T - -cf - | tar -C "$run_testdir" -xf -
+
+make=(make -C "$run_testdir" NVIM_PRG="$NVIM_PRG")
+# The generated inputs, once, before any test (a split run copies the
+# prepared directory).
+"${make[@]}" --no-print-directory opt_test.vim .gdbinit >/dev/null
+
 status=0
 if [[ $# -eq 1 && $1 == all ]]; then
-  "${make[@]}" clean
-  "${make[@]}" || status=$?
+  "${make[@]}" 2>&1 | tee "$run_dir/make.log" || status=$?
 else
-  "${make[@]}" "$@" || status=$?
+  "${make[@]}" "$@" 2>&1 | tee "$run_dir/make.log" || status=$?
 fi
 user_log_check || ((status)) || status=1
 exit "$status"

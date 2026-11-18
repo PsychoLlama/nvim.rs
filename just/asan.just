@@ -18,6 +18,11 @@ nightly := 'PATH="${RUST_NIGHTLY:?the nightly lanes run inside the nix devshell}
 triple := `rustc -vV | sed -n 's/^host: //p'`
 bin := justfile_directory() / "target/asan" / triple / "debug/nvim"
 
+# The test build dir the ASan suites run from (bin/nvim linked to `bin`,
+# runtime/, lib/nvim, and the functional run root): never target/ itself,
+# whose bin/nvim a plain suite beside this one is running.
+tree := justfile_directory() / "target/asan/tree"
+
 # ASan reports go to files (nvim is a TUI; stderr is often a terminal the
 # harness owns). Leak checking is off in the default options because a leak
 # is not a corruption and every report would be noise on a run looking for
@@ -57,9 +62,10 @@ functionaltest *args: build
   # non-inlined calls, so the deliberately-recursive specs (E169) overflow
   # the default 8MB stack; give the whole tree headroom.
   ulimit -s 65536
-  # Tests run target/bin/nvim (the layout specs assert); prep-test-tree.sh
-  # points it at $NVIM_BIN.
-  export NVIM_BIN={{ bin }}
+  # Tests run <build dir>/bin/nvim (the layout specs assert);
+  # prep-test-tree.sh points it at $NVIM_BIN. The build dir is ASan's own
+  # (and the run root under it), so a plain suite can run beside this one.
+  export NVIM_BIN={{ bin }} NVIM_TEST_BUILD_DIR={{ tree }}
   exec setarch "$(uname -m)" -R scripts/run-tests.sh functional {{ args }}
 
 # Reports land in target/asan/asan.log.<pid>.
@@ -72,8 +78,10 @@ oldtest +args: build
   export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ options }}}"
   export NVIM_TEST_ASAN=1
   ulimit -s 65536
-  export NVIM_BIN={{ bin }}
-  export NVIM_PRG={{ justfile_directory() }}/target/bin/nvim
+  export NVIM_BIN={{ bin }} NVIM_TEST_BUILD_DIR={{ tree }}
+  export NVIM_PRG={{ tree }}/bin/nvim
+  # Two levels below the repo root, like every oldtest run root.
+  export NVIM_OLDTEST_RUN_DIR={{ justfile_directory() }}/target/oldtest-asan
   exec setarch "$(uname -m)" -R scripts/run-oldtest.sh {{ args }}
 
 # Run functional tests with LEAK CHECKING ON, then summarise every report.
@@ -104,7 +112,7 @@ leaktest *args: build
   export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ leakoptions }}}"
   export NVIM_TEST_ASAN=1
   ulimit -s 65536
-  export NVIM_BIN={{ bin }}
+  export NVIM_BIN={{ bin }} NVIM_TEST_BUILD_DIR={{ tree }}
   rm -f {{ justfile_directory() }}/target/asan/asan.log.*
   setarch "$(uname -m)" -R scripts/run-tests.sh functional {{ args }}
   rc=$?

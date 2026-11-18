@@ -100,6 +100,7 @@ FILE *fopen(const char *, const char *);
 int fclose(FILE *);
 int fprintf(FILE *, const char *, ...);
 void *memcpy(void *, const void *, size_t);
+char *getenv(const char *);
 
 // nvim/macros_defs.h: fixture headers mark globals EXTERN; the defining
 // declarations live in the fixture .c files themselves.

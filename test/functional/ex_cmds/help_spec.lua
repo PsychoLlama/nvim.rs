@@ -42,8 +42,10 @@ end
 describe(':help', function()
   before_each(clear)
 
+  -- Nvim.rs: $VIMRUNTIME/doc/tags (++t) is generated once by
+  -- scripts/prep-test-tree.sh, before any suite runs; these cases used to
+  -- regenerate it in place, under the :help of the suites running beside.
   it('{subject}', function()
-    n.command('helptags ++t $VIMRUNTIME/doc')
     local function check_tag(cmd, tag)
       local cmd_ok = t.pcall(n.command, cmd)
       local found = n.api.nvim_get_current_line():find(tag, 1, true)
@@ -152,7 +154,6 @@ describe(':help', function()
   end)
 
   it('":help!" (bang + no args) guesses the best tag near cursor', function()
-    n.command('helptags ++t $VIMRUNTIME/doc')
     -- n.command('enew')
     -- n.command('set filetype=help')
     -- n.command [[set keywordprg=:help]]
