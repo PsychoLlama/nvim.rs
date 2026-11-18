@@ -118,12 +118,13 @@ if [[ $# -eq 1 && $1 == clean ]]; then
   exit 0
 fi
 
-# Copy what the checkout holds (tracked and untracked-but-not-ignored, so a
-# test being written is included), never the ignored leftovers of an
-# in-place run: a stale test_*.res would make make skip its test.
-mkdir -p "$run_testdir"
-(cd "$testdir" && git ls-files -z --cached --others --exclude-standard) |
-  tar -C "$testdir" --null --no-recursion -T - -cf - | tar -C "$run_testdir" -xf -
+# Copy what the checkout holds under test/old (tracked and
+# untracked-but-not-ignored, so a test being written is included), never the
+# ignored leftovers of an in-place run: a stale test_*.res would make make
+# skip its test. The run root mirrors test/old, not just the testdir:
+# test_syntax views ../memfile_test.c.
+(cd "$root/test/old" && git ls-files -z --cached --others --exclude-standard) |
+  tar -C "$root/test/old" --null --no-recursion -T - -cf - | tar -C "$run_dir" -xf -
 
 make=(make -C "$run_testdir" NVIM_PRG="$NVIM_PRG")
 # The generated inputs, once, before any test (a split run copies the

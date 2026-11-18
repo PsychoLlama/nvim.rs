@@ -187,8 +187,9 @@ describe('vim.ui', function()
       )
     end)
 
+    -- Nvim.rs: $VIMRUNTIME/doc/tags comes from scripts/prep-test-tree.sh (see
+    -- help_spec); rewriting it here raced the other suites' :help.
     it('gx on a help tag opens URL', function()
-      n.command('helptags $VIMRUNTIME/doc')
       n.command('help nvim.txt')
 
       local link_ns = n.api.nvim_create_namespace('nvim.help.urls')
