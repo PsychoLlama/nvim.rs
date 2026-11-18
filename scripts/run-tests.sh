@@ -49,8 +49,17 @@ shard_job() { # <slot> <spec> [harness flags...]
   name=${name//\//.}
   local log=$SHARD_DIR/logs/$name.log root=$SHARD_DIR/w$slot
   local start=$EPOCHREALTIME status=0 result=ok
+  # A failed screen wait that leaves nvim at a prompt hangs the spec's
+  # after_each for good (its `qall!` request waits behind the prompt): one
+  # such spec once held a sharded run for half an hour. A spec gets
+  # NVIM_TEST_SPEC_TIMEOUT seconds (default 900, three times the slowest
+  # spec's ASan time under load), then its runner is killed and the spec fails.
   NVIM_TEST_JOBS=1 NVIM_TEST_SKIP_PREP=1 NVIM_TEST_RUN_DIR=$root TEST_COLORS=0 \
+    timeout -k 30 "${NVIM_TEST_SPEC_TIMEOUT:-900}" \
     "$SHARD_SELF" functional "$@" "$spec" >"$log" 2>&1 </dev/null || status=$?
+  if ((status == 124 || status == 137)); then
+    echo "run-tests.sh: $spec killed after NVIM_TEST_SPEC_TIMEOUT=${NVIM_TEST_SPEC_TIMEOUT:-900} s" >>"$log"
+  fi
   if ((status)); then
     if grep -q '^No tests matched the current selection' "$log"; then
       result=none
