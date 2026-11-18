@@ -185,9 +185,13 @@ user_log_mark
 export NVIM_LOG_FILE=${NVIM_LOG_FILE:-$LOGDIR/$LABEL.nvim.log}
 
 fail=0
+# Each row's outputs (SWEEP_OUT, else /tmp/<row>-out) go under the log dir,
+# so a battery run beside another suite writes nothing shared in /tmp but the
+# rows' own fixed work dirs (paths their reports scrub; rows never share one,
+# so rows may run beside each other, two batteries may not).
 run() { # name script
   local n=$1; shift
-  "$@" "$LABEL" > "$LOGDIR/$LABEL.$n.log" 2>&1
+  SWEEP_OUT="$LOGDIR/out/$n" "$@" "$LABEL" > "$LOGDIR/$LABEL.$n.log" 2>&1
   local rc=$?
   local res
   # scrsweep prints "  txt IDENTICAL" with no colon; every other verify.sh
