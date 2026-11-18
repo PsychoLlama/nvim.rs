@@ -57,6 +57,11 @@
 
 Tests only run local, not in CI. Any failure, even out of scope, is your responsibility to fix.
 
+- **Lanes.** Every change runs `just minimal-ci`, `just functionaltest` and `just oldtest all`. The expensive lanes run once, at the close of a piece of work, and only for what it touched; work that touched none of these says so in its report and skips them:
+  - `just asan functionaltest` + `just asan oldtest` — a `PERIMETER` file, a handle type or its lifetime (`winlayer/`, `eval/typval/handle.rs`, anything building a `Win`/`Buf`/`GridRef` from a stored address), or the pinned C dependencies. The handle-lifetime trigger goes once a handle can no longer outlive its target; the work that closes that class edits this line.
+  - `just miri-perimeter` — a raw-memory perimeter file: one under a `memory` row of `docs/unsafe-audit.md` (`MIRI_PERIMETER_FILES` in `scripts/ratchet.py`).
+  - `just battery` — work that retypes or restructures without meaning to change behaviour (not work whose point is a behaviour change).
+  - `just miri-lib`/`just miri` are on no routine chain.
 - `just cargo-unit [filter...]` — `crates/nvim/tests/unit` under cargo-nextest (part of `minimal-ci`): a process per case, all cores, so a case sets up the editor state it needs rather than inheriting an earlier case's, and a prompt that would wait for a key panics. Lib tests and doctests stay on `cargo test`.
 - `just functionaltest [paths...] [--filter=pat]` — RPC-driven tests from `test/functional`. Pass spec files/dirs to run a subset.
 - `just oldtest <all|test_name...|clean>` — legacy Vim tests from `test/old/testdir`. The mode is required; `all` runs the whole suite from scratch, names run a subset, e.g. `just oldtest test_arglist`.
