@@ -4363,6 +4363,64 @@ def check_cast_deny_floor(tree, report=False):
         )
 
 
+# The raw-memory rows of PERIMETER (docs/unsafe-audit.md's "memory" class):
+# the primitives whose unsafe code is aliasing, provenance and lifetime --
+# what Miri can see and nothing else does. `just miri-perimeter` runs only the
+# lib tests under the module prefixes its recipe names, so each of these files
+# must hold a `#[test]` of its own under one of them (`check_miri_perimeter`).
+MIRI_PERIMETER_FILES = (
+    "crates/nvim/src/allocator.rs",
+    "crates/nvim/src/memory/",
+    "crates/nvim/src/global_cell.rs",
+    "crates/nvim/src/winlayer.rs",
+    "crates/nvim/src/winlayer/",
+    "crates/nvim/src/eval/typval/handle.rs",
+)
+JUSTFILE = ROOT / "justfile"
+# The `miri-perimeter` recipe's body: its indented lines up to the next blank
+# one. A word ending in `::` there is a test-name filter.
+MIRI_PERIMETER_RECIPE = re.compile(
+    r"^miri-perimeter\b[^\n]*:\n((?:[ \t]+\S[^\n]*\n)+)", re.M
+)
+MIRI_SKIP = re.compile(r"--skip\s+\S+")
+MIRI_FILTER = re.compile(r"(?<!\S)([a-z_][a-z0-9_:]*::)(?!\S)")
+
+
+def module_path(file):
+    """The crate-relative module path of a source file, `::`-joined."""
+    stem = file.removeprefix(CRATE_SRC).removesuffix(".rs").removesuffix("/mod")
+    return stem.replace("/", "::")
+
+
+def check_miri_perimeter(tree):
+    """Every raw-memory file that allows unsafe code holds a `#[test]`, and
+    the `miri-perimeter` recipe names a module prefix over it."""
+    if stale := sorted(set(MIRI_PERIMETER_FILES) - PERIMETER.keys()):
+        sys.exit(
+            f"ratchet: MIRI_PERIMETER_FILES rows not on PERIMETER: {', '.join(stale)}"
+        )
+    recipe = MIRI_PERIMETER_RECIPE.search(JUSTFILE.read_text())
+    if recipe is None:
+        sys.exit("ratchet: the justfile has no `miri-perimeter` recipe")
+    filters = MIRI_FILTER.findall(MIRI_SKIP.sub("", recipe.group(1)))
+    bad = []
+    for file, masked in sorted(tree.items()):
+        if not in_home(file, MIRI_PERIMETER_FILES) or FILE_ALLOWS_UNSAFE not in masked:
+            continue
+        if "#[test]" not in masked:
+            bad.append(f"{file}: no #[test] of its own")
+        if not any(f"{module_path(file)}::".startswith(f) for f in filters):
+            bad.append(f"{file}: under none of miri-perimeter's filters {filters}")
+    if bad:
+        sys.exit(
+            "ratchet: `just miri-perimeter` does not reach every raw-memory "
+            "file:\n  "
+            + "\n  ".join(bad)
+            + "\nGive the file a `#[cfg(test)]` module whose tests exercise its "
+            "unsafe operations, or add its module prefix to the recipe."
+        )
+
+
 def copy_sites(tree):
     """Every `derive_copy` site as (file, type name)."""
     return [
@@ -6175,6 +6233,7 @@ def main():
     check_perimeter(stats)
     check_unsafe_placement(tree, sources)
     check_cast_deny_floor(tree)
+    check_miri_perimeter(tree)
     check_keeper_floors(tree)
     index = unsafe_fn_index(tree)
     check_unsafe_fn_allowlist(index, unsafe_fn_allowlist())

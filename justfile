@@ -243,6 +243,20 @@ miri *args:
 miri-lib *args:
   {{ nightly }} MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib {{ args }}
 
+# Miri where it still finds what nothing else does: the lib tests of the
+# raw-memory perimeter (docs/unsafe-audit.md's "memory" rows -- the
+# allocator, `memory/`, `GlobalCell`, the `winlayer` handles, the Vimscript
+# value handles), selected by module prefix. A few minutes rather than
+# miri-lib's hours. Each raw-memory file keeps a `#[cfg(test)]` module of its
+# own under one of these prefixes, exercising its unsafe operations through
+# the safe API; `just ratchet --check` fails when one does not. Runs serially:
+# Miri's ~40 s per-process startup makes nextest slower here. `memory/
+# claimed.rs` forbids unsafe code and its payload test was half the lane, so
+# it is skipped. `args` go to the test binary, e.g. `-Z unstable-options
+# --report-time` or `--skip x`.
+miri-perimeter *args:
+  {{ nightly }} MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib -- allocator:: memory:: global_cell:: winlayer:: eval::typval:: --skip memory::claimed:: {{ args }}
+
 # Run the cargo-test lane with the struct layouts shuffled, to catch code
 # that assumes a `repr(Rust)` type's field order or size. `seed` picks the
 # permutation; run at least two, since one seed proves nothing on its own.

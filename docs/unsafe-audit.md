@@ -58,7 +58,10 @@ falls into four classes:
   and borrow checks of `GlobalCell`, the overlapping-edit check on Vimscript
   values, the Lua stack's consuming-operation check. The functional, old-style
   and unit suites run against debug builds; whole-suite AddressSanitizer runs
-  and Miri (over the crate's own tests) back them.
+  and Miri (over the crate's own tests) back them. `just miri-perimeter` runs
+  Miri over the raw-memory rows' own tests alone: each of those files holds
+  a test module under one of the recipe's module prefixes, and
+  `just ratchet --check` fails on one that does not.
 
 To check the numbers here: `python3 scripts/ratchet.py --dimension
 unsafe_placement` lists any misplaced attribute (none);

@@ -62,6 +62,7 @@ Tests only run local, not in CI. Any failure, even out of scope, is your respons
 - `just oldtest <all|test_name...|clean>` — legacy Vim tests from `test/old/testdir`. The mode is required; `all` runs the whole suite from scratch, names run a subset, e.g. `just oldtest test_arglist`.
 - `just unittest [paths...]` — unit tests from `test/unit`. Their FFI declarations are generated from the Rust crate (`tools/ffigen`, wired in by `scripts/gen-unit-cdefs.sh`); the specs call the exported symbols of the nvim binary, and the C fixtures (`unit-fixtures.so`) compile against the same generated declarations.
 - Run one suite at a time: the harnesses share `target/` scaffolding and interfere when run concurrently.
+- `just miri-perimeter` — Miri over the lib tests of the raw-memory perimeter files (`docs/unsafe-audit.md`'s "memory" rows), selected by module prefix; minutes, not `just miri-lib`'s hours. Run it when a change touches one of those files. Each keeps a `#[cfg(test)]` module of its own, under a prefix the recipe names, that exercises its unsafe operations through the safe API (`just ratchet --check` fails otherwise). `just miri-lib`/`just miri` stay as recipes, off every routine chain.
 - `just asan <recipe>` — AddressSanitizer equivalents (`build`, `functionaltest`, `oldtest`), defined in `just/asan.just`. Reports land in `target/asan/asan.log.<pid>`.
 - `just benchmark [paths...]` — benchmarks from `test/benchmark`. It depends on
   `just build`, so the binary it times is the **dev profile** (only `nvim-mainthread`
