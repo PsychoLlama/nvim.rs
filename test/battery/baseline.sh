@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Resolve one row's baseline directory, cutting it on a cache miss.
 #
-#   baseline.sh key   ->  .../target/battery/base/<sha>/<slot>/keybase
+#   baseline.sh key   ->  .../target/battery/base/<sha>/keybase
 #
 # Nothing generated is committed.  The baselines used to be 276 files and
 # 53 MiB of `*base/` in git; they are now cut from the binary
@@ -37,12 +37,13 @@ if [[ -z $SHA ]]; then
   exit 1
 fi
 
-# Per battery slot (tmproot.sh): most rows write their work dir's path into
-# the report unscrubbed -- it was one fixed path for every run -- so a cut
-# only matches a head run made in the same slot. A lone battery always
-# takes nvb1; a second one at once cuts its own baselines under nvb2 once.
+# One cache for every battery slot (tmproot.sh): each row masks the slot's
+# digit out of its artifacts (slotscrub.py) before cut or compare, so a cut
+# made in /tmp/nvb2 serves a head run in /tmp/nvb1. Two batteries at once
+# share it; the per-row lock below makes the second wait for the first's
+# cut and then hit. The slot is still taken here: a cut's sweep runs in it.
 . "$HERE/tmproot.sh"
-DIR=$REPO/target/battery/base/$SHA/${BATTERY_TMP##*/}
+DIR=$REPO/target/battery/base/$SHA
 CACHE=$DIR/${ROW}base
 # The stamp, not the directory, is the cache hit: a cut interrupted halfway
 # leaves a directory full of half-written artifacts, and a row that trusted

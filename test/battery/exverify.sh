@@ -64,6 +64,8 @@ for probe in parse excmd; do
   rm -f "$OUT/$LABEL-$probe.txt"
   "$HERE/ex-run.sh" "$NVIM_BIN" "$REPO/runtime" \
     "$OUT" "$LABEL" "$probe" | tail -1
+  # Cut and head may run in different battery slots (slotscrub.py).
+  "$HERE/slotscrub.py" "$OUT"
   if [[ -n $CUT ]]; then continue; fi
   if diff -q "$BASELINE/base-$probe.txt" "$OUT/$LABEL-$probe.txt" >/dev/null; then
     echo "$probe: IDENTICAL"

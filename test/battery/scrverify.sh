@@ -100,6 +100,8 @@ fi
 
 echo "== sweep"
 "$here/scrsweep.sh" "$nvim_bin" "$out" "$label" || exit 1
+# Cut and head may run in different battery slots (slotscrub.py).
+"$here/slotscrub.py" "$out"
 if [[ -n $cut ]]; then exit 0; fi
 
 # The baseline is CUT, not committed: `baseline.sh` runs this same sweep

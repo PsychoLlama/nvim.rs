@@ -37,6 +37,8 @@ fi
 
 echo "== sweep"
 "$here/msgsweep.sh" "$nvim_bin" "$out" "$label" || exit 1
+# Cut and head may run in different battery slots (slotscrub.py).
+"$here/slotscrub.py" "$out"
 if [[ -n $cut ]]; then exit 0; fi
 
 base=${MSG_BASELINE:-$("$here/baseline.sh" msg)}

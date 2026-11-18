@@ -58,6 +58,8 @@ rm -rf "${OUT:?}/$LABEL.txt" "$OUT/$LABEL.struct" "$OUT/$LABEL.hashes" \
 "$HERE/undogold.sh" "$BIN" "$REPO/runtime" "$OUT" "$LABEL" \
   2>&1 | tail -2
 
+# Cut and head may run in different battery slots (slotscrub.py).
+"$HERE/slotscrub.py" "$OUT"
 if [[ -n $CUT ]]; then exit 0; fi
 
 # The baseline is CUT, not committed: `baseline.sh` runs this same sweep

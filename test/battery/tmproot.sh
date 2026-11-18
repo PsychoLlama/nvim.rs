@@ -8,11 +8,11 @@
 #
 # A slot, not a `mktemp -d`: the root's NAME reaches the reports. Most of
 # these rows print their work directory's path unscrubbed (it used to be one
-# fixed path for every run), and where they scrub it nvim may have elided a
-# message wider than the headless screen from the middle first (README.md,
-# "Paths and formatting"). So baseline.sh keys its cache by slot: a cut is
-# compared only with a head run in the same root. A lone battery always runs
-# in /tmp/nvb1; a second one at once cuts its own baselines in nvb2, once.
+# fixed path for every run), and nvim may elide a message wider than the
+# headless screen (README.md, "Paths and formatting"), so the path must not
+# vary in length. Every slot root is the same length, so a message lays out
+# alike in any slot and only the digit differs; slotscrub.py masks it, and
+# baseline.sh keeps one cut cache for all nine slots.
 # Rows that take a `mktemp -d` of their own (constant length, scrubbed whole)
 # keep it.
 if [[ -z ${BATTERY_TMP:-} ]]; then

@@ -59,6 +59,8 @@ rm -f "$OUT/$LABEL.txt" "$OUT/$LABEL.err" "$OUT/$LABEL.stderr"
 "$HERE/synsweep.sh" "$NVIM_BIN" "$REPO/runtime" \
   "$OUT" "$LABEL" 2>&1 | tail -1
 
+# Cut and head may run in different battery slots (slotscrub.py).
+"$HERE/slotscrub.py" "$OUT"
 if [[ -n $CUT ]]; then exit 0; fi
 
 BASELINE=${SYN_BASELINE:-$("$HERE/baseline.sh" syn)}

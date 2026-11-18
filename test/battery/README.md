@@ -166,9 +166,14 @@ screen, and a long fixture path is what turns an error text into `...<tail>`.
 The fixed-name ones sit under one root per run, `$BATTERY_TMP` (`tmproot.sh`):
 the lowest free slot of `/tmp/nvb1`…`/tmp/nvb9`, locked for the run, so two
 batteries at once never share a work directory. Most rows print their work
-path unscrubbed, so the cut cache is per slot (`base/<sha>/nvb<N>/`): a lone
-battery always takes `nvb1`; a second one beside it cuts its own baselines in
-`nvb2`, once.
+path, and every slot root has the same length, so a message lays out (and
+elides) alike in any slot and only the digit differs: each row passes its
+artifacts through `slotscrub.py` right after its sweep — the one call the cut
+and the head run share — which masks it to `nvbN` (`<vbN/`, `<N/` where nvim
+cut the head off). So there is one cut cache for all slots, and two batteries
+beside each other share it (the per-row lock in `baseline.sh` makes the second
+wait for the first's cut, then hit). A new row does the same; `perssweep.sh`
+masks its swap files before hashing them, since `b0_fname` holds the path.
 
 For the same reason LuaJIT elides a chunk name past ~60 characters, so every
 `<SCRIPT>` mask has a second, basename-anchored form

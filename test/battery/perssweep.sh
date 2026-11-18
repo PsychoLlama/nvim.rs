@@ -150,6 +150,11 @@ fi
 rm -rf "${OUT:?}/$LABEL-files"
 mkdir -p "$OUT/$LABEL-files"
 : >"$OUT/$LABEL.hashes"
+# b0_fname holds the battery slot root; hash it masked (slotscrub.py), so a
+# cut in one slot compares with a head run in another.
+if ((${#swaps[@]})); then
+  "$HERE/slotscrub.py" "${swaps[@]}"
+fi
 for f in "${swaps[@]}"; do
   name=$(basename "$f")
   cp "$f" "$OUT/$LABEL-files/$name"

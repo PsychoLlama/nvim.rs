@@ -92,6 +92,8 @@ for corpus in list dict blob; do
   rm -f "$out.stderr.raw"
   printf '\nexit %d\n' "$status" >>"$out.stderr"
   touch "$out"
+  # Cut and head may run in different battery slots (slotscrub.py).
+  "$HERE/slotscrub.py" "$out" "$out.stderr"
   if [ -n "$CUT" ]; then
     echo "$corpus: CUT ($(wc -l <"$out") lines, exit $status)"
     continue

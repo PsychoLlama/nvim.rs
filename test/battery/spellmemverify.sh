@@ -34,6 +34,8 @@ rm -f "$OUT/$LABEL.txt"
 SPELLMEMSWEEP_WORK=${SPELLMEMSWEEP_WORK:-$BATTERY_TMP/spellmemsweep-verify} \
   "$HERE/spellmemsweep.sh" "$NVIM_BIN" "$REPO/runtime" "$OUT" "$LABEL"
 
+# Cut and head may run in different battery slots (slotscrub.py).
+"$HERE/slotscrub.py" "$OUT"
 if [[ -n $CUT ]]; then exit 0; fi
 
 BASELINE=${SPELLMEM_BASELINE:-$("$HERE/baseline.sh" spellmem)}

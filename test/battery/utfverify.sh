@@ -80,6 +80,8 @@ rm -f "$OUT/$LABEL.txt" "$OUT/$LABEL.struct" "$OUT/$LABEL.bin" "$OUT/$LABEL.stde
 "$HERE/utfsweep.sh" "$NVIM_BIN" "$REPO/runtime" \
   "$OUT" "$LABEL" 2>&1 | tail -1
 
+# Cut and head may run in different battery slots (slotscrub.py).
+"$HERE/slotscrub.py" "$OUT"
 if [[ -n $CUT ]]; then exit 0; fi
 
 # The baseline is CUT, not committed: `baseline.sh` runs this same sweep

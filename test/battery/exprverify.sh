@@ -86,6 +86,8 @@ sed "s#$HERE#<HERE>#g" "$out.stderr.raw" >"$out.stderr"
 rm -f "$out.stderr.raw"
 printf '\nexit %d\n' "$status" >>"$out.stderr"
 touch "$out.txt"
+# Cut and head may run in different battery slots (slotscrub.py).
+"$HERE/slotscrub.py" "$out.txt" "$out.stderr"
 if [ -n "$CUT" ]; then
   echo "expr: CUT ($(wc -l <"$out.txt") lines, exit $status)"
   exit 0

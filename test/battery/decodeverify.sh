@@ -124,6 +124,8 @@ for corpus in json msgpack walk luajson lumpack rpc; do
     fail=1
     continue
   fi
+  # Cut and head may run in different battery slots (slotscrub.py).
+  "$HERE/slotscrub.py" "$out"
   # Cut mode stops here: the artifact IS the baseline.
   if [ -n "$CUT" ]; then
     echo "$corpus: CUT ($(wc -l <"$out") lines)"
