@@ -24,11 +24,16 @@ bin := justfile_directory() / "target/asan" / triple / "debug/nvim"
 tree := justfile_directory() / "target/asan/tree"
 
 # ASan reports go to files (nvim is a TUI; stderr is often a terminal the
-# harness owns). Leak checking is off in the default options because a leak
-# is not a corruption and every report would be noise on a run looking for
-# one; `leaktest` below turns it on. Callers may override by exporting
-# ASAN_OPTIONS.
-options := "detect_leaks=0:log_path=" + justfile_directory() / "target/asan/asan.log"
+# harness owns), one directory per suite under `logs`, emptied when the suite
+# starts: a sharded run's workers all write there, a suite beside another
+# never reads the other's reports, and `scripts/asan-reports.sh` scans the
+# directory after the run and fails it on any report. Leak checking is off in
+# the default options because a leak is not a corruption and every report
+# would be noise on a run looking for one; `leaktest` below turns it on.
+# Callers may override the options by exporting ASAN_OPTIONS; the recipe
+# appends its own `log_path`, so the scan still sees every report.
+logs := justfile_directory() / "target/asan/logs"
+options := "detect_leaks=0"
 
 # The same, with LeakSanitizer on.
 #
@@ -36,7 +41,7 @@ options := "detect_leaks=0:log_path=" + justfile_directory() / "target/asan/asan
 # functional harness reads a child nvim's exit status: with the default
 # exitcode the whole run dies before the first test, with no output that says
 # why. Measured.
-leakoptions := "detect_leaks=1:exitcode=0:log_path=" + justfile_directory() / "target/asan/asan.log"
+leakoptions := "detect_leaks=1:exitcode=0"
 
 # Compile the nvim binary with AddressSanitizer. Stack-redzone checking is
 # on again: the 2023 nightly's C-ABI lowering over-read by-value aggregates
@@ -50,13 +55,17 @@ build:
 # with ASLR on, ~1/3 of processes randomly land a mapping inside ASan's fixed
 # shadow regions and SIGSEGV in the dynamic loader before main.
 #
-# Reports land in target/asan/asan.log.<pid>.
+# Reports land in target/asan/logs/functional/asan.log.<pid>; any report
+# fails the run.
 #
-# Run functional tests against the ASan build. Args as for `functionaltest`.
+# Run functional tests against the ASan build. Args as for `functionaltest`
+# (`--jobs=N` included).
 functionaltest *args: build
   #!/usr/bin/env bash
   set -euo pipefail
-  export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ options }}}"
+  logs={{ logs }}/functional
+  rm -rf "$logs" && mkdir -p "$logs"
+  export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ options }}}:log_path=$logs/asan.log"
   export NVIM_TEST_ASAN=1
   # ASan frames are several times larger and the debug GlobalCell checks add
   # non-inlined calls, so the deliberately-recursive specs (E169) overflow
@@ -66,23 +75,33 @@ functionaltest *args: build
   # prep-test-tree.sh points it at $NVIM_BIN. The build dir is ASan's own
   # (and the run root under it), so a plain suite can run beside this one.
   export NVIM_BIN={{ bin }} NVIM_TEST_BUILD_DIR={{ tree }}
-  exec setarch "$(uname -m)" -R scripts/run-tests.sh functional {{ args }}
+  status=0
+  setarch "$(uname -m)" -R scripts/run-tests.sh functional {{ args }} || status=$?
+  scripts/asan-reports.sh "$logs" || status=1
+  exit "$status"
 
-# Reports land in target/asan/asan.log.<pid>.
+# Reports land in target/asan/logs/oldtest/asan.log.<pid>; any report fails
+# the run.
 #
 # Run old (Vim) tests against the ASan build. Args as for `oldtest`, whose
-# mode (`all`, test names, or `clean`) is likewise required.
+# mode (`all`, test names, or `clean`) is likewise required; `--jobs=N`
+# included.
 oldtest +args: build
   #!/usr/bin/env bash
   set -euo pipefail
-  export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ options }}}"
+  logs={{ logs }}/oldtest
+  rm -rf "$logs" && mkdir -p "$logs"
+  export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ options }}}:log_path=$logs/asan.log"
   export NVIM_TEST_ASAN=1
   ulimit -s 65536
   export NVIM_BIN={{ bin }} NVIM_TEST_BUILD_DIR={{ tree }}
   export NVIM_PRG={{ tree }}/bin/nvim
   # A root of its own, so it runs beside a plain oldtest.
   export NVIM_OLDTEST_RUN_DIR={{ justfile_directory() }}/target/oldtest-asan
-  exec setarch "$(uname -m)" -R scripts/run-oldtest.sh {{ args }}
+  status=0
+  setarch "$(uname -m)" -R scripts/run-oldtest.sh {{ args }} || status=$?
+  scripts/asan-reports.sh "$logs" || status=1
+  exit "$status"
 
 # Run functional tests with LEAK CHECKING ON, then summarise every report.
 # Args as for `functionaltest`.
@@ -109,17 +128,18 @@ oldtest +args: build
 leaktest *args: build
   #!/usr/bin/env bash
   set -uo pipefail
-  export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ leakoptions }}}"
+  logs={{ logs }}/leaktest
+  rm -rf "$logs" && mkdir -p "$logs"
+  export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ leakoptions }}}:log_path=$logs/asan.log"
   export NVIM_TEST_ASAN=1
   ulimit -s 65536
   export NVIM_BIN={{ bin }} NVIM_TEST_BUILD_DIR={{ tree }}
-  rm -f {{ justfile_directory() }}/target/asan/asan.log.*
   setarch "$(uname -m)" -R scripts/run-tests.sh functional {{ args }}
   rc=$?
   echo
   echo "== leak reports =="
   shopt -s nullglob
-  reports=({{ justfile_directory() }}/target/asan/asan.log.*)
+  reports=("$logs"/asan.log.*)
   if [ ${#reports[@]} -eq 0 ]; then
     echo "none"
   else
