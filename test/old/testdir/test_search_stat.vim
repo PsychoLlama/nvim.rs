@@ -530,9 +530,10 @@ func Test_search_stat_option()
   " didn't get added to message history
   call assert_equal(messages_before, execute('messages'))
 
-  " If the test is being retried due to flakiness, extend the searchcount()
-  " timeout, too
-  let timeout = 500 * get(g:, 'run_nr', 1)
+  " Nvim.rs: no searchcount() timeout (0). These checks are about the count,
+  " and counting 28000 matches took over 500 ms on a loaded machine (twelve
+  " suites' workers at once), which the retry did not always cover.
+  let timeout = 0
 
   " Many matches
   call cursor(line('$')-2, 1)
