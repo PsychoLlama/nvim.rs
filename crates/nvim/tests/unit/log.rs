@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use neovim::log::G_MIN_LOG_LEVEL;
 use neovim::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, log_init, logmsg_line};
 
-use crate::support::Sandbox;
+use crate::support::{Sandbox, process_dir};
 
 /// Points the editor's log at a path for the rest of the case.
 ///
@@ -55,7 +55,7 @@ impl Logging {
 impl Drop for Logging {
     fn drop(&mut self) {
         G_MIN_LOG_LEVEL.set(self.min_level);
-        let parking = std::env::temp_dir().join("nvim-unit-log-parking.log");
+        let parking = process_dir().join("log-parking.log");
         // SAFETY-free: this is the test's own process environment, and the
         // editor lock is still held by the case's sandbox.
         unsafe { std::env::set_var("NVIM_LOG_FILE", &parking) };

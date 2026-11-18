@@ -114,7 +114,8 @@ fn init_editor() {
         // all, see below) point into the suite's own while `early_init`
         // computes them; the option oracles pin every one of them.
         let saved_state = std::env::var_os("XDG_STATE_HOME");
-        let _ = std::fs::remove_dir_all(suite_state_dir());
+        prune_dead_process_dirs();
+        let _ = std::fs::remove_dir_all(process_dir());
         std::env::set_var("XDG_STATE_HOME", suite_state_dir());
         neovim::startup::event_init();
         neovim::startup::early_init(false);
@@ -133,28 +134,75 @@ fn init_editor() {
         // process exits without closing it. In the user's own 'directory'
         // every run left one more `crates%nvim.s??` behind, until the names
         // ran out and the next case to edit stopped at E326's hit-enter
-        // prompt. A directory of the suite's own, emptied per run, instead --
-        // set outright, and the default (`set directory&`) under the suite's
-        // state directory too; the option oracle pins 'directory' and puts
-        // it back.
-        let swap = suite_swap_dir();
-        let _ = std::fs::remove_dir_all(&swap);
-        if std::fs::create_dir_all(&swap).is_ok() {
+        // prompt. A directory of the process's own instead (see
+        // [`process_dir`]) -- set outright, and the default
+        // (`set directory&`) under the process's state directory too; the
+        // option oracle pins 'directory' and puts it back.
+        if std::fs::create_dir_all(suite_swap_dir()).is_ok() {
             let _ = neovim::ex_docmd::do_cmdline_cmd(&cstr(set_suite_directory()));
         }
     });
 }
 
+/// Where this process's editor keeps everything it writes on its own
+/// account: `$XDG_STATE_HOME` (and the log `early_init` opens under it) and
+/// the swap files.
+///
+/// One per process, because the suite runs a process per case (nextest), up
+/// to one per core at a time: a single shared directory, emptied by each
+/// process as it started, was deleted under the eleven others still using
+/// it, and their next swap file write failed (E301, or E303 and a hit-enter
+/// prompt). A process cannot remove its own on the way out — it exits with
+/// the swap files open — so each new one prunes the directories of
+/// processes that have gone ([`prune_dead_process_dirs`]).
+#[cfg(not(miri))]
+pub(crate) fn process_dir() -> PathBuf {
+    Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("{PROCESS_DIR_PREFIX}{}", std::process::id()))
+}
+
+/// [`process_dir`]'s name, less the process id.
+#[cfg(not(miri))]
+const PROCESS_DIR_PREFIX: &str = "unit-editor-";
+
+/// Remove every [`process_dir`] whose process is no longer running.
+///
+/// A process is "running" while `/proc/<pid>` exists, so this prunes on
+/// Linux only; elsewhere the directories wait for `cargo clean`. A recycled
+/// id keeps a dead directory one run longer, which is harmless.
+#[cfg(not(miri))]
+fn prune_dead_process_dirs() {
+    if !Path::new("/proc/self").exists() {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(env!("CARGO_TARGET_TMPDIR")) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(pid) = name
+            .to_str()
+            .and_then(|name| name.strip_prefix(PROCESS_DIR_PREFIX))
+            .filter(|pid| pid.parse::<u32>().is_ok())
+        else {
+            continue;
+        };
+        if !Path::new("/proc").join(pid).exists() {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
 /// The `$XDG_STATE_HOME` the unit editor's defaults are computed under.
 #[cfg(not(miri))]
 fn suite_state_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("unit-state")
+    process_dir().join("state")
 }
 
 /// Where the unit editor keeps its swap files: see [`init_editor`].
 #[cfg(not(miri))]
 fn suite_swap_dir() -> PathBuf {
-    Path::new(env!("CARGO_TARGET_TMPDIR")).join("unit-swap")
+    process_dir().join("swap")
 }
 
 /// The `:set` that points 'directory' back at the suite's own swap
