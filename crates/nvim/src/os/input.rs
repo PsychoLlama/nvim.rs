@@ -110,7 +110,11 @@ static CURSORHOLD_TB_CHANGE_CNT: GlobalCell<c_int> = GlobalCell::new(0);
 /// process forever. The panic fails the case instead, and says why. It
 /// fires where the wait would become indefinite, after the 'updatetime'
 /// poll that gives a CursorHold its turn.
+///
+/// Never inlined: a small call-free `pub` body is shipped to other crates,
+/// which exports the cell it names (`just state-exports`).
 #[doc(hidden)]
+#[inline(never)]
 pub fn refuse_endless_waits() {
     REFUSE_ENDLESS_WAITS.set(true);
 }
