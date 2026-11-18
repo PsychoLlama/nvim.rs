@@ -83,7 +83,9 @@ functionaltest *args: build
 #   just oldtest clean                # delete test artifacts, run nothing
 #
 # There is no incremental full run: `all` always starts from scratch, because
-# a resumed one reports only the tests it re-ran. See scripts/run-oldtest.sh.
+# a resumed one reports only the tests it re-ran. `--jobs=N` (or
+# NVIM_TEST_JOBS=N) runs the test files N at a time, with one merged report.
+# See scripts/run-oldtest.sh.
 oldtest +args: build
   scripts/run-oldtest.sh {{ args }}
 

@@ -57,6 +57,11 @@ endif
 
 default: nongui
 
+# The tests `make` (the default target) runs, one name per line: what a split
+# run (scripts/run-oldtest.sh --jobs=N) hands out to its workers.
+list-tests:
+	@printf '%s\n' $(basename $(NEW_TESTS_RES))
+
 nongui: nolog $(FIXFF) newtests report
 
 .gdbinit:

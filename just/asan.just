@@ -80,7 +80,7 @@ oldtest +args: build
   ulimit -s 65536
   export NVIM_BIN={{ bin }} NVIM_TEST_BUILD_DIR={{ tree }}
   export NVIM_PRG={{ tree }}/bin/nvim
-  # Two levels below the repo root, like every oldtest run root.
+  # A root of its own, so it runs beside a plain oldtest.
   export NVIM_OLDTEST_RUN_DIR={{ justfile_directory() }}/target/oldtest-asan
   exec setarch "$(uname -m)" -R scripts/run-oldtest.sh {{ args }}
 

@@ -22,7 +22,8 @@ main() {(
     i=$(( i+1 ))
   done
 
-  BUILD_DIR="$(dirname "$nvim_prg")/.."
+  # scripts/run-oldtest.sh gives each run root a build dir of its own.
+  BUILD_DIR="${NVIM_OLDTEST_BUILD_DIR:-$(dirname "$nvim_prg")/..}"
   export BUILD_DIR
   export FAILED=0
 
