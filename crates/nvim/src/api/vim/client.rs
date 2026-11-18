@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::msgpack_rpc::channel::note_channel_detached;
 use crate::types::DictBuilder;
 
 pub fn nvim_get_api_info(channel_id: uint64_t) -> Array {
@@ -58,6 +59,9 @@ pub fn nvim_set_client_info(
 pub fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
     if with_channel(channel_id, |channel| channel.detach = detach).is_none() {
         return Err(Error::from_message(ERROR_TYPE_VALIDATION, E_INVCHAN));
+    }
+    if detach {
+        note_channel_detached(channel_id);
     }
     Ok(())
 }

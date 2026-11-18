@@ -397,6 +397,45 @@ describe('TUI :restart', function()
 
     -- The server is now detached and needs to be quit explicitly.
     tt.feed_data(':qall!\r')
+    screen:expect({ any = vim.pesc('[Process exited 0]') })
+  end)
+
+  it('restarted server exits when its client dies', function()
+    local server_pipe = new_pipename()
+    local screen = tt.setup_child_nvim({
+      '--clean',
+      '--listen',
+      server_pipe,
+      '--cmd',
+      'set notermguicolors',
+    }, {
+      env = vim.tbl_extend('force', env_notermguicolors, {
+        -- Ignore logs, because assert_restarted may log "connection refused" while it retries.
+        NVIM_LOG_FILE = testlog,
+      }),
+    })
+    finally(function()
+      os.remove(testlog)
+    end)
+    screen:expect({ any = vim.pesc('[No Name]') })
+    local server_session = n.connect(server_pipe)
+    local _, starttime = server_session:request('nvim_eval', 'v:starttime')
+    tt.feed_data(':restart\r')
+    _, server_session = assert_restarted(starttime, server_session, server_pipe)
+    local _, server_pid = server_session:request('nvim_call_function', 'getpid', {})
+    -- The new server answers before the client has reattached to it.
+    retry(nil, 5000, function()
+      local _, uis = server_session:request('nvim_list_uis')
+      eq(1, #uis)
+    end)
+    server_session:close()
+
+    -- The client goes without a word, as when its terminal is closed: the
+    -- server it reconnected to after :restart must not outlive it.
+    exec_lua([[vim.uv.kill(vim.fn.jobpid(vim.bo.channel), 'sigkill')]])
+    retry(nil, 5000, function()
+      eq(nil, (vim.uv.kill(server_pid, 0)))
+    end)
   end)
 
   it('works', function()

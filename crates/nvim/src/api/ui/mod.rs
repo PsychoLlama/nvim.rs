@@ -47,6 +47,7 @@ use crate::channel::CHAN_STDIO;
 use crate::event::r#loop::{Drain, wait_on_main_loop};
 use crate::grid::DEFAULT_GRID_HANDLE;
 use crate::memory::XString;
+use crate::msgpack_rpc::channel::note_ui_attached;
 use crate::narrow::number_as_int;
 use crate::option::set_tty_option;
 use crate::startup::{STDIN_FD, STDIN_ISATTY, STDOUT_ISATTY, starting};
@@ -146,6 +147,7 @@ pub fn nvim_ui_attach(
 
     CURRENT_UI.set(channel_id);
     ui_attach_impl(ui);
+    note_ui_attached(channel_id);
     may_trigger_vim_suspend_resume(false);
     Ok(())
 }

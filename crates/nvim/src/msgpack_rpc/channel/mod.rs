@@ -79,8 +79,44 @@ use known::*;
 
 use crate::api_error;
 use crate::global_cell::GlobalCell;
+use crate::startup::HEADLESS_MODE;
+use crate::ui::ui_active;
 
 pub(crate) static CH_BEFORE_BLOCKING_EVENTS: GlobalCell<Option<ChildQueue>> = GlobalCell::new(None);
+
+// The `:restart` hand-off. An embedded server exits when its embedder, the
+// stdio peer, goes away. `:restart` starts the new server embedded and then
+// detaches it, before any UI has attached, so that it outlives the old
+// server; the TUI client then reconnects over a socket. That client is the
+// embedder from then on, so the first UI to attach after such a detach is
+// adopted: when its channel closes, the server exits as it would have on
+// stdio EOF, unless that channel was detached in turn (`:detach`). Without
+// this, a client that dies after `:restart` (its terminal closed) leaves
+// the server running with no UI and nothing that will ever quit it.
+
+/// The hand-off's state: 0 for none, [`ADOPT_NEXT_UI`] while one is
+/// pending, else the adopted UI's channel.
+static UI_HANDOFF: GlobalCell<uint64_t> = GlobalCell::new(0);
+/// [`UI_HANDOFF`] waiting for the first UI. Never a channel id: those count
+/// up from 1.
+const ADOPT_NEXT_UI: uint64_t = uint64_t::MAX;
+
+/// Notes that channel `id` was just detached; if it is the stdio embedder
+/// of a server still waiting for its first UI, that UI will be adopted.
+pub(crate) fn note_channel_detached(id: uint64_t) {
+    let stdio = with_channel(id, |chan| chan.streamtype() == CHANNEL_STREAM_STDIO);
+    if stdio == Some(true) && ui_active() == 0 && !HEADLESS_MODE.get() {
+        UI_HANDOFF.set(ADOPT_NEXT_UI);
+    }
+}
+
+/// Called when a UI attaches on channel `id`: adopts it if a hand-off is
+/// pending.
+pub(crate) fn note_ui_attached(id: uint64_t) {
+    if UI_HANDOFF.get() == ADOPT_NEXT_UI {
+        UI_HANDOFF.set(id);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Opening and closing
@@ -162,7 +198,7 @@ fn rpc_close_event(id: uint64_t, _: uint64_t) {
             return;
         }
         exit_on_closed_chan(0);
-    } else if streamtype == CHANNEL_STREAM_STDIO && !detach {
+    } else if (streamtype == CHANNEL_STREAM_STDIO || id == UI_HANDOFF.get()) && !detach {
         exit_on_closed_chan(0);
     }
 }
