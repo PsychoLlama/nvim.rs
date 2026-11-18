@@ -35,6 +35,19 @@ use crate::types::{Failed, OptInt};
 use crate::winlayer::graph::LASTWIN;
 use crate::winlayer::{FrameId, FrameRef, Win, frames};
 
+/// Exchange one field of two windows, borrowing each in turn: holding both
+/// windows' `&mut` at once (`mem::swap(&mut a.x, &mut b.x)`) would be two
+/// live `&mut Window` to one window if `a == b`, which is undefined
+/// behaviour. This stays sound (a no-op) when they are the same window.
+macro_rules! swap_field {
+    ($a:expr, $b:expr, $field:ident) => {{
+        let (mut a, mut b): (Win, Win) = ($a, $b);
+        let from_a = a.$field;
+        let from_b = core::mem::replace(&mut b.$field, from_a);
+        a.$field = from_b;
+    }};
+}
+
 pub fn make_windows(count: c_int, vertical: bool) -> c_int {
     let cur = Win::current();
     // Each window needs at least 'winminheight' lines and a status line, and
@@ -89,7 +102,7 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
 /// Exchange the current window with the `prenum`th window of its row or
 /// column, or with the next one when `prenum` is zero.
 pub(crate) fn exchange(prenum: c_int) {
-    let mut cur = Win::current();
+    let cur = Win::current();
     if cur.w_floating {
         emsg(E_FLOATEXCHANGE);
         return;
@@ -146,9 +159,9 @@ pub(crate) fn exchange(prenum: c_int) {
 
     // Exchange the chrome, which belongs to the position and not to the
     // window.
-    core::mem::swap(&mut cur.w_status_height, &mut wp.w_status_height);
-    core::mem::swap(&mut cur.w_vsep_width, &mut wp.w_vsep_width);
-    core::mem::swap(&mut cur.w_hsep_height, &mut wp.w_hsep_height);
+    swap_field!(cur, wp, w_status_height);
+    swap_field!(cur, wp, w_vsep_width);
+    swap_field!(cur, wp, w_hsep_height);
     frame_fix_height(cur);
     frame_fix_height(wp);
     frame_fix_width(cur);
@@ -220,15 +233,15 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
             first.prepend_sibling(frp);
             wp1 = Some(w1);
         }
-        let (Some(mut w1), Some(mut w2)) = (wp1, wp2) else {
+        let (Some(w1), Some(w2)) = (wp1, wp2) else {
             continue;
         };
         // Exchange the chrome, which belongs to the position.
-        core::mem::swap(&mut w2.w_status_height, &mut w1.w_status_height);
-        core::mem::swap(&mut w2.w_hsep_height, &mut w1.w_hsep_height);
+        swap_field!(w2, w1, w_status_height);
+        swap_field!(w2, w1, w_hsep_height);
         frame_fix_height(w1);
         frame_fix_height(w2);
-        core::mem::swap(&mut w2.w_vsep_width, &mut w1.w_vsep_width);
+        swap_field!(w2, w1, w_vsep_width);
         frame_fix_width(w1);
         frame_fix_width(w2);
         comp_positions();
@@ -328,8 +341,8 @@ fn move_after(win1: Win, win2: Win) {
         // with whichever window is about to become last.
         if LASTWIN.get() == Some(win1.id()) {
             let mut prev = win1.prev().expect("`win1` is not the first window");
-            core::mem::swap(&mut prev.w_status_height, &mut win1.w_status_height);
-            core::mem::swap(&mut prev.w_hsep_height, &mut win1.w_hsep_height);
+            swap_field!(prev, win1, w_status_height);
+            swap_field!(prev, win1, w_hsep_height);
             if prev.w_vsep_width == 1 {
                 // The last window has no separator: give it to `win1`.
                 prev.w_vsep_width = 0;
@@ -338,8 +351,8 @@ fn move_after(win1: Win, win2: Win) {
                 win1.frame().fr_width += 1;
             }
         } else if LASTWIN.get() == Some(win2.id()) {
-            core::mem::swap(&mut win1.w_status_height, &mut win2.w_status_height);
-            core::mem::swap(&mut win1.w_hsep_height, &mut win2.w_hsep_height);
+            swap_field!(win1, win2, w_status_height);
+            swap_field!(win1, win2, w_hsep_height);
             if win1.w_vsep_width == 1 {
                 win2.w_vsep_width = 1;
                 win2.frame().fr_width += 1;
