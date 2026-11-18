@@ -862,7 +862,7 @@ impl Dict {
 /// of the table before either goes, which is what makes the link sound. `b:`
 /// is neither scope the function-name check guards.
 pub(crate) fn link_buf_changedtick(mut buffer: crate::winlayer::Buf) {
-    let item = &raw mut buffer.changedtick_di;
+    let item = buffer.changedtick_item();
     let key = DictKey::new(b"changedtick");
     let Some(dict) = buffer.b_bufvar.di_tv.dict_mut() else {
         return;
@@ -990,7 +990,34 @@ impl Dict {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::buffer::{bare_buffer, buf_init_changedtick, free_bare_buffer};
+    use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
     use crate::global_cell::editor_state_lock;
+    use crate::types::VAR_SCOPE;
+
+    /// `b:changedtick` is an item embedded in the buffer that the buffer's
+    /// `b:` table points at: the table's pointer stays good while the buffer
+    /// is written around it, and reads the counter the buffer keeps.
+    #[test]
+    fn b_changedtick_is_the_buffer_own_item() {
+        let _held = editor_state_lock();
+        let mut buffer = bare_buffer();
+        buffer.b_bufvar = new_var_scope(VAR_SCOPE);
+        buf_init_changedtick(buffer);
+        buffer.b_changed = 1;
+        buffer.changedtick_di.di_tv.write_number(7);
+        let vars = buffer.b_bufvar.di_tv.dict_handle().expect("a b: scope");
+        let tick = vars
+            .find(b"changedtick")
+            .map(|item| item.di_tv.number_or_zero());
+        assert_eq!(tick, Some(7));
+        unlink_buf_changedtick(buffer);
+        assert!(vars.find(b"changedtick").is_none());
+        vars_clear(&vars);
+        drop(vars);
+        release_var_scope(&mut buffer.b_bufvar);
+        free_bare_buffer(buffer);
+    }
 
     /// A dictionary released to zero under the flag is left for the
     /// collector, which frees it explicitly afterwards. Here rather than
