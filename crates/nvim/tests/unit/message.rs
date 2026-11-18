@@ -17,7 +17,7 @@ use std::ffi::c_int;
 
 use neovim::message::cut_middle;
 
-use crate::support::{Editor, editor_lock};
+use crate::support::{Editor, Probe, Sandbox, editor_lock};
 
 /// The Lua spec's buffer size. Big enough that nothing here hits the
 /// "cannot even fit the `...`" arm unless a case asks for it.
@@ -150,7 +150,7 @@ fn a_buffer_too_small_for_the_ellipsis_is_merely_cut() {
 }
 
 /// The history as `:messages` prints it, one entry a line.
-fn history(probe: &crate::support::Probe<'_>) -> String {
+fn history(probe: &Probe<'_>) -> String {
     probe.output("messages")
 }
 
@@ -160,7 +160,7 @@ fn history(probe: &crate::support::Probe<'_>) -> String {
 #[test]
 fn the_history_keeps_what_was_said_and_drops_the_oldest() {
     let editor = editor_lock();
-    let probe = crate::support::Probe::new(&editor);
+    let probe = Probe::new(&editor);
     probe.run("messages clear");
     probe.run("echomsg 'one'");
     probe.run("echo 'not kept'");
@@ -184,7 +184,7 @@ fn the_history_keeps_what_was_said_and_drops_the_oldest() {
 #[test]
 fn the_history_holds_the_text_not_its_rendering() {
     let editor = editor_lock();
-    let probe = crate::support::Probe::new(&editor);
+    let probe = Probe::new(&editor);
     probe.run("messages clear");
     let long = "x".repeat(300);
     probe.run(&format!("echomsg '{long}'"));
@@ -198,7 +198,7 @@ fn the_history_holds_the_text_not_its_rendering() {
 #[test]
 fn messagesopt_refuses_what_it_cannot_use() {
     let editor = editor_lock();
-    let probe = crate::support::Probe::new(&editor);
+    let probe = Probe::new(&editor);
     for bad in [
         "history:500",
         "hit-enter",
@@ -250,4 +250,15 @@ fn a_buffer_smaller_than_the_text_is_never_overrun() {
             assert!(out.len() < buflen, "{room}/{buflen}: {} bytes", out.len());
         }
     }
+}
+
+/// A case that leaves the editor waiting for a key fails rather than hangs:
+/// nothing in this suite can type one (see `support::init_editor`).
+#[test]
+#[should_panic(expected = "waiting for a key that nothing can send")]
+fn a_wait_for_a_key_nobody_will_type_fails_the_case() {
+    let sandbox = Sandbox::globals();
+    let fx = Probe::new(sandbox.editor());
+    fx.run("set updatetime=1");
+    fx.run("call getchar()");
 }

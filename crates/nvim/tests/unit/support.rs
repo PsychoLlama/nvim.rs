@@ -130,6 +130,9 @@ fn init_editor() {
         }
         neovim::lua::executor::nlua_init(&[], -1);
         neovim::drawscreen::default_grid_alloc();
+        // Nothing here can type a key, so a prompt fails the case instead
+        // of hanging the process.
+        neovim::os::input::refuse_endless_waits();
         // The first change to the shared buffer opens a swap file, and the
         // process exits without closing it. In the user's own 'directory'
         // every run left one more `crates%nvim.s??` behind, until the names

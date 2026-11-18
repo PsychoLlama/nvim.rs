@@ -93,11 +93,27 @@ static INPUT_READ_POS: GlobalCell<usize> = GlobalCell::new(0);
 static INPUT_WRITE_POS: GlobalCell<usize> = GlobalCell::new(0);
 
 static INPUT_EOF: GlobalCell<bool> = GlobalCell::new(false);
+/// Whether a wait for input with no end panics: see [`refuse_endless_waits`].
+static REFUSE_ENDLESS_WAITS: GlobalCell<bool> = GlobalCell::new(false);
 static BLOCKING: GlobalCell<bool> = GlobalCell::new(false);
 /// Time already spent waiting for a CursorHold, and the `tb_change_cnt` that
 /// wait started under — a change to the typeahead restarts the clock.
 static CURSORHOLD_TIME: GlobalCell<c_int> = GlobalCell::new(0);
 static CURSORHOLD_TB_CHANGE_CNT: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// From now on, a wait for input that only a key could end panics instead
+/// of waiting, for the unit suite.
+///
+/// The suite's editor reads no stdin and has no UI or channel attached, so
+/// once its typeahead is empty no key can ever arrive: a hit-enter or more
+/// prompt, or a `getchar()` the case did not feed, would block the test
+/// process forever. The panic fails the case instead, and says why. It
+/// fires where the wait would become indefinite, after the 'updatetime'
+/// poll that gives a CursorHold its turn.
+#[doc(hidden)]
+pub fn refuse_endless_waits() {
+    REFUSE_ENDLESS_WAITS.set(true);
+}
 
 /// Start reading stdin.
 pub fn input_start() {
@@ -256,6 +272,11 @@ pub(crate) fn input_get(
             if trigger_cursorhold() && !typebuf_changed(tb_change_cnt) {
                 create_cursorhold_event(events.is_main_loop());
             } else {
+                assert!(
+                    !REFUSE_ENDLESS_WAITS.get(),
+                    "the editor is waiting for a key that nothing can send \
+                     (a hit-enter or more prompt?); see the messages above"
+                );
                 before_blocking();
                 result = inbuf_poll(-1, events);
             }
