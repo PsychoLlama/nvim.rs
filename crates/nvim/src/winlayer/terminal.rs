@@ -86,3 +86,54 @@ impl Buf {
         NonNull::new(self.terminal).map(Term)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::buffer::{bare_buffer, free_bare_buffer};
+    use crate::global_cell::editor_state_lock;
+    use crate::terminal::state::TerminalOptions;
+    use crate::types::Handle;
+
+    fn options() -> TerminalOptions {
+        TerminalOptions {
+            owner: 1,
+            width: 4,
+            height: 2,
+            read_pause_cb: None,
+            write_cb: None,
+            resize_cb: None,
+            resume_cb: None,
+            close_cb: None,
+            force_crlf: false,
+        }
+    }
+
+    /// A terminal's life: allocated once, reached through copies held by
+    /// its buffer and its driver -- each borrow one expression, writes
+    /// through either seen by the other -- then freed once, with what it
+    /// owns.
+    #[test]
+    fn copies_of_a_terminal_share_it_until_the_free() {
+        let _held = editor_state_lock();
+        let mut driver = Term::alloc(Terminal::new(options(), Handle::new(1)));
+        let mut buffer = bare_buffer();
+        assert_eq!(buffer.terminal_handle(), None);
+        buffer.terminal = driver.raw();
+        let mut drawn = buffer.terminal_handle().expect("a terminal buffer");
+        assert_eq!(drawn, driver);
+
+        drawn.title.extend_from_slice(b"shell");
+        driver.title.push(b'!');
+        assert_eq!(drawn.title, b"shell!");
+        driver.textbuf.resize(64, b' ');
+        drawn.closed = true;
+        assert!(driver.closed);
+        assert_eq!(drawn.textbuf.len(), 64);
+        assert_eq!(drawn.opts.width, 4);
+
+        buffer.terminal = ::core::ptr::null_mut();
+        driver.free();
+        free_bare_buffer(buffer);
+    }
+}

@@ -925,3 +925,73 @@ impl PosRef {
         self.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::buffer::{bare_buffer, free_bare_buffer};
+    use crate::global_cell::editor_state_lock;
+    use crate::window::{alloc_tabpage, bare_window, free_bare_window, free_tab};
+
+    /// Copies of a window handle are one block: a write through either is
+    /// read through the other and through the registry's own handle, and the
+    /// cursor handle -- an address computed from the window's, never a
+    /// borrow of it -- stays good while the window is written around it.
+    #[test]
+    fn copies_of_a_window_and_its_cursor_share_one_block() {
+        let _held = editor_state_lock();
+        let mut win = bare_window();
+        let mut alias = win;
+        let mut cursor = win.cursor();
+        alias.w_cursor.lnum = LineNr::new(4);
+        assert_eq!(cursor.lnum, LineNr::new(4));
+        win.w_topline = LineNr::new(2);
+        cursor.col = ColNr::new(7);
+        assert_eq!(alias.w_cursor.col, ColNr::new(7));
+        assert_eq!(alias.w_topline, LineNr::new(2));
+        let found = window(win.handle()).expect("a registered window");
+        assert_eq!(found, alias);
+        assert_eq!(found.cursor(), cursor);
+        assert_eq!(found.w_cursor.lnum, LineNr::new(4));
+        free_bare_window(win);
+    }
+
+    /// A buffer handle made from its owner and the one the registry answers
+    /// are the same block; a window reaches it through its own field.
+    #[test]
+    fn a_buffer_reached_three_ways_is_one_buffer() {
+        let _held = editor_state_lock();
+        let buffer = bare_buffer();
+        let mut win = bare_window();
+        win.w_buffer = buffer;
+        let mut registered = self::buffer(buffer.handle()).expect("a registered buffer");
+        registered.b_changed = 1;
+        assert_eq!(win.buffer().b_changed, 1);
+        win.buffer().b_p_ma = 1;
+        assert_eq!(buffer.b_p_ma, 1);
+        assert_eq!(win.buffer_or_none(), Some(registered));
+        win.w_buffer = Buf::NULL;
+        assert_eq!(win.buffer_or_none(), None);
+        free_bare_window(win);
+        free_bare_buffer(buffer);
+    }
+
+    /// A tab page and its layout tree's root, each a registered block named
+    /// by a handle and found again by id.
+    #[test]
+    fn a_tab_page_finds_its_top_frame_by_id() {
+        let _held = editor_state_lock();
+        let mut tab = alloc_tabpage();
+        let mut frame = new_frame();
+        tab.tp_topframe = Some(frame.id());
+        frame.fr_width = 80;
+        let mut top = tab.topframe();
+        assert_eq!(top, frame);
+        top.fr_height = 24;
+        assert_eq!((frame.fr_width, frame.fr_height), (80, 24));
+        assert_eq!(tabpage(tab.handle()), Some(tab));
+        tab.tp_topframe = None;
+        frame.free();
+        free_tab(tab);
+    }
+}

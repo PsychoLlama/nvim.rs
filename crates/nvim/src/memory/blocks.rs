@@ -129,3 +129,64 @@ pub unsafe extern "C" fn free_block(block: *mut c_void) {
     REUSE_HEAD.set(reuse_blk);
     REUSE_COUNT.set(count + 1);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::global_cell::editor_state_lock;
+
+    /// A spent block goes onto the reuse list with its link written over its
+    /// first bytes, and the next taker gets that very block back, empty --
+    /// the link read out of memory a vector owned a moment before.
+    #[test]
+    fn a_spent_block_is_the_next_one_handed_out() {
+        let _held = editor_state_lock();
+        free_reuse_blks();
+        let mut spent = block_vec();
+        spent.extend_from_slice(b"read off a stream");
+        let address = spent.as_ptr();
+        recycle_block(spent);
+        assert_eq!(REUSE_COUNT.get(), 1);
+
+        let allocated = ARENA_ALLOC_COUNT.get();
+        let mut again = block_vec();
+        assert_eq!(again.as_ptr(), address, "the reuse list's block");
+        assert_eq!(ARENA_ALLOC_COUNT.get(), allocated, "no allocator traffic");
+        assert!(again.is_empty());
+        assert_eq!(again.capacity(), BLOCK_SIZE);
+        // Every byte is the taker's, the link's included.
+        again.resize(BLOCK_SIZE, 0xa5);
+        assert!(again.iter().all(|&byte| byte == 0xa5));
+        recycle_block(again);
+        free_reuse_blks();
+        assert_eq!(REUSE_COUNT.get(), 0);
+    }
+
+    /// The list keeps [`REUSE_MAX`] blocks, last spent first out, and frees
+    /// the rest; a vector of another size never joins it.
+    #[test]
+    fn the_reuse_list_keeps_the_last_four_spent() {
+        let _held = editor_state_lock();
+        free_reuse_blks();
+        let blocks: Vec<Vec<u8>> = (0..REUSE_MAX + 2).map(|_| block_vec()).collect();
+        let addresses: Vec<*const u8> = blocks.iter().map(|block| block.as_ptr()).collect();
+        for mut block in blocks {
+            block.push(1);
+            recycle_block(block);
+        }
+        assert_eq!(REUSE_COUNT.get(), REUSE_MAX);
+        recycle_block(Vec::with_capacity(16));
+        assert_eq!(REUSE_COUNT.get(), REUSE_MAX);
+
+        let taken: Vec<Vec<u8>> = (0..REUSE_MAX).map(|_| block_vec()).collect();
+        let kept: Vec<*const u8> = addresses[..REUSE_MAX].iter().rev().copied().collect();
+        let got: Vec<*const u8> = taken.iter().map(|block| block.as_ptr()).collect();
+        assert_eq!(got, kept);
+        assert_eq!(REUSE_COUNT.get(), 0);
+        for block in taken {
+            recycle_block(block);
+        }
+        free_reuse_blks();
+        assert_eq!(REUSE_COUNT.get(), 0);
+    }
+}

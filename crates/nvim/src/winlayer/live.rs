@@ -220,3 +220,67 @@ impl Cc {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::buffer::{bare_buffer, free_bare_buffer};
+    use crate::global_cell::editor_state_lock;
+    use crate::window::{bare_window, free_bare_window};
+
+    /// A table's views stay good while the table grows and other values come
+    /// and go around them -- the boxes do not move when the slot vector
+    /// does -- and two views of one value see each other's writes.
+    #[test]
+    fn a_view_outlives_the_table_growing_under_it() {
+        let mut table: IdTable<Vec<u32>> = IdTable::new();
+        let (kept, _) = table.insert((), vec![1]);
+        let mut first = table.view(kept);
+        let second = table.view(kept);
+        assert_eq!(first, second);
+        let others: Vec<_> = (0..32).map(|n| table.insert((), vec![n]).0).collect();
+        first.push(2);
+        assert_eq!(*second, [1, 2]);
+        let (freed, held): (Vec<_>, Vec<_>) = others
+            .into_iter()
+            .partition(|id| table.view(*id)[0] % 2 == 0);
+        for id in freed {
+            drop(table.remove(id));
+        }
+        let (refilled, _) = table.insert((), vec![99]);
+        first.push(3);
+        assert_eq!(*table.view(kept), [1, 2, 3]);
+        assert_eq!(*table.view(refilled), [99]);
+        // The table's own `&mut` ends what came before it; a view taken
+        // afterwards is the one to use.
+        table.get_mut(kept).push(4);
+        assert_eq!(*table.view(kept), [1, 2, 3, 4]);
+        // A table drops none of its values: their owner takes them back.
+        assert_eq!(table.remove(kept), [1, 2, 3, 4]);
+        for id in held.into_iter().chain([refilled]) {
+            drop(table.remove(id));
+        }
+    }
+
+    /// A window that uses its buffer's syntax block: the window's handle and
+    /// the buffer's name one block, at the address inside the buffer.
+    #[test]
+    fn a_window_and_its_buffer_share_one_syntax_block() {
+        let _held = editor_state_lock();
+        let mut win = bare_window();
+        let buffer = bare_buffer();
+        win.w_buffer = buffer;
+        win.w_s = buffer.syntax_block();
+        let mut through_window = win.syntax();
+        let through_buffer = buffer.syntax();
+        assert_eq!(through_window, through_buffer);
+        through_window.b_syn_ic = 1;
+        assert_eq!(through_buffer.b_syn_ic, 1);
+        win.syn_block_mut().b_syn_spell = 2;
+        assert_eq!(buffer.syntax().b_syn_spell, 2);
+        assert_eq!(win.syn_block().b_syn_ic, 1);
+        win.w_s = ::core::ptr::null_mut();
+        free_bare_window(win);
+        free_bare_buffer(buffer);
+    }
+}
