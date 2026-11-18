@@ -49,7 +49,9 @@ func Test_hlsearch_hangs()
   redraw
   let elapsed = reltimefloat(reltime(start))
   call assert_true(elapsed > 0.1)
-  call assert_true(elapsed < 1.0)
+  " Nvim.rs: 5 s, not 1 s: an ASan build beside eleven workers took over a
+  " second. Without 'redrawtime' the match would run for minutes.
+  call assert_true(elapsed < 5.0)
   set nohlsearch redrawtime&
   bwipe!
 endfunc
