@@ -32,7 +32,7 @@
 
 use core::ffi::c_void;
 
-use crate::event::libuv::{uv_close, uv_timer_init, uv_timer_start, uv_timer_stop};
+use crate::event::libuv::{uv_close, uv_timer_init, uv_timer_start, uv_timer_stop, uv_update_time};
 use crate::event::r#loop::{RawEvent, main_loop_raw};
 use crate::event::uv::{uv_handle_t, uv_timer_t};
 use crate::event_queue::{self, ChildQueue, QueueId};
@@ -179,8 +179,16 @@ impl OwnedTimer {
             return;
         }
         self.0.on_due = on_due;
-        // SAFETY: the box's own timer, open.
-        unsafe { uv_timer_start(self.0.uv(), Some(time_watcher_cb), timeout, repeat) };
+        // libuv counts `timeout` from the loop's cached time, taken when the
+        // loop last woke; the editor may have run for a while since (a
+        // script calling `timer_start()`), and the timer would fire that
+        // much early. Refresh it first.
+        // SAFETY: the editor's loop, live from startup until exit, and the
+        // box's own timer, open.
+        unsafe {
+            uv_update_time(&raw mut (*main_loop_raw()).uv);
+            uv_timer_start(self.0.uv(), Some(time_watcher_cb), timeout, repeat);
+        }
     }
 
     /// Disarm the timer. A tick already queued is still delivered.

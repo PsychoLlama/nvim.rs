@@ -27,6 +27,22 @@ describe('timers', function()
     eq(1, eval('g:val'))
   end)
 
+  it('counts its time from timer_start(), not from when the loop last woke', function()
+    -- A busy stretch with no loop iteration (a Lua loop never polls) leaves
+    -- libuv's cached time behind; a timer started from it fired that much
+    -- early (upstream: ~20 ms for this 50 ms timer).
+    source([[
+      lua local t = vim.uv.hrtime() while vim.uv.hrtime() - t < 100e6 do end
+      let g:t0 = reltime()
+      call timer_start(50, {-> execute('let g:ms = reltimefloat(reltime(g:t0)) * 1000')})
+    ]])
+    retry(nil, load_adjust(2000), function()
+      ok(eval('exists("g:ms")') == 1)
+    end)
+    local ms = eval('g:ms')
+    ok(ms >= 49, '>= 49 ms', ms)
+  end)
+
   it('works one-shot when repeat=0', function()
     eq(0, eval("[timer_start(10, 'MyHandler', {'repeat': 0}), g:val][1]"))
     run(nil, nil, nil, load_adjust(100))

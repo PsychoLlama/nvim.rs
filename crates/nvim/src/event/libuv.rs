@@ -359,6 +359,7 @@ unsafe extern "C" {
     pub fn uv_tty_reset_mode() -> ::core::ffi::c_int;
     pub fn uv_tty_set_mode(_: *mut uv_tty_t, mode: uv_tty_mode_t) -> ::core::ffi::c_int;
     pub fn uv_unref(_: *mut uv_handle_t);
+    pub fn uv_update_time(_: *mut uv_loop_t);
     pub fn uv_uptime(uptime: *mut ::core::ffi::c_double) -> ::core::ffi::c_int;
     pub fn uv_walk(uv_loop: *mut uv_loop_t, walk_cb: uv_walk_cb, arg: *mut ::core::ffi::c_void);
     pub fn uv_write(
