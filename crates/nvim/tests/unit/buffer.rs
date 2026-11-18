@@ -303,6 +303,11 @@ fn ls_shows_every_flag_column_and_filter() {
     fx.home();
     let long = "a_name_long_enough_to_reach_past_column_forty.txt";
     for cmd in [
+        // `home` leaves buffer 1 current but not necessarily loaded: the
+        // editor brings it up unloaded, and only a case that edited it
+        // loads it. The first row wants it loaded, whichever case ran
+        // before this one, if any.
+        "call bufload(1)",
         "set hidden",
         "badd a.txt",
         "badd b.txt",
