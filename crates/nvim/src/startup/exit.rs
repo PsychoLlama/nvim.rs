@@ -49,7 +49,7 @@ use crate::startup::{
 };
 use crate::state::mode::EXMODE_ACTIVE;
 use crate::types::{VAR_NUMBER, VarNumber, Vv};
-use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
+use crate::ui::{ui_active, ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 
 use crate::winlayer::{Buf, WinId, buffers, first_tab, first_window};
@@ -193,8 +193,9 @@ pub fn getout(mut exitval: c_int) -> ! {
 
     profile_dump();
 
-    if DID_EMSG.get() != 0 {
-        // Give the user a chance to read the error.
+    // Give the user a chance to read the error, if anyone can: with no UI
+    // (an embedder that went away), nothing will ever answer the prompt.
+    if DID_EMSG.get() != 0 && ui_active() != 0 {
         NO_WAIT_RETURN.set(0);
         // NB: upstream notes this may itself call getout(0) and clobber
         // `exitval`.

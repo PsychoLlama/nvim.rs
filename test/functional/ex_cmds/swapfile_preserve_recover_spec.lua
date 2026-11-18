@@ -780,7 +780,10 @@ describe('quitting swapfile dialog on startup stops TUI properly', function()
     feed('Gisometext<esc>')
     poke_eventloop()
     clear() -- Leaves a swap file behind
-    api.nvim_ui_attach(80, 30, {})
+    -- Tall enough that the E325 dialog never pages: it names the swap file
+    -- (cwd twice over, with `//`) three times, so its height grows with
+    -- the length of the run directory, and a "-- More --" hides the prompt.
+    api.nvim_ui_attach(80, 50, {})
   end)
   after_each(function()
     rmdir(swapdir)
@@ -804,6 +807,31 @@ describe('quitting swapfile dialog on startup stops TUI properly', function()
     end)
     api.nvim_chan_send(chan, 'q')
     expect_exitcode(1)
+  end)
+
+  it('server exits when its client dies at a "-- More --" prompt', function()
+    -- Short enough that the dialog pages.
+    api.nvim_ui_detach()
+    api.nvim_ui_attach(80, 10, {})
+    local chan = fn.jobstart(
+      { nvim_prog, '-u', 'NONE', '-i', 'NONE', '--cmd', init_dir, '--cmd', init_set, testfile },
+      {
+        term = true,
+        env = { VIMRUNTIME = os.getenv('VIMRUNTIME') },
+      }
+    )
+    retry(nil, nil, function()
+      eq('-- More --', eval("getline('$')->trim(' ', 2)"))
+    end)
+    local client_pid = fn.jobpid(chan)
+    local server_pid = api.nvim_get_proc_children(client_pid)[1]
+    -- The client goes without a word, as when its terminal is closed. The
+    -- server must not wait at its exit for a key to dismiss the E325 error
+    -- nobody can see.
+    uv.kill(client_pid, 'sigkill')
+    retry(nil, 5000, function()
+      eq(nil, (uv.kill(server_pid, 0)))
+    end)
   end)
 
   it('(A)bort at second file argument with -p', function()
