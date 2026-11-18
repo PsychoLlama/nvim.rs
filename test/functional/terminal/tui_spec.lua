@@ -3292,7 +3292,10 @@ describe('TUI', function()
         '--cmd',
         'echo "foo"',
         '--cmd',
-        'sleep 10',
+        -- The screen below is the one during this sleep, before the first
+        -- full redraw. 10 ms was shorter than a loaded terminal's refresh, so
+        -- the two states reached the screen as one and the wait never matched.
+        'sleep 500',
       }, {
         term = true,
         env = { VIMRUNTIME = os.getenv('VIMRUNTIME') },
