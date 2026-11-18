@@ -257,6 +257,12 @@ describe('TUI :restart', function()
       ok(t > starttime, ('v:starttime (%d) > old starttime (%d)'):format(t, starttime), t)
       new_starttime = t
     end)
+    -- The new server answers before the client has reattached to it, and
+    -- keys fed to the client in between are lost.
+    retry(nil, 5000, function()
+      local _, uis = sess:request('nvim_list_uis')
+      eq(1, #uis)
+    end)
     return new_starttime, sess
   end
 
@@ -423,11 +429,6 @@ describe('TUI :restart', function()
     tt.feed_data(':restart\r')
     _, server_session = assert_restarted(starttime, server_session, server_pipe)
     local _, server_pid = server_session:request('nvim_call_function', 'getpid', {})
-    -- The new server answers before the client has reattached to it.
-    retry(nil, 5000, function()
-      local _, uis = server_session:request('nvim_list_uis')
-      eq(1, #uis)
-    end)
     server_session:close()
 
     -- The client goes without a word, as when its terminal is closed: the
