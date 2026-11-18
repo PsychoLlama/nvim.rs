@@ -30,7 +30,8 @@ if [[ -z $CUT ]] && ! just build >"$OUT/build-$LABEL.log" 2>&1; then
 fi
 
 rm -f "$OUT/$LABEL.txt"
-SPELLMEMSWEEP_WORK=${SPELLMEMSWEEP_WORK:-/tmp/spellmemsweep-verify} \
+. "$HERE/tmproot.sh"
+SPELLMEMSWEEP_WORK=${SPELLMEMSWEEP_WORK:-$BATTERY_TMP/spellmemsweep-verify} \
   "$HERE/spellmemsweep.sh" "$NVIM_BIN" "$REPO/runtime" "$OUT" "$LABEL"
 
 if [[ -n $CUT ]]; then exit 0; fi

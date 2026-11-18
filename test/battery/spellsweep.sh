@@ -34,7 +34,8 @@ OUT=$(realpath -m "$3")
 LABEL=$4
 HERE=$(cd "$(dirname "$0")" && pwd)
 
-WORK=${SPELLSWEEP_WORK:-/tmp/spellsweep-work}
+. "$HERE/tmproot.sh"
+WORK=${SPELLSWEEP_WORK:-$BATTERY_TMP/spellsweep-work}
 CORPUS=$WORK/corpus
 
 mkdir -p "$OUT"

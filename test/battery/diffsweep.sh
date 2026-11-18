@@ -83,7 +83,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # Short on purpose, and the same for every run: absolute paths reach the
 # report through error texts and shell command lines, and a long work
 # directory leaves half-elided paths behind that the scrub cannot match.
-WORK=${DIFFSWEEP_WORK:-/tmp/diffsweep}
+. "$HERE/tmproot.sh"
+WORK=${DIFFSWEEP_WORK:-$BATTERY_TMP/diffsweep}
 LIMIT=${DIFFSWEEP_TIMEOUT:-900}
 
 mkdir -p "$OUT"

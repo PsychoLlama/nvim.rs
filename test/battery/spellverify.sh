@@ -42,7 +42,8 @@ if [[ -z $CUT ]] && ! just build >"$OUT/build-$LABEL.log" 2>&1; then
 fi
 
 rm -rf "$OUT/$LABEL.txt" "$OUT/$LABEL.hashes" "$OUT/$LABEL-files"
-SPELLSWEEP_WORK=${SPELLSWEEP_WORK:-/tmp/spellsweep-verify} \
+. "$HERE/tmproot.sh"
+SPELLSWEEP_WORK=${SPELLSWEEP_WORK:-$BATTERY_TMP/spellsweep-verify} \
   "$HERE/spellsweep.sh" "$NVIM_BIN" \
   "$REPO/runtime" "$OUT" "$LABEL" 2>&1 | tail -2
 

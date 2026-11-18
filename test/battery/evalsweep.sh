@@ -53,7 +53,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # Short on purpose, and the same for every run: messages are truncated to
 # the (headless, 80 column) screen and a long work directory leaves
 # half-elided paths behind that the scrub cannot recognise.
-WORK=${EVALSWEEP_WORK:-/tmp/evsweep}
+. "$HERE/tmproot.sh"
+WORK=${EVALSWEEP_WORK:-$BATTERY_TMP/evsweep}
 # A clean run is a few seconds.  120 is a large margin and bounds what a
 # looping-walker mutation costs.
 LIMIT=${EVALSWEEP_TIMEOUT:-120}
@@ -96,6 +97,10 @@ status=$?
 set -e
 
 printf 'exit %d\n' "$status" >>"$OUT/$LABEL.txt"
+# The prompt's text is raw: the work dir (this run's battery slot) and the
+# undo messages' "N seconds ago", which reads the machine's load.
+sed -i -E -e "s#$WORK#<WORK>#g" -e 's/[0-9]+ (second|minute|hour|day)s? ago/N ago/g' \
+  "$OUT/$LABEL.stderr"
 
 touch "$OUT/$LABEL.struct.raw"
 LC_ALL=C sort "$OUT/$LABEL.struct.raw" >"$OUT/$LABEL.struct"

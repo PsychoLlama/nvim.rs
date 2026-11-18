@@ -13,6 +13,7 @@ of `*base/` in git; they are now **cut on demand** and cached under `target/`.
 ```
 just battery              # all 38, ~8 min warm, logs under target/battery-logs
 just battery my-label     # same, naming the log set
+just battery --jobs=12    # the rows 12 at a time (opt-in), verdicts in list order
 test/battery/keyverify.sh # one row, on its own — same cache, same pin
 ```
 
@@ -162,6 +163,12 @@ Nothing here holds an absolute path: `$HERE` is the script's own directory and
 `$REPO` (overridable) is its grandparent. The work directories are short and in
 `/tmp` on purpose — nvim elides a message wider than the 80-column headless
 screen, and a long fixture path is what turns an error text into `...<tail>`.
+The fixed-name ones sit under one root per run, `$BATTERY_TMP` (`tmproot.sh`):
+the lowest free slot of `/tmp/nvb1`…`/tmp/nvb9`, locked for the run, so two
+batteries at once never share a work directory. Most rows print their work
+path unscrubbed, so the cut cache is per slot (`base/<sha>/nvb<N>/`): a lone
+battery always takes `nvb1`; a second one beside it cuts its own baselines in
+`nvb2`, once.
 
 For the same reason LuaJIT elides a chunk name past ~60 characters, so every
 `<SCRIPT>` mask has a second, basename-anchored form

@@ -56,7 +56,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # half-elided paths behind that the scrub cannot recognise.  It also has
 # to be short enough that a `<afile>` of a file two directories deep
 # still fits on one line of a `:autocmd` listing.
-WORK=${AUSWEEP_WORK:-/tmp/ausweep}
+. "$HERE/tmproot.sh"
+WORK=${AUSWEEP_WORK:-$BATTERY_TMP/ausweep}
 # A clean run is a couple of seconds.  120 bounds what a walker mutation
 # that never terminates costs.
 LIMIT=${AUSWEEP_TIMEOUT:-120}

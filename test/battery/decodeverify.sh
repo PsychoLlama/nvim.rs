@@ -98,7 +98,8 @@ fi
 # The corpora are cwd-independent (verified), but run them from a fixed
 # short directory anyway: that is the rule every other sweep follows and
 # it costs nothing.
-WORK=/tmp/decodesweep-work
+. "$HERE/tmproot.sh"
+WORK=$BATTERY_TMP/decodesweep-work
 rm -rf "$WORK"; mkdir -p "$WORK"
 cd "$WORK" || exit 1
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Resolve one row's baseline directory, cutting it on a cache miss.
 #
-#   baseline.sh key   ->  .../target/battery/base/<sha>/keybase
+#   baseline.sh key   ->  .../target/battery/base/<sha>/<slot>/keybase
 #
 # Nothing generated is committed.  The baselines used to be 276 files and
 # 53 MiB of `*base/` in git; they are now cut from the binary
@@ -37,7 +37,12 @@ if [[ -z $SHA ]]; then
   exit 1
 fi
 
-DIR=$REPO/target/battery/base/$SHA
+# Per battery slot (tmproot.sh): most rows write their work dir's path into
+# the report unscrubbed -- it was one fixed path for every run -- so a cut
+# only matches a head run made in the same slot. A lone battery always
+# takes nvb1; a second one at once cuts its own baselines under nvb2 once.
+. "$HERE/tmproot.sh"
+DIR=$REPO/target/battery/base/$SHA/${BATTERY_TMP##*/}
 CACHE=$DIR/${ROW}base
 # The stamp, not the directory, is the cache hit: a cut interrupted halfway
 # leaves a directory full of half-written artifacts, and a row that trusted
@@ -64,7 +69,9 @@ echo "baseline: cutting $ROW at $SHA" >&2
 if [[ $ROW == probe ]]; then
   # The probe has no verify.sh -- battery.sh runs it inline.  It exits
   # nonzero when a case's nvim does, which is data, not a failure of the cut.
-  python3 "$HERE/startprobe.py" "$BIN" "$CACHE/base.txt" >&2 || true
+  # Its scratch sits in this run's root, like every row's work dir.
+  STARTPROBE_WORK=${STARTPROBE_WORK:-$BATTERY_TMP/startprobe} \
+    python3 "$HERE/startprobe.py" "$BIN" "$CACHE/base.txt" >&2 || true
 else
   "$HERE/${ROW}verify.sh" --cut "$BIN" "$CACHE" >&2
 fi

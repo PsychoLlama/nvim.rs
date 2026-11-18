@@ -45,7 +45,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # column) screen, and 'undodir' turns the whole path into one file name,
 # so a long work directory would leave the report full of half-elided
 # names the scrub cannot recognise.
-WORK=${UNDOGOLD_WORK:-/tmp/ugold}
+. "$HERE/tmproot.sh"
+WORK=${UNDOGOLD_WORK:-$BATTERY_TMP/ugold}
 ART=$WORK/artifacts
 
 mkdir -p "$OUT"

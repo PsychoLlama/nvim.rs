@@ -18,8 +18,8 @@
 # pays for one reference build; after that the cache is a hit.  Read
 # README.md before bumping BASE.
 #
-#   just battery [label]
-#   battery.sh <label>
+#   just battery [--jobs=N] [label]
+#   battery.sh [--jobs=N] [label] [goldens]
 #   BATTERY_LOGDIR=... battery.sh <label>
 #
 # Logs land in $BATTERY_LOGDIR (default $REPO/target/battery-logs).
@@ -155,8 +155,6 @@
 # marks, :lockmarks/:keepjumps/:keepmarks, and a shada round trip),
 # baselined at 070c9cfc00.  It costs ~1 s.  Buffer HANDLES appear in
 # neither artifact: the driver prints filenames.
-# Usage: battery.sh <label> [goldens]
-#
 # `goldens` is a directory `readbase.sh --record` wrote: the `readbase`
 # row reads its swap/ShaDa/undo artifacts with this tree's binary.  The
 # goldens are a recording, not part of the tree, so without the argument
@@ -167,13 +165,32 @@
 # tree is compressed is decided by the bytes upstream's allocator would have
 # charged, and the `spell` row's small cases never compress twice. Its cut
 # is ~45 s (the reference binary's quadratic .sug pass); the head run ~15 s.
+# Usage: battery.sh [--jobs=N] [label] [goldens]
+#
+# `--jobs=N` (opt-in; default 1, the plain serial run) runs the rows N at a
+# time with GNU parallel, longest first by target/timings/battery.tsv, and
+# prints their verdict lines in the order below once all have finished.
+# Rows never share a work directory (tmproot.sh), so any two may run at once.
 set -u
-LABEL="${1:?label}"
-GOLDENS="${2:-}"
+JOBS=1
+ARGS=()
+for arg in "$@"; do
+  case $arg in
+    --jobs=*) JOBS=${arg#--jobs=} ;;
+    *) ARGS+=("$arg") ;;
+  esac
+done
+if [[ ! $JOBS =~ ^[1-9][0-9]*$ ]]; then
+  echo "battery.sh: --jobs wants a worker count, got '$JOBS'" >&2
+  exit 64
+fi
+LABEL="${ARGS[0]:-}"
+GOLDENS="${ARGS[1]:-}"
 # Everything is resolved from this script's own directory, so the harness
 # travels with the checkout: $T is test/battery, $REPO its grandparent.
 T=$(cd "$(dirname "$0")" && pwd)
 REPO=${REPO:-$(cd "$T/../.." && pwd)}
+[[ -n $LABEL ]] || LABEL=$(git -C "$REPO" rev-parse --short HEAD)
 LOGDIR=${BATTERY_LOGDIR:-$REPO/target/battery-logs}
 mkdir -p "$LOGDIR"
 cd "$REPO" || exit 1
@@ -183,15 +200,57 @@ cd "$REPO" || exit 1
 . "$REPO/scripts/user-log-guard.sh"
 user_log_mark
 export NVIM_LOG_FILE=${NVIM_LOG_FILE:-$LOGDIR/$LABEL.nvim.log}
+# This run's root for the rows' fixed-name work dirs (a slot of its own, so
+# a second battery at once gets another), and the probe's scratch under it.
+. "$T/tmproot.sh"
+export STARTPROBE_WORK=${STARTPROBE_WORK:-$BATTERY_TMP/startprobe}
+echo "work dirs under $BATTERY_TMP"
 
 fail=0
 # Each row's outputs (SWEEP_OUT, else /tmp/<row>-out) go under the log dir,
-# so a battery run beside another suite writes nothing shared in /tmp but the
-# rows' own fixed work dirs (paths their reports scrub; rows never share one,
-# so rows may run beside each other, two batteries may not).
-run() { # name script
-  local n=$1; shift
-  SWEEP_OUT="$LOGDIR/out/$n" "$@" "$LABEL" > "$LOGDIR/$LABEL.$n.log" 2>&1
+# and its work dir under $BATTERY_TMP: rows never share either.
+#
+# `run` only lists a row; the rows run after the list (run_rows).
+ROW_NAMES=()
+ROW_CMDS=()
+# The rows a sharded run keeps off the parallel part: they run one by one
+# after it, on a quiet machine, each with the reason it cannot share one.
+SERIAL_TAIL=(
+  # s91's children are stopped with jobstop (SIGTERM at once); a loaded
+  # child is still alive to catch it and says "Caught deadly signal".
+  winsweep
+  # i91 feeds each case's keys as separate nvim_input calls; when the child
+  # lags they arrive together, and insert completion behaves differently
+  # with typeahead pending.
+  inssweep
+  # The row's one clock is a 1000 ms search timeout; a 40 ms NFA search
+  # (syn/gitolite:45) read `T` with twelve rows running.
+  synsweep
+  # The screen rows number highlight attrs in first-draw order, which a
+  # loaded child reordered (NonText 1 -> 31) with two batteries running.
+  scrsweep
+  msgsweep
+  # ~45 s alone, 230 s beside eleven rows, and past its 300 s harness
+  # timeout with two batteries running; alone at the end it is quicker too.
+  exprsweep
+)
+run() { # name script [args...]
+  local n=$1
+  shift
+  ROW_NAMES+=("$n")
+  ROW_CMDS+=("$(printf '%q ' "$@")")
+}
+skip() { # name reason
+  ROW_NAMES+=("$1")
+  ROW_CMDS+=("")
+  printf '%-10s skipped (%s)\n' "$1" "$2" >"$LOGDIR/$LABEL.$1.verdict"
+}
+
+# One row: runs it, then writes its verdict line to <label>.<row>.verdict and
+# its time to <label>.timings.rows. Exits with the row's status.
+run_row() { # name quoted-command
+  local n=$1 start=$EPOCHREALTIME
+  eval "SWEEP_OUT=\"\$LOGDIR/out/\$n\" $2 \"\$LABEL\"" >"$LOGDIR/$LABEL.$n.log" 2>&1
   local rc=$?
   local res
   # scrsweep prints "  txt IDENTICAL" with no colon; every other verify.sh
@@ -199,10 +258,62 @@ run() { # name script
   # reported "(no verdict lines)" for scrsweep on every run (B16-18).
   res=$(grep -aoE '[a-z]+ *:? *(IDENTICAL|DIFFERS)' "$LOGDIR/$LABEL.$n.log" | tr '\n' ' ')
   [ -z "$res" ] && res="(no verdict lines; rc=$rc)"
-  printf '%-10s rc=%s %s\n' "$n" "$rc" "$res"
-  [ "$rc" -ne 0 ] && fail=1
-  return 0
+  printf '%-10s rc=%s %s\n' "$n" "$rc" "$res" >"$LOGDIR/$LABEL.$n.verdict"
+  awk -v a="$start" -v b="$EPOCHREALTIME" -v n="$n" \
+    'BEGIN { printf "%.1f\t1\t%s\n", b - a, n }' >>"$LOGDIR/$LABEL.timings.rows"
+  return "$rc"
 }
+
+# Every listed row, serially in list order (printing each verdict as it
+# lands) or N at a time, longest first (printing them all, in list order,
+# at the end). Sets fail=1 when any row exits nonzero.
+run_rows() {
+  local i n
+  : >"$LOGDIR/$LABEL.timings.rows"
+  if ((JOBS == 1)); then
+    for i in "${!ROW_NAMES[@]}"; do
+      n=${ROW_NAMES[$i]}
+      [[ -n ${ROW_CMDS[$i]} ]] && { run_row "$n" "${ROW_CMDS[$i]}" || fail=1; }
+      cat "$LOGDIR/$LABEL.$n.verdict"
+    done
+  else
+    export LOGDIR LABEL
+    export -f run_row
+    local -a tail=()
+    local list=
+    for i in "${!ROW_NAMES[@]}"; do
+      [[ -n ${ROW_CMDS[$i]} ]] || continue
+      if [[ " ${SERIAL_TAIL[*]} " == *" ${ROW_NAMES[$i]} "* ]]; then
+        tail+=("$i")
+      else
+        list+=$(printf '%s\t%s' "${ROW_NAMES[$i]}" "${ROW_CMDS[$i]}")$'\n'
+      fi
+    done
+    printf '%s' "$list" | awk -F'\t' -v table="$REPO/target/timings/battery.tsv" '
+      BEGIN { while ((getline line < table) > 0) { split(line, f, "\t"); secs[f[3]] = f[1] } }
+      { print (($1 in secs) ? secs[$1] : 1e9) "\t" $0 }' |
+      sort -t$'\t' -k1,1gr | cut -f2- |
+      SHELL=$(command -v bash) parallel --will-cite -j "$JOBS" --colsep '\t' \
+        run_row '{1}' '{2}' || fail=1
+    for i in "${tail[@]}"; do
+      run_row "${ROW_NAMES[$i]}" "${ROW_CMDS[$i]}" || fail=1
+    done
+    for n in "${ROW_NAMES[@]}"; do
+      cat "$LOGDIR/$LABEL.$n.verdict" 2>/dev/null || {
+        printf '%-10s (no verdict: the row did not finish)\n' "$n"
+        fail=1
+      }
+    done
+  fi
+  # The per-row times, folded into the stable table the next sharded run
+  # balances by (scripts/test-timings.sh).
+  . "$REPO/scripts/test-timings.sh"
+  if [[ -s $LOGDIR/$LABEL.timings.rows ]]; then
+    timings_sort "$LOGDIR/$LABEL.timings.rows" >"$LOGDIR/$LABEL.timings.tsv"
+    timings_fold "$LOGDIR/$LABEL.timings.tsv" "$REPO/target/timings/battery.tsv"
+  fi
+}
+rm -f "$LOGDIR/$LABEL".*.verdict
 
 run keysweep  "$T/keyverify.sh"
 run scrsweep  "$T/scrverify.sh"
@@ -303,8 +414,9 @@ run synsweep   "$T/synverify.sh"
 if [ -n "$GOLDENS" ]; then
   run readbase "$T/readbaseverify.sh" "$GOLDENS"
 else
-  printf '%-10s skipped (no goldens directory given)\n' readbase
+  skip readbase "no goldens directory given"
 fi
+run_rows
 
 echo "=== startup probe (paired)"
 # The probe's baseline, like every row's, is CUT from the binary

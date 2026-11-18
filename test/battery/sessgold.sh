@@ -42,7 +42,8 @@ OUT=$(realpath -m "$3")
 LABEL=$4
 HERE=$(cd "$(dirname "$0")" && pwd)
 
-WORK=${SESSGOLD_WORK:-/tmp/sessgold}
+. "$HERE/tmproot.sh"
+WORK=${SESSGOLD_WORK:-$BATTERY_TMP/sessgold}
 LIMIT=${SESSGOLD_TIMEOUT:-300}
 
 mkdir -p "$OUT"

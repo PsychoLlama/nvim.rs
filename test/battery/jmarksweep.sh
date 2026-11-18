@@ -77,7 +77,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # text column to the (headless, 80 column) screen, and a long work
 # directory leaves half-elided paths behind that the scrub cannot
 # recognise.
-WORK=${JMARKSWEEP_WORK:-/tmp/jmarksweep}
+. "$HERE/tmproot.sh"
+WORK=${JMARKSWEEP_WORK:-$BATTERY_TMP/jmarksweep}
 LIMIT=${JMARKSWEEP_TIMEOUT:-600}
 
 mkdir -p "$OUT"

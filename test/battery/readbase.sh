@@ -33,7 +33,8 @@ set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 # Short on purpose, as perssweep's: messages are elided to the screen width.
-WORK=${READBASE_WORK:-/tmp/rbase}
+. "$HERE/tmproot.sh"
+WORK=${READBASE_WORK:-$BATTERY_TMP/rbase}
 
 if [[ ${1:-} == --record ]]; then
   [[ $# -eq 4 ]] || {

@@ -44,7 +44,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # Short on purpose: nvim truncates messages to fit the (headless, 80
 # column) screen, and a long work directory would leave the report full
 # of half-elided paths that the scrub cannot recognise.
-WORK=${NAVSWEEP_WORK:-/tmp/nsweep}
+. "$HERE/tmproot.sh"
+WORK=${NAVSWEEP_WORK:-$BATTERY_TMP/nsweep}
 
 mkdir -p "$OUT"
 rm -rf "$WORK"

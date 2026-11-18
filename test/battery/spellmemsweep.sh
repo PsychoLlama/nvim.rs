@@ -38,7 +38,8 @@ RUNTIME=$(realpath "$2")
 OUT=$(realpath -m "$3")
 LABEL=$4
 HERE=$(cd "$(dirname "$0")" && pwd)
-WORK=${SPELLMEMSWEEP_WORK:-/tmp/spellmemsweep-work}
+. "$HERE/tmproot.sh"
+WORK=${SPELLMEMSWEEP_WORK:-$BATTERY_TMP/spellmemsweep-work}
 
 mkdir -p "$OUT"
 rm -rf "$WORK"

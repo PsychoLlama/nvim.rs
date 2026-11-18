@@ -78,7 +78,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # Short on purpose, and the same for every run: messages are truncated
 # to the (headless, 80 column) screen and a long work directory leaves
 # half-elided paths behind that the scrub cannot recognise.
-WORK=${FOLDSWEEP_WORK:-/tmp/foldsweep}
+. "$HERE/tmproot.sh"
+WORK=${FOLDSWEEP_WORK:-$BATTERY_TMP/foldsweep}
 LIMIT=${FOLDSWEEP_TIMEOUT:-600}
 
 mkdir -p "$OUT"

@@ -91,7 +91,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # Short on purpose, and the same for every run: absolute paths reach the
 # report through error texts and shellescape()'s output, and a long work
 # directory leaves half-elided paths behind that the scrub cannot match.
-WORK=${UTFSWEEP_WORK:-/tmp/utfsweep}
+. "$HERE/tmproot.sh"
+WORK=${UTFSWEEP_WORK:-$BATTERY_TMP/utfsweep}
 LIMIT=${UTFSWEEP_TIMEOUT:-900}
 
 mkdir -p "$OUT"

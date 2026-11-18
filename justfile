@@ -153,9 +153,12 @@ bench-ab bench *args:
 # `test/battery/readbase.sh --record`; given one, the `readbase` row reads its
 # swap/ShaDa/undo files with this binary (skipped otherwise).
 #
+# `--jobs=N` runs the rows N at a time (opt-in; same flag as functionaltest).
+#
 # Run the differential battery over the built binary.
-battery label='' goldens='':
-  test/battery/battery.sh "{{ if label == '' { '$(git rev-parse --short HEAD)' } else { label } }}" "{{ goldens }}"
+[positional-arguments]
+battery *args:
+  test/battery/battery.sh "$@"
 
 # Run clippy over the two generators (tools/apigen, tools/ffigen). They carry
 # their own workspace and lockfile on purpose — membership would make every

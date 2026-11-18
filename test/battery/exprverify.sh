@@ -63,7 +63,8 @@ fi
 
 # A fixed, short work directory: `:p` and `%:p` answers carry it, and the
 # buffer is named inside it, so it must be the same path on both sides.
-WORK=/tmp/exprsweep-work
+. "$HERE/tmproot.sh"
+WORK=$BATTERY_TMP/exprsweep-work
 rm -rf "$WORK"
 mkdir -p "$WORK/home"
 cd "$WORK" || exit 1

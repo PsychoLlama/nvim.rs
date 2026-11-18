@@ -51,7 +51,8 @@ case $PROBE in
   *) echo "unknown probe: $PROBE (parse|excmd)" >&2; exit 2 ;;
 esac
 
-WORK=${EX_RUN_WORK:-/tmp/exprobe}
+. "$HERE/tmproot.sh"
+WORK=${EX_RUN_WORK:-$BATTERY_TMP/exprobe}
 mkdir -p "$OUT"
 rm -rf "$WORK"
 mkdir -p "$WORK/home"

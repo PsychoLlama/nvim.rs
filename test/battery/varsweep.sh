@@ -58,7 +58,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # Short on purpose, and the same for every run: messages are truncated
 # to the (headless, 80 column) screen and a long work directory leaves
 # half-elided paths behind that the scrub cannot recognise.
-WORK=${VARSWEEP_WORK:-/tmp/varsweep}
+. "$HERE/tmproot.sh"
+WORK=${VARSWEEP_WORK:-$BATTERY_TMP/varsweep}
 LIMIT=${VARSWEEP_TIMEOUT:-180}
 
 mkdir -p "$OUT"

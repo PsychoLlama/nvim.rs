@@ -48,7 +48,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 # Short on purpose: messages are truncated to the (headless, 80 column)
 # screen and a long work directory leaves half-elided paths behind that
 # the scrub cannot recognise.
-WORK=${KEYSWEEP_WORK:-/tmp/ksweep}
+. "$HERE/tmproot.sh"
+WORK=${KEYSWEEP_WORK:-$BATTERY_TMP/ksweep}
 # A clean run is ~22 s.  180 is an eight-fold margin and bounds what a
 # hang mutation costs; a hang is meant to be a diff, not an afternoon.
 LIMIT=${KEYSWEEP_TIMEOUT:-180}

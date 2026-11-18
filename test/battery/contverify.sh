@@ -69,7 +69,8 @@ fi
 
 # A fixed, short work directory, as every row has: nothing here should
 # reach a path, and if something ever does it is the same one on both sides.
-WORK=/tmp/contsweep-work
+. "$HERE/tmproot.sh"
+WORK=$BATTERY_TMP/contsweep-work
 rm -rf "$WORK"
 mkdir -p "$WORK/home"
 cd "$WORK" || exit 1
