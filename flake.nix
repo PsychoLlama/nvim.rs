@@ -171,6 +171,9 @@
               pkgs.just
               # Runs tests/unit, a process per case (`just cargo-unit`).
               pkgs.cargo-nextest
+              # Fans the functional suite out over spec files
+              # (`just functionaltest --jobs=N`, scripts/run-tests.sh).
+              pkgs.parallel
               # `valgrind --tool=cachegrind|callgrind` is how a perf claim in
               # this tree is settled: instruction counts are deterministic
               # where wall clock on this machine drifts several percent

@@ -20,11 +20,20 @@ timings_sort() {
 }
 
 # timings_fold <run table> <stable table>: merge the run's rows into the
-# stable table (the run's row wins for a file in both).
+# stable table (the run's row wins for a file in both). Under a lock: the
+# workers of a sharded run each fold their own rows as they finish.
 timings_fold() {
-  local run=$1 stable=$2 rows
+  local run=$1 stable=$2
   [[ -s $run ]] || return 0
   mkdir -p "$(dirname "$stable")"
+  (
+    flock 9
+    timings_fold_locked "$run" "$stable"
+  ) 9>"$stable.lock"
+}
+
+timings_fold_locked() {
+  local run=$1 stable=$2 rows
   rows=$(mktemp "$stable.XXXXXX")
   local inputs=("$run")
   [[ -f $stable ]] && inputs+=("$stable")

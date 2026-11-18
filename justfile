@@ -71,6 +71,8 @@ fmt-check:
 
 # Run functional tests. Args: spec paths and/or harness flags, e.g.
 # `just functionaltest test/functional/core --filter='startup'`.
+# `--jobs=N` (or NVIM_TEST_JOBS=N) runs the spec files N at a time, with one
+# merged report; see scripts/run-tests.sh.
 functionaltest *args: build
   scripts/run-tests.sh functional {{ args }}
 
