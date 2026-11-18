@@ -194,8 +194,8 @@ pub(crate) fn leave_curbuf() {
 }
 
 /// Leave the editor with no current window: what a lib test that made a
-/// bare window current puts back before freeing it.
-#[cfg(test)]
+/// bare window current puts back before freeing it, and what
+/// [`Saved::restore`] puts back when a switch found no window.
 pub(crate) fn leave_curwin() {
     CURRENT_WIN.set(None);
     curwin.set(::core::ptr::null_mut::<Window>());
@@ -279,7 +279,10 @@ fn current_buffer() -> Buf {
 #[must_use = "the switch is undone by Saved::restore; dropping this leaves \
               the editor standing in the wrong window"]
 pub(crate) fn switch_to(win: Win) -> Saved {
-    let saved = Saved(Displaced::WindowAndBuffer(current_window()));
+    let saved = Saved(Displaced::WindowAndBuffer(
+        current_window(),
+        current_buffer(),
+    ));
     win.make_current();
     win.buffer().make_current();
     saved
@@ -323,8 +326,9 @@ pub(crate) struct Saved(Displaced);
 /// Which halves a switch took, and what they held.
 #[derive(Debug)]
 enum Displaced {
-    /// [`switch_to`]: the window, with `CURBUF` following it back.
-    WindowAndBuffer(Win),
+    /// [`switch_to`]: the window, with `CURBUF` following it back -- or,
+    /// when there was no window, going back to the buffer beside it.
+    WindowAndBuffer(Win, Buf),
     /// [`switch_window`]: the window alone.
     Window(Win),
     /// [`switch_buffer`]: the buffer alone.
@@ -339,15 +343,31 @@ impl Saved {
     /// value, which is what the hand-written pairs this replaces did and is
     /// the answer that stays right when the buffer behind that window
     /// changed while the caller was away.
+    ///
+    /// A null window or buffer is the editor between them, and is put back
+    /// as none; with no window to follow, `CURBUF` goes back to what the
+    /// switch found.
     #[inline]
     pub(crate) fn restore(self) {
+        fn put_back_buffer(displaced: Buf) {
+            if displaced.is_null() {
+                leave_curbuf();
+            } else {
+                displaced.make_current();
+            }
+        }
         match self.0 {
-            Displaced::WindowAndBuffer(win) => {
+            Displaced::WindowAndBuffer(win, _) if !win.raw().is_null() => {
                 win.make_current();
                 win.buffer().make_current();
             }
+            Displaced::WindowAndBuffer(_, buf) => {
+                leave_curwin();
+                put_back_buffer(buf);
+            }
+            Displaced::Window(win) if win.raw().is_null() => leave_curwin(),
             Displaced::Window(win) => win.make_current(),
-            Displaced::Buffer(buf) => buf.make_current(),
+            Displaced::Buffer(buf) => put_back_buffer(buf),
         }
     }
 }
@@ -462,4 +482,82 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     // SAFETY: all-zero bytes are otherwise what upstream's
     // `xcalloc(1, sizeof(Buffer))` hands a fresh buffer.
     Owned::new(unsafe { storage.assume_init() })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::buffer::{bare_buffer, free_bare_buffer};
+    use crate::global_cell::editor_state_lock;
+    use crate::types::{ColNr, LineNr};
+    use crate::window::{bare_window, free_bare_window};
+
+    /// The current window and buffer are a registered block's address with
+    /// its identity beside it: what `Win::current()` hands back writes the
+    /// very block the caller's own handle reads, and a switch puts back
+    /// exactly what it displaced -- here, no window at all.
+    #[test]
+    fn a_switch_stands_in_a_window_and_puts_the_old_one_back() {
+        let _held = editor_state_lock();
+        let mut win = bare_window();
+        let buffer = bare_buffer();
+        win.w_buffer = buffer;
+        leave_curwin();
+        leave_curbuf();
+
+        let saved = switch_to(win);
+        assert!(win.is_current() && buffer.is_current());
+        assert_eq!(Win::current(), win);
+        assert_eq!(Buf::current(), buffer);
+        Win::current().w_cursor.lnum = LineNr::new(5);
+        assert_eq!(win.w_cursor.lnum, LineNr::new(5));
+        Buf::current().b_changed = 1;
+        assert_eq!(win.buffer().b_changed, 1);
+        saved.restore();
+        assert_eq!(Win::current_or_none(), None);
+        assert_eq!(Buf::current_or_none(), None);
+
+        let saved = switch_buffer(buffer);
+        assert_eq!(Buf::current(), buffer);
+        saved.restore();
+        assert_eq!(Buf::current_or_none(), None);
+
+        free_bare_window(win);
+        free_bare_buffer(buffer);
+    }
+
+    /// A forgotten window's block goes back and its id answers `None`; its
+    /// neighbours' handles stay good.
+    #[test]
+    fn a_forgotten_window_is_found_no_more() {
+        let _held = editor_state_lock();
+        let gone = bare_window();
+        let mut stays = bare_window();
+        let id = gone.id();
+        assert_eq!(id.get(), Some(gone));
+        free_bare_window(gone);
+        assert_eq!(id.get(), None);
+        assert!(forget_window(gone.handle()).is_none(), "freed once");
+        stays.w_cursor.col = ColNr::new(3);
+        assert_eq!(
+            stays.id().get().map(|win| win.w_cursor.col),
+            Some(ColNr::new(3))
+        );
+        free_bare_window(stays);
+    }
+
+    /// The fields a zeroed `Buffer` is not a valid value for are written
+    /// before anything reads them: the owners read back empty, and dropping
+    /// the block drops each of them.
+    #[test]
+    fn an_unregistered_buffer_holds_valid_owners() {
+        let owned = alloc_unregistered_buffer();
+        let buffer = Buf::owned_by(&owned);
+        assert!(!buffer.is_null() && buffer.try_id().is_none());
+        assert!(buffer.b_ucmds.is_empty() && buffer.b_wininfo.is_empty());
+        assert!(buffer.b_kmap_ga.is_empty() && buffer.b_p_cpt_cb.is_empty());
+        assert!(buffer.b_u_line.is_none() && buffer.additional_data.is_none());
+        assert!(buffer.b_p_vts_array.is_none() && buffer.b_p_vsts_array.is_none());
+        drop(owned);
+    }
 }
