@@ -12,7 +12,10 @@ describe(':Tutor', function()
 
   before_each(function()
     clear({ args = { '--clean' } })
-    command('set cmdheight=0')
+    -- 'redrawtime' is wall clock: on a loaded machine the tutor's syntax
+    -- (a debug build, a thousand lines with vim/sh included) can take over
+    -- the default 2 s, and then syntax is switched off for the window.
+    command('set cmdheight=0 redrawtime=60000')
     command('Tutor')
     screen = Screen.new(81, 30)
     screen:set_default_attr_ids({
