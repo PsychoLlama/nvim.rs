@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(*second, [1, 2]);
         let (freed, held): (Vec<_>, Vec<_>) = others
             .into_iter()
-            .partition(|id| table.view(*id)[0] % 2 == 0);
+            .partition(|id| table.view(*id)[0].is_multiple_of(2));
         for id in freed {
             drop(table.remove(id));
         }
