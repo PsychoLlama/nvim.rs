@@ -95,6 +95,7 @@ export NVIM_RPLUGIN_MANIFEST=$run_dir/Xtest_rplugin_manifest
 unset XDG_DATA_DIRS NVIM TMUX
 export NVIM_LOG_FILE=${NVIM_LOG_FILE:-$run_dir/nvim.log}
 export VTERM_TEST_FILE=$run_dir/vterm_test_output
+export NVIM_TEST_TIMINGS=$run_dir/timings.rows
 export TMPDIR=$tmpdir
 export HISTFILE=/dev/null
 export SYSTEM_NAME=$(uname -s) # used by test/testutil.lua
@@ -126,5 +127,11 @@ status=0
   "${args[@]}" \
   "${paths[@]}" || status=$?
 
+# The run's timing table, folded into the build dir's stable one.
+source "$root/scripts/test-timings.sh"
+if [[ -s $NVIM_TEST_TIMINGS ]]; then
+  timings_sort "$NVIM_TEST_TIMINGS" >"$run_dir/timings.tsv"
+  timings_fold "$run_dir/timings.tsv" "$build/timings/$test_type.tsv"
+fi
 user_log_check || ((status)) || status=1
 exit "$status"

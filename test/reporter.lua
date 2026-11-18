@@ -30,6 +30,7 @@
 --- @class test.reporter : test.base_reporter
 --- @field opts test.reporter.Options
 --- @field colors test.reporter.ColorMap
+--- @field timings? string
 local M = {}
 M.__index = M
 
@@ -95,6 +96,8 @@ function M.new(opts)
   local self = setmetatable({
     opts = opts,
     colors = colors,
+    -- The run's timing table (see file_end).
+    timings = os.getenv('NVIM_TEST_TIMINGS'),
   }, M)
 
   return self
@@ -425,6 +428,19 @@ function M:file_end(file, test_count)
     )
   )
   io.flush()
+  -- The same line, uncoloured, for the run's timing table (scripts/run-tests.sh
+  -- sorts it; scripts/test-timings.sh has the format).
+  if self.timings then
+    local f = assert(io.open(self.timings, 'a'))
+    f:write(
+      ('%.3f\t%d\t%s\n'):format(
+        get_elapsed_time_ms(file) / 1000,
+        test_count,
+        vim.fs.normalize(file.name)
+      )
+    )
+    f:close()
+  end
 end
 
 --- @param duration number

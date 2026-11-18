@@ -34,6 +34,9 @@ end
 ---@return string[]
 local function make_env(overrides)
   local env = uv.os_environ()
+  -- The nested harness must not add its throwaway specs to this run's
+  -- timing table (test/reporter.lua).
+  env.NVIM_TEST_TIMINGS = nil
   for k, v in pairs(overrides) do
     env[k] = v
   end

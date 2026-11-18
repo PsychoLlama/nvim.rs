@@ -9,7 +9,9 @@
 #
 # $NVIM_PRG selects the binary under test (default target/debug/nvim); the ASan
 # recipes point it at their own build. Every run executes in a fresh copy of
-# the testdir under $NVIM_OLDTEST_RUN_DIR (default target/oldtest; see below).
+# the testdir under $NVIM_OLDTEST_RUN_DIR (default target/oldtest; see below),
+# and writes a per-file timing table there (timings.tsv) and to
+# <build dir>/timings/oldtest.tsv.
 #
 # The mode is mandatory because the obvious invocation — no arguments, meaning
 # "run everything" — could report a green suite while executing nothing. make's
@@ -129,10 +131,32 @@ make=(make -C "$run_testdir" NVIM_PRG="$NVIM_PRG")
 "${make[@]}" --no-print-directory opt_test.vim .gdbinit >/dev/null
 
 status=0
+log=$run_dir/make.log
 if [[ $# -eq 1 && $1 == all ]]; then
-  "${make[@]}" 2>&1 | tee "$run_dir/make.log" || status=$?
+  "${make[@]}" 2>&1 | tee "$log" || status=$?
+  timing_source=$run_testdir/messages
 else
-  "${make[@]}" "$@" 2>&1 | tee "$run_dir/make.log" || status=$?
+  # A named target deletes `messages` before its test and prints it after,
+  # so only make's output holds every named test's lines.
+  "${make[@]}" "$@" 2>&1 | tee "$log" || status=$?
+  timing_source=$log
+fi
+
+# The run's timing table (per test file: seconds, tests), folded into the
+# build dir's stable one. From the lines runtest.vim already writes:
+#   From test_x.vim:
+#   Executed 26 tests                        in   0.677101 seconds
+source "$root/scripts/test-timings.sh"
+if [[ -f $timing_source ]]; then
+  sed 's/\x1b\[[0-9;]*m//g' "$timing_source" | awk '
+    /^From test_.*\.vim:$/ { file = substr($2, 1, length($2) - 1); next }
+    file != "" && /^Executed [0-9]+ tests? +in +[0-9.]+ seconds/ {
+      printf "%s\t%s\t%s\n", $5, $2, file; file = ""
+    }' >"$run_dir/timings.rows"
+  if [[ -s $run_dir/timings.rows ]]; then
+    timings_sort "$run_dir/timings.rows" >"$run_dir/timings.tsv"
+    timings_fold "$run_dir/timings.tsv" "$(dirname "$(dirname "$NVIM_PRG")")/timings/oldtest.tsv"
+  fi
 fi
 user_log_check || ((status)) || status=1
 exit "$status"
