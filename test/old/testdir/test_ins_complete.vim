@@ -5896,7 +5896,10 @@ func Test_completetimeout_autocompletetimeout()
   let match_count = len(b:matches->mapnew('v:val.word'))
   call assert_true(match_count < 4000)
 
-  set completetimeout=1000
+  " Nvim.rs: 10 s, not 1 s: an ASan build on a loaded machine collected
+  " fewer than 2000 of the 60000 in one second. The point is only that a long
+  " timeout collects far more than a 1 ms one.
+  set completetimeout=10000
   call feedkeys("\<Esc>Sf\<C-N>\<F2>\<Esc>0", 'xt!')
   let match_count = len(b:matches->mapnew('v:val.word'))
   call assert_true(match_count > 2000)

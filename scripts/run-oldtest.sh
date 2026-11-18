@@ -47,6 +47,14 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 source "$root/scripts/user-log-guard.sh"
 user_log_mark
 
+# The test files a split run keeps off the parallel part: they run one by
+# one after it, each with the reason it cannot share the machine. A test that
+# fails only under load is fixed first (wait on a condition, not a clock);
+# this list is for what cannot be.
+SERIAL_TAIL=(
+  "test_search_stat: 'n' counts matches for its [N/M] under a fixed 40 ms clock (SEARCH_STAT_DEF_TIMEOUT) a test cannot widen; an ASan build beside eleven workers misses it"
+)
+
 jobs=${NVIM_TEST_JOBS:-1}
 names=()
 for arg in "$@"; do
@@ -236,7 +244,7 @@ oldtest_job() { # <slot> <test>
 # report (`make report`: summarize.vim over every test's `messages`, the
 # failures from every failing test's `test.log`) in the run root's testdir.
 run_split() {
-  local start=$SECONDS slot test status=0
+  local start=$SECONDS slot test tail_test status=0
   local -a tests=()
   if [[ $# -eq 1 && $1 == all ]]; then
     mapfile -t tests < <("${make[@]}" -s --no-print-directory list-tests)
@@ -251,15 +259,28 @@ run_split() {
   done
   mkdir -p "$run_dir/logs" "$run_dir/messages.d" "$run_dir/testlog.d"
   : >"$run_dir/results.tsv"
-  echo "${#tests[@]} test files on $jobs workers; logs in $run_dir/logs"
+  local -a parallel_tests=() tail_tests=()
+  for test in "${tests[@]}"; do
+    for tail_test in "${SERIAL_TAIL[@]%%:*}"; do
+      if [[ $test == "$tail_test" ]]; then
+        tail_tests+=("$test")
+        continue 2
+      fi
+    done
+    parallel_tests+=("$test")
+  done
+  echo "${#parallel_tests[@]} test files on $jobs workers, then ${#tail_tests[@]} serially; logs in $run_dir/logs"
 
   export OLDTEST_DIR=$run_dir NVIM_PRG
   export -f oldtest_job root_env
-  printf '%s\n' "${tests[@]}" | awk -v table="$build/timings/oldtest.tsv" '
+  ((${#parallel_tests[@]})) && printf '%s\n' "${parallel_tests[@]}" | awk -v table="$build/timings/oldtest.tsv" '
     BEGIN { while ((getline line < table) > 0) { split(line, f, "\t"); secs[f[3]] = f[1] } }
     { file = $0 ".vim"; print ((file in secs) ? secs[file] : 1e9) "\t" $0 }' |
     sort -t$'\t' -k1,1gr -k2,2 | cut -f2 |
     SHELL=$(command -v bash) parallel --will-cite -j "$jobs" oldtest_job '{%}' '{}' || true
+  for test in "${tail_tests[@]}"; do
+    oldtest_job 1 "$test"
+  done
 
   # The merged inputs of the report, in the serial run's order.
   : >"$run_testdir/messages"
