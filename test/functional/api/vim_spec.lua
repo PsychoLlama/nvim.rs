@@ -5619,7 +5619,9 @@ describe('API', function()
       it('works with :sleep using milliseconds', function()
         local start = uv.now()
         api.nvim_cmd({ cmd = 'sleep', args = { '100m' } }, {})
-        ok(uv.now() - start <= 300)
+        -- Milliseconds, not the 100 seconds a lost "m" would sleep: the bound
+        -- sits far from both, since a loaded machine adds wall time.
+        ok(uv.now() - start < 10000)
       end)
     end)
 

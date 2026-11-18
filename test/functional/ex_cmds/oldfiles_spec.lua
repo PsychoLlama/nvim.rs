@@ -32,26 +32,29 @@ describe(':oldfiles', function()
     os.remove(shada_file)
   end)
 
-  local function add_padding(s)
-    return s .. string.rep(' ', 96 - string.len(s))
-  end
-
   it('shows most recently used files', function()
-    local screen = Screen.new(100, 5)
-    screen._default_attr_ids = nil
     feed_command('edit testfile1')
     feed_command('edit testfile2')
     feed_command('wshada')
     feed_command('rshada!')
     local oldfiles = api.nvim_get_vvar('oldfiles')
+    -- The lines are full paths under the run root: size the screen to them,
+    -- so a deeper root (a sharded worker's, the ASan tree's) does not wrap.
+    local width = math.max(100, #oldfiles[1] + 4, #oldfiles[2] + 4)
+    local function add_padding(s)
+      return s .. string.rep(' ', width - 4 - string.len(s))
+    end
+    local screen = Screen.new(width, 5)
+    screen._default_attr_ids = nil
     feed_command('oldfiles')
-    screen:expect([[
-                                                                                                          |
-      1: ]] .. add_padding(oldfiles[1]) .. [[ |
-      2: ]] .. add_padding(oldfiles[2]) .. [[ |
-                                                                                                          |
-      Press ENTER or type command to continue^                                                             |
-    ]])
+    local blank = string.rep(' ', width)
+    screen:expect(table.concat({
+      blank .. '|',
+      '1: ' .. add_padding(oldfiles[1]) .. ' |',
+      '2: ' .. add_padding(oldfiles[2]) .. ' |',
+      blank .. '|',
+      'Press ENTER or type command to continue^' .. string.rep(' ', width - 39) .. '|',
+    }, '\n'))
     feed('<CR>')
   end)
 

@@ -1035,7 +1035,10 @@ describe(':terminal buffer', function()
     api.nvim_set_option_value('scrollback', scrollback, {})
     api.nvim_create_autocmd('TermClose', { command = 'let g:did_termclose = 1' })
     fn.jobstart({ testprg('shell-test'), subcmd, count, 'TEST' }, { term = true })
-    retry(nil, 10000 + count, function()
+    -- A condition wait: the deadline only bounds a hang, and 20,000 lines
+    -- through a debug or ASan build on a loaded machine take far more than
+    -- the upstream 30 s.
+    retry(nil, 120000 + count, function()
       eq(1, api.nvim_get_var('did_termclose'))
     end)
     feed('i')

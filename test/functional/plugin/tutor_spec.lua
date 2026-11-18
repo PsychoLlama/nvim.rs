@@ -140,7 +140,10 @@ describe(':Tutor', function()
     ]]
 
     feed(':983<CR>zt')
-    screen:expect(expected)
+    -- The jump syncs the syntax over the thousand lines above: seconds in a
+    -- debug build, past the default screen timeout under ASan on a loaded
+    -- machine. The wait is on the screen, so a long one costs nothing.
+    screen:expect({ grid = expected, timeout = 60000 })
   end)
 
   it("removing a line doesn't affect highlight/mark of other lines", function()

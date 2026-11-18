@@ -7,9 +7,12 @@ local Screen = require('test.functional.ui.screen')
 local api, clear, command, exec_lua, feed = n.api, n.clear, n.command, n.exec_lua, n.feed
 
 local msg_timeout = 400
-local function set_msg_target_zero_ch()
+--- @param timeout? integer how long a message stays (default `msg_timeout`): a
+--- case that needs a message to outlive several steps passes one no load reaches
+local function set_msg_target_zero_ch(timeout)
+  timeout = timeout or msg_timeout
   exec_lua(function()
-    require('vim._core.ui2').enable({ msg = { target = 'msg', msg = { timeout = msg_timeout } } })
+    require('vim._core.ui2').enable({ msg = { target = 'msg', msg = { timeout = timeout } } })
     vim.o.cmdheight = 0
   end)
 end
@@ -335,7 +338,9 @@ describe('messages2', function()
       {1:~                                                    }|*12
                                                            |
     ]])
-    set_msg_target_zero_ch()
+    -- "foo" must last until the last screen below, through a resize and a
+    -- cmdline: 400 ms is a wall clock a loaded machine outruns.
+    set_msg_target_zero_ch(60000)
     command('echo "foo"')
     screen:expect([[
       ^                                                     |
