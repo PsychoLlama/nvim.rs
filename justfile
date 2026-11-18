@@ -246,16 +246,30 @@ miri-lib *args:
 # Miri where it still finds what nothing else does: the lib tests of the
 # raw-memory perimeter (docs/unsafe-audit.md's "memory" rows -- the
 # allocator, `memory/`, `GlobalCell`, the `winlayer` handles, the Vimscript
-# value handles), selected by module prefix. A few minutes rather than
-# miri-lib's hours. Each raw-memory file keeps a `#[cfg(test)]` module of its
-# own under one of these prefixes, exercising its unsafe operations through
-# the safe API; `just ratchet --check` fails when one does not. Runs serially:
-# Miri's ~40 s per-process startup makes nextest slower here. `memory/
-# claimed.rs` forbids unsafe code and its payload test was half the lane, so
-# it is skipped. `args` go to the test binary, e.g. `-Z unstable-options
+# value handles) and of the modules beside them that drive those handles
+# through the safe API. A few minutes rather than miri-lib's hours. Each
+# filter is a whole test module's path: libtest matches a filter anywhere in
+# a test's name, so a bare `memory::` would also take any future
+# `foo::memory::` or `memory::foo`. `just ratchet --check` fails when a
+# raw-memory file has no `#[test]` of its own or no filter here, when a
+# filter names no test module, and when one also matches another module's
+# tests. Runs serially: Miri's ~40 s per-process startup makes nextest
+# slower here. `args` go to the test binary, e.g. `-Z unstable-options
 # --report-time` or `--skip x`.
 miri-perimeter *args:
-  {{ nightly }} MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib -- allocator:: memory:: global_cell:: winlayer:: eval::typval:: --skip memory::claimed:: {{ args }}
+  {{ nightly }} MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib -- \
+    allocator::tests:: global_cell::tests:: \
+    memory::tests:: memory::alloc_log::tests:: memory::blocks::tests:: \
+    memory::thin_cstring::tests:: memory::xstring::tests:: \
+    winlayer::tests:: winlayer::graph::tests:: winlayer::grid::tests:: \
+    winlayer::handles::tests:: winlayer::live::tests:: winlayer::terminal::tests:: \
+    eval::typval::handle::tests:: eval::typval::access::tests:: \
+    eval::typval::blob::tests:: eval::typval::dict::tests:: \
+    eval::typval::dictitem::tests:: eval::typval::edit::tests:: \
+    eval::typval::list::tests:: eval::typval::partial::tests:: \
+    eval::typval::sort::tests:: eval::typval::string::tests:: \
+    eval::typval::value::tests:: eval::typval::watcher::tests:: \
+    {{ args }}
 
 # Run the cargo-test lane with the struct layouts shuffled, to catch code
 # that assumes a `repr(Rust)` type's field order or size. `seed` picks the

@@ -4366,8 +4366,8 @@ def check_cast_deny_floor(tree, report=False):
 # The raw-memory rows of PERIMETER (docs/unsafe-audit.md's "memory" class):
 # the primitives whose unsafe code is aliasing, provenance and lifetime --
 # what Miri can see and nothing else does. `just miri-perimeter` runs only the
-# lib tests under the module prefixes its recipe names, so each of these files
-# must hold a `#[test]` of its own under one of them (`check_miri_perimeter`).
+# lib test modules its recipe names, so each of these files must hold a
+# `#[test]` of its own in a module the recipe names (`check_miri_perimeter`).
 MIRI_PERIMETER_FILES = (
     "crates/nvim/src/allocator.rs",
     "crates/nvim/src/memory/",
@@ -4393,8 +4393,11 @@ def module_path(file):
 
 
 def check_miri_perimeter(tree):
-    """Every raw-memory file that allows unsafe code holds a `#[test]`, and
-    the `miri-perimeter` recipe names a module prefix over it."""
+    """Every raw-memory file that allows unsafe code holds a `#[test]` in a
+    `tests` module the `miri-perimeter` recipe names, and every filter there
+    is one whole test module's path: libtest matches a filter anywhere in a
+    test's name, so a filter must name a module that exists and occur in no
+    other module's test path."""
     if stale := sorted(set(MIRI_PERIMETER_FILES) - PERIMETER.keys()):
         sys.exit(
             f"ratchet: MIRI_PERIMETER_FILES rows not on PERIMETER: {', '.join(stale)}"
@@ -4403,21 +4406,33 @@ def check_miri_perimeter(tree):
     if recipe is None:
         sys.exit("ratchet: the justfile has no `miri-perimeter` recipe")
     filters = MIRI_FILTER.findall(MIRI_SKIP.sub("", recipe.group(1)))
+    # Every test module's path as libtest prints it, `::`-terminated.
+    test_modules = {
+        f"{module_path(file)}::tests::"
+        for file, masked in tree.items()
+        if file.startswith(CRATE_SRC) and "#[test]" in masked
+    }
     bad = []
+    for f in filters:
+        if f not in test_modules:
+            bad.append(f"filter {f}: names no `tests` module")
+        if others := sorted(m for m in test_modules if m != f and f in m):
+            bad.append(f"filter {f}: also matches {', '.join(others)}")
     for file, masked in sorted(tree.items()):
         if not in_home(file, MIRI_PERIMETER_FILES) or FILE_ALLOWS_UNSAFE not in masked:
             continue
         if "#[test]" not in masked:
             bad.append(f"{file}: no #[test] of its own")
-        if not any(f"{module_path(file)}::".startswith(f) for f in filters):
-            bad.append(f"{file}: under none of miri-perimeter's filters {filters}")
+        elif f"{module_path(file)}::tests::" not in filters:
+            bad.append(f"{file}: its `tests` module is not a miri-perimeter filter")
     if bad:
         sys.exit(
-            "ratchet: `just miri-perimeter` does not reach every raw-memory "
-            "file:\n  "
+            "ratchet: `just miri-perimeter` does not reach exactly the "
+            "raw-memory tests:\n  "
             + "\n  ".join(bad)
-            + "\nGive the file a `#[cfg(test)]` module whose tests exercise its "
-            "unsafe operations, or add its module prefix to the recipe."
+            + "\nGive each raw-memory file a `#[cfg(test)] mod tests` whose "
+            "tests exercise its unsafe operations, and name each test module "
+            "in the recipe by its whole path."
         )
 
 

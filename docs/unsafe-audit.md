@@ -60,7 +60,7 @@ falls into four classes:
   and unit suites run against debug builds; whole-suite AddressSanitizer runs
   and Miri (over the crate's own tests) back them. `just miri-perimeter` runs
   Miri over the raw-memory rows' own tests alone: each of those files holds
-  a test module under one of the recipe's module prefixes, and
+  a `tests` module the recipe names by its whole path, and
   `just ratchet --check` fails on one that does not.
 
 To check the numbers here: `python3 scripts/ratchet.py --dimension
