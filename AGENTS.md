@@ -57,8 +57,8 @@
 
 Tests only run local, not in CI. Any failure, even out of scope, is your responsibility to fix.
 
-- **Lanes.** Every change runs `just minimal-ci`, `just functionaltest` and `just oldtest all`. The expensive lanes run once, at the close of a piece of work, and only for what it touched; work that touched none of these says so in its report and skips them:
-  - `just asan functionaltest` + `just asan oldtest` — a `PERIMETER` file, a handle type or its lifetime (`winlayer/`, `eval/typval/handle.rs`, anything building a `Win`/`Buf`/`GridRef` from a stored address), or the pinned C dependencies. The handle-lifetime trigger goes once a handle can no longer outlive its target; the work that closes that class edits this line.
+- **Lanes.** Every change runs `just minimal-ci`, `just functionaltest` and `just oldtest all` (the routine chain; on an idle machine with `--jobs=12` on both suites, ~6 min against ~25 serial). The expensive lanes run once, at the close of a piece of work, and only for what it touched; work that touched none of these says so in its report and skips them:
+  - `just asan functionaltest` + `just asan oldtest all` (`--jobs=N` as below; 12 workers: ~13 + ~6 min against ~50 + ~25 serial) — a `PERIMETER` file, a handle type or its lifetime (`winlayer/`, `eval/typval/handle.rs`, anything building a `Win`/`Buf`/`GridRef` from a stored address), or the pinned C dependencies. The handle-lifetime trigger goes once a handle can no longer outlive its target; the work that closes that class edits this line.
   - `just miri-perimeter` — a raw-memory perimeter file: one under a `memory` row of `docs/unsafe-audit.md` (`MIRI_PERIMETER_FILES` in `scripts/ratchet.py`).
   - `just battery [--jobs=N]` — work that retypes or restructures without meaning to change behaviour (not work whose point is a behaviour change). `--jobs=N` runs the rows N at a time, longest first, then its `SERIAL_TAIL` alone (12 cores, warm cache: ~6 min against ~13 serial).
   - `just miri-lib`/`just miri` are on no routine chain.
