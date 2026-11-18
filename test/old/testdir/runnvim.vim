@@ -27,7 +27,9 @@ function Main()
   set columns=80
   enew
   let job = jobstart(args, s:logger)
-  let results = jobwait([job], 5 * 60 * 1000)
+  " Nvim.rs: three times as long under ASan, the factor the functional
+  " screen tests use: test_quickfix alone runs close to 5 min there.
+  let results = jobwait([job], ($NVIM_TEST_ASAN == '1' ? 3 : 1) * 5 * 60 * 1000)
   " TODO(ZyX-I): Get colors
   let screen = getline(1, '$')
   call jobstop(job)  " kills the job always.

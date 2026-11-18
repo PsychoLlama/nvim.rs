@@ -432,7 +432,10 @@ func Test_spellsuggest_option_file()
   call assert_equal([], spellsuggest('teribal', 2))
   call assert_equal([], spellsuggest('terribal', 2))
 
-  set spell spellsuggest=best,file:Xspellsuggest
+  " Nvim.rs: no time limit (timeout:-1). These pin what the whole search
+  " finds; an ASan build beside eleven workers passed the default 5 s and
+  " answered with what it had found by then.
+  set spell spellsuggest=best,file:Xspellsuggest,timeout:-1
   call assert_equal(['vim', 'Emacs'],       spellsuggest('emacs', 2))
   call assert_equal(['terrible', 'tribal'], spellsuggest('theribal', 2))
   call assert_equal(['tribal'],             spellsuggest('teribal', 1))
