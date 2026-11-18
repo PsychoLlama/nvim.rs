@@ -57,6 +57,7 @@
 
 Tests only run local, not in CI. Any failure, even out of scope, is your responsibility to fix.
 
+- `just cargo-unit [filter...]` — `crates/nvim/tests/unit` under cargo-nextest (part of `minimal-ci`): a process per case, all cores, so a case sets up the editor state it needs rather than inheriting an earlier case's, and a prompt that would wait for a key panics. Lib tests and doctests stay on `cargo test`.
 - `just functionaltest [paths...] [--filter=pat]` — RPC-driven tests from `test/functional`. Pass spec files/dirs to run a subset.
 - `just oldtest <all|test_name...|clean>` — legacy Vim tests from `test/old/testdir`. The mode is required; `all` runs the whole suite from scratch, names run a subset, e.g. `just oldtest test_arglist`.
 - `just unittest [paths...]` — unit tests from `test/unit`. Their FFI declarations are generated from the Rust crate (`tools/ffigen`, wired in by `scripts/gen-unit-cdefs.sh`); the specs call the exported symbols of the nvim binary, and the C fixtures (`unit-fixtures.so`) compile against the same generated declarations.

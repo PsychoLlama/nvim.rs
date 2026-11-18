@@ -14,6 +14,9 @@
 # not parallelism — and removes the whole class.
 #
 # It is set here rather than in the justfile so that a bare `cargo test`
-# gets it too.
+# gets it too. `just cargo-unit` runs `tests/unit` under cargo-nextest
+# instead, a process per case, where the variable is moot; the lib tests
+# (whose `#[cfg(test)]` modules share globals the same way) still run
+# under `cargo test` and depend on it.
 [env]
 RUST_TEST_THREADS = "1"

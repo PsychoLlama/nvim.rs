@@ -169,6 +169,8 @@
             packages = [
               (mkToolchain pkgs)
               pkgs.just
+              # Runs tests/unit, a process per case (`just cargo-unit`).
+              pkgs.cargo-nextest
               # `valgrind --tool=cachegrind|callgrind` is how a perf claim in
               # this tree is settled: instruction counts are deterministic
               # where wall clock on this machine drifts several percent
