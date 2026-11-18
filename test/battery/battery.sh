@@ -230,9 +230,6 @@ SERIAL_TAIL=(
   # loaded child reordered (NonText 1 -> 31) with two batteries running.
   scrsweep
   msgsweep
-  # ~45 s alone, 230 s beside eleven rows, and past its 300 s harness
-  # timeout with two batteries running; alone at the end it is quicker too.
-  exprsweep
 )
 run() { # name script [args...]
   local n=$1
@@ -400,7 +397,8 @@ run inssweep   "$T/insverify.sh"
 # expression parser's oracle: every corpus line AND EVERY PREFIX of it
 # through eval(), `:let`, `:echo`, `:execute`, `:call` and skip mode, the
 # lvalue and `:function` commands the same way, and the re-entrant cases
-# where an expression changes the text being evaluated; ~45 s.
+# where an expression changes the text being evaluated; ~200 s, the
+# longest row.
 run contsweep  "$T/contverify.sh"
 run exprsweep  "$T/exprverify.sh"
 run msgsweep   "$T/msgverify.sh"

@@ -26,9 +26,10 @@
 #
 # The fixture is rebuilt before every evaluation, so a line's answer does
 # not depend on the lines before it.  No time, pid or address reaches either
-# artifact; three runs of one binary were byte-identical.  It costs ~45 s
-# on a debug build, almost all of it the expression section's seven entries
-# over ~3,800 prefixes.
+# artifact; three runs of one binary were byte-identical.  It costs ~200 s
+# on a debug build (2026-11), almost all of it the expression section's
+# seven entries over ~3,800 prefixes, so the harness timeout is a hang guard
+# well past that: a sharded battery beside another ran it past 300 s.
 set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -36,7 +37,7 @@ OUT=${SWEEP_OUT:-/tmp/exprsweep-out}
 REPO=${REPO:-$(cd "$HERE/../.." && pwd)}
 LABEL=${1:-cur}
 LOG=$OUT/build-$LABEL.log
-LIMIT=${EXPR_TIMEOUT:-300}
+LIMIT=${EXPR_TIMEOUT:-900}
 # Cut mode.  `baseline.sh` re-enters this script as `--cut <nvim> <dir>` to
 # cut the pinned baseline from the reference binary; it shares the ONE sweep
 # call below with the head run, so the two sides of the differential cannot
