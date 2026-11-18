@@ -686,12 +686,19 @@ describe('vim.pack', function()
       eq(true, pack_exists('basic'))
       eq(true, pack_exists('defbranch'))
 
-      -- Direct install from the lockfile should not write to it
+      -- Direct install from the lockfile should not write to it. Compare
+      -- what a write changes, not the whole stat: ZFS reports a fresh
+      -- file's `blocks` only once its transaction group commits, which
+      -- can land between the two calls.
       n.rmdir(pack_get_dir())
       n.clear()
-      local lockfile_fs_stat = vim.uv.fs_stat(get_lock_path())
+      local function lockfile_written_state()
+        local stat = assert(vim.uv.fs_stat(get_lock_path()))
+        return { ino = stat.ino, size = stat.size, mtime = stat.mtime, ctime = stat.ctime }
+      end
+      local lockfile_state = lockfile_written_state()
       vim_pack_add({})
-      eq(lockfile_fs_stat, vim.uv.fs_stat(get_lock_path()))
+      eq(lockfile_state, lockfile_written_state())
     end)
 
     it('handles lockfile during install errors', function()
