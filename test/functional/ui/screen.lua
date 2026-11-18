@@ -109,7 +109,13 @@ if os.getenv('CI') then
   default_timeout_factor = default_timeout_factor * 3
 end
 
-local default_screen_timeout = default_timeout_factor * 3500
+-- A sharded run (run-tests.sh --jobs=N sets NVIM_TEST_SHARDED) shares the
+-- machine with N-1 other specs: give a screen wait three times as long to
+-- match. Only the maximum: a wait that matches returns as soon as it does,
+-- and the minimal waits (`expect_unchanged`) keep their length.
+local default_screen_timeout = default_timeout_factor
+  * 3500
+  * (os.getenv('NVIM_TEST_SHARDED') == '1' and 3 or 1)
 
 local function _init_colors()
   local session = get_session()

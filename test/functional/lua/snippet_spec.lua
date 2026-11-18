@@ -45,8 +45,14 @@ describe('vim.snippet', function()
     if prefix then
       feed('i' .. prefix)
     end
-    exec_lua('vim.snippet.expand(...)', table.concat(snippet, '\n'))
-    eq(expected, buf_lines(0))
+    -- Read the lines in the same call: a choice tabstop opens its menu
+    -- 100 ms later (`vim.defer_fn`), and on a loaded machine the menu could
+    -- insert its first item before a separate read.
+    local lines = exec_lua(function(text)
+      vim.snippet.expand(text)
+      return vim.api.nvim_buf_get_lines(0, 0, -1, true)
+    end, table.concat(snippet, '\n'))
+    eq(expected, lines)
   end
 
   local function wait_for_pum()

@@ -54,7 +54,7 @@ shard_job() { # <slot> <spec> [harness flags...]
   # such spec once held a sharded run for half an hour. A spec gets
   # NVIM_TEST_SPEC_TIMEOUT seconds (default 900, three times the slowest
   # spec's ASan time under load), then its runner is killed and the spec fails.
-  NVIM_TEST_JOBS=1 NVIM_TEST_SKIP_PREP=1 NVIM_TEST_RUN_DIR=$root TEST_COLORS=0 \
+  NVIM_TEST_JOBS=1 NVIM_TEST_SKIP_PREP=1 NVIM_TEST_RUN_DIR=$root TEST_COLORS=0 NVIM_TEST_SHARDED=1 \
     timeout -k 30 "${NVIM_TEST_SPEC_TIMEOUT:-900}" \
     "$SHARD_SELF" functional "$@" "$spec" >"$log" 2>&1 </dev/null || status=$?
   if ((status == 124 || status == 137)); then

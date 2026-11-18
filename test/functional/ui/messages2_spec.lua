@@ -7,10 +7,11 @@ local Screen = require('test.functional.ui.screen')
 local api, clear, command, exec_lua, feed = n.api, n.clear, n.command, n.exec_lua, n.feed
 
 local msg_timeout = 400
---- @param timeout? integer how long a message stays (default `msg_timeout`): a
---- case that needs a message to outlive several steps passes one no load reaches
+--- @param timeout? integer how long a message stays. The default is one no
+--- load reaches: with 400 ms, messages a case still expected expired first on
+--- a loaded machine. A case that waits for the timer passes `msg_timeout`.
 local function set_msg_target_zero_ch(timeout)
-  timeout = timeout or msg_timeout
+  timeout = timeout or 60000
   exec_lua(function()
     require('vim._core.ui2').enable({ msg = { target = 'msg', msg = { timeout = timeout } } })
     vim.o.cmdheight = 0
@@ -338,9 +339,7 @@ describe('messages2', function()
       {1:~                                                    }|*12
                                                            |
     ]])
-    -- "foo" must last until the last screen below, through a resize and a
-    -- cmdline: 400 ms is a wall clock a loaded machine outruns.
-    set_msg_target_zero_ch(60000)
+    set_msg_target_zero_ch()
     command('echo "foo"')
     screen:expect([[
       ^                                                     |
@@ -914,7 +913,7 @@ describe('messages2', function()
   end)
 
   it('closed msg window timer removes empty lines', function()
-    set_msg_target_zero_ch()
+    set_msg_target_zero_ch(msg_timeout)
     command('echo "foo" | echo "bar\n"')
     screen:expect([[
       ^                                                     |
@@ -931,6 +930,8 @@ describe('messages2', function()
       {1:~                                                    }|*12
       {1:~                                                 }{4:baz}|
     ]])
+    -- From here "4" must outlive the steps below: no timer may fire.
+    set_msg_target_zero_ch(60000)
     -- Last message line is at bottom of window after closing it.
     screen:try_resize(screen._width, 8)
     command('mode | echo "1\n" | echo "2\n" | echo "3\n" | echo "4\n"')

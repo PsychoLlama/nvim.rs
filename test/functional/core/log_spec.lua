@@ -53,6 +53,10 @@ describe('log', function()
       ]])
     end
 
+    -- The message is logged as the client starts; a debug build's DBG lines
+    -- after it (the server's startup, the UI attach) can pass 100 on a slow
+    -- run, so search the last 1000.
+
     -- Without $NVIM parent.
     setup({
       NVIM = '',
@@ -62,7 +66,7 @@ describe('log', function()
     })
     -- Example:
     --    ERR 2024-09-11T16:40:02.421 ui.47056   ui_client_run:165: test log message
-    assert_log(' ui%.%d+% +ui_client_run:%d+: test log message', testlog, 100)
+    assert_log(' ui%.%d+% +ui_client_run:%d+: test log message', testlog, 1000)
 
     -- With $NVIM parent.
     setup({
@@ -72,7 +76,7 @@ describe('log', function()
     -- Example:
     --    ERR 2024-09-11T16:41:17.539 ui/c/T2.47826.0 ui_client_run:165: test log message
     local tid = _G._nvim_test_id
-    assert_log(' ui/c/' .. tid .. '%.%d+%.%d +ui_client_run:%d+: test log message', testlog, 100)
+    assert_log(' ui/c/' .. tid .. '%.%d+%.%d +ui_client_run:%d+: test log message', testlog, 1000)
   end)
 
   it('formats messages with session name or test id', function()
