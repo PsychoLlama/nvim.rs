@@ -42,12 +42,18 @@ describe(':terminal', function()
       ok(fn.line('$') > 6)
     end)
     feed(':messages<CR>')
-    screen:expect([[
+    -- The keys wait behind the terminal's output, which takes longer than
+    -- the default screen timeout in an ASan build on a loaded machine. The
+    -- wait is on the screen, so a long one costs nothing.
+    screen:expect({
+      grid = [[
       msg1                                              |
       msg2                                              |
       msg3                                              |
       Press ENTER or type command to continue^           |
-    ]])
+    ]],
+      timeout = 60000,
+    })
   end)
 
   it('reads output buffer on terminal reporting #4151', function()

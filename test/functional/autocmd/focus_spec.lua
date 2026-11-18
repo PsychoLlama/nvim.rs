@@ -59,6 +59,11 @@ describe('autoread TUI FocusGained/FocusLost', function()
     feed_data('\027[O')
     screen:expect_unchanged()
 
+    -- FocusGained checks timestamps at most once in 2 s. The child's TUI
+    -- may get a focus-in of its own at startup (the terminal reports focus
+    -- if focus reporting is on by the time it is entered: a race), and the
+    -- FocusGained below then fell inside that window and checked nothing.
+    vim.uv.sleep(2100)
     t.write_file(path, expected_addition)
 
     feed_data('\027[I')

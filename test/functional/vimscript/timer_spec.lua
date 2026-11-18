@@ -98,16 +98,36 @@ describe('timers', function()
   end)
 
   it('are paused when event processing is disabled', function()
-    command("call timer_start(5, 'MyHandler', {'repeat': -1})")
+    -- The handler counts the ticks it runs at the prompt itself. Counting
+    -- every tick between before and after the prompt also counted the ones
+    -- before the prompt was up, which a loaded machine stretches. A UI, so
+    -- there is a prompt: headless, the error does not wait for a key.
+    Screen.new(40, 6)
+    source([[
+      let g:at_prompt = 0
+      func PromptHandler(timer)
+        let g:val += 1
+        if mode(1) =~# '^r'
+          let g:at_prompt += 1
+        endif
+      endfunc
+    ]])
+    command("call timer_start(5, 'PromptHandler', {'repeat': -1})")
     run(nil, nil, nil, load_adjust(10))
-    local count = eval('g:val')
     -- shows two line error message and thus invokes the return prompt.
     -- if we start to allow event processing here, we need to change this test.
     feed(':throw "fatal error"<CR>')
+    retry(nil, nil, function()
+      eq('r', api.nvim_get_mode().mode)
+    end)
     run(nil, nil, nil, load_adjust(30))
     feed('<cr>')
-    local diff = eval('g:val') - count
-    assert(0 <= diff and diff <= 4, 'expected (0 <= diff <= 4), got: ' .. tostring(diff))
+    eq(0, eval('g:at_prompt'))
+    -- And the timer still runs once the prompt is gone.
+    local count = eval('g:val')
+    retry(nil, nil, function()
+      ok(eval('g:val') > count)
+    end)
   end)
 
   it('are triggered in inputlist() call #7857', function()

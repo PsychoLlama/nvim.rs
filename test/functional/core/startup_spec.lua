@@ -1444,7 +1444,10 @@ describe('user config init', function()
         -- The 'exrc' file is not trusted, and the prompt is skipped because there is no UI.
         eq('---', eval('g:exrc_file'))
 
-        local screen = Screen.new(50, 8)
+        -- 12 rows: the prompt shows the file's full path, which wraps over
+        -- more rows the deeper the run root (a sharded worker's, the ASan
+        -- tree's); at 8 a long one paged ("-- More --") before the prompt.
+        local screen = Screen.new(50, 12)
         screen._default_attr_ids = nil
         fn.jobstart({ nvim_prog }, {
           term = true,
@@ -1459,7 +1462,7 @@ describe('user config init', function()
         feed(':q<CR>')
         screen:expect([[
           ^                                                  |
-          ~                                                 |*4
+          ~                                                 |*8
           [No Name]                       0,0-1          All|
                                                             |
           -- TERMINAL --                                    |
@@ -1468,7 +1471,7 @@ describe('user config init', function()
         screen:expect(string.format(
           [[
           ^                                                  |
-          ~                                                 |*4
+          ~                                                 |*8
           [No Name]                       0,0-1          All|
           %s%s|
           -- TERMINAL --                                    |
