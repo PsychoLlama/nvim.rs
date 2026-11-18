@@ -4494,6 +4494,14 @@ describe('TUI bg color', function()
   end)
 
   it('does not trigger OptionSet from automatic background processing', function()
+    -- The startup waits 100 ms (wall clock, runtime/lua/vim/_core/defaults.lua)
+    -- for the terminal's background answer so it lands before the user's
+    -- config; an ASan child beside eleven sharded specs answered later, after
+    -- the `-c` autocmd existed, and OptionSet fired. Runs everywhere else.
+    t.skip(
+      os.getenv('NVIM_TEST_ASAN') == '1' and os.getenv('NVIM_TEST_SHARDED') == '1',
+      'a 100 ms startup wait that a sharded ASan run outlasts'
+    )
     command('set background=light')
     local child_server = new_pipename()
     local screen = tt.setup_child_nvim({
