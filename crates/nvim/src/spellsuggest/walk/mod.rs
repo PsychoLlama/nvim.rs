@@ -413,11 +413,11 @@ impl<'a> Walk<'a> {
         Some(walk)
     }
 
-    /// Run every state of every level until the stack empties or the user
-    /// interrupts.
+    /// Run every state of every level until the stack empties, the search
+    /// gives up, or the user interrupts.
     #[inline(always)]
     fn run(&mut self) {
-        while !self.finished && !GOT_INT.get() {
+        while !self.finished && !self.su.su_gave_up && !GOT_INT.get() {
             self.step();
         }
     }
@@ -465,7 +465,7 @@ impl<'a> Walk<'a> {
             os_breakcheck();
             self.breakcheckcount = 1000;
             if SPELL_SUGGEST_TIMEOUT.get() > 0 && profile_passed_limit(self.time_limit) {
-                GOT_INT.set(true);
+                self.su.su_gave_up = true;
             }
         }
     }

@@ -214,6 +214,12 @@ pub(crate) struct SugInfo {
     /// Per language, the soundfolds the sound-a-like passes have already
     /// turned back into words; see [`soundalike`].
     pub su_sounddone: Vec<(LangId, SoundDone)>,
+    /// A walk ran out of 'spellsuggest' time, or met a tree that disagrees
+    /// with its own length: no later walk of this search starts. Not
+    /// `GOT_INT`, which C set here: a script reads that as CTRL-C, so a
+    /// `spellsuggest()` that timed out raised `Vim:Interrupt` instead of
+    /// answering with what it had found.
+    pub su_gave_up: bool,
 }
 
 impl SugInfo {
@@ -234,6 +240,7 @@ impl SugInfo {
             su_banned: Banned::default(),
             su_sallang: None,
             su_sounddone: Vec::new(),
+            su_gave_up: false,
         }
     }
 

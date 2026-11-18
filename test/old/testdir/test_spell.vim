@@ -444,6 +444,20 @@ func Test_spellsuggest_option_file()
   set spellsuggest& spell&
 endfunc
 
+" Nvim.rs: a search that runs out of 'spellsuggest' time answers with what it
+" found. It used to set got_int, which the script read as CTRL-C: every one of
+" these raised Vim:Interrupt (and Test_spellsuggest_option_file did, under
+" load, past the default 5 s).
+func Test_spellsuggest_option_timeout()
+  set spell spellsuggest=best,timeout:1
+  for word in ['theribal', 'teribal', 'antidisestablishmentarianismus']
+    call assert_equal(v:t_list, type(spellsuggest(word, 2)))
+  endfor
+  let reached = 1
+  call assert_equal(1, reached)
+  set spellsuggest& spell&
+endfunc
+
 " Test 'spellsuggest' option with value {number}
 " to limit the number of suggestions
 func Test_spellsuggest_option_number()
