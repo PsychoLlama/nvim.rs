@@ -25,7 +25,7 @@
 
 use crate::ascii::TAB;
 use crate::buffer::buf_meta_total;
-use crate::charset::{byte2cells, vim_isbreak, vim_isprintc};
+use crate::charset::{byte_width, byte2cells, vim_isbreak, vim_isprintc, with_byte_cells};
 use crate::cstr::byte_at;
 use crate::decoration::{
     MT_META_INLINE, decor_conceal_line, mark_virt_chain, ns_in_win, with_decor_virt,
@@ -87,16 +87,22 @@ impl Win {
 /// drawn the way that character is -- except the overlong NUL, which is
 /// `<c0><80>` on screen, so a codepoint of 0 reads the byte: a real NUL is
 /// the two-cell `^@` there.
+///
+/// `byte_width` answers an ASCII byte's width: the table read per byte
+/// ([`crate::charset::byte_width`]) for one call, or
+/// the widths [`with_byte_cells`] lends in a walk that holds the table.
 #[inline(always)]
-fn char_cells(line: &[u8], at: usize, cur_char: int32_t) -> c_int {
+fn char_cells(line: &[u8], at: usize, cur_char: int32_t, byte_width: impl Fn(u8) -> u8) -> c_int {
     if cur_char < 0 {
         INVALID_BYTE_CELLS
     } else if (1..0x80).contains(&cur_char) {
-        byte2cells(u8::try_from(cur_char).expect("a code point in 1..0x80 is one byte"))
+        c_int::from(byte_width(
+            u8::try_from(cur_char).expect("a code point in 1..0x80 is one byte"),
+        ))
     } else {
         let byte = byte_at(line, at);
         if byte < 0x80 {
-            byte2cells(byte)
+            c_int::from(byte_width(byte))
         } else {
             c_cells_in(line, at)
         }
@@ -524,7 +530,7 @@ pub(crate) fn charsize_regular(
         // two-cell ^@ a NUL *in the text* would get.
         size = c_int::from(has_lcs_eol);
     } else {
-        size = char_cells(csarg.line, at, cur_char);
+        size = char_cells(csarg.line, at, cur_char, byte_width);
         is_doublewidth = size == 2 && cur_char >= 0x80;
     }
 
@@ -559,7 +565,9 @@ pub(crate) fn charsize_regular(
 
 /// Like [`charsize_regular`] but with no inline virtual text, 'linebreak',
 /// 'breakindent' or 'showbreak' to worry about: normal characters, tabs and
-/// wrapping only. Always inlined — it is the per-character hot path.
+/// wrapping only. Always inlined — it is the per-character hot path, which
+/// is why a walk passes the byte widths it holds ([`with_byte_cells`]) as
+/// `byte_width`.
 #[inline(always)]
 fn charsize_fast_impl(
     window: Win,
@@ -568,6 +576,7 @@ fn charsize_fast_impl(
     use_tabstop: bool,
     vcol: ColNr,
     cur_char: int32_t,
+    byte_width: impl Fn(u8) -> u8,
 ) -> CharSize {
     // A tab is expanded according to the column it starts at.
     if cur_char == c_int::from(TAB) && use_tabstop {
@@ -575,7 +584,7 @@ fn charsize_fast_impl(
         return CharSize { width, head: 0 };
     }
 
-    let width = char_cells(line, at, cur_char);
+    let width = char_cells(line, at, cur_char, byte_width);
 
     // A double-width char that does not fit at the end of a screen line
     // wraps to the next one, and the last column shows a '>'.
@@ -599,7 +608,15 @@ pub(crate) fn charsize_fast(
     vcol: ColNr,
     cur_char: int32_t,
 ) -> CharSize {
-    charsize_fast_impl(csarg.win, csarg.line, at, csarg.use_tabstop, vcol, cur_char)
+    charsize_fast_impl(
+        csarg.win,
+        csarg.line,
+        at,
+        csarg.use_tabstop,
+        vcol,
+        cur_char,
+        byte_width,
+    )
 }
 
 /// Dispatch to whichever charsize function [`CharsizeArg::new`] chose, for
@@ -631,7 +648,7 @@ pub(crate) fn charsize_nowrap(
     if cur_char == c_int::from(TAB) && use_tabstop {
         buffer.tab_padding(vcol)
     } else {
-        char_cells(text, 0, cur_char)
+        char_cells(text, 0, cur_char, byte_width)
     }
 }
 
@@ -723,19 +740,29 @@ pub(crate) fn linesize_fast(csarg: &CharsizeArg<'_>, mut vcol_arg: c_int, len: C
 
     let mut at = 0;
     let mut chr: CharInfo = c_char_info(line, 0);
-    while at < end && !ends_at(line, at, chr) {
-        vcol += int64_t::from(
-            charsize_fast_impl(wp, line, at, use_tabstop, ColNr::new(vcol_arg), chr.value).width,
-        );
-        (at, chr) = c_next_cluster(line, at, chr);
-        if vcol > int64_t::from(MAXCOL) {
-            vcol_arg = MAXCOL;
-            break;
+    with_byte_cells(|cells| {
+        while at < end && !ends_at(line, at, chr) {
+            let width = charsize_fast_impl(
+                wp,
+                line,
+                at,
+                use_tabstop,
+                ColNr::new(vcol_arg),
+                chr.value,
+                |byte| cells.of(byte),
+            )
+            .width;
+            vcol += int64_t::from(width);
+            (at, chr) = c_next_cluster(line, at, chr);
+            if vcol > int64_t::from(MAXCOL) {
+                vcol_arg = MAXCOL;
+                break;
+            }
+            // Bounded just above, and never negative: the wrapping narrow is
+            // exact, and cheaper in this loop than a checked one.
+            vcol_arg = number_as_int(vcol);
         }
-        // Bounded just above, and never negative: the wrapping narrow is
-        // exact, and cheaper in this loop than a checked one.
-        vcol_arg = number_as_int(vcol);
-    }
+    });
 
     vcol_arg
 }

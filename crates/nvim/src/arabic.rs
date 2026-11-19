@@ -160,13 +160,15 @@ fn a_is_valid(c: Codepoint) -> bool {
 }
 
 /// Is `two` an alef variant that combines with a preceding lam?
+///
+/// The character first: every cluster step of every text walk asks this,
+/// and only an alef needs the options read.
 pub(crate) fn arabic_maycombine(two: Codepoint) -> bool {
-    p_arshape()
+    matches!(
+        two,
+        A_ALEF_MADDA | A_ALEF_HAMZA_ABOVE | A_ALEF_HAMZA_BELOW | A_ALEF
+    ) && p_arshape()
         && !p_tbidi()
-        && matches!(
-            two,
-            A_ALEF_MADDA | A_ALEF_HAMZA_ABOVE | A_ALEF_HAMZA_BELOW | A_ALEF
-        )
 }
 
 /// Do `one` and `two` combine into a lam-alef ligature?

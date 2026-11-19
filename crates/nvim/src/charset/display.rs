@@ -32,8 +32,8 @@ use crate::os::libc::uint8_t;
 use crate::winlayer::Buf;
 
 use super::{
-    CHARTAB_INITIALIZED, CT_CELL_MASK, NL, OPT_DY_FLAG_UHEX, TAB, chartab, transchar as render,
-    vim_isprintc,
+    CHARTAB_INITIALIZED, CT_CELL_MASK, G_CHARTAB, NL, OPT_DY_FLAG_UHEX, TAB, chartab,
+    transchar as render, vim_isprintc,
 };
 
 /// A cursor over the characters of a C string's bytes.
@@ -438,6 +438,38 @@ pub(crate) fn mirror_ascii(bytes: &mut [u8]) {
 /// The display width of the byte `b`, or zero for a multibyte lead byte.
 pub fn byte2cells(b: u8) -> c_int {
     byte_cells(b)
+}
+
+/// [`byte2cells`] as the byte it is: a width is at most four.
+#[inline(always)]
+pub(crate) fn byte_width(b: u8) -> u8 {
+    if b >= 0x80 {
+        return 0;
+    }
+    chartab(b) & CT_CELL_MASK
+}
+
+/// [`byte2cells`] for a walk over a line: the table borrowed once around the
+/// walk, where `byte2cells` checks the table's cell at every byte.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ByteCells<'t>(&'t [uint8_t; 256]);
+
+impl ByteCells<'_> {
+    /// [`byte_width`] of `b`.
+    #[inline(always)]
+    pub(crate) fn of(self, b: u8) -> u8 {
+        if b >= 0x80 {
+            return 0;
+        }
+        self.0[usize::from(b)] & CT_CELL_MASK
+    }
+}
+
+/// `f` with the byte widths in hand. Nothing `f` reaches may rebuild the
+/// table ('isprint', 'display'): that would panic on the borrow.
+#[inline(always)]
+pub(crate) fn with_byte_cells<R>(f: impl FnOnce(ByteCells<'_>) -> R) -> R {
+    G_CHARTAB.with(|table| f(ByteCells(table)))
 }
 
 /// The display width of character `c`. A negative code costs two cells more

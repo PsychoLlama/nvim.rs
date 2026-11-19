@@ -516,7 +516,13 @@ pub fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
     if cached > 0 {
         return cached;
     }
+    combine_attr_uncached(char_attr, prim_attr)
+}
 
+/// [`hl_combine_attr`] for a pair not in the cache yet: build the entry and
+/// remember it. Out of line, so the per-cell cache hit above stays a leaf.
+#[inline(never)]
+fn combine_attr_uncached(char_attr: c_int, prim_attr: c_int) -> c_int {
     let char_aep = syn_attr2entry(char_attr);
     let prim_aep = syn_attr2entry(prim_attr);
 

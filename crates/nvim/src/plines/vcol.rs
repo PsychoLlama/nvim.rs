@@ -50,20 +50,23 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
 
     if cstype == CharsizeKind::Fast {
         let use_tabstop = csarg.use_tabstop;
-        loop {
-            if ends_at(line, at, chr) {
-                // The cursor on a NUL is treated like a one-cell char.
-                char_size = CharSize { width: 1, head: 0 };
-                break;
+        char_size = with_byte_cells(|cells| {
+            loop {
+                if ends_at(line, at, chr) {
+                    // The cursor on a NUL is treated like a one-cell char.
+                    break CharSize { width: 1, head: 0 };
+                }
+                let byte_width = |byte| cells.of(byte);
+                let size =
+                    charsize_fast_impl(window, line, at, use_tabstop, vcol, chr.value, byte_width);
+                let (next, next_chr) = c_next_cluster(line, at, chr);
+                if past_end(next, end_col) {
+                    break size;
+                }
+                (at, chr) = (next, next_chr);
+                vcol += size.width;
             }
-            char_size = charsize_fast_impl(window, line, at, use_tabstop, vcol, chr.value);
-            let (next, next_chr) = c_next_cluster(line, at, chr);
-            if past_end(next, end_col) {
-                break;
-            }
-            (at, chr) = (next, next_chr);
-            vcol += char_size.width;
-        }
+        });
     } else {
         loop {
             char_size = charsize_regular(&mut csarg, at, vcol, chr.value);
