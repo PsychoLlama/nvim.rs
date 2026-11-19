@@ -98,7 +98,6 @@ count	callee	no_raw	defs	def
 2	proc_spawn	0	1	crates/nvim/src/event/proc.rs
 2	proc_wait	0	1	crates/nvim/src/event/proc.rs
 2	push_c_string	0	1	crates/nvim/src/lua/treesitter/mod.rs
-2	push_owned_ranges	0	1	crates/nvim/src/lua/treesitter/ranges.rs
 2	query_string	0	1	crates/nvim/src/lua/treesitter/query.rs
 2	rstream_init_fd	0	1	crates/nvim/src/event/rstream.rs
 2	rstream_start	0	1	crates/nvim/src/event/rstream.rs
@@ -211,6 +210,8 @@ count	callee	no_raw	defs	def
 1	poll	0	0	
 1	predicate_steps	0	1	crates/nvim/src/lua/treesitter/query.rs
 1	ptsname	0	0	
+1	push_owned_ranges	0	1	crates/nvim/src/lua/treesitter/ranges.rs
+1	push_tree	0	1	crates/nvim/src/lua/treesitter/tree.rs
 1	raise	0	1	crates/nvim/src/lua/stack/dispatch.rs
 1	read	0	0	
 1	realloc	0	1	crates/nvim/src/allocator.rs
@@ -270,7 +271,6 @@ count	callee	no_raw	defs	def
 1	ts_query_new	0	0	
 1	ts_query_pattern_count	0	0	
 1	ts_set_allocator	0	0	
-1	ts_tree_copy	0	0	
 1	ts_tree_included_ranges	0	0	
 1	tzset	0	0	
 1	uname	0	0	

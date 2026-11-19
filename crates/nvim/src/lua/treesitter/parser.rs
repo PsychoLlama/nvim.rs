@@ -265,9 +265,12 @@ fn parser_parse(stack: &mut Stack) -> Result<c_int, Raise> {
     let Some((new_tree, changed, count)) = parsed? else {
         return Ok(0);
     };
-    push_tree(stack, new_tree);
-    // SAFETY: the array `parse_lent` allocated for us.
-    unsafe { push_owned_ranges(stack, changed, count, include_bytes) };
+    // SAFETY: the tree and the array `parse_lent` allocated for us, each
+    // handed over once.
+    unsafe {
+        push_tree(stack, new_tree);
+        push_owned_ranges(stack, changed, count, include_bytes);
+    }
     Ok(2)
 }
 

@@ -197,13 +197,12 @@ is inside `event/`.
 - **Closure:** type holds it — `pub(super)`, and `Pin<&mut T>` projections
   (or field accessors) in place of `DerefMut`. **S–M.**
 
-### S9 — a safe function adopting a raw pointer (sound-by-convention)
+### ~~S9 — a safe function adopting a raw pointer~~ (closed: `unsafe fn`)
 
 `treesitter::push_tree(stack, *mut TSTree)` takes ownership: the userdatum's
-`Drop` deletes the tree.
-
-- **Breaks:** a safe caller passing a tree it does not own → double free.
-- **Closure:** `unsafe fn` with the contract ("an owned tree, or null"). **XS.**
+`Drop` deletes the tree. It is an `unsafe fn` whose contract is "null, or a
+tree the caller owns and hands over"; its three callers pass a tree fresh
+from `ts_tree_copy` or a parse.
 
 ## Closed before the survey
 

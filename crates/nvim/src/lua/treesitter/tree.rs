@@ -54,7 +54,13 @@ lua_functions! {
 }
 
 /// Push `tree` as a userdatum that owns it; nil for no tree.
-pub(crate) fn push_tree(stack: &mut Stack, tree: *mut TSTree) {
+///
+/// # Safety
+///
+/// `tree` is null or a tree the caller owns and hands over — fresh from
+/// `ts_parser_parse*` or `ts_tree_copy` — that nothing else deletes or
+/// reads after this call: the userdatum's `__gc` deletes it.
+pub(crate) unsafe fn push_tree(stack: &mut Stack, tree: *mut TSTree) {
     match NonNull::new(tree) {
         Some(tree) => stack.new_userdata(Tree(Some(tree))),
         None => stack.push_nil(),
@@ -90,9 +96,9 @@ pub(crate) fn check_tree(stack: &mut Stack, at: At) -> Result<*const TSTree, Rai
 
 fn tree_copy(stack: &mut Stack) -> Result<c_int, Raise> {
     let tree = check_tree(stack, At::arg(1))?;
-    // SAFETY: the tree the userdatum in slot 1 owns.
-    let copy = unsafe { ts_tree_copy(tree) };
-    push_tree(stack, copy);
+    // SAFETY: the tree the userdatum in slot 1 owns is copied, and the
+    // copy, which nothing else holds, handed to its new userdatum.
+    unsafe { push_tree(stack, ts_tree_copy(tree)) };
     Ok(1)
 }
 
@@ -124,13 +130,12 @@ fn tree_edit(stack: &mut Stack) -> Result<c_int, Raise> {
         new_end_point: point(4),
     };
     // SAFETY: the tree the userdatum in slot 1 owns, copied, and the copy
-    // edited before anything else sees it.
-    let edited = unsafe {
+    // edited before anything else sees it, then handed to its userdatum.
+    unsafe {
         let copy = ts_tree_copy(tree);
         ts_tree_edit(copy, &raw const edit);
-        copy
-    };
-    push_tree(stack, edited);
+        push_tree(stack, copy);
+    }
     Ok(1)
 }
 
