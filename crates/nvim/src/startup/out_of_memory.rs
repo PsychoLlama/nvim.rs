@@ -125,7 +125,10 @@ pub(crate) fn allocation_failed(size: usize) {
         let text = String::from_utf8_lossy(E_OUTOFMEM.to_bytes()).into_owned() + "\n";
         hand_off_to_main(text, exit_after_another_thread);
     }
-    forget_borrows();
+    // Whatever the main thread was inside of never resumes, and may have
+    // held a `GlobalCell` borrow: abandon it, as the panic hook does, so the
+    // cleanup does not trip the borrow check.
+    crate::global_cell::abandon_borrows();
     if !begin_emergency_exit() {
         // A deadly signal or a panic is already on its way out, and this
         // allocation cannot be answered.
@@ -137,21 +140,13 @@ pub(crate) fn allocation_failed(size: usize) {
 /// The main thread's half of an allocation failure on another thread, run
 /// from its loop's fast queue.
 fn exit_after_another_thread() {
-    forget_borrows();
+    crate::global_cell::abandon_borrows();
     if !begin_emergency_exit() {
         // A deadly signal or a panic is already on its way out, and ends
         // the process itself.
         return;
     }
     exit_out_of_memory(print_off_thread_report);
-}
-
-/// Whatever the main thread was inside of never resumes, and may have held
-/// a `GlobalCell` borrow: forget it, as the panic hook does, so the cleanup
-/// does not trip the (debug) borrow tracker.
-fn forget_borrows() {
-    #[cfg(soundness_checks)]
-    nvim_mainthread::BorrowTable::forget_all();
 }
 
 /// Say `E41` on the terminal the way `preserve_exit` does.

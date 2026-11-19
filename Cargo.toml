@@ -10,8 +10,9 @@ members = [
 [profile.release]
 strip = "debuginfo"
 
-# The GlobalCell debug assertion calls into nvim-mainthread on every global
-# access; unoptimized it costs enough to blow the timing-sensitive oldtests
-# (see crates/mainthread/lib.rs). Optimize it in every profile.
+# The GlobalCell thread check calls into nvim-mainthread on every global
+# access in an unoptimized build; unoptimized it costs enough to blow the
+# timing-sensitive oldtests (see crates/mainthread/lib.rs). Optimize it in
+# every profile.
 [profile.dev.package.nvim-mainthread]
 opt-level = 3

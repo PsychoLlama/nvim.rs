@@ -5,42 +5,44 @@
 //! autocmd firing mid-operation and touching the same global, say — is
 //! undefined behavior even single-threaded. `GlobalCell` funnels every
 //! access through a single `UnsafeCell` so the compiler stops assuming
-//! uniqueness, and adds debug-build enforcement of the invariants the
-//! soundness argument rests on.
+//! uniqueness, and checks the two invariants the soundness argument rests
+//! on in every build with the `soundness_checks` cfg: every build with
+//! debug assertions, and a release build with the `soundness-checks`
+//! feature (crates/nvim/build.rs). "Checked builds" below means those.
 //!
 //! # Soundness contract
 //!
 //! - **Main-thread only.** Editor state is only touched from the main
-//!   thread. `unsafe impl Sync` below is justified by that invariant alone.
-//!   Debug builds assert it on every access (see [`init_main_thread`]);
-//!   release builds compile the check out.
+//!   thread. `unsafe impl Sync` below is justified by that invariant, and
+//!   checked builds assert it on every access (see [`init_main_thread`]):
+//!   an access from any other thread panics before it reads anything, the
+//!   borrow state included.
 //! - **No outstanding references across accesses.** `get`/`set` copy values
-//!   in and out without forming references. `with`/`with_mut` hand out a
-//!   scoped reference and track it (debug builds panic on conflicting
-//!   reentry, RefCell-style). `ptr` is the raw escape hatch for the
-//!   mechanically converted call sites: writes/reads through it are exempt
-//!   from borrow tracking, and callers must not let a reference from
-//!   `with`/`with_mut` overlap such an access.
+//!   in and out without forming references. `with`/`with_mut`/`with_field`
+//!   hand out a scoped reference, which checked builds record in the cell,
+//!   RefCell-style: a conflicting access while it lives panics. `ptr` is the
+//!   raw escape hatch for the mechanically converted call sites:
+//!   writes/reads through it are exempt from borrow tracking, and callers
+//!   must not let a reference from `with`/`with_mut` overlap such an access.
 //!
-//! The layout is `repr(transparent)`, so an unmangled `pub static X:
-//! GlobalCell<T>` exports the same symbol with the same object layout as
-//! the mutable static it replaces — the C deps and the LuaJIT-FFI unit
-//! suite keep resolving and poking the same bytes.
+//! # Layout
 //!
-//! "Debug builds" below means builds with the `soundness_checks` cfg: every
-//! build with debug assertions, and a release build with the
-//! `soundness-checks` feature (crates/nvim/build.rs).
+//! `repr(C)` with the value first, then (checked builds only) one word of
+//! borrow state. An unmangled `pub static X: GlobalCell<T>` therefore
+//! exports a symbol whose address is the value's in every build: the C deps
+//! and the LuaJIT-FFI unit suite keep resolving and poking the same bytes,
+//! and a checked build's object only grew a word past what they read.
 //!
-//! The debug checks are deliberately austere — one direct call to the
-//! always-optimized `nvim-mainthread` crate (a bare TLS flag load there)
-//! on the main-thread fast path, plus one relaxed atomic for the
-//! borrow-table shortcut — because the transpiled code hits globals on
-//! practically every line and unoptimized builds inline very little; the
-//! std `thread_local!`/`RefCell` machinery was measured to slow the
-//! functional suite several-fold, a `pthread_self()` call per access blew
-//! the search-stat timing test in the old suite, and an in-crate
-//! const-initialized `thread_local!` at opt-level 0 measured ~3× the cost
-//! per check and roughly doubled search time in that same test.
+//! # Cost
+//!
+//! The checks cost a compare each: the borrow state sits beside the value
+//! (one word, no table), and the thread question is one thread-local byte,
+//! read in place in an optimised build and through one direct call into the
+//! always-optimised `nvim-mainthread` crate in an unoptimised one (a
+//! `thread_local!` compiled at opt-level 0 costs ~3× per check). In a
+//! release build that is +3 % to +11 % instructions across the A/B benches
+//! (the shared borrow table this replaced cost +11 % to +78 %); see
+//! docs/safe-surface.md for the numbers and why that is not yet always-on.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `global_cell.rs` row in docs/perimeter.md.
@@ -53,25 +55,88 @@
     clippy::ptr_as_ptr
 )]
 
+#[cfg(soundness_checks)]
+use core::cell::Cell;
 use core::cell::UnsafeCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A global editor-state cell. See the module docs for the contract.
-#[repr(transparent)]
+#[repr(C)]
 #[derive(Debug)]
-pub struct GlobalCell<T>(UnsafeCell<T>);
+pub struct GlobalCell<T> {
+    /// The value. First, so the cell's address is the value's.
+    value: UnsafeCell<T>,
+    /// What is borrowed: [`FREE`], [`EXCLUSIVE`], or the innermost of the
+    /// shared [`Loan`]s live on the stack, each pointing at the one outside
+    /// it. Read and written only on the main thread, after the thread
+    /// check.
+    #[cfg(soundness_checks)]
+    borrow: Cell<State>,
+}
 
-// SAFETY: editor globals are only accessed from the main thread (checked in
-// debug builds). The `Sync` bound is required for `static` items; it is not
-// a claim of actual thread safety.
+/// A cell's borrow state: [`FREE`], [`EXCLUSIVE`], or the innermost open
+/// shared [`Loan`].
+type State = *const Loan;
+
+/// Nothing borrowed.
+const FREE: State = core::ptr::null();
+
+/// Lent exclusively, to one `with_mut`. Never a `Loan`'s address: a `Loan`
+/// is word-aligned.
+const EXCLUSIVE: State = core::ptr::without_provenance(1);
+
+/// One shared borrow of a cell: a `with` of the whole record or a
+/// `with_field` of one field, as the byte range it lends. It lives in the
+/// borrowing call's frame for exactly as long as the borrow, and the cell
+/// points at it, so a nested borrow of the same cell finds every loan open
+/// by walking `outer`.
+#[derive(Debug)]
+struct Loan {
+    /// The lent bytes, `start..end`, as addresses.
+    start: usize,
+    end: usize,
+    /// The loan open when this one was made: another [`Loan`], or [`FREE`].
+    outer: State,
+}
+
+/// Puts a cell's borrow state back when the borrow ends, however it ends
+/// (an unwinding panic in a lib test included). Nothing at all, with no
+/// `Drop`, when the checks are compiled out.
+#[derive(Debug)]
+struct Restore<'a> {
+    #[cfg(soundness_checks)]
+    borrow: &'a Cell<State>,
+    #[cfg(soundness_checks)]
+    to: State,
+    #[cfg(not(soundness_checks))]
+    _cell: core::marker::PhantomData<&'a ()>,
+}
+
+#[cfg(soundness_checks)]
+impl Drop for Restore<'_> {
+    #[inline(always)]
+    fn drop(&mut self) {
+        // On the main thread: the access that made this guard checked it.
+        self.borrow.set(self.to);
+    }
+}
+
+// SAFETY: editor globals are only accessed from the main thread, and a
+// checked build checks it before touching the value or the borrow state. The
+// `Sync` bound is required for `static` items; it is not a claim of actual
+// thread safety.
 unsafe impl<T> Sync for GlobalCell<T> {}
 
 impl<T> GlobalCell<T> {
     pub const fn new(value: T) -> Self {
-        GlobalCell(UnsafeCell::new(value))
+        GlobalCell {
+            value: UnsafeCell::new(value),
+            #[cfg(soundness_checks)]
+            borrow: Cell::new(FREE),
+        }
     }
 
-    /// Raw pointer to the cell contents, with the debug main-thread check.
+    /// Raw pointer to the cell contents, with the main-thread check.
     ///
     /// This is what the mechanical `static mut` conversion emits for place
     /// expressions (field projections, `&raw mut`, index, ...). Accesses
@@ -80,13 +145,53 @@ impl<T> GlobalCell<T> {
     #[inline(always)]
     pub fn ptr(&self) -> *mut T {
         check_main_thread();
-        self.0.get()
+        self.value.get()
     }
 
     /// Like [`ptr`](Self::ptr) but callable in const initializers (some
-    /// globals hold the address of another global). No debug checks.
+    /// globals hold the address of another global). No checks.
     pub const fn as_raw(&self) -> *mut T {
-        self.0.get()
+        self.value.get()
+    }
+
+    /// The borrow state, after the thread check; [`FREE`], which folds
+    /// every conflict branch away, when the checks are compiled out.
+    #[inline(always)]
+    fn borrowed(&self) -> State {
+        check_main_thread();
+        #[cfg(soundness_checks)]
+        return self.borrow.get();
+        #[cfg(not(soundness_checks))]
+        FREE
+    }
+
+    /// Record `now` as the borrow state until the guard drops, and `back`
+    /// then. Nothing when the checks are compiled out.
+    #[inline(always)]
+    fn hold(&self, now: State, back: State) -> Restore<'_> {
+        #[cfg(soundness_checks)]
+        {
+            // On the main thread: the caller's `borrowed` checked it.
+            self.borrow.set(now);
+            Restore {
+                borrow: &self.borrow,
+                to: back,
+            }
+        }
+        #[cfg(not(soundness_checks))]
+        {
+            let _ = (now, back);
+            Restore {
+                _cell: core::marker::PhantomData,
+            }
+        }
+    }
+
+    /// The cell's bytes, as a [`Loan`] range.
+    #[inline(always)]
+    fn whole(&self) -> (usize, usize) {
+        let start = self.value.get().addr();
+        (start, start + size_of::<T>().max(1))
     }
 
     /// Copy the value out.
@@ -95,17 +200,22 @@ impl<T> GlobalCell<T> {
     where
         T: Copy,
     {
-        check_read(self.0.get() as usize);
+        if self.borrowed() == EXCLUSIVE {
+            read_conflict(self.value.get().addr());
+        }
         // SAFETY: main-thread invariant + no outstanding exclusive borrow.
-        unsafe { *self.0.get() }
+        unsafe { *self.value.get() }
     }
 
     /// Overwrite the value.
     #[inline(always)]
     pub fn set(&self, value: T) {
-        check_write(self.0.get() as usize);
+        let borrowed = self.borrowed();
+        if borrowed != FREE {
+            whole_write_conflict(borrowed, self.whole(), "set");
+        }
         // SAFETY: main-thread invariant + no outstanding borrow.
-        unsafe { *self.0.get() = value }
+        unsafe { *self.value.get() = value }
     }
 
     /// Swap in a new value, returning the old one.
@@ -140,7 +250,7 @@ impl<T> GlobalCell<T> {
     ///
     /// The move itself is `with_mut(mem::take)`: the closure is `mem::take`,
     /// which provably cannot re-enter, so the exclusive borrow is a leaf one
-    /// and the debug borrow table catches a caller that is already inside a
+    /// and the borrow check catches a caller that is already inside a
     /// `with`/`with_mut` on the same cell.
     pub fn take(&self) -> T
     where
@@ -159,9 +269,9 @@ impl<T> GlobalCell<T> {
     ///
     /// The borrow rules are `get`'s, not `with`'s: the read is a copy, and it
     /// may not happen inside a `with_mut` on the same cell. That is the point
-    /// — a field read that tracked a borrow would make every option read in
-    /// the editor a borrow-table entry, and would turn an option read inside
-    /// a `did_set_*` callback into a panic.
+    /// — a field read that recorded a borrow would cost every option read in
+    /// the editor a loan, and would turn an option read inside a `did_set_*`
+    /// callback into a panic.
     ///
     /// The projection is a *shared* one. A read may happen inside
     /// [`with_field`](Self::with_field) on another field of the same record
@@ -171,9 +281,11 @@ impl<T> GlobalCell<T> {
     /// reports. A shared reborrow is a read, and reads coexist.
     #[inline(always)]
     pub fn get_field<F: Copy>(&self, project: impl FnOnce(&T) -> &F) -> F {
-        check_read(self.0.get() as usize);
+        if self.borrowed() == EXCLUSIVE {
+            read_conflict(self.value.get().addr());
+        }
         // SAFETY: main-thread invariant + no outstanding exclusive borrow.
-        *project(unsafe { &*self.0.get() })
+        *project(unsafe { &*self.value.get() })
     }
 
     /// Overwrite one field of the contents. See
@@ -207,7 +319,7 @@ impl<T> GlobalCell<T> {
     /// constant offset).
     #[inline(always)]
     fn field_ptr<F>(&self, project: impl FnOnce(&T) -> &F) -> *mut F {
-        let record = self.0.get();
+        let record = self.value.get();
         // SAFETY: main-thread invariant + no outstanding exclusive borrow
         // (the callers check both); the shared reborrow lives only for the
         // projection.
@@ -230,7 +342,7 @@ impl<T> GlobalCell<T> {
     /// a value that has to outlive the call is cloned inside `f`, never
     /// handed out by reference.
     ///
-    /// The borrow is tracked per *field*, not per cell: debug builds record
+    /// The borrow is tracked per *field*, not per cell: the cell records
     /// a shared loan of the field for as long as `f` runs, so a write to
     /// that field from inside `f` ([`set_field`](Self::set_field),
     /// [`replace_field`](Self::replace_field)) panics, as does anything that
@@ -244,15 +356,21 @@ impl<T> GlobalCell<T> {
     /// for the same reason: `f` may read other fields of the record.
     #[inline(always)]
     pub fn with_field<F, R>(&self, project: impl FnOnce(&T) -> &F, f: impl FnOnce(&F) -> R) -> R {
-        check_read(self.0.get() as usize);
+        let outer = self.borrowed();
+        if outer == EXCLUSIVE {
+            read_conflict(self.value.get().addr());
+        }
         // SAFETY: main-thread invariant + no outstanding exclusive borrow;
         // the loan below makes a write to the field (or the record) while
-        // `f` holds it a debug-build panic.
-        let field = project(unsafe { &*self.0.get() });
-        // A statement under `cfg`, not a call that compiles to nothing: an
-        // empty call still weighs in the inliner's view of every caller.
-        #[cfg(soundness_checks)]
-        let _loan = FieldLoan::new(self.0.get() as usize, core::ptr::from_ref(field).addr());
+        // `f` holds it panic.
+        let field = project(unsafe { &*self.value.get() });
+        let start = core::ptr::from_ref(field).addr();
+        let loan = Loan {
+            start,
+            end: start + size_of::<F>().max(1),
+            outer,
+        };
+        let _restore = self.lend(&loan);
         f(field)
     }
 
@@ -263,42 +381,60 @@ impl<T> GlobalCell<T> {
     /// The write projects as [`set_field`](Self::set_field) describes.
     #[inline(always)]
     pub fn replace_field<F>(&self, project: impl FnOnce(&T) -> &F, value: F) -> F {
-        let quiet = access_is_quiet();
-        if !quiet {
-            check_main_thread();
-            check_no_borrow(self.0.get() as usize);
+        let borrowed = self.borrowed();
+        if borrowed == EXCLUSIVE {
+            // Before the projection: it reborrows the record `with_mut` holds.
+            whole_write_conflict(borrowed, self.whole(), "replace_field");
         }
         let field = self.field_ptr(project);
-        #[cfg(soundness_checks)]
-        if !quiet {
-            check_field_not_lent(field.addr());
+        if borrowed != FREE {
+            field_write_conflict(borrowed, field.addr(), size_of::<F>(), self.whole());
         }
-        // SAFETY: main-thread invariant + no outstanding borrow; `field` is
-        // an aligned, initialised `F` inside the cell carrying the cell's
-        // provenance (`field_ptr`), and nothing holds a reference to it.
+        // SAFETY: main-thread invariant + no outstanding borrow of the
+        // field; `field` is an aligned, initialised `F` inside the cell
+        // carrying the cell's provenance (`field_ptr`), and nothing holds a
+        // reference to it.
         core::mem::replace(unsafe { &mut *field }, value)
     }
 
     /// Run `f` with a shared reference to the contents.
+    #[inline(always)]
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
-        check_main_thread();
-        let _guard = BorrowGuard::shared(self.0.get() as usize);
-        // SAFETY: main-thread invariant + borrow tracking (debug).
-        f(unsafe { &*self.0.get() })
+        let outer = self.borrowed();
+        if outer == EXCLUSIVE {
+            shared_conflict(self.value.get().addr());
+        }
+        let (start, end) = self.whole();
+        let loan = Loan { start, end, outer };
+        let _restore = self.lend(&loan);
+        // SAFETY: main-thread invariant + no exclusive borrow, and the loan
+        // turns any write while `f` holds the reference into a panic.
+        f(unsafe { &*self.value.get() })
     }
 
     /// Run `f` with an exclusive reference to the contents.
     ///
-    /// Debug builds panic if the cell is already borrowed — this is the
-    /// probe that turns vim's historic autocmd-reentrancy corruption into a
-    /// loud failure instead of silent UB.
+    /// Panics if the cell is already borrowed — this is the probe that turns
+    /// vim's historic autocmd-reentrancy corruption into a loud failure
+    /// instead of silent UB.
+    #[inline(always)]
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        check_main_thread();
-        #[cfg(soundness_checks)]
-        check_no_field_loan(self.0.get() as usize);
-        let _guard = BorrowGuard::exclusive(self.0.get() as usize);
-        // SAFETY: main-thread invariant + borrow tracking (debug).
-        f(unsafe { &mut *self.0.get() })
+        let outer = self.borrowed();
+        if outer != FREE {
+            whole_write_conflict(outer, self.whole(), "with_mut");
+        }
+        let _restore = self.hold(EXCLUSIVE, outer);
+        // SAFETY: main-thread invariant + nothing else borrowed, and the
+        // state says so to every access until `f` returns.
+        f(unsafe { &mut *self.value.get() })
+    }
+
+    /// Open `loan` (whose `outer` is the state now) as the innermost borrow
+    /// of the cell, until the guard drops. Tying both to one lifetime keeps
+    /// the loan alive, and in place, for as long as the cell points at it.
+    #[inline(always)]
+    fn lend<'a>(&'a self, loan: &'a Loan) -> Restore<'a> {
+        self.hold(core::ptr::from_ref(loan), loan.outer)
     }
 }
 
@@ -500,7 +636,7 @@ macro_rules! state_record {
 
             /// Look at the field, for a test or a clone. The loan is
             /// [`GlobalCell::with_field`]'s: a write to this field (or the
-            /// whole record) from inside `f` panics in a debug build.
+            /// whole record) from inside `f` panics.
             #[inline(always)]
             $rvis fn with<R>(self, f: impl FnOnce(&T) -> R) -> R {
                 $cell.with_at(self, f)
@@ -523,7 +659,7 @@ macro_rules! state_record {
             }
 
             /// Change the field in place, with the record borrowed for the
-            /// duration -- tracked, so in a debug build anything `f`
+            /// duration -- tracked, so anything `f`
             /// reaches that touches the record panics. For a field too
             /// large to move out and back on a hot path (`gotchars`'s
             /// per-byte key assembly); `f` must be a leaf.
@@ -605,36 +741,67 @@ impl<T> RawStatic<T> {
     }
 }
 
-// A release build compiles every use of the crate out, which leaves cargo's
-// `unused_dependencies` lint calling the dependency dead; it is not.
-#[cfg(not(soundness_checks))]
-use nvim_mainthread as _;
-
 /// Armed once [`init_main_thread`] runs; false in processes that never call
 /// it (unit tests FFI-loading the symbols, `.init_array` constructors,
-/// `cargo test`), which keeps the check inert there.
+/// `cargo test`), which keeps the thread check inert there.
 static ARMED: AtomicBool = AtomicBool::new(false);
 
-/// Record the calling thread as the main thread and arm the debug
-/// main-thread assertion. Called from the binary entry point before any
-/// editor code runs.
+/// Set by [`abandon_borrows`]: a conflict no longer panics.
+static ABANDONED: AtomicBool = AtomicBool::new(false);
+
+/// Record the calling thread as the main thread and arm the main-thread
+/// assertion of a checked build. Called from the binary entry point before
+/// any editor code runs.
 pub fn init_main_thread() {
-    #[cfg(soundness_checks)]
     nvim_mainthread::mark_main_thread();
     ARMED.store(true, Ordering::Relaxed);
 }
 
-#[cfg(soundness_checks)]
+/// Stop treating a borrow conflict as an error, for good.
+///
+/// Only for the emergency exits (the panic hook, a failed allocation),
+/// which end the process: the frames that hold the open borrows never
+/// resume, and the swap-file cleanup must not trip over a borrow their
+/// owner can no longer give back. The thread check stays.
+///
+/// Only the conflict paths read the flag, so it costs the access paths
+/// nothing.
+pub(crate) fn abandon_borrows() {
+    ABANDONED.store(true, Ordering::Relaxed);
+}
+
+/// Whether [`abandon_borrows`] ran.
+fn abandoned() -> bool {
+    ABANDONED.load(Ordering::Relaxed)
+}
+
 #[inline(always)]
 fn check_main_thread() {
-    if !nvim_mainthread::is_main_thread() {
-        check_main_thread_cold();
+    #[cfg(soundness_checks)]
+    if !on_main_thread() {
+        off_main_thread();
     }
+}
+
+/// The thread question, outlined into the optimised crate, where it is one
+/// thread-local load: an unoptimised build inlines nothing anyway.
+#[cfg(all(soundness_checks, debug_assertions))]
+#[inline(always)]
+fn on_main_thread() -> bool {
+    nvim_mainthread::is_main_thread()
+}
+
+/// The thread question, one thread-local byte read in place.
+#[cfg(all(soundness_checks, not(debug_assertions)))]
+#[inline(always)]
+fn on_main_thread() -> bool {
+    nvim_mainthread::is_main_thread_inline()
 }
 
 #[cfg(soundness_checks)]
 #[cold]
-fn check_main_thread_cold() {
+#[inline(never)]
+fn off_main_thread() {
     if ARMED.load(Ordering::Relaxed) {
         panic!(
             "GlobalCell accessed off the main thread (thread {:?})",
@@ -643,202 +810,84 @@ fn check_main_thread_cold() {
     }
 }
 
-#[cfg(not(soundness_checks))]
-#[inline(always)]
-fn check_main_thread() {}
+// The conflict paths. Each is out of line and cold, so an access inlines
+// one compare and a call nobody takes.
 
-// Borrow tracking. Only `with`/`with_mut` (and `with_field`'s loans)
-// create tracked borrows, so the hot get/set path asks one question -- the
-// main thread, with nothing borrowed? -- and skips the rest while the answer
-// is yes. The table is `nvim_mainthread::BorrowTable`, in the crate that is
-// optimized in every profile: see its module docs for what an unoptimized
-// one cost. The question is one call there; it used to be the main-thread
-// call plus a load of a borrow counter here, which an unoptimized build
-// spent two more calls on (`AtomicUsize::load` -> `atomic_load`) at every
-// global access in the editor.
-
-/// Whether an access may skip its checks: it is on the main thread and no
-/// cell is borrowed. Always true in a release build, which checks nothing.
-#[cfg(soundness_checks)]
-#[inline(always)]
-fn access_is_quiet() -> bool {
-    nvim_mainthread::BorrowTable::idle()
-}
-
-#[cfg(not(soundness_checks))]
-#[inline(always)]
-fn access_is_quiet() -> bool {
-    true
-}
-
-/// The checks of a read (`get`, `get_field`, `with_field`): the main thread,
-/// and no exclusive borrow of the cell at `addr`.
-#[inline(always)]
-fn check_read(addr: usize) {
-    if !access_is_quiet() {
-        check_read_slow(addr);
-    }
-}
-
+/// A read (`get`, `get_field`, `with_field`) while `with_mut` holds the
+/// cell at `cell`.
 #[cold]
 #[inline(never)]
-fn check_read_slow(addr: usize) {
-    check_main_thread();
-    check_no_exclusive_borrow(addr);
-}
-
-/// The checks of a whole-cell write (`set`): the main thread, no borrow of
-/// the cell at `addr`, and none of its fields lent.
-#[inline(always)]
-fn check_write(addr: usize) {
-    if !access_is_quiet() {
-        check_write_slow(addr);
+fn read_conflict(cell: usize) {
+    if !abandoned() {
+        panic!("GlobalCell read during an active with_mut borrow (cell @ {cell:#x})");
     }
 }
 
+/// A `with` while `with_mut` holds the cell at `cell`.
 #[cold]
 #[inline(never)]
-fn check_write_slow(addr: usize) {
-    check_main_thread();
-    check_no_borrow(addr);
-    #[cfg(soundness_checks)]
-    check_no_field_loan(addr);
-}
-
-#[cfg(soundness_checks)]
-#[inline(always)]
-fn check_no_exclusive_borrow(addr: usize) {
-    if nvim_mainthread::BorrowTable::state(addr) < 0 {
-        panic!("GlobalCell::get during an active with_mut borrow (cell @ {addr:#x})");
-    }
-}
-
-#[cfg(not(soundness_checks))]
-#[inline(always)]
-fn check_no_exclusive_borrow(_addr: usize) {}
-
-#[cfg(soundness_checks)]
-#[inline(always)]
-fn check_no_borrow(addr: usize) {
-    if nvim_mainthread::BorrowTable::state(addr) != 0 {
-        panic!("GlobalCell::set during an active with/with_mut borrow (cell @ {addr:#x})");
-    }
-}
-
-#[cfg(not(soundness_checks))]
-#[inline(always)]
-fn check_no_borrow(_addr: usize) {}
-
-// `with_field`'s loans share the table with the cells' own borrows under
-// tagged keys, since a field at offset 0 has its record's address. One key
-// per lent field (the field's address with the top bit set), so a write to
-// that field can find it, and one per record that has any field out (the
-// record's address with the next bit set), so a write to the whole record
-// can. Neither tag can collide with a user-space address.
-#[cfg(soundness_checks)]
-const LENT_FIELD: usize = 1 << (usize::BITS - 1);
-#[cfg(soundness_checks)]
-const LENT_RECORD: usize = 1 << (usize::BITS - 2);
-
-#[cfg(soundness_checks)]
-#[inline(always)]
-fn check_field_not_lent(field: usize) {
-    if nvim_mainthread::BorrowTable::state(field | LENT_FIELD) != 0 {
-        panic!("GlobalCell field written while with_field lends it (field @ {field:#x})");
-    }
-}
-
-#[cfg(soundness_checks)]
-#[inline(always)]
-fn check_no_field_loan(addr: usize) {
-    if nvim_mainthread::BorrowTable::state(addr | LENT_RECORD) != 0 {
+fn shared_conflict(cell: usize) {
+    if !abandoned() {
         panic!(
-            "GlobalCell written whole while with_field lends one of its fields (cell @ {addr:#x})"
+            "GlobalCell::with while exclusively borrowed (cell @ {cell:#x}) — \
+             reentrant global access"
         );
     }
 }
 
-/// The two shared borrows [`GlobalCell::with_field`] holds while `f` runs:
-/// one of the field, one of the record. Debug builds only.
-#[cfg(soundness_checks)]
-#[derive(Debug)]
-struct FieldLoan {
-    _field: BorrowGuard,
-    _record: BorrowGuard,
+/// A write of the whole record (`what`: `set`, `with_mut`) while it is
+/// borrowed: by `with_mut` or `with`, or by a `with_field` of one field.
+#[cold]
+#[inline(never)]
+fn whole_write_conflict(borrowed: State, (start, end): (usize, usize), what: &str) {
+    if abandoned() {
+        return;
+    }
+    let whole_lent =
+        borrowed == EXCLUSIVE || loans(borrowed).any(|loan| loan.start == start && loan.end == end);
+    if whole_lent {
+        panic!(
+            "GlobalCell::{what} while already borrowed (cell @ {start:#x}) — \
+             reentrant global access"
+        );
+    }
+    panic!("GlobalCell written whole while with_field lends one of its fields (cell @ {start:#x})");
 }
 
-#[cfg(soundness_checks)]
-impl FieldLoan {
-    fn new(record: usize, field: usize) -> Self {
-        FieldLoan {
-            _field: BorrowGuard::shared(field | LENT_FIELD),
-            _record: BorrowGuard::shared(record | LENT_RECORD),
+/// A write of the `size` bytes at `field` while the record (`whole`) has
+/// shared loans open: a conflict if one of them covers the field.
+#[cold]
+#[inline(never)]
+fn field_write_conflict(borrowed: State, field: usize, size: usize, whole: (usize, usize)) {
+    if abandoned() {
+        return;
+    }
+    let end = field + size.max(1);
+    if let Some(loan) = loans(borrowed).find(|loan| field < loan.end && loan.start < end) {
+        if (loan.start, loan.end) == whole {
+            panic!("GlobalCell field written during an active with borrow (field @ {field:#x})");
         }
+        panic!("GlobalCell field written while with_field lends it (field @ {field:#x})");
     }
 }
 
-#[derive(Debug)]
-struct BorrowGuard {
-    #[cfg(soundness_checks)]
-    addr: usize,
-    #[cfg(soundness_checks)]
-    exclusive: bool,
-}
-
-impl BorrowGuard {
-    fn shared(addr: usize) -> Self {
-        #[cfg(soundness_checks)]
-        {
-            if nvim_mainthread::BorrowTable::acquire(addr, false) < 0 {
-                panic!(
-                    "GlobalCell::with while exclusively borrowed (cell @ {addr:#x}) — \
-                     reentrant global access"
-                );
-            }
-            BorrowGuard {
-                addr,
-                exclusive: false,
-            }
+/// The shared loans open on a cell, innermost first, from its borrow state.
+fn loans<'a>(borrowed: State) -> impl Iterator<Item = &'a Loan> {
+    let mut next = borrowed;
+    core::iter::from_fn(move || {
+        if next == FREE || next == EXCLUSIVE {
+            return None;
         }
-        #[cfg(not(soundness_checks))]
-        {
-            let _ = addr;
-            BorrowGuard {}
-        }
-    }
-
-    fn exclusive(addr: usize) -> Self {
-        #[cfg(soundness_checks)]
-        {
-            if nvim_mainthread::BorrowTable::acquire(addr, true) != 0 {
-                panic!(
-                    "GlobalCell::with_mut while already borrowed (cell @ {addr:#x}) — \
-                     reentrant global access"
-                );
-            }
-            BorrowGuard {
-                addr,
-                exclusive: true,
-            }
-        }
-        #[cfg(not(soundness_checks))]
-        {
-            let _ = addr;
-            BorrowGuard {}
-        }
-    }
-}
-
-#[cfg(soundness_checks)]
-impl Drop for BorrowGuard {
-    fn drop(&mut self) {
-        let was = nvim_mainthread::BorrowTable::release(self.addr, self.exclusive);
-        if self.exclusive {
-            assert_eq!(was, -1, "an exclusive borrow is released exactly once");
-        } else {
-            assert!(was > 0, "a shared borrow is released exactly once");
-        }
-    }
+        // SAFETY: every loan reachable from a cell's state is live: each is
+        // a local of a frame still inside the borrow that opened it, and
+        // that borrow's `Restore` takes it off the chain before the frame
+        // ends. Only a conflict path walks the chain, and none does once
+        // `abandon_borrows` has run (the one way a frame is left without
+        // its `Restore`).
+        let loan = unsafe { &*next };
+        next = loan.outer;
+        Some(loan)
+    })
 }
 
 /// The lib harness's editor lock.
@@ -932,12 +981,15 @@ mod tests {
     }
 
     #[test]
-    fn ptr_and_as_raw_agree_and_are_transparent() {
+    fn ptr_and_as_raw_agree_and_the_value_comes_first() {
         static CELL: GlobalCell<u64> = GlobalCell::new(0xdead);
         assert_eq!(CELL.ptr(), CELL.as_raw());
-        // repr(transparent): the cell's address IS the value's address.
-        assert_eq!(&CELL as *const _ as usize, CELL.as_raw() as usize);
-        assert_eq!(size_of::<GlobalCell<u64>>(), 8);
+        // repr(C), value first: the cell's address IS the value's address,
+        // which is what an exported cell's C readers rely on.
+        assert_eq!(core::ptr::from_ref(&CELL).addr(), CELL.as_raw().addr());
+        // The borrow word is a checked build's alone.
+        let word = if cfg!(soundness_checks) { 8 } else { 0 };
+        assert_eq!(size_of::<GlobalCell<u64>>(), 8 + word);
     }
 
     #[test]
@@ -955,7 +1007,7 @@ mod tests {
     #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "reentrant global access")]
-    fn reentrant_with_mut_panics_in_debug() {
+    fn reentrant_with_mut_panics() {
         static CELL: GlobalCell<i32> = GlobalCell::new(0);
         CELL.with_mut(|_| CELL.with_mut(|inner| *inner));
     }
@@ -963,7 +1015,7 @@ mod tests {
     #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "with_mut borrow")]
-    fn get_during_with_mut_panics_in_debug() {
+    fn get_during_with_mut_panics() {
         static CELL: GlobalCell<i32> = GlobalCell::new(0);
         CELL.with_mut(|_| CELL.get());
     }
@@ -1061,12 +1113,16 @@ mod tests {
         name: Option<Vec<u8>>,
     }
     const LENT_COUNT: Field<Lent, i32> = field!(Lent, count);
+    #[cfg_attr(
+        not(soundness_checks),
+        expect(dead_code, reason = "only the checked tests lend it")
+    )]
     const LENT_NAME: Field<Lent, Option<Vec<u8>>> = field!(Lent, name);
 
     #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "while with_field lends it")]
-    fn a_write_to_the_lent_field_panics_in_debug() {
+    fn a_write_to_the_lent_field_panics() {
         let cell = GlobalCell::new(Lent {
             count: 1,
             name: Some(b"abc".to_vec()),
@@ -1077,12 +1133,59 @@ mod tests {
     #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "while with_field lends one of its fields")]
-    fn a_whole_record_write_under_a_field_loan_panics_in_debug() {
+    fn a_whole_record_write_under_a_field_loan_panics() {
         let cell = GlobalCell::new(Lent {
             count: 1,
             name: None,
         });
         cell.with_at(LENT_COUNT, |_| cell.with_mut(|record| record.count = 2));
+    }
+
+    #[cfg(soundness_checks)]
+    #[test]
+    #[should_panic(expected = "during an active with borrow")]
+    fn a_field_write_under_a_whole_record_borrow_panics() {
+        let cell = GlobalCell::new(Lent {
+            count: 1,
+            name: None,
+        });
+        cell.with(|_| cell.set_at(LENT_COUNT, 2));
+    }
+
+    #[cfg(soundness_checks)]
+    #[test]
+    #[should_panic(expected = "while with_field lends it")]
+    fn an_outer_field_loan_is_found_under_an_inner_one() {
+        let cell = GlobalCell::new(Lent {
+            count: 1,
+            name: None,
+        });
+        // The lent field is the outer loan; the inner one, of another
+        // field, must not hide it.
+        cell.with_at(LENT_COUNT, |_| {
+            cell.with_at(LENT_NAME, |_| cell.set_at(LENT_COUNT, 2));
+        });
+    }
+
+    #[cfg(soundness_checks)]
+    #[test]
+    #[should_panic(expected = "reentrant global access")]
+    fn a_set_inside_with_panics() {
+        let cell = GlobalCell::new(0);
+        cell.with(|_| cell.set(1));
+    }
+
+    #[cfg(soundness_checks)]
+    #[test]
+    fn a_panicking_borrow_gives_the_cell_back() {
+        let cell = GlobalCell::new(0);
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            cell.with_mut(|_| cell.with(|_| ()));
+        }));
+        assert!(caught.is_err());
+        // Both guards ran as the panic unwound: the cell is free again.
+        cell.with_mut(|x| *x = 1);
+        assert_eq!(cell.with(|x| *x), 1);
     }
 
     #[test]

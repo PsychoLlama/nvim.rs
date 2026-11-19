@@ -41,7 +41,8 @@ use crate::ui_client::ui_client_stop;
 
 /// The thread that installed the hook: the main thread, the only one that
 /// may touch editor state. Kept here rather than asked of
-/// `nvim_mainthread`, whose flag a release build never sets.
+/// `nvim_mainthread`, so that a process that never armed the cells' thread
+/// check (lib tests, the unit suite) answers `None`.
 static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 
 /// Set once the main thread has started the cleanup, from its own panic or
@@ -94,10 +95,9 @@ fn on_panic(info: &PanicHookInfo<'_>, report: &(dyn Fn(&PanicHookInfo<'_>) + Syn
     }
 
     // The panic may have fired inside a `GlobalCell::with`/`with_mut`. Its
-    // owner never runs again, so the borrow is dead; forget it, or the
-    // first cell the cleanup touches would panic on the borrow tracker.
-    #[cfg(soundness_checks)]
-    nvim_mainthread::BorrowTable::forget_all();
+    // owner never runs again, so the borrow is dead; abandon it, or the
+    // first cell the cleanup touches would panic on the borrow check.
+    crate::global_cell::abandon_borrows();
 
     if !begin_emergency_exit() {
         // The panic fired on a way out that has already started preserving
@@ -149,8 +149,7 @@ pub(super) fn hand_off_to_main(text: String, cleanup: fn()) -> ! {
 /// queue.
 fn clean_up_after_another_thread() {
     // Whatever the loop was inside of never resumes: see `on_panic`.
-    #[cfg(soundness_checks)]
-    nvim_mainthread::BorrowTable::forget_all();
+    crate::global_cell::abandon_borrows();
     if !begin_emergency_exit() {
         // A deadly signal or an out-of-memory exit is already preserving,
         // and ends the process itself.
