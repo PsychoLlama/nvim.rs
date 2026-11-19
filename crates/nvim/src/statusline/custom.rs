@@ -133,10 +133,12 @@ impl Target {
         if draw_winbar {
             let local = !win.w_onebuf_opt.wo_wbr.bytes().is_empty();
             let mut row = -1; // Row zero is the first row of text.
-            canvas = grid_adjust(win.w_grid, &mut row, &mut col);
-            if row < 0 {
+            // Scrolled off the top -- asked before the view is resolved,
+            // since a window with no room for a winbar may have no grid.
+            if row + win.w_grid.row_offset < 0 {
                 return None;
             }
+            canvas = grid_adjust(win.w_grid, &mut row, &mut col);
             let group = if win.is_current() { HLF_WBR } else { HLF_WBRNC };
             let maxwidth = win.w_view_width;
             reset_click_defs(win, ClickKind::Winbar, maxwidth);

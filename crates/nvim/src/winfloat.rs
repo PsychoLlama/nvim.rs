@@ -41,7 +41,6 @@ use crate::api::vim::nvim_create_buf;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::decoration::defs::VirtText;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
-use crate::grid::grid_adjust;
 use crate::memory::XString;
 use crate::message::{E_CMDWIN, emsg};
 use crate::mouse::{MousePos, find_win_inner};
@@ -256,8 +255,12 @@ fn parse_winhl(win: Win) {
     // SAFETY: a live window; a null pattern means "use the window's option".
     parse_winhl_opt(None, Some(win));
 }
+/// Fold `win`'s view offsets into `row`/`col`. Only the offsets: the view
+/// may not be resolved to a grid yet (a float anchored to a window that has
+/// none).
 fn adjust_for_grid(win: &mut Win, row: &mut c_int, col: &mut c_int) {
-    grid_adjust(win.w_grid, row, col);
+    *row += win.w_grid.row_offset;
+    *col += win.w_grid.col_offset;
 }
 fn screen_pos_of(win: Win, pos: &mut Pos) -> (c_int, c_int) {
     let (row, scol, _, _) = textpos2screenpos(win, pos, true);
