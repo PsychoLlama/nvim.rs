@@ -210,6 +210,16 @@ from `ts_tree_copy` or a parse.
 
 ## Closed before the survey
 
+- A flag a libuv callback writes through an address it was handed, read
+  by a wait's closure, is a `Cell` (`event/socket/`): the release-only hang
+  above. The audit for the same shape elsewhere — a local whose address
+  goes to C as callback data (`&raw mut`, `as_ptr().cast()`, `.data =`,
+  `rstream_start`'s data, a treesitter payload) and that Rust reads while C
+  may write it — found none: every other such local is either a `Cell`, a
+  `Copy` handle that dereferences afresh on each read, or touched by Rust
+  only before the address is handed over and after the call that uses it
+  returns. `process_events_until`'s docs carry the rule.
+
 - `apply_autocmds` and siblings take owned names (`XString`); no borrowed
   `&CStr` crosses an autocommand.
 - The `Channel` transports sit in `Pin<Box<ChannelStream>>` (S8 is the

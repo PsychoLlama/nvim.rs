@@ -428,6 +428,13 @@ pub unsafe fn process_events(uv_loop: *mut Loop, queue: Option<QueueId>, timeout
 /// itself changed, which is the whole point — a child's refcount reaching one,
 /// or input arriving, is what ends most of these waits.
 ///
+/// So what `done` reads must be something the compiler knows can change
+/// under it: a `Cell` (or a cell, or a handle that dereferences anew).
+/// A plain local captured by the closure is a shared borrow, which promises
+/// the value does not change for the borrow's life; a callback writing it
+/// through an address handed to libuv breaks that promise, and a release
+/// build reads the local once and waits for ever (`nvim --listen` did).
+///
 /// # Safety
 /// As [`process_events`].
 pub unsafe fn process_events_until(
