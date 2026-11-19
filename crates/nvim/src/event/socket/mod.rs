@@ -30,6 +30,7 @@ pub mod address;
 use crate::event::uv::UV_TCP;
 use crate::message_fmt::msg_cstr;
 use crate::os::uv_error::{UV_EACCES, UV_EADDRINUSE, UV_EINVAL, UV_ENOENT};
+use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ops::{Deref, DerefMut};
 use core::{mem, ptr};
@@ -436,13 +437,17 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
     let handle = watcher.pipe();
     // SAFETY: the watcher's own handle.
     let handle_loop = unsafe { (*handle).loop_0 };
-    let mut closed = false;
+    // A `Cell`: the close callback writes it through `data` while the
+    // wait's closure reads it, and a plain `bool` borrowed by that closure
+    // is one the optimiser may read once (the release build did, and
+    // waited for ever).
+    let closed = Cell::new(false);
     // SAFETY: as above; `closed` outlives the wait below.
-    unsafe { (*handle).data = (&raw mut closed).cast() };
+    unsafe { (*handle).data = closed.as_ptr().cast() };
     // SAFETY: as above.
     unsafe { uv_close(handle.cast(), Some(early_server_close_cb)) };
     // SAFETY: the main loop is live for as long as the editor is.
-    unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed) };
+    unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed.get()) };
 
     // SAFETY: a fresh handle, on the loop the closed one used.
     unsafe { uv_pipe_init(handle_loop, handle, 0) };
@@ -468,13 +473,14 @@ unsafe fn socket_alive(uv_loop: *mut Loop, address: &CStr) -> bool {
 
     // Take the probe connection back down before answering: the stream is on
     // this stack frame.
-    let mut closed = false;
+    // A `Cell`, as in `rebind_stale_socket`.
+    let closed = Cell::new(false);
     stream.s.internal_close_cb = Some(connect_close_cb);
-    stream.s.internal_data = (&raw mut closed).cast();
+    stream.s.internal_data = closed.as_ptr().cast();
     // SAFETY: the probe stream, still on this frame.
     unsafe { stream_may_close(&raw mut stream.s) };
     // SAFETY: the main loop is live for as long as the editor is.
-    unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed) };
+    unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed.get()) };
     true
 }
 
@@ -653,11 +659,13 @@ pub unsafe fn socket_connect(
         candidate = addr_req.addrinfo;
     }
 
-    let mut status: c_int = 1;
-    let mut closed = false;
+    // `Cell`s, as in `rebind_stale_socket`: the callbacks write them while
+    // the waits' closures read them.
+    let status: Cell<c_int> = Cell::new(1);
+    let closed = Cell::new(false);
     // SAFETY: `uv_connect_t` is inhabited by the all-zero bit pattern.
     let mut req: uv_connect_t = unsafe { mem::zeroed() };
-    req.data = (&raw mut status).cast();
+    req.data = status.as_ptr().cast();
 
     let settled = loop {
         let uv_stream: *mut uv_stream_t = if is_tcp {
@@ -682,14 +690,14 @@ pub unsafe fn socket_connect(
         // SAFETY: the caller's stream, now holding the connect attempt.
         unsafe { stream_init(ptr::null_mut(), conn.as_ptr(), -1, uv_stream) };
         conn.internal_close_cb = Some(connect_close_cb);
-        conn.internal_data = (&raw mut closed).cast();
-        closed = false;
-        status = 1;
+        conn.internal_data = closed.as_ptr().cast();
+        closed.set(false);
+        status.set(1);
 
         let ms = i64::from(timeout);
         // SAFETY: the main loop is live for as long as the editor is.
-        unsafe { process_events_until(MAIN_LOOP.ptr(), None, ms, || status != 1) };
-        if status == 0 {
+        unsafe { process_events_until(MAIN_LOOP.ptr(), None, ms, || status.get() != 1) };
+        if status.get() == 0 {
             break Ok(());
         }
 
@@ -697,7 +705,7 @@ pub unsafe fn socket_connect(
         // Wait for the close callback before retrying or returning: `stream`
         // may be on the caller's stack.
         // SAFETY: the main loop is live for as long as the editor is.
-        unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed) };
+        unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed.get()) };
 
         // The short circuit is load-bearing: a pipe connect never looked an
         // address up, so `candidate` is still null here.
