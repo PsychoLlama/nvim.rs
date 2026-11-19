@@ -1950,7 +1950,7 @@ fn emit_handlers(out: &mut String, specs: &[Spec]) {
 
     writeln!(
         out,
-        "pub static METHOD_HANDLERS: ConstTable<[MsgpackRpcRequestHandler; {}]> = ConstTable::new([",
+        "pub static METHOD_HANDLERS: [MsgpackRpcRequestHandler; {}] = [",
         specs.len()
     )
     .unwrap();
@@ -1968,7 +1968,7 @@ fn emit_handlers(out: &mut String, specs: &[Spec]) {
         };
         writeln!(out, "    handler(c\"{}\", {f}, {}),", spec.name, flags.fast).unwrap();
     }
-    writeln!(out, "]);").unwrap();
+    writeln!(out, "];").unwrap();
     out.push('\n');
 
     writeln!(
@@ -2075,7 +2075,6 @@ fn generate_tables(
     out.push_str("use crate::api::private::dispatch_wrappers::*;\n");
     out.push_str("use crate::api_error;\n");
     out.push_str("use crate::message_fmt::msg_bytes;\n");
-    out.push_str("use crate::global_cell::ConstTable;\n");
     out.push_str("use crate::api::private::keyset::{FieldKind, KeyField, KeySet, Slot};\n");
     // Handlers the spec names outright, which live outside the generated
     // wrappers.

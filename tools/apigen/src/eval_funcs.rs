@@ -364,7 +364,6 @@ fn imports(out: &mut String, rows: &[Builtin], symbols: &Symbols) -> Result<(), 
             .insert(name);
     }
     out.push_str("use core::ffi::CStr;\n\n");
-    out.push_str("use crate::global_cell::ConstTable;\n");
     for (module, names) in &by_module {
         writeln!(
             out,
@@ -482,7 +481,7 @@ pub fn generate(
         out,
         "\n/// Every builtin Vimscript function there is, plus the blank row\n\
          /// that ends the table.\n\
-         pub(crate) static BUILTINS: ConstTable<[EvalFuncDef; {}]> = ConstTable::new(table());\n\
+         pub(crate) static BUILTINS: [EvalFuncDef; {}] = table();\n\
          \n\
          /// The table, spliced together from the generated parts.\n\
          const fn table() -> [EvalFuncDef; {}] {{\n\

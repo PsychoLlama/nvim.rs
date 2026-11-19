@@ -429,7 +429,7 @@
     "crates/nvim/src/getchar/scriptin.rs": {"pub_items": 4},
     "crates/nvim/src/getchar/state.rs": {"pub_items": 4},
     "crates/nvim/src/getchar/typeahead.rs": {"pub_items": 10},
-    "crates/nvim/src/global_cell.rs": {"cell_ptr": 3, "pub_items": 5, "unsafe_stmts": 13},
+    "crates/nvim/src/global_cell.rs": {"cell_ptr": 3, "pub_items": 4, "unsafe_stmts": 12},
     "crates/nvim/src/grid/border.rs": {"pub_items": 1},
     "crates/nvim/src/grid/defs.rs": {"pub_items": 3},
     "crates/nvim/src/grid/line.rs": {"pub_items": 16},

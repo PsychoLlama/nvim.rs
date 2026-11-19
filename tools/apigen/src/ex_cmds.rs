@@ -369,14 +369,13 @@ pub fn generate(lua_path: &Path) -> Result<(String, String), String> {
          clippy::ptr_as_ptr\n\
          )]\n\
          \n#[allow(unused_imports)]\nuse super::*;\n\
-         use crate::global_cell::ConstTable;\n\
          use crate::types::CmdAddr as Ad;\n\
          use crate::types::ExArgt as Ex;\n",
     );
     table.push_str(HELPERS);
     table.push_str(&format!("\npub(crate) const COMMAND_COUNT: c_int = {n};\n"));
     table.push_str(&format!(
-        "\n#[rustfmt::skip]\npub(crate) static CMDNAMES: ConstTable<[CommandDefinition; {n}]> = ConstTable::new([\n"
+        "\n#[rustfmt::skip]\npub(crate) static CMDNAMES: [CommandDefinition; {n}] = [\n"
     ));
     for row in &rows {
         let flags = spell_flags(row.flags, &bits)?;
@@ -389,7 +388,7 @@ pub fn generate(lua_path: &Path) -> Result<(String, String), String> {
             None => format!("    cmd(c\"{name}\", {func}, {flags}, {addr}),\n"),
         });
     }
-    table.push_str("]);\n");
+    table.push_str("];\n");
 
     // Where the linear scan over `CMDNAMES` starts, by first letter and then
     // by the first two. Only the a-z rows take part: `:Next` and the

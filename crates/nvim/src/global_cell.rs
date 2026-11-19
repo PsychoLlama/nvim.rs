@@ -53,7 +53,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::deref::deref_to_field;
 use core::cell::UnsafeCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -624,42 +623,6 @@ impl<T> SharedCell<T> {
         unsafe { *self.0.get() = value }
     }
 }
-
-/// A global the editor only ever reads: a table the compiler built.
-///
-/// `GlobalCell` earns its checks because the editor *writes* its globals.
-/// A table like `CMDNAMES` or `NV_CMD_TABLE` is finished the moment the compiler
-/// lays it out and no line of the editor writes to it again, so none of the
-/// cell's machinery applies — but a plain `static` demands `Sync`, and these
-/// tables hold raw pointers (a command's name), which are `!Sync` by
-/// convention rather than by anything about the data.
-///
-/// So the promise is made once here, for the whole family, instead of a
-/// `GlobalCell` per table handing out a `*mut` at every read. `Deref` gives
-/// the table back, so a row reads as `CMDNAMES[idx].cmd_name` — safe
-/// indexing, bounds-checked — and a table handed to C as `TABLE.as_ptr()`.
-///
-/// The one thing it does not give back is a `*mut`: the contents live in
-/// read-only memory, so a caller that needs to hand C a mutable pointer must
-/// say `.cast_mut()` and answer for the write itself. That is the point —
-/// the tables that *are* written keep their cell.
-#[repr(transparent)]
-#[derive(Debug)]
-pub struct ConstTable<T>(T);
-
-// SAFETY: the contents are never written, so sharing `&T` across threads
-// races with nothing. `T` is `!Sync` only because it holds raw pointers,
-// which carry no data of their own; the pointees are themselves immutable
-// statics (string literals) or code addresses.
-unsafe impl<T> Sync for ConstTable<T> {}
-
-impl<T> ConstTable<T> {
-    pub const fn new(table: T) -> Self {
-        ConstTable(table)
-    }
-}
-
-deref_to_field!(impl[T] ConstTable<T> => T, 0);
 
 // A release build compiles every use of the crate out, which leaves cargo's
 // `unused_dependencies` lint calling the dependency dead; it is not.

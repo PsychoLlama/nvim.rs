@@ -26,7 +26,6 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::global_cell::ConstTable;
 use crate::types::CmdAddr as Ad;
 use crate::types::ExArgt as Ex;
 
@@ -75,7 +74,7 @@ const fn cmd_pv(
 pub(crate) const COMMAND_COUNT: c_int = 557;
 
 #[rustfmt::skip]
-pub(crate) static CMDNAMES: ConstTable<[CommandDefinition; 557]> = ConstTable::new([
+pub(crate) static CMDNAMES: [CommandDefinition; 557] = [
     cmd(c"append", ex_append, Ex::RANGE.or(Ex::BANG).or(Ex::TRLBAR).or(Ex::ZEROR).or(Ex::CMDWIN).or(Ex::MODIFY).or(Ex::LOCK_OK), Ad::Lines),
     cmd(c"abbreviate", ex_abbreviate, Ex::EXTRA.or(Ex::TRLBAR).or(Ex::NOTRLCOM).or(Ex::CTRLV).or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::NoRange),
     cmd(c"abclear", ex_abclear, Ex::EXTRA.or(Ex::TRLBAR).or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::NoRange),
@@ -633,7 +632,7 @@ pub(crate) static CMDNAMES: ConstTable<[CommandDefinition; 557]> = ConstTable::n
     cmd(c"@", ex_at, Ex::RANGE.or(Ex::EXTRA).or(Ex::WHOLEFOLD).or(Ex::TRLBAR).or(Ex::CMDWIN).or(Ex::LOCK_OK), Ad::Lines),
     cmd(c"~", ex_substitute, Ex::RANGE.or(Ex::EXTRA).or(Ex::WHOLEFOLD).or(Ex::CMDWIN).or(Ex::MODIFY).or(Ex::LOCK_OK), Ad::Lines),
     cmd(c"Next", ex_previous, Ex::RANGE.or(Ex::BANG).or(Ex::EXTRA).or(Ex::TRLBAR).or(Ex::COUNT).or(Ex::CMDARG).or(Ex::ARGOPT), Ad::Other),
-]);
+];
 
 /// For each letter a-z, the index of the first command in `CMDNAMES`
 /// that starts with it.

@@ -22,8 +22,8 @@
 //! Those four live here, one record per [`OptIndex`], reached only through
 //! the accessors below. An immutable option reads its default *as* its
 //! value ([`OptSlot::OwnDefault`](crate::option::OptSlot)), which is why
-//! `option_default` is the whole of the read path for one. The table itself is then a `ConstTable`, indexed
-//! rather than dereferenced.
+//! `option_default` is the whole of the read path for one. The table itself is then a plain
+//! `static` array, indexed rather than dereferenced.
 //!
 //! Every accessor is a `with`/`with_mut` whose closure reads or writes one
 //! field and calls nothing: no autocommand, no Lua callback and no

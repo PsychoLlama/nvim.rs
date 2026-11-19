@@ -58,7 +58,6 @@ use crate::api::keysets::{
 use crate::api::private::dispatch_wrappers::*;
 use crate::api::private::keyset::{FieldKind, KeyField, KeySet, Slot};
 use crate::api_error;
-use crate::global_cell::ConstTable;
 use crate::message_fmt::msg_bytes;
 use crate::msgpack_rpc::handler::{ApiDispatchFn, MsgpackRpcRequestHandler};
 use crate::types::ERROR_TYPE_EXCEPTION;

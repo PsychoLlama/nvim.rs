@@ -110,7 +110,6 @@ use crate::ex_getln::{
 };
 use crate::fold::{f_foldclosed, f_foldclosedend, f_foldlevel, f_foldtext, f_foldtextresult};
 use crate::getchar::{f_getchar, f_getcharmod, f_getcharstr};
-use crate::global_cell::ConstTable;
 use crate::indent::expr::{f_indent, f_lispindent};
 use crate::indent_c::f_cindent;
 use crate::insexpand::{
@@ -218,7 +217,7 @@ const fn fill<const N: usize>(
 
 /// Every builtin Vimscript function there is, plus the blank row
 /// that ends the table.
-pub(crate) static BUILTINS: ConstTable<[EvalFuncDef; 645]> = ConstTable::new(table());
+pub(crate) static BUILTINS: [EvalFuncDef; 645] = table();
 
 /// The table, spliced together from the generated parts.
 const fn table() -> [EvalFuncDef; 645] {

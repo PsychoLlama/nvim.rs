@@ -112,14 +112,15 @@ and the rest are callable from any thread.
 - **Closure:** type holds it — atomics for the four scalars, a pointer-only
   cell (no safe `get`/`set`) for `MAIN_LOOP`, `SharedCell` deleted. **S.**
 
-### S4 — `ConstTable<T>` (sound-by-convention)
+### ~~S4 — `ConstTable<T>`~~ (closed: type holds it)
 
 `Sync` for any `T` on the promise that the contents are never written.
-
-- **Breaks:** a table over a type with interior mutability (a `Cell`) read
-  from two threads.
-- **Closure:** `unsafe const fn new` whose contract is "no interior
-  mutability; pointers name immutable statics" (4 tables). **XS.**
+Every row type it held (`VimOption`, `CommandDefinition`, `EvalFuncDef`,
+`MsgpackRpcRequestHandler`) had since become `Sync` on its own — names are
+`&'static CStr`, callbacks are `fn` pointers, the option's variable a
+`&'static GlobalCell` — so the four tables are plain `static` arrays and
+the compiler asks the question; `ConstTable` is deleted. A row type that
+gains a `Cell` or a raw pointer fails to build.
 
 ### S5 — `Copy` object handles lending `&`/`&mut` (sound-by-convention)
 

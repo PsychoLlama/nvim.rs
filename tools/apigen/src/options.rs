@@ -1535,7 +1535,6 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
     ffi.sort_by_key(|name| (name.starts_with("c_"), *name));
     writeln!(out, "use core::ffi::{{{}}};", ffi.join(", ")).unwrap();
     out.push('\n');
-    out.push_str("use crate::global_cell::ConstTable;\n");
     for (module, names) in &by_module {
         writeln!(
             out,
@@ -1720,8 +1719,7 @@ pub fn generate(
          ///\n\
          /// Immutable, and in `.rodata`: what changes about an option while\n\
          /// the editor runs lives in `crate::option::state` instead.\n\
-         pub static OPTION_TABLE: ConstTable<[VimOption; OPT_COUNT as usize]> =\n\
-         \x20   ConstTable::new(table());\n\
+         pub static OPTION_TABLE: [VimOption; OPT_COUNT as usize] = table();\n\
          \n\
          /// The table, spliced together from the generated parts. Public to\n\
          /// the crate because `crate::option::state` seeds each option's\n\

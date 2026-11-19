@@ -48,7 +48,6 @@ use core::ffi::{CStr, c_int, c_uint};
 use crate::ascii::TAB;
 use crate::ex_docmd::did_set_findfunc;
 use crate::ex_getln::did_set_cedit;
-use crate::global_cell::ConstTable;
 use crate::insexpand::{did_set_completefunc, did_set_omnifunc, did_set_thesaurusfunc};
 use crate::mapping::did_set_langmap;
 use crate::ops::did_set_operatorfunc;
@@ -172,7 +171,7 @@ const fn fill<const N: usize>(
 ///
 /// Immutable, and in `.rodata`: what changes about an option while
 /// the editor runs lives in `crate::option::state` instead.
-pub static OPTION_TABLE: ConstTable<[VimOption; OPT_COUNT as usize]> = ConstTable::new(table());
+pub static OPTION_TABLE: [VimOption; OPT_COUNT as usize] = table();
 
 /// The table, spliced together from the generated parts. Public to
 /// the crate because `crate::option::state` seeds each option's

@@ -16,7 +16,7 @@
 #[allow(unused_imports)]
 use super::*;
 
-pub static METHOD_HANDLERS: ConstTable<[MsgpackRpcRequestHandler; 281]> = ConstTable::new([
+pub static METHOD_HANDLERS: [MsgpackRpcRequestHandler; 281] = [
     handler(c"redraw", handle_ui_client_redraw, true),
     handler(c"nvim__id", handle_nvim__id, false),
     handler(c"nvim_cmd", handle_nvim_cmd, false),
@@ -514,7 +514,7 @@ pub static METHOD_HANDLERS: ConstTable<[MsgpackRpcRequestHandler; 281]> = ConstT
         handle_nvim_buf_create_user_command,
         false,
     ),
-]);
+];
 
 /// The row of [`METHOD_HANDLERS`] the method called `name` sits in.
 pub fn handler_index(name: &[u8]) -> Option<usize> {
