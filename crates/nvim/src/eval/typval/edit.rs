@@ -14,7 +14,7 @@
 )]
 
 use crate::deref::deref_to_field;
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 use ::core::ptr::NonNull;
 
 /// A writable borrow of a value object, taken through a shared handle: what
@@ -35,7 +35,7 @@ use ::core::ptr::NonNull;
 #[derive(Debug)]
 pub struct Edit<'a, T> {
     pub(super) target: &'a mut T,
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     pub(super) loan: Loan,
 }
 
@@ -45,12 +45,12 @@ impl<'a, T> Edit<'a, T> {
     pub fn map<U>(self, part: impl FnOnce(&'a mut T) -> &'a mut U) -> Edit<'a, U> {
         let Edit {
             target,
-            #[cfg(debug_assertions)]
+            #[cfg(soundness_checks)]
             loan,
         } = self;
         Edit {
             target: part(target),
-            #[cfg(debug_assertions)]
+            #[cfg(soundness_checks)]
             loan,
         }
     }
@@ -63,12 +63,12 @@ impl<'a, T> Edit<'a, T> {
     ) -> Option<Edit<'a, U>> {
         let Edit {
             target,
-            #[cfg(debug_assertions)]
+            #[cfg(soundness_checks)]
             loan,
         } = self;
         Some(Edit {
             target: part(target)?,
-            #[cfg(debug_assertions)]
+            #[cfg(soundness_checks)]
             loan,
         })
     }
@@ -78,11 +78,11 @@ deref_to_field!(impl[T] Edit<'_, T> => mut T, target);
 
 /// An [`Edit`]'s record in the debug builds' loan table: the object's
 /// address, given back when the edit goes.
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 #[derive(Debug)]
 pub(super) struct Loan(usize);
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 impl Loan {
     /// Record `at` as lent writable; a second loan of it is the aliasing
     /// the `Live` promise forbids.
@@ -97,7 +97,7 @@ impl Loan {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 impl Drop for Loan {
     fn drop(&mut self) {
         nvim_mainthread::EditTable::give_back(self.0);
@@ -106,7 +106,7 @@ impl Drop for Loan {
 
 /// An owning handle's `DerefMut` while an [`Edit`] of the same object lives
 /// is the same aliasing.
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 #[track_caller]
 pub(super) fn assert_not_lent<T>(at: NonNull<T>) {
     assert!(
@@ -124,7 +124,7 @@ mod tests {
     /// Two live edits of one object, through two handles, are the aliasing
     /// the `Live` promise forbids: debug builds stop at the second.
     #[test]
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     #[should_panic(expected = "edited through two handles at once")]
     fn a_second_edit_of_one_object_panics_in_debug_builds() {
         let _held = editor_state_lock();
@@ -137,7 +137,7 @@ mod tests {
     /// An owning handle's `DerefMut` while an edit lends the object is the
     /// same aliasing.
     #[test]
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     #[should_panic(expected = "while edit() lends it")]
     fn a_deref_mut_under_an_edit_panics_in_debug_builds() {
         let _held = editor_state_lock();

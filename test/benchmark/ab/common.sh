@@ -126,6 +126,11 @@ PY
       cat "$out/log" >&2
       exit 70
     fi
+    # KEEP_CG=<path> keeps the profile for `cg_annotate` (release keeps its
+    # symbols), which says *where* two counts differ.
+    if [ -n "${KEEP_CG:-}" ]; then
+      cp "$out/cachegrind.out" "$KEEP_CG"
+    fi
     printf '%s\tIr\t%s\n' "$name" "$refs"
     return
   fi

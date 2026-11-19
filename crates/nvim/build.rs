@@ -300,5 +300,16 @@ fn main() {
         std::env::var("PROFILE").unwrap_or_else(|_| "unknown".to_owned()),
     );
 
+    // The soundness checks: `GlobalCell`'s main-thread and borrow tracking,
+    // the value handles' overlapping-edit loans, the Lua stack's consuming
+    // checks. On in every build with debug assertions, and in any other
+    // with the `soundness-checks` feature, so a release binary can carry
+    // them too. One cfg names them so no site has to spell the pair.
+    if std::env::var_os("CARGO_CFG_DEBUG_ASSERTIONS").is_some()
+        || std::env::var_os("CARGO_FEATURE_SOUNDNESS_CHECKS").is_some()
+    {
+        println!("cargo:rustc-cfg=soundness_checks");
+    }
+
     println!("cargo:rerun-if-changed=build.rs");
 }

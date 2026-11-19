@@ -211,7 +211,7 @@ impl Stack {
     /// function, or thread) at `at`: `lua_setfenv`. `false` when the value
     /// there can have none (the table is popped all the same).
     pub fn set_environment(&mut self, at: At) -> bool {
-        debug_assert!(self.depth() >= 1, "a view sets an environment it pushed");
+        soundness_check!(self.depth() >= 1, "a view sets an environment it pushed");
         unsafe { lua_setfenv(self.l(), at.0) != 0 }
     }
 

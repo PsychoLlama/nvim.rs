@@ -52,7 +52,7 @@
 
 use ::core::ptr::NonNull;
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 use super::edit::{Loan, assert_not_lent};
 use super::*;
 use crate::hashtab::{HashValue, SlotEntry};
@@ -147,7 +147,7 @@ impl ListRef {
         // exclusivity is the caller's promise above, checked in debug
         // builds by the loan.
         Edit {
-            #[cfg(debug_assertions)]
+            #[cfg(soundness_checks)]
             loan: Loan::new(self.0),
             target: unsafe { &mut *self.0.as_ptr() },
         }
@@ -214,7 +214,7 @@ impl ::core::ops::Deref for ListRef {
 impl ::core::ops::DerefMut for ListRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut List {
-        #[cfg(debug_assertions)]
+        #[cfg(soundness_checks)]
         assert_not_lent(self.0);
         // SAFETY: as `deref`.
         unsafe { self.0.as_mut() }
@@ -373,7 +373,7 @@ impl DictRef {
         // exclusivity is the caller's promise above, checked in debug
         // builds by the loan.
         Edit {
-            #[cfg(debug_assertions)]
+            #[cfg(soundness_checks)]
             loan: Loan::new(self.0),
             target: unsafe { &mut *self.0.as_ptr() },
         }
@@ -429,7 +429,7 @@ impl ::core::ops::Deref for DictRef {
 impl ::core::ops::DerefMut for DictRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Dict {
-        #[cfg(debug_assertions)]
+        #[cfg(soundness_checks)]
         assert_not_lent(self.0);
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_mut() }
@@ -549,7 +549,7 @@ impl BlobRef {
         // exclusivity is the caller's promise above, checked in debug
         // builds by the loan.
         Edit {
-            #[cfg(debug_assertions)]
+            #[cfg(soundness_checks)]
             loan: Loan::new(self.0),
             target: unsafe { &mut *self.0.as_ptr() },
         }
@@ -596,7 +596,7 @@ impl ::core::ops::Deref for BlobRef {
 impl ::core::ops::DerefMut for BlobRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Blob {
-        #[cfg(debug_assertions)]
+        #[cfg(soundness_checks)]
         assert_not_lent(self.0);
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_mut() }
@@ -651,7 +651,7 @@ impl PartialRef {
         // exclusivity is the caller's promise above, checked in debug
         // builds by the loan.
         Edit {
-            #[cfg(debug_assertions)]
+            #[cfg(soundness_checks)]
             loan: Loan::new(self.0),
             target: unsafe { &mut *self.0.as_ptr() },
         }
@@ -697,7 +697,7 @@ impl ::core::ops::Deref for PartialRef {
 impl ::core::ops::DerefMut for PartialRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Partial {
-        #[cfg(debug_assertions)]
+        #[cfg(soundness_checks)]
         assert_not_lent(self.0);
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_mut() }

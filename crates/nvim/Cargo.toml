@@ -50,6 +50,15 @@ nvim-mainthread = { path = "../mainthread" }
 # binary but the impls it wrote.
 thiserror = { version = "2", default-features = false, features = ["std"] }
 
+[features]
+# The soundness checks debug builds always carry -- `GlobalCell`'s main-thread
+# and borrow tracking, the value handles' overlapping-edit loans, the Lua
+# stack's consuming checks -- in a build without debug assertions too.
+# build.rs turns either into the one `soundness_checks` cfg the sites test.
+# `cargo build --release --features soundness-checks` is a release binary
+# that panics where a debug one would.
+soundness-checks = []
+
 # Edition 2024 warns when an `unsafe fn` body uses unsafe operations without an
 # explicit `unsafe {}` block. Allowed here only for the sibling bin/test/bench
 # crate roots; every file in the library denies it, and lib.rs denies it
@@ -126,7 +135,7 @@ non_upper_case_globals = "deny"
 # and nowhere else.
 [lints.rust.unexpected_cfgs]
 level = "warn"
-check-cfg = ['cfg(randomized_layout)']
+check-cfg = ['cfg(randomized_layout)', 'cfg(soundness_checks)']
 
 [lints.clippy]
 # `tui/tui.rs`, `vterm/vterm.rs`, `tui/termkey/termkey.rs`,

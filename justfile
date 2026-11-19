@@ -19,6 +19,14 @@ build:
 build-release:
   cargo build --release
 
+# A release binary that keeps the soundness checks debug builds carry
+# (`GlobalCell`'s borrow and thread tracking, the value handles' edit loans,
+# the Lua stack's consuming checks; docs/safe-surface.md), in its own target
+# dir: `target/checked/release/nvim`. The suites take it as asan's recipes
+# do: `NVIM_BIN=<it> NVIM_TEST_BUILD_DIR=target/checked/tree`.
+build-checked:
+  cargo build --release --features soundness-checks --target-dir target/checked
+
 # Assemble a relocatable release tarball under `target/dist`. Mirrors the
 # layout nix/package.nix installs (bin/ + runtime + tree-sitter parsers) but
 # with a cargo-built binary: the baked default paths don't exist on a consumer

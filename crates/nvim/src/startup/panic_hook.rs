@@ -96,7 +96,7 @@ fn on_panic(info: &PanicHookInfo<'_>, report: &(dyn Fn(&PanicHookInfo<'_>) + Syn
     // The panic may have fired inside a `GlobalCell::with`/`with_mut`. Its
     // owner never runs again, so the borrow is dead; forget it, or the
     // first cell the cleanup touches would panic on the borrow tracker.
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     nvim_mainthread::BorrowTable::forget_all();
 
     if !begin_emergency_exit() {
@@ -149,7 +149,7 @@ pub(super) fn hand_off_to_main(text: String, cleanup: fn()) -> ! {
 /// queue.
 fn clean_up_after_another_thread() {
     // Whatever the loop was inside of never resumes: see `on_panic`.
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     nvim_mainthread::BorrowTable::forget_all();
     if !begin_emergency_exit() {
         // A deadly signal or an out-of-memory exit is already preserving,

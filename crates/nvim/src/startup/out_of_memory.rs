@@ -150,7 +150,7 @@ fn exit_after_another_thread() {
 /// a `GlobalCell` borrow: forget it, as the panic hook does, so the cleanup
 /// does not trip the (debug) borrow tracker.
 fn forget_borrows() {
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     nvim_mainthread::BorrowTable::forget_all();
 }
 

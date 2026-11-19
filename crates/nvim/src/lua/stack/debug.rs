@@ -88,7 +88,7 @@ impl Stack {
     /// Pop the function on top and answer where it was defined: its chunk
     /// name and the line its definition starts on (`lua_getinfo(L, ">S")`).
     pub fn pop_function_source(&mut self) -> Option<(Vec<u8>, c_int)> {
-        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
+        soundness_check!(self.depth() >= 1, "consumes a slot below the base");
         let mut record = lua_Debug::default();
         // SAFETY: a live state with a function on top, which `>S` consumes.
         if unsafe { lua_getinfo(self.l(), c">S".as_ptr(), &raw mut record) } == 0 {

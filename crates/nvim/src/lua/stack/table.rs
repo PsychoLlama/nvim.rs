@@ -27,7 +27,7 @@ impl Stack {
     /// reference there: `luaL_ref(L, table)` (`LUA_REFNIL` for a nil, which
     /// stores nothing).
     pub fn reference_in(&mut self, table: At) -> c_int {
-        debug_assert!(self.depth() >= 1, "a view references a value it pushed");
+        soundness_check!(self.depth() >= 1, "a view references a value it pushed");
         unsafe { luaL_ref(self.l(), table.0) }
     }
 

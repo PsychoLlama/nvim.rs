@@ -27,6 +27,10 @@
 //! the mutable static it replaces — the C deps and the LuaJIT-FFI unit
 //! suite keep resolving and poking the same bytes.
 //!
+//! "Debug builds" below means builds with the `soundness_checks` cfg: every
+//! build with debug assertions, and a release build with the
+//! `soundness-checks` feature (crates/nvim/build.rs).
+//!
 //! The debug checks are deliberately austere — one direct call to the
 //! always-optimized `nvim-mainthread` crate (a bare TLS flag load there)
 //! on the main-thread fast path, plus one relaxed atomic for the
@@ -248,7 +252,7 @@ impl<T> GlobalCell<T> {
         let field = project(unsafe { &*self.0.get() });
         // A statement under `cfg`, not a call that compiles to nothing: an
         // empty call still weighs in the inliner's view of every caller.
-        #[cfg(debug_assertions)]
+        #[cfg(soundness_checks)]
         let _loan = FieldLoan::new(self.0.get() as usize, core::ptr::from_ref(field).addr());
         f(field)
     }
@@ -266,7 +270,7 @@ impl<T> GlobalCell<T> {
             check_no_borrow(self.0.get() as usize);
         }
         let field = self.field_ptr(project);
-        #[cfg(debug_assertions)]
+        #[cfg(soundness_checks)]
         if !quiet {
             check_field_not_lent(field.addr());
         }
@@ -291,7 +295,7 @@ impl<T> GlobalCell<T> {
     /// loud failure instead of silent UB.
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
         check_main_thread();
-        #[cfg(debug_assertions)]
+        #[cfg(soundness_checks)]
         check_no_field_loan(self.0.get() as usize);
         let _guard = BorrowGuard::exclusive(self.0.get() as usize);
         // SAFETY: main-thread invariant + borrow tracking (debug).
@@ -659,7 +663,7 @@ deref_to_field!(impl[T] ConstTable<T> => T, 0);
 
 // A release build compiles every use of the crate out, which leaves cargo's
 // `unused_dependencies` lint calling the dependency dead; it is not.
-#[cfg(not(debug_assertions))]
+#[cfg(not(soundness_checks))]
 use nvim_mainthread as _;
 
 /// Armed once [`init_main_thread`] runs; false in processes that never call
@@ -671,12 +675,12 @@ static ARMED: AtomicBool = AtomicBool::new(false);
 /// main-thread assertion. Called from the binary entry point before any
 /// editor code runs.
 pub fn init_main_thread() {
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     nvim_mainthread::mark_main_thread();
     ARMED.store(true, Ordering::Relaxed);
 }
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 #[inline(always)]
 fn check_main_thread() {
     if !nvim_mainthread::is_main_thread() {
@@ -684,7 +688,7 @@ fn check_main_thread() {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 #[cold]
 fn check_main_thread_cold() {
     if ARMED.load(Ordering::Relaxed) {
@@ -695,7 +699,7 @@ fn check_main_thread_cold() {
     }
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(soundness_checks))]
 #[inline(always)]
 fn check_main_thread() {}
 
@@ -711,13 +715,13 @@ fn check_main_thread() {}
 
 /// Whether an access may skip its checks: it is on the main thread and no
 /// cell is borrowed. Always true in a release build, which checks nothing.
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 #[inline(always)]
 fn access_is_quiet() -> bool {
     nvim_mainthread::BorrowTable::idle()
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(soundness_checks))]
 #[inline(always)]
 fn access_is_quiet() -> bool {
     true
@@ -753,11 +757,11 @@ fn check_write(addr: usize) {
 fn check_write_slow(addr: usize) {
     check_main_thread();
     check_no_borrow(addr);
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     check_no_field_loan(addr);
 }
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 #[inline(always)]
 fn check_no_exclusive_borrow(addr: usize) {
     if nvim_mainthread::BorrowTable::state(addr) < 0 {
@@ -765,11 +769,11 @@ fn check_no_exclusive_borrow(addr: usize) {
     }
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(soundness_checks))]
 #[inline(always)]
 fn check_no_exclusive_borrow(_addr: usize) {}
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 #[inline(always)]
 fn check_no_borrow(addr: usize) {
     if nvim_mainthread::BorrowTable::state(addr) != 0 {
@@ -777,7 +781,7 @@ fn check_no_borrow(addr: usize) {
     }
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(soundness_checks))]
 #[inline(always)]
 fn check_no_borrow(_addr: usize) {}
 
@@ -787,12 +791,12 @@ fn check_no_borrow(_addr: usize) {}
 // that field can find it, and one per record that has any field out (the
 // record's address with the next bit set), so a write to the whole record
 // can. Neither tag can collide with a user-space address.
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 const LENT_FIELD: usize = 1 << (usize::BITS - 1);
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 const LENT_RECORD: usize = 1 << (usize::BITS - 2);
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 #[inline(always)]
 fn check_field_not_lent(field: usize) {
     if nvim_mainthread::BorrowTable::state(field | LENT_FIELD) != 0 {
@@ -800,7 +804,7 @@ fn check_field_not_lent(field: usize) {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 #[inline(always)]
 fn check_no_field_loan(addr: usize) {
     if nvim_mainthread::BorrowTable::state(addr | LENT_RECORD) != 0 {
@@ -812,14 +816,14 @@ fn check_no_field_loan(addr: usize) {
 
 /// The two shared borrows [`GlobalCell::with_field`] holds while `f` runs:
 /// one of the field, one of the record. Debug builds only.
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 #[derive(Debug)]
 struct FieldLoan {
     _field: BorrowGuard,
     _record: BorrowGuard,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 impl FieldLoan {
     fn new(record: usize, field: usize) -> Self {
         FieldLoan {
@@ -831,15 +835,15 @@ impl FieldLoan {
 
 #[derive(Debug)]
 struct BorrowGuard {
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     addr: usize,
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     exclusive: bool,
 }
 
 impl BorrowGuard {
     fn shared(addr: usize) -> Self {
-        #[cfg(debug_assertions)]
+        #[cfg(soundness_checks)]
         {
             if nvim_mainthread::BorrowTable::acquire(addr, false) < 0 {
                 panic!(
@@ -852,7 +856,7 @@ impl BorrowGuard {
                 exclusive: false,
             }
         }
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(soundness_checks))]
         {
             let _ = addr;
             BorrowGuard {}
@@ -860,7 +864,7 @@ impl BorrowGuard {
     }
 
     fn exclusive(addr: usize) -> Self {
-        #[cfg(debug_assertions)]
+        #[cfg(soundness_checks)]
         {
             if nvim_mainthread::BorrowTable::acquire(addr, true) != 0 {
                 panic!(
@@ -873,7 +877,7 @@ impl BorrowGuard {
                 exclusive: true,
             }
         }
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(soundness_checks))]
         {
             let _ = addr;
             BorrowGuard {}
@@ -881,14 +885,14 @@ impl BorrowGuard {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(soundness_checks)]
 impl Drop for BorrowGuard {
     fn drop(&mut self) {
         let was = nvim_mainthread::BorrowTable::release(self.addr, self.exclusive);
         if self.exclusive {
-            debug_assert_eq!(was, -1);
+            assert_eq!(was, -1, "an exclusive borrow is released exactly once");
         } else {
-            debug_assert!(was > 0);
+            assert!(was > 0, "a shared borrow is released exactly once");
         }
     }
 }
@@ -1004,7 +1008,7 @@ mod tests {
         assert_eq!(A.get(), 11);
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "reentrant global access")]
     fn reentrant_with_mut_panics_in_debug() {
@@ -1012,7 +1016,7 @@ mod tests {
         CELL.with_mut(|_| CELL.with_mut(|inner| *inner));
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "with_mut borrow")]
     fn get_during_with_mut_panics_in_debug() {
@@ -1115,7 +1119,7 @@ mod tests {
     const LENT_COUNT: Field<Lent, i32> = field!(Lent, count);
     const LENT_NAME: Field<Lent, Option<Vec<u8>>> = field!(Lent, name);
 
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "while with_field lends it")]
     fn a_write_to_the_lent_field_panics_in_debug() {
@@ -1126,7 +1130,7 @@ mod tests {
         cell.with_at(LENT_NAME, |_| cell.set_at(LENT_NAME, None));
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "while with_field lends one of its fields")]
     fn a_whole_record_write_under_a_field_loan_panics_in_debug() {

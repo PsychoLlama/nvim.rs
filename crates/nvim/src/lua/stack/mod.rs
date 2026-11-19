@@ -121,6 +121,18 @@ use crate::lua::state::MAIN_REFS;
 use crate::os::libc::size_t;
 use crate::types::LuaRef;
 
+/// A check the soundness of a `Stack` operation rests on: an operation
+/// that consumes values off the top consumes values its view pushed.
+/// `assert!` under the `soundness_checks` cfg (debug builds, and release
+/// with the `soundness-checks` feature), nothing otherwise.
+macro_rules! soundness_check {
+    ($check:expr, $what:literal) => {
+        if cfg!(soundness_checks) {
+            assert!($check, $what);
+        }
+    };
+}
+
 mod debug;
 mod dispatch;
 mod table;
@@ -650,7 +662,7 @@ impl Stack {
 
     /// Concatenate the top `n` values into one string, as `..` does.
     pub fn concat(&mut self, n: c_int) {
-        debug_assert!(self.depth() >= n, "consumes a slot below the base");
+        soundness_check!(self.depth() >= n, "consumes a slot below the base");
         unsafe { lua_concat(self.l(), n) };
     }
 
@@ -663,32 +675,32 @@ impl Stack {
 
     /// Pop a value into `table[key]` for the table at `at`.
     pub fn set_field(&mut self, at: At, key: &CStr) {
-        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
+        soundness_check!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_setfield(self.l(), at.0, key.as_ptr()) };
     }
 
     /// Pop a key and push `table[key]`, metamethods included.
     pub fn get_table(&mut self, at: At) {
-        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
+        soundness_check!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_gettable(self.l(), at.0) };
     }
 
     /// Pop a value and a key and set `table[key] = value`, metamethods
     /// included.
     pub fn set_table(&mut self, at: At) {
-        debug_assert!(self.depth() >= 2, "consumes a slot below the base");
+        soundness_check!(self.depth() >= 2, "consumes a slot below the base");
         unsafe { lua_settable(self.l(), at.0) };
     }
 
     /// [`Stack::get_table`] without metamethods.
     pub fn raw_get(&mut self, at: At) {
-        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
+        soundness_check!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_rawget(self.l(), at.0) };
     }
 
     /// [`Stack::set_table`] without metamethods.
     pub fn raw_set(&mut self, at: At) {
-        debug_assert!(self.depth() >= 2, "consumes a slot below the base");
+        soundness_check!(self.depth() >= 2, "consumes a slot below the base");
         unsafe { lua_rawset(self.l(), at.0) };
     }
 
@@ -699,7 +711,7 @@ impl Stack {
 
     /// Pop a value into `table[n]`, without metamethods.
     pub fn raw_set_index(&mut self, at: At, n: c_int) {
-        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
+        soundness_check!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_rawseti(self.l(), at.0, n) };
     }
 
@@ -711,7 +723,7 @@ impl Stack {
 
     /// Pop a table and make it the metatable of the value at `at`.
     pub fn set_metatable(&mut self, at: At) {
-        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
+        soundness_check!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_setmetatable(self.l(), at.0) };
     }
 
@@ -722,7 +734,7 @@ impl Stack {
     /// The key left below the value is what the next step pops, so it must
     /// not be converted in place in between — [`Stack::string`] never does.
     pub fn next(&mut self, at: At) -> bool {
-        debug_assert!(self.depth() >= 1, "consumes a slot below the base");
+        soundness_check!(self.depth() >= 1, "consumes a slot below the base");
         unsafe { lua_next(self.l(), at.0) != 0 }
     }
 
