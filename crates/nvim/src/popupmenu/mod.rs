@@ -377,12 +377,11 @@ pub fn pum_display(
         }
     }
 
-    let mut grid = pum_grid_ref();
-    grid.zindex = if STATE.get() & MODE_CMDLINE != 0 {
+    pum_grid_ref().set_zindex(if STATE.get() & MODE_CMDLINE != 0 {
         Z_INDEX_CMDLINE_POPUP_MENU
     } else {
         Z_INDEX_POPUP_MENU
-    };
+    });
     pum_redraw();
 }
 
@@ -392,7 +391,7 @@ pub fn pum_display(
 /// reached from there while it is being drawn on, so it is named rather than
 /// borrowed -- see [`GridRef`] for why that matters.
 pub(crate) fn pum_grid_ref() -> GridRef {
-    GridRef::of_cell(&PUM_GRID)
+    PUM_GRID.grid()
 }
 
 /// Take the menu down.
@@ -415,7 +414,7 @@ pub fn pum_undisplay(immediate: bool) {
 /// Split from [`pum_undisplay`] because the menu is taken down in the middle
 /// of a redraw, where the grid may not be freed yet.
 pub fn pum_check_clear() {
-    let mut grid = pum_grid_ref();
+    let grid = pum_grid_ref();
     if PUM_IS_VISIBLE.get() || !PUM_IS_DRAWN.get() {
         return;
     }
@@ -553,7 +552,7 @@ fn pum_send_float_pos() {
 /// Re-send the menu's float position if the compositor moved it since the
 /// last redraw.
 pub fn pum_ui_flush() {
-    let mut grid = pum_grid_ref();
+    let grid = pum_grid_ref();
     if ui_has(UI_MULTIGRID)
         && PUM_IS_DRAWN.get()
         && !PUM_EXTERNAL.get()
@@ -561,6 +560,6 @@ pub fn pum_ui_flush() {
         && grid.pending_comp_index_update
     {
         pum_send_float_pos();
-        grid.pending_comp_index_update = false;
+        grid.set_pending_comp_index_update(false);
     }
 }

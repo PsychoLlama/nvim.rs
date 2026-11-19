@@ -1048,7 +1048,6 @@ CELL_PTR_ALLOW_RE = re.compile(
 # as `cell_ptr_keepers`. Without this list each would trip the accessor cap;
 # see "the cell_ptr partition" in the doc block for why the cap is kept.
 CELL_PTR_KEEPERS = {
-    "cell": "not one cell — a local bound from an option slot (S3) or a grid (S13)",
     "CELL": "`GlobalCell`'s own tests of `ptr`/`as_raw`; they must call them",
 }
 # Every `.ptr()`/`.as_raw()` site with its receiver, for the partition. The
@@ -5035,7 +5034,7 @@ SELF_TEST_CELL_PTR_PARTITION = [
     (
         {
             "a.rs": "fn f() {\n    MAIN_LOOP.ptr();\n    curwin.ptr();\n}\n",
-            "b.rs": "fn g() {\n    cell.ptr();\n    cell.ptr();\n"
+            "b.rs": "fn g() {\n    CELL.ptr();\n    CELL.ptr();\n"
             "    curbuf.ptr();\n    self.0.ptr();\n}\n",
         },
         {"cell_ptr_keepers": 2, "cell_ptr_accessors": 3},
@@ -5058,7 +5057,7 @@ SELF_TEST_CELL_PTR_CHECK = [
     # A listed name may hold as many as its ruling allows.
     ({"a.rs": "fn f() {\n    MAIN_LOOP.ptr();\n    MAIN_LOOP.ptr();\n}\n"}, False),
     (
-        {"a.rs": "fn f() {\n    cell.ptr();\n    cell.ptr();\n}\n"},
+        {"a.rs": "fn f() {\n    CELL.ptr();\n    CELL.ptr();\n}\n"},
         False,
     ),
 ]

@@ -221,20 +221,20 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
     let valid = (ROWS.get() - scrollsize).max(0);
 
     // The part of the message grid that is not displayed is invalid.
-    let mut mg = msg_grid_ref();
+    let mg = msg_grid_ref();
     if mg.is_allocated() {
         for i in 0..scrollsize.min(mg.rows) {
             let (off, cols) = (mg.row_start(i), mg.cols);
             mg.clear_line(off, cols, OptInt::from(i) < p_ch());
         }
     }
-    mg.throttled = false;
+    mg.set_throttled(false);
 
     let mut was_invalidated = false;
     // UPD_CLEAR is already handled by the caller.
     if redr_type == UPD_NOT_VALID && !ui_has(UI_MULTIGRID) && MSG_SCROLLED.get() != 0 {
         was_invalidated = ui_comp_set_screen_valid(false);
-        let mut dg = default_grid_ref();
+        let dg = default_grid_ref();
         let mut row = valid;
         while OptInt::from(row) < OptInt::from(ROWS.get()) - p_ch() {
             let off = dg.row_start(row);
@@ -643,8 +643,9 @@ pub fn setcursor_mayforce(window: Win, force: bool) {
         col = window.w_view_width - window.w_wcol - cells;
     }
 
-    let grid = grid_adjust(window.w_grid, &mut row, &mut col);
-    if !grid.is_unresolved() {
+    // A window whose view is not resolved yet has no cursor to place.
+    if !window.w_grid.target.is_null() {
+        let grid = grid_adjust(window.w_grid, &mut row, &mut col);
         ui_grid_cursor_goto(grid.handle, row, col);
     }
 }

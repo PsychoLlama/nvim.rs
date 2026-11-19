@@ -67,7 +67,7 @@ use crate::ui::{
     ui_line,
 };
 pub use crate::winlayer::GridRef;
-pub(crate) use crate::winlayer::grid_of_view;
+pub(crate) use crate::winlayer::{GridCell, grid_of_view, try_grid_of_view};
 use crate::winlayer::{Win, windows};
 
 use core::ffi::{c_char, c_int};
@@ -95,7 +95,7 @@ pub(crate) use schar::{
     SCHAR_BUF_SIZE, SCharBuf, schar_bytes, schar_copy, schar_put_scratch, schar_text,
 };
 
-pub(crate) static DEFAULT_GRID: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
+pub(crate) static DEFAULT_GRID: GridCell = GridCell::new();
 
 /// `grid_put_linebuf` flag: 'rightleft' text.
 pub const SLF_RIGHTLEFT: c_int = 1;
@@ -112,7 +112,7 @@ pub(crate) const DEFAULT_GRID_HANDLE: Handle = Handle::new(1);
 /// compositor's stack and is reached from there while it is being drawn on,
 /// so it is named rather than borrowed. See the module docs.
 pub(crate) fn default_grid_ref() -> GridRef {
-    GridRef::of_cell(&DEFAULT_GRID)
+    DEFAULT_GRID.grid()
 }
 
 /// A view of the whole screen: a screen row already is a row of the screen
@@ -168,7 +168,7 @@ pub fn grid_getchar(
 /// line buffers as wide as the widest grid.
 ///
 /// See [`ScreenGrid::alloc`] for `copy` and `valid`.
-pub fn grid_alloc(grid: &mut ScreenGrid, rows: c_int, columns: c_int, copy: bool, valid: bool) {
+pub fn grid_alloc(grid: GridRef, rows: c_int, columns: c_int, copy: bool, valid: bool) {
     debug_assert!(rows >= 0 && columns >= 0, "rows >= 0 && columns >= 0");
     grid.alloc(rows, columns, copy, valid);
 
@@ -200,15 +200,10 @@ pub fn win_grid_alloc(mut window: Win) {
             || window.w_grid_alloc.rows != total_rows
             || window.w_grid_alloc.cols != total_cols)
     {
-        let copy = window.w_grid_alloc.valid;
-        grid_alloc(
-            &mut window.w_grid_alloc,
-            total_rows,
-            total_cols,
-            copy,
-            false,
-        );
-        window.w_grid_alloc.valid = true;
+        let grid = window.grid_alloc();
+        let copy = grid.valid;
+        grid_alloc(grid, total_rows, total_cols, copy, false);
+        grid.set_valid(true);
         if window.w_floating && window.w_config.border {
             window.w_redr_border = true;
         }
@@ -216,11 +211,11 @@ pub fn win_grid_alloc(mut window: Win) {
     } else if !want_allocation && has_allocation {
         // Single-grid mode: all rendering is redirected to default_grid
         // and only the window's size and offset are tracked.
-        window.w_grid_alloc.free();
-        window.w_grid_alloc.valid = false;
+        window.grid_alloc().free();
+        window.grid_alloc().set_valid(false);
         was_resized = true;
     } else if want_allocation && has_allocation && !window.w_grid_alloc.valid {
-        window.w_grid_alloc.revalidate();
+        window.grid_alloc().revalidate();
     }
 
     if want_allocation {
@@ -247,11 +242,11 @@ pub fn win_grid_alloc(mut window: Win) {
 }
 
 /// Give `grid` a handle if it has none. The grid need not be allocated.
-pub fn grid_assign_handle(grid: &mut ScreenGrid) {
+pub fn grid_assign_handle(grid: GridRef) {
     static LAST_GRID_HANDLE: GlobalCell<c_int> = GlobalCell::new(DEFAULT_GRID_HANDLE.get());
     if grid.handle == Handle::NONE {
         LAST_GRID_HANDLE.set(LAST_GRID_HANDLE.get() + 1);
-        grid.handle = Handle::new(LAST_GRID_HANDLE.get());
+        grid.set_handle(Handle::new(LAST_GRID_HANDLE.get()));
     }
 }
 
@@ -264,7 +259,7 @@ pub fn grid_assign_handle(grid: &mut ScreenGrid) {
 /// keeps that indirection; a partial-width one has to copy cells.
 ///
 pub fn grid_ins_lines(
-    mut grid: GridRef,
+    grid: GridRef,
     row: c_int,
     line_count: c_int,
     end: c_int,
@@ -325,7 +320,7 @@ pub fn grid_ins_lines(
 /// mirror of [`grid_ins_lines`].
 ///
 pub fn grid_del_lines(
-    mut grid: GridRef,
+    grid: GridRef,
     row: c_int,
     line_count: c_int,
     end: c_int,

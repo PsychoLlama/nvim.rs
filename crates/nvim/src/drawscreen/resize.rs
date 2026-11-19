@@ -46,7 +46,7 @@ pub fn default_grid_alloc() -> bool {
     }
     RESIZING.set(true);
 
-    let mut grid = default_grid_ref();
+    let grid = default_grid_ref();
     let unchanged = grid.is_allocated() && ROWS.get() == grid.rows && COLUMNS.get() == grid.cols;
     if unchanged || ROWS.get() == 0 || COLUMNS.get() == 0 {
         RESIZING.set(false);
@@ -56,7 +56,7 @@ pub fn default_grid_alloc() -> bool {
     // Allocates new arrays, moves the old lines across, clears the rest and
     // frees the old ones. On failure the arrays are left NULL rather than
     // at the old size, because the wrong size is a crash.
-    grid_alloc(&mut grid, ROWS.get(), COLUMNS.get(), true, true);
+    grid_alloc(grid, ROWS.get(), COLUMNS.get(), true, true);
 
     let columns = usize::try_from(COLUMNS.get()).unwrap_or(0);
     TAB_PAGE_CLICK_DEFS.with_mut(|line| {
@@ -66,9 +66,9 @@ pub fn default_grid_alloc() -> bool {
         }
     });
 
-    grid.comp_height = ROWS.get();
-    grid.comp_width = COLUMNS.get();
-    grid.handle = DEFAULT_GRID_HANDLE;
+    grid.set_comp_height(ROWS.get());
+    grid.set_comp_width(COLUMNS.get());
+    grid.set_handle(DEFAULT_GRID_HANDLE);
 
     RESIZING.set(false);
     true
@@ -82,7 +82,7 @@ pub fn screenclear() {
         return;
     }
 
-    let mut grid = default_grid_ref();
+    let grid = default_grid_ref();
     for row in 0..grid.rows {
         let (off, cols) = (grid.row_start(row), grid.cols);
         grid.clear_line(off, cols, true);

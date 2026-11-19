@@ -468,6 +468,71 @@ fn redraw_forced() -> bool {
         || RDB_FLAGS.get() & OPT_RDB_FLAG_NODELTA != 0
 }
 
+/// The grid half of [`grid_put_linebuf`]: where on the grid row the scratch
+/// line lands and how the rest of the row is cleared.
+#[derive(Debug)]
+pub(crate) struct LinePut {
+    /// The cell of the row the line's column 0 lands on.
+    off: size_t,
+    /// How many cells of the row from `off` the line may touch.
+    width: size_t,
+    col: c_int,
+    endcol: c_int,
+    clear_start: c_int,
+    clear_width: c_int,
+    clear_attr: c_int,
+    flags: c_int,
+    last_vcol: ColNr,
+}
+
+/// What [`ScreenGrid::put_line_cells`] wrote.
+#[derive(Debug)]
+pub(crate) struct LinePutResult {
+    copied: Copied,
+    /// One past the last column written, the orphan blanked included.
+    end_dirty: c_int,
+    cleared: Dirty,
+}
+
+impl ScreenGrid {
+    /// Copy the changed cells of `line` onto the row and clear the rest, as
+    /// [`LinePut`] places them. Touches this grid and `line` only: it is
+    /// one of the writers a `GridRef` forwards.
+    pub(crate) fn put_line_cells(&mut self, line: &LineBuf, put: &LinePut) -> LinePutResult {
+        let mut on_grid = self.cells_mut(put.off, put.width);
+        let copied = copy_changed_cells(line, &mut on_grid, put.col, put.endcol);
+        let mut end_dirty = copied.dirty.end;
+
+        if copied.clear_next {
+            // Clear the second half of a double-width character whose left
+            // half was overwritten with a single-width one.
+            on_grid.chars[as_index(copied.col)] = schar_from_ascii(b' ');
+            end_dirty += 1;
+        }
+
+        // Clearing the left half of a double-width char clears the right
+        // too.
+        let mut clear_width = put.clear_width;
+        if as_index(clear_width) < put.width && on_grid.chars[as_index(clear_width)] == 0 {
+            clear_width += 1;
+        }
+
+        let cleared = clear_rest_of_line(
+            &mut on_grid,
+            put.clear_start,
+            clear_width,
+            put.clear_attr,
+            put.flags,
+            put.last_vcol,
+        );
+        LinePutResult {
+            copied,
+            end_dirty,
+            cleared,
+        }
+    }
+}
+
 /// What [`copy_changed_cells`] wrote.
 #[derive(Debug)]
 struct Copied {
@@ -642,7 +707,7 @@ fn clear_rest_of_line(
 /// `row` must be within `grid` and the scratch buffers must hold the line;
 /// a row or column outside them panics rather than writing past the grid.
 pub fn grid_put_linebuf(
-    mut grid: GridRef,
+    grid: GridRef,
     row: c_int,
     coloff: c_int,
     span: LineSpan,
@@ -710,31 +775,22 @@ pub fn grid_put_linebuf(
             }
         }
 
-        let mut on_grid = grid.cells_mut(off_to, span_width);
-        let copied = copy_changed_cells(line, &mut on_grid, col, endcol);
-        let mut end_dirty = copied.dirty.end;
-
-        if copied.clear_next {
-            // Clear the second half of a double-width character whose left
-            // half was overwritten with a single-width one.
-            on_grid.chars[as_index(copied.col)] = schar_from_ascii(b' ');
-            end_dirty += 1;
-        }
-
-        // Clearing the left half of a double-width char clears the right
-        // too.
-        if as_index(clear_width) < span_width && on_grid.chars[as_index(clear_width)] == 0 {
-            clear_width += 1;
-        }
-
-        let cleared = clear_rest_of_line(
-            &mut on_grid,
+        let put = LinePut {
+            off: off_to,
+            width: span_width,
+            col,
+            endcol,
             clear_start,
             clear_width,
             clear_attr,
             flags,
             last_vcol,
-        );
+        };
+        let LinePutResult {
+            copied,
+            end_dirty,
+            cleared,
+        } = grid.put_line_cells(line, &put);
         (copied, end_dirty, cleared)
     });
     let mut start_dirty = copied.dirty.start;

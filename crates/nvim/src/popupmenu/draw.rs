@@ -637,7 +637,7 @@ fn pum_draw_row(style: &RowStyle, items: &[PumItem], i: c_int, grid_row: c_int) 
 
 /// Redraw the popup menu, using `PUM_FIRST` and `PUM_SELECTED`.
 pub fn pum_redraw() {
-    let mut grid = pum_grid_ref();
+    let grid = pum_grid_ref();
     let win = Win::current();
 
     // Room for one padding cell beside the text, when there is any.
@@ -673,8 +673,8 @@ pub fn pum_redraw() {
         }
     }
 
-    grid.blending = p_pb() > 0 || config.shadow;
-    grid_assign_handle(&mut grid);
+    grid.set_blending(p_pb() > 0 || config.shadow);
+    grid_assign_handle(grid);
 
     PUM_LEFT_COL.set(PUM_COL.get() - col_off);
     PUM_RIGHT_COL.set(PUM_LEFT_COL.get() + grid_width);
@@ -693,7 +693,7 @@ pub fn pum_redraw() {
 
     let (rows, cols) = (PUM_HEIGHT.get() + border.width, grid_width + border.width);
     if !grid.is_allocated() || grid.rows != rows || grid.cols != cols {
-        grid_alloc(&mut grid, rows, cols, !invalid_grid, false);
+        grid_alloc(grid, rows, cols, !invalid_grid, false);
         ui_call_grid_resize(
             Integer::from(grid.handle),
             Integer::from(grid.cols),

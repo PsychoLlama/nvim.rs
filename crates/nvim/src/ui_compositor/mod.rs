@@ -176,17 +176,17 @@ pub fn ui_comp_should_draw() -> bool {
 /// line with `zindex`.
 pub fn ui_comp_layers_adjust(mut layer_idx: usize, raise: bool) {
     let size = layer_count();
-    let mut layer = layer_at(layer_idx);
+    let layer = layer_at(layer_idx);
     if raise {
         while layer_idx < size - 1 && layer.zindex > layer_at(layer_idx + 1).zindex {
-            let mut above = layer_at(layer_idx + 1);
+            let above = layer_at(layer_idx + 1);
             LAYERS.with_mut(|stack| stack[layer_idx] = above);
             above.set_comp_index(layer_idx);
             layer_idx += 1;
         }
     } else {
         while layer_idx > 0 && layer.zindex < layer_at(layer_idx - 1).zindex {
-            let mut below = layer_at(layer_idx - 1);
+            let below = layer_at(layer_idx - 1);
             LAYERS.with_mut(|stack| stack[layer_idx] = below);
             below.set_comp_index(layer_idx);
             layer_idx -= 1;
@@ -207,9 +207,8 @@ pub fn ui_comp_put_grid(
     valid: bool,
     on_top: bool,
 ) -> bool {
-    let mut grid = grid;
     let moved;
-    grid.pending_comp_index_update = true;
+    grid.set_pending_comp_index_update(true);
 
     if grid.comp_index != 0 {
         moved = row != grid.comp_row || col != grid.comp_col;
@@ -219,7 +218,7 @@ pub fn ui_comp_put_grid(
             let (old_row, old_col) = (grid.comp_row, grid.comp_col);
             let (old_bot, old_right) = (old_row + grid.comp_height, old_col + grid.comp_width);
             let (top, bot) = (row.max(old_row), (row + height).min(old_bot));
-            grid.comp_disabled = true;
+            grid.set_comp_disabled(true);
             compose_area(old_row, row, old_col, old_right);
             if old_col < col {
                 compose_area(top, bot, old_col, col);
@@ -228,10 +227,10 @@ pub fn ui_comp_put_grid(
                 compose_area(top, bot, col + width, old_right);
             }
             compose_area(row + height, old_bot, old_col, old_right);
-            grid.comp_disabled = false;
+            grid.set_comp_disabled(false);
         }
-        grid.comp_row = row;
-        grid.comp_col = col;
+        grid.set_comp_row(row);
+        grid.set_comp_col(col);
     } else {
         moved = true;
         // C guards this scan with `#ifndef NDEBUG`, and so does the port: a
@@ -267,14 +266,14 @@ pub fn ui_comp_put_grid(
             layer_at(i).set_comp_index(i);
         }
 
-        grid.comp_row = row;
-        grid.comp_col = col;
-        grid.comp_index = insert_at;
-        grid.pending_comp_index_update = true;
+        grid.set_comp_row(row);
+        grid.set_comp_col(col);
+        grid.set_comp_index(insert_at);
+        grid.set_pending_comp_index_update(true);
     }
 
-    grid.comp_height = height;
-    grid.comp_width = width;
+    grid.set_comp_height(height);
+    grid.set_comp_width(width);
     if moved && valid && ui_comp_should_draw() {
         compose_under(grid);
     }
@@ -283,7 +282,6 @@ pub fn ui_comp_put_grid(
 
 /// Take `grid` off the layer stack, if it is on it.
 pub fn ui_comp_remove_grid(grid: GridRef) {
-    let mut grid = grid;
     debug_assert!(!grid.same(default_layer()), "grid != &default_grid");
     if grid.comp_index == 0 {
         return; // The grid was not a layer.
@@ -299,8 +297,8 @@ pub fn ui_comp_remove_grid(grid: GridRef) {
     for i in removed_at..layer_count() {
         layer_at(i).set_comp_index(i);
     }
-    grid.comp_index = 0;
-    grid.pending_comp_index_update = true;
+    grid.set_comp_index(0);
+    grid.set_pending_comp_index_update(true);
 
     // Recompose the area the grid was covering. Inefficient when it was
     // itself overlapped: only the layers up to `comp_index` needed it.
@@ -320,10 +318,10 @@ pub fn ui_comp_set_grid(handle: Handle) -> bool {
 
 /// Moves `grid` up to `new_index`, sliding everything it passes down one,
 /// then recomposes each overlap it uncovered.
-fn raise_grid(mut grid: GridRef, new_index: usize) {
+fn raise_grid(grid: GridRef, new_index: usize) {
     let old_index = grid.comp_index;
     for i in old_index..new_index {
-        let mut above = layer_at(i + 1);
+        let above = layer_at(i + 1);
         LAYERS.with_mut(|stack| stack[i] = above);
         above.set_comp_index(i);
     }
@@ -723,9 +721,9 @@ pub fn ui_comp_msg_set_pos(
     _zindex: Integer,
     _compindex: Integer,
 ) {
-    let mut msg = msg_layer();
-    msg.pending_comp_index_update = true;
-    msg.comp_row = number_as_int(row);
+    let msg = msg_layer();
+    msg.set_pending_comp_index_update(true);
+    msg.set_comp_row(number_as_int(row));
     if scrolled && row > 0 {
         MSG_SEP_ROW.set(number_as_int(row) - 1);
         if !sep_char.data().is_null() {

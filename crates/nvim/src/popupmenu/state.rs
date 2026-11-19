@@ -14,7 +14,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::global_cell::GlobalCell;
-use crate::grid::defs::ScreenGrid;
+use crate::grid::GridCell;
 use core::ffi::c_int;
 
 #[derive(Copy, Clone, Debug)]
@@ -25,7 +25,7 @@ pub(crate) struct PumWant {
     pub finish: bool,
 }
 pub(crate) static MUST_REDRAW_PUM: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static PUM_GRID: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
+pub(crate) static PUM_GRID: GridCell = GridCell::new();
 pub(crate) static PUM_WANT: GlobalCell<PumWant> = GlobalCell::new(PumWant {
     active: false,
     item: 0,

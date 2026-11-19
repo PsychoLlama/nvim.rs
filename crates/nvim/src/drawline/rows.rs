@@ -268,7 +268,7 @@ impl Cells {
         if wrap {
             let mut current_row = wlv.row;
             let mut dummy_col = 0;
-            let mut current_grid = grid_adjust(grid, &mut current_row, &mut dummy_col);
+            let current_grid = grid_adjust(grid, &mut current_row, &mut dummy_col);
             // Force a redraw of the first column of the next line.
             let off = current_grid.row_start(current_row + 1);
             current_grid.set_attr(off, -1 as ScreenAttr);

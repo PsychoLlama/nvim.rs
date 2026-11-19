@@ -159,7 +159,7 @@ fn combine_stl_hlt(
 /// Called when nvim starts and on the first redraw after any `:highlight`.
 pub(crate) fn highlight_changed() {
     // `HLF_MSG`'s blend flag lives on the message grid; acquired once.
-    let mut msg_grid = msg_grid_ref();
+    let msg_grid = msg_grid_ref();
     NEED_HIGHLIGHT_CHANGED.set(false);
 
     // Sentinel: used when no highlight is active.
@@ -188,7 +188,7 @@ pub(crate) fn highlight_changed() {
         }
         if hlf == HLF_MSG {
             CLEAR_CMDLINE.set(true);
-            msg_grid.blending = syn_attr2entry(attr).hl_blend > -1;
+            msg_grid.set_blending(syn_attr2entry(attr).hl_blend > -1);
         }
         ui_call_hl_group_set(ApiString::from_cstr(name), Integer::from(attr));
         HIGHLIGHT_ATTR_LAST.with_mut(|last| last[as_index(hlf)] = attr);

@@ -45,7 +45,7 @@
 
 use super::{PROGRESS_TARGET_CMD, SB_CLEAR_NONE, ScrollbackClear};
 use crate::global_cell::{GlobalCell, state_record};
-use crate::grid::defs::ScreenGrid;
+use crate::grid::GridCell;
 use crate::memory::XString;
 use crate::options::{
     OPT_MOPT_FLAG_HISTORY, OPT_MOPT_FLAG_HIT_ENTER, OPT_MOPT_FLAG_PROGRESS, OptMoptFlags,
@@ -62,8 +62,8 @@ pub(crate) static LINE_MSG: &CStr = c" line ";
 pub(crate) static NO_LINES_MSG: &CStr = c"--No lines in buffer--";
 
 /// The message grid. Its own cell rather than a field of [`MsgState`]: the
-/// grid layer holds its address (`GridRef::of_cell`) across calls.
-pub(crate) static MSG_GRID: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
+/// grid layer holds its address (a `GridRef`) across calls.
+pub(crate) static MSG_GRID: GridCell = GridCell::new();
 
 state_record! {
     /// What the message machinery knows about the message area and the one

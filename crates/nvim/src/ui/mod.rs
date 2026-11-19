@@ -229,8 +229,8 @@ fn reaches(ui: &RemoteUI, reach: Reach) -> bool {
 }
 
 pub fn ui_init() {
-    let mut grid = default_grid_ref();
-    grid.handle = DEFAULT_GRID_HANDLE;
+    let grid = default_grid_ref();
+    grid.set_handle(DEFAULT_GRID_HANDLE);
     ui_comp_init();
 }
 

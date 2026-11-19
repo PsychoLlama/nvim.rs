@@ -199,9 +199,29 @@ gains a `Cell` or a raw pointer fails to build.
 `Deref`/`DerefMut` from a `Copy` value. Constructors are `unsafe` (or the
 registries, which check); every dereference after is safe and unchecked.
 Rows: the eight `Deref`/`DerefMut` pairs; `Win::syn_block`/`syn_block_mut`
-(may be the buffer's `b_s`); `GridRef::of_cell` (a cell's grid outside its
-tracker); `GridRef`'s null "unresolved" form; `memline::held_line` (a line's
-bytes for the life of a `&Buf`, i.e. a local).
+(may be the buffer's `b_s`); ~~`GridRef::of_cell` (a cell's grid outside its
+tracker)~~; ~~`GridRef`'s null "unresolved" form~~; `memline::held_line` (a
+line's bytes for the life of a `&Buf`, i.e. a local).
+
+- **Closed — `GridRef`'s write half (type holds it):** ~~`DerefMut`~~ is
+  gone. A write is one of the handle's in-place writers (`grid_writes!` in
+  `winlayer/grid.rs`): each runs one `ScreenGrid` method, or stores one
+  field, through a `&mut` made by a private `write` and dropped before it
+  returns, and a forwarded method touches only its grid (no handle, global
+  or user code). The one write that was a borrow of the cells across code
+  (`grid_put_linebuf`'s copy) is `ScreenGrid::put_line_cells`, forwarded
+  the same way. ~~`of_cell`~~: the three screen grids live in a `GridCell`,
+  which has no `with`/`with_mut` — the only way to the grid is a handle, so
+  there is no tracker loan to go around. ~~The null form~~: the handle is a
+  `NonNull`, and the one place a null could enter (a window's `w_grid`
+  before `win_grid_alloc`) is `try_grid_of_view`'s `None`;
+  `grid_of_view` panics on it (always on: one compare per view resolved).
+  The constructor is private: the three that make a handle are in its
+  module. scrbench (cgu1 release, cachegrind Ir): see p46-5's row in the
+  history below. **Left in this class:** `GridRef`'s `Deref` — a
+  `&ScreenGrid` held across a write through another copy (`let c =
+g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with the other
+  handles' `Deref`s.
 
 - **Breaks — aliasing:** two copies give two live `&mut`
   (`let c = &mut w1.w_cursor; w2.w_cursor.lnum = 1; c.col = 0`);
@@ -217,7 +237,7 @@ bytes for the life of a `&Buf`, i.e. a local).
   cannot carry it — it may be freed); a check-always that wants its own
   measurement. Aliasing: no `DerefMut` on a `Copy` type — reads by `&`
   through a checked handle, writes through a scoped, tracked `with_mut`
-  (S1's tracker keyed by object). Order: `GridRef` + `of_cell` (S), `Term`
+  (S1's tracker keyed by object). Order: ~~`GridRef` + `of_cell` (S)~~, `Term`
   (S), `syn_block_mut` (13 sites, S), `held_line` (the matcher's line
   cursor, M), `Live<T>` users (M), then `Win`/`Buf`/`TabPage` (XL; 553 files
   name them). **XL** overall.

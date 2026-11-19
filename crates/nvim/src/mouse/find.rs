@@ -102,7 +102,7 @@ pub(crate) fn find_win_outer(pos: &mut MousePos) -> Option<Win> {
 /// The `ext_multigrid` half: map a grid handle plus coordinates onto the
 /// window that drew them, rewriting `pos` for the grid it settled on.
 fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
-    if pos.grid == (MSG_GRID.with(|grid| grid.handle)).get() {
+    if pos.grid == MSG_GRID.grid().handle.get() {
         pos.row += MSG_GRID_POS.get();
         pos.grid = DEFAULT_GRID_HANDLE.get();
     } else if pos.grid > 1 {

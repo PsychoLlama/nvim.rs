@@ -412,7 +412,7 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     new_wp.set_handle(Handle::new(LAST_WIN_ID.get()));
     register_window(new_wp);
     new_wp.w_grid_alloc.mouse_enabled = true;
-    grid_assign_handle(&mut new_wp.w_grid_alloc);
+    grid_assign_handle(new_wp.grid_alloc());
     // The window's `w:` scope.
     new_wp.w_winvar = new_var_scope(VAR_SCOPE);
     block_autocmds();

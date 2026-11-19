@@ -250,8 +250,8 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
         PUM_IS_VISIBLE.set(true);
         PUM_IS_DRAWN.set(true);
         // Above the cmdline area: #23275.
-        let mut grid = pum_grid_ref();
-        grid.zindex = Z_INDEX_CMDLINE_POPUP_MENU;
+        let grid = pum_grid_ref();
+        grid.set_zindex(Z_INDEX_CMDLINE_POPUP_MENU);
         pum_redraw();
         setcursor_mayforce(Win::current(), true);
         let c = vgetc();

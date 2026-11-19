@@ -273,7 +273,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 - **What:** `Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, `Live<T>`, the
   screen grid handle `GridRef` and the terminal handle `Term` — each a
   `Copy` value over one pointer (`winlayer.rs` 22, `graph.rs` 17, `live.rs`
-  5, `grid.rs` 4, `terminal.rs` 3). Building one from an address is the
+  5, `grid.rs` 2, `terminal.rs` 3). Building one from an address is the
   unsafe step; dereferencing it is not. `curwin`/`CURBUF`/`CURTAB` are cells
   holding a raw pointer (`curwin` is a C symbol a functional spec reads).
 - **Contract:** the constructor's caller promises the object is live for as
@@ -358,8 +358,9 @@ not taken, or a fix listed for later.
 - **The handle borrow model** (`winlayer`): a `Copy` handle lends `&`/`&mut`
   into an object the type system cannot tie it to — `Buf::header`/
   `header_mut` (an undo header through the buffer), `Win::syn_block`/
-  `syn_block_mut` (which may be the buffer's own block), `GridRef` (the
-  compositor reads a grid while it is drawn). Two copies of one handle can
+  `syn_block_mut` (which may be the buffer's own block), `GridRef`'s
+  `Deref` (the compositor reads a grid while it is drawn; its writes are
+  in-place writers that lend no `&mut`). Two copies of one handle can
   produce overlapping borrows; the rule is that no borrow is held across an
   access through another handle or across user code.
 - **`TypVal::named_for_call`** (`eval/typval/handle.rs`): a function's `a:`
