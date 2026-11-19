@@ -10,7 +10,7 @@ not count as calls), an `#[inline]` method of a trait impl for a `pub` type,
 or the cell itself being `pub` and reachable.
 
 `just state-exports` reads a release binary and fails on any
-`GlobalCell`/`SharedCell` static that is exported and not listed here, and on
+`GlobalCell`/`RawStatic` static that is exported and not listed here, and on
 any row here whose cell is local now or gone. The list only shrinks: when a
 module is finished its rows go, and a row never comes back. The state
 records, the option table and the hot cells the script names are not

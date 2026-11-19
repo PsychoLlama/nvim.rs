@@ -18,6 +18,7 @@
 
 use core::ffi::{CStr, c_int};
 use std::io::Write;
+use std::sync::atomic::Ordering;
 
 use super::{
     BUILTIN_MODULES, call, in_fast_event, nlua_pcall, rpcnotify, rpcrequest, schedule, until_nul,
@@ -175,7 +176,10 @@ pub(crate) fn init_packages(stack: &mut Stack, is_standalone: bool) -> bool {
         stack.push_integer(index);
         stack.push_closure(preloader, 1);
         stack.set_field(At::from_top(2), def.name);
-        if NLUA_DISABLE_PRELOAD.get() && !is_standalone && def.name == FIRST_DEV_MODULE {
+        if NLUA_DISABLE_PRELOAD.load(Ordering::Relaxed)
+            && !is_standalone
+            && def.name == FIRST_DEV_MODULE
+        {
             break;
         }
     }

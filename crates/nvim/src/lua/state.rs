@@ -14,10 +14,11 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::global_cell::{GlobalCell, SharedCell};
+use crate::global_cell::GlobalCell;
 use crate::lua::executor::NluaRefState;
 use crate::lua::ffi::LUA_NOREF;
 use crate::os::libc::uint64_t;
+use std::sync::atomic::AtomicBool;
 
 /// The main state's reference bookkeeping: how many references it holds
 /// (what the leak checks read), and the `vim.NIL` and `vim.empty_dict()`
@@ -27,5 +28,7 @@ pub(crate) static MAIN_REFS: GlobalCell<NluaRefState> = GlobalCell::new(NluaRefS
     empty_dict_ref: LUA_NOREF,
     ref_count: 0,
 });
-pub(crate) static NLUA_DISABLE_PRELOAD: SharedCell<bool> = SharedCell::new(false);
+/// `--luamod-dev`: the `vim` dev modules are not preloaded, so they load
+/// from the runtime path.
+pub(crate) static NLUA_DISABLE_PRELOAD: AtomicBool = AtomicBool::new(false);
 pub(crate) static TSLUA_QUERY_PARSE_COUNT: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);

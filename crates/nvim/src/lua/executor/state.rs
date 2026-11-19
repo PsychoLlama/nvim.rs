@@ -26,6 +26,8 @@ use core::ffi::c_int;
 use core::ptr::NonNull;
 use std::ffi::CString;
 use std::io::Write;
+use std::sync::OnceLock;
+use std::sync::atomic::Ordering;
 
 use super::{
     IN_SCRIPT, REQUIRE_REF, VIM_FUNCTIONS, add_common, init_packages, install_luv, nlua_exec_file,
@@ -33,7 +35,7 @@ use super::{
 };
 use crate::event::libuv::{uv_thread_equal, uv_thread_self};
 use crate::event::uv::uv_thread_t;
-use crate::global_cell::{GlobalCell, SharedCell};
+use crate::global_cell::GlobalCell;
 use crate::guard::Restore;
 use crate::lua::abi::lua_State;
 use crate::lua::converter::binding::add_api_functions;
@@ -68,7 +70,7 @@ static ACTIVE_STATE: GlobalCell<Option<NonNull<lua_State>>> = GlobalCell::new(No
 
 /// The thread `nlua_init` ran on: the only one allowed to rebuild the
 /// runtime search path.
-static MAIN_THREAD: SharedCell<uv_thread_t> = SharedCell::new(0);
+static MAIN_THREAD: OnceLock<uv_thread_t> = OnceLock::new();
 
 /// Run `body` over a view of the main state's running frame that owns
 /// nothing yet.
@@ -246,7 +248,8 @@ pub fn nlua_init(argv: &[CString], lua_arg0: c_int) {
         unsafe { luv_set_thread_cb(Some(nlua_thread_acquire_vm), Some(nlua_common_free_all_mem)) };
 
         // SAFETY: libuv's thread id of the caller, which needs nothing.
-        MAIN_THREAD.set(unsafe { uv_thread_self() });
+        // The first call wins; `nlua_init` runs once per process.
+        let _ = MAIN_THREAD.set(unsafe { uv_thread_self() });
         init_argv(stack, argv, lua_arg0);
     })
 }
@@ -256,7 +259,7 @@ pub fn nlua_init(argv: &[CString], lua_arg0: c_int) {
 ///
 /// Once, from `main()`, instead of [`nlua_init`].
 pub fn nlua_run_script(argv: &[CString], lua_arg0: c_int) -> ! {
-    IN_SCRIPT.set(true);
+    IN_SCRIPT.store(true, Ordering::Relaxed);
     let lstate = nlua_init_state(false);
     let lstate = NonNull::new(lstate).expect("a script's state");
     adopt_main(lstate);
@@ -276,11 +279,12 @@ pub fn nlua_run_script(argv: &[CString], lua_arg0: c_int) -> ! {
 pub(crate) fn nlua_init_state(thread: bool) -> *mut lua_State {
     // The runtime path is shared, so only the main thread may rebuild it.
     // SAFETY: libuv's id of the calling thread, and two ids compared.
-    let on_main_thread = unsafe {
+    // Before `nlua_init` names the main thread, no thread is it.
+    let on_main_thread = MAIN_THREAD.get().is_some_and(|main| unsafe {
         let this_thread: uv_thread_t = uv_thread_self();
-        uv_thread_equal(MAIN_THREAD.ptr(), &raw const this_thread) != 0
-    };
-    if !IN_SCRIPT.get() && on_main_thread {
+        uv_thread_equal(main, &raw const this_thread) != 0
+    });
+    if !IN_SCRIPT.load(Ordering::Relaxed) && on_main_thread {
         runtime_search_path_validate();
     }
 
@@ -291,7 +295,7 @@ pub(crate) fn nlua_init_state(thread: bool) -> *mut lua_State {
     // SAFETY: the state just made, on the thread it belongs to, used by
     // nothing else until this returns it.
     let mut stack = unsafe { Stack::from_raw(lstate.as_ptr()) };
-    if !IN_SCRIPT.get() {
+    if !IN_SCRIPT.load(Ordering::Relaxed) {
         stack.push_function(super::print_function());
         stack.set_global(c"print");
     }
@@ -301,16 +305,16 @@ pub(crate) fn nlua_init_state(thread: bool) -> *mut lua_State {
     stack.new_table(0, 0);
     add_common(&mut stack, thread);
     // SAFETY: as above, with the `vim` table on top.
-    unsafe { install_luv(lstate.as_ptr(), thread, IN_SCRIPT.get()) };
+    unsafe { install_luv(lstate.as_ptr(), thread, IN_SCRIPT.load(Ordering::Relaxed)) };
     add_vendored(&mut stack);
-    if !IN_SCRIPT.get() {
+    if !IN_SCRIPT.load(Ordering::Relaxed) {
         stack.new_table(0, 0);
         stack.register_functions(thread_api());
         stack.set_field(At::from_top(2), c"api");
     }
     stack.set_global(c"vim");
 
-    init_packages(&mut stack, IN_SCRIPT.get());
+    init_packages(&mut stack, IN_SCRIPT.load(Ordering::Relaxed));
 
     // package.loaded.vim = vim
     stack.get_global(c"package");

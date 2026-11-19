@@ -1117,7 +1117,7 @@ impl<'w> Emitter<'w> {
                 {
                     return Some(CTy::Named { name, konst: false });
                 }
-                if name == "GlobalCell" || name == "SharedCell" || name == "ManuallyDrop" {
+                if name == "GlobalCell" || name == "RawStatic" || name == "ManuallyDrop" {
                     // All three are `repr(transparent)` over the thing the C
                     // sees, and the last of them is how a typval says the
                     // compiler must not drop its payload.
@@ -1348,7 +1348,7 @@ impl<'w> Emitter<'w> {
             return false;
         };
         let name = seg.ident.to_string();
-        if matches!(name.as_str(), "GlobalCell" | "SharedCell" | "ManuallyDrop") {
+        if matches!(name.as_str(), "GlobalCell" | "RawStatic" | "ManuallyDrop") {
             if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
                 if let Some(syn::GenericArgument::Type(inner)) = ab.args.first() {
                     return self.names_unknown(inner);
@@ -1642,14 +1642,14 @@ fn main() {
         }
     }
     for s in &world.statics {
-        // GlobalCell/SharedCell wrap mutable editor state; a plain Rust
+        // GlobalCell/RawStatic wrap mutable editor state; a plain Rust
         // static is immutable, i.e. `const` on the C side.
         let cell = match &s.ty {
             syn::Type::Path(tp) => tp
                 .path
                 .segments
                 .last()
-                .is_some_and(|seg| seg.ident == "GlobalCell" || seg.ident == "SharedCell"),
+                .is_some_and(|seg| seg.ident == "GlobalCell" || seg.ident == "RawStatic"),
             _ => false,
         };
         match emitter.cty(&s.file, &s.ty) {

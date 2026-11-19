@@ -19,6 +19,7 @@
 
 use core::ffi::{CStr, c_int};
 use std::io::Write;
+use std::sync::atomic::Ordering;
 
 use super::{IN_FAST_CALLBACK, IN_SCRIPT, LUA_ERRMEM, LUVF_CALLBACK_NOEXIT};
 use crate::event_queue::put_job_on_main_loop;
@@ -62,7 +63,7 @@ pub(crate) fn nlua_get_error(stack: &mut Stack) -> Option<&[u8]> {
 /// stderr.
 pub fn nlua_error(stack: &mut Stack, template: &'static CStr) {
     let text = nlua_get_error(stack);
-    if IN_SCRIPT.get() {
+    if IN_SCRIPT.load(Ordering::Relaxed) {
         // `fprintf(stderr, template, len, text)`: the bytes as they are,
         // `%.*s` stopping at a NUL, and a null string printing as nothing
         // at the zero precision it comes with.

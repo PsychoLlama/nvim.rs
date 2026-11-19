@@ -34,12 +34,13 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use crate::global_cell::{GlobalCell, SharedCell};
+use crate::global_cell::GlobalCell;
 use crate::mbyte::Codepoint;
 use crate::memory::alloc_log::AllocEvent;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_ulong, c_void};
 use core::{ptr, slice};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::memfile::mf_release_all;
 use crate::message::E_OUTOFMEM;
@@ -61,15 +62,14 @@ use ::libc::{calloc, free, malloc, realloc};
 /// across the call; the allocation paths that call it hold none. Main thread
 /// only: those are main-thread state.
 unsafe fn try_to_free_memory() {
-    static TRYING_TO_FREE: SharedCell<bool> = SharedCell::new(false);
-    if TRYING_TO_FREE.get() {
+    static TRYING_TO_FREE: AtomicBool = AtomicBool::new(false);
+    if TRYING_TO_FREE.swap(true, Ordering::Relaxed) {
         return;
     }
-    TRYING_TO_FREE.set(true);
     clear_sb_text(true);
     mf_release_all();
     free_reuse_blks();
-    TRYING_TO_FREE.set(false);
+    TRYING_TO_FREE.store(false, Ordering::Relaxed);
 }
 
 /// Report an allocation failure, once per process.

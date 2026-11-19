@@ -28,8 +28,9 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use core::ffi::c_int;
+use std::sync::atomic::AtomicBool;
 
-use crate::global_cell::{GlobalCell, SharedCell};
+use crate::global_cell::GlobalCell;
 use crate::lua::ffi::LUA_REFNIL;
 use crate::types::LuaRef;
 
@@ -88,7 +89,7 @@ static IN_FAST_CALLBACK: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Whether this process is `nvim -l`, with no editor at all: errors go to
 /// stderr and the runtime path is never rebuilt.
-static IN_SCRIPT: SharedCell<bool> = SharedCell::new(false);
+static IN_SCRIPT: AtomicBool = AtomicBool::new(false);
 
 /// The stock `require`, kept so `--startuptime`'s wrapper can delegate to it.
 static REQUIRE_REF: GlobalCell<LuaRef> = GlobalCell::new(LUA_REFNIL);

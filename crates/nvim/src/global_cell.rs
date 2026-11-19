@@ -577,50 +577,31 @@ impl<T> GlobalCell<T> {
     }
 }
 
-/// The rare global that worker threads touch by upstream design — the
-/// thread-local Lua states (`nlua_init_state` reads `IN_SCRIPT` /
-/// `MAIN_THREAD`) and the helpers exposed to `vim.uv.new_thread` threads
-/// (mpack/json/base64). Same raw-cell semantics as [`GlobalCell`] minus the
-/// debug main-thread assertion; cross-thread coordination remains the
-/// accessors' responsibility, exactly as it was in C. Every exemption is a
-/// deliberate, hand-reviewed downgrade — the mechanical conversion never
-/// emits this type.
+/// A static only ever reached through a raw pointer: the event loop, whose
+/// address libuv holds and whose every touch is a libuv call.
+///
+/// It lends nothing safe — no `get`, no `set`, no reference — so sharing
+/// it between threads shares an address and nothing else; whatever reads or
+/// writes through [`ptr`](Self::ptr) does so in its own `unsafe` and
+/// answers there for which thread it is on.
 #[repr(transparent)]
 #[derive(Debug)]
-pub struct SharedCell<T>(UnsafeCell<T>);
+pub struct RawStatic<T>(UnsafeCell<T>);
 
-// SAFETY: same (weak) claim the transpiled C made: concurrent access is
-// coordinated by usage (init-once before threads exist, or thread-owned
-// state indexed per thread).
-unsafe impl<T> Sync for SharedCell<T> {}
+// SAFETY: the only access is `ptr`, a raw pointer; dereferencing it is
+// `unsafe` at the caller, who carries the thread and aliasing obligations.
+// A static is never dropped, so `T: !Send` cannot be dropped on a stranger.
+unsafe impl<T> Sync for RawStatic<T> {}
 
-impl<T> SharedCell<T> {
+impl<T> RawStatic<T> {
     pub const fn new(value: T) -> Self {
-        SharedCell(UnsafeCell::new(value))
+        RawStatic(UnsafeCell::new(value))
     }
 
+    /// The value's address, for the life of the process.
     #[inline(always)]
-    pub fn ptr(&self) -> *mut T {
+    pub const fn ptr(&self) -> *mut T {
         self.0.get()
-    }
-
-    pub const fn as_raw(&self) -> *mut T {
-        self.0.get()
-    }
-
-    #[inline(always)]
-    pub fn get(&self) -> T
-    where
-        T: Copy,
-    {
-        // SAFETY: see the Sync impl; usage-coordinated like the C original.
-        unsafe { *self.0.get() }
-    }
-
-    #[inline(always)]
-    pub fn set(&self, value: T) {
-        // SAFETY: see the Sync impl; usage-coordinated like the C original.
-        unsafe { *self.0.get() = value }
     }
 }
 

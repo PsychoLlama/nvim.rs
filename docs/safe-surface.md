@@ -102,15 +102,19 @@ and the rest are callable from any thread.
   the caller (today a cross-crate call, 4 % of spellbench), measured with
   S1's slice. **S.**
 
-### S3 — `SharedCell<T>` (sound-by-convention)
+### ~~S3 — `SharedCell<T>`~~ (closed: type holds it)
 
 `Sync` for any `T`, safe `get`/`set` from any thread, by design: `IN_SCRIPT`,
-`MAIN_THREAD`, `NLUA_DISABLE_PRELOAD`, `TRYING_TO_FREE`, `MAIN_LOOP`.
+`MAIN_THREAD`, `NLUA_DISABLE_PRELOAD`, `TRYING_TO_FREE`, `MAIN_LOOP`. A Lua
+thread's state set-up reading `IN_SCRIPT` while the main thread wrote it
+was a data race in safe code.
 
-- **Breaks:** two threads `set`ting one (a Lua thread's state set-up
-  writing `IN_SCRIPT` while the main thread reads it).
-- **Closure:** type holds it — atomics for the four scalars, a pointer-only
-  cell (no safe `get`/`set`) for `MAIN_LOOP`, `SharedCell` deleted. **S.**
+`SharedCell` is deleted. The three flags are `AtomicBool`s
+(`TRYING_TO_FREE` a `swap`, so two threads out of memory at once cannot
+both enter); `MAIN_THREAD` is a `OnceLock<uv_thread_t>` (unset answers "not
+the main thread", as the zero id did); `MAIN_LOOP` is a `RawStatic<Loop>`,
+whose only method is `ptr()` — sharing it shares an address, and every
+dereference is the caller's `unsafe`.
 
 ### ~~S4 — `ConstTable<T>`~~ (closed: type holds it)
 

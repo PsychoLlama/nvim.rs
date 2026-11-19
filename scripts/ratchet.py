@@ -89,7 +89,7 @@ unmeasured, as they were when they lived at the repo root):
               uses.
 
   cell_ptr    raw escape-hatch accesses to global editor state:
-              GlobalCell/SharedCell `.ptr()` and `.as_raw()`. The cells
+              GlobalCell/RawStatic `.ptr()` and `.as_raw()`. The cells
               themselves are the safe replacement for c2rust's mutable
               statics, but `ptr()` hands back a bare `*mut T` and reinstates
               every obligation the cell exists to check — it was the
@@ -185,7 +185,7 @@ plus these whole-tree metrics, which are not per-file:
                     that also hold unrelated `.ptr()` sites, so a file-keyed
                     list would exempt those too. A rename cannot silently
                     widen CELL_PTR_ALLOW — `check_names` fails the run if a
-                    listed name no longer declares a GlobalCell/SharedCell
+                    listed name no longer declares a GlobalCell/RawStatic
                     static — and it cannot widen CELL_PTR_KEEPERS either,
                     because a renamed keeper's sites land in the accessor
                     class and trip the one-site cap.
@@ -1036,7 +1036,6 @@ CELL_PTR_ALLOW = {
     # has none today, and `cell_ptr` still counts it.
     "WATCHERS": "uv_signal_t array whose addresses are registered with uv",
     "REFRESH_TIMER": "TimeWatcher — a uv timer handle",
-    "MAIN_THREAD": "uv_thread_t, compared with uv_thread_equal",
     "TERMIOS_DEFAULT": "struct termios handed to tcsetattr",
 }
 # No whitespace is tolerated around the `.`, so that what this subtracts is
@@ -1111,11 +1110,11 @@ CELL_COPY_OWNER_RE = re.compile(
     r"\b(?:" + "|".join(map(re.escape, CELL_COPY_OWNER)) + r")\s*\.\s*get\(\)"
 )
 # What `check_names` demands of every name on either list: that somewhere in
-# the tree it still names a `static X: GlobalCell<..>`/`SharedCell<..>`. Any
+# the tree it still names a `static X: GlobalCell<..>`/`RawStatic<..>`. Any
 # visibility may precede `static`, and the static may sit inside a function
 # (`TERMIOS_DEFAULT` does), so only the two words either side of the name are
 # pinned.
-CELL_DECL = r"\bstatic\s+{}\s*:\s*(?:GlobalCell|SharedCell)\b"
+CELL_DECL = r"\bstatic\s+{}\s*:\s*(?:GlobalCell|RawStatic)\b"
 
 # The unsafe perimeter: the modules whose unchecked code is expected to
 # outlive the migration, because removing it would mean rewriting something
@@ -4332,7 +4331,7 @@ def check_names(tree):
     if missing:
         sys.exit(
             "ratchet: these names are on a cell allowlist but no longer "
-            "declare a GlobalCell/SharedCell static:\n  "
+            "declare a GlobalCell/RawStatic static:\n  "
             + "\n  ".join(missing)
             + "\nRename them in CELL_PTR_ALLOW/CELL_COPY_OWNER, or drop "
             "the entry (and lower the baseline) if "

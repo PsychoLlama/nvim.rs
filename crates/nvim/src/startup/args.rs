@@ -28,6 +28,7 @@ use crate::semsg;
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+use std::sync::atomic::Ordering;
 
 use crate::api::private::helpers::api_metadata_raw;
 use crate::arglist::{alist_add, arg_name};
@@ -277,7 +278,7 @@ impl<'a> Scan<'a> {
             self.parm.clean = true;
             set_opt(OPT_SHADAFILE, OptVal::from_cstr(c"NONE"));
         } else if self.tail_starts_with(c"luamod-dev") {
-            NLUA_DISABLE_PRELOAD.set(true);
+            NLUA_DISABLE_PRELOAD.store(true, Ordering::Relaxed);
         } else if self.has_tail() {
             mainerr(ERR_OPT_UNKNOWN, Some(self.arg()), None);
         } else {

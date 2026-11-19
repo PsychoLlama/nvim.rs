@@ -22,10 +22,10 @@ use crate::event::uv::{
     uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
     uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
 };
-use crate::global_cell::SharedCell;
+use crate::global_cell::RawStatic;
 use core::ffi::c_void;
 
-pub static MAIN_LOOP: SharedCell<Loop> = SharedCell::new(Loop {
+pub static MAIN_LOOP: RawStatic<Loop> = RawStatic::new(Loop {
     uv: uv_loop_t {
         data: ::core::ptr::null_mut::<c_void>(),
         active_handles: 0,

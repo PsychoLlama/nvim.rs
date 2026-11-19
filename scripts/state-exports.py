@@ -30,7 +30,7 @@ those too: every `static X: GlobalCell<T>` whose `T` is an `id_table::IdTable`
 or a struct holding one (an owner table every lookup by id goes through),
 found in the source the same way, and the hand-picked cells in `HOT`.
 
-Every other `GlobalCell`/`SharedCell` static is watched as well, against a
+Every other `GlobalCell`/`RawStatic` static is watched as well, against a
 shrink-only allowlist (docs/exported-cells.md, one row per exported cell,
 grouped under its owning module): a cell exported and not on the list fails,
 and so does a row whose cell is local now or gone from the binary -- the list
@@ -64,10 +64,10 @@ HOT = [
     ("Y_PREVIOUS", f"{CRATE}::register::Y_PREVIOUS"),
 ]
 
-# Every `GlobalCell`/`SharedCell` static, at any depth (a fn-local one is
+# Every `GlobalCell`/`RawStatic` static, at any depth (a fn-local one is
 # `module::fn::NAME` to `nm`), however its type is spelled or wrapped.
 ANY_CELL = re.compile(
-    r"\bstatic\s+(\w+)\s*:\s*(?:[\w:]*::)?(?:GlobalCell|SharedCell)\s*<"
+    r"\bstatic\s+(\w+)\s*:\s*(?:[\w:]*::)?(?:GlobalCell|RawStatic)\s*<"
 )
 # The allowlist, and one row of it: a heading per owning module, then
 # "- `neovim::path::NAME`" rows.
