@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Ratchet the clippy warning count: per-file counts may hold or shrink.
 
-Runs `cargo clippy --all-targets` and holds the tree to two rules:
+Runs `cargo clippy --all-targets`, once in the dev profile and once with
+`--release`, and holds the tree to two rules:
 
   errors    fail the run outright, always. Clippy ships its `correctness`
             group at deny — those are bugs, not style — so any hit (or any
@@ -30,7 +31,16 @@ could be counted. Regular builds keep enforcing it; this lane only decides
 lint levels through clippy's defaults plus Cargo.toml.
 
 Identical diagnostics are deduplicated across targets (the lib compiles
-once per target that links it), keyed by lint, primary span, and message.
+once per target that links it) and across the two profiles, keyed by lint,
+primary span, and message.
+
+The release pass exists because the profiles compile different code: the
+`soundness_checks` cfg (debug assertions, or the feature) gives types like
+`Edit` a `Drop` and fields the release build lacks, so a finding can live
+in one profile only (a `drop` of a then non-`Drop` value went unseen until
+a release clippy run). Both passes are check builds, so `--release` costs
+its own metadata pass (~50 s after an edit, against ~20 s for the
+dev pass), not an optimised compile.
 
 Usage: lint.py [--check] [--allow-growth]
   --check         compare against the committed baseline instead of
@@ -54,15 +64,23 @@ ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "metrics" / "clippy.json"
 
 CLIPPY = ["cargo", "clippy", "--all-targets", "--message-format=json"]
+PROFILES = ([], ["--release"])
 
 
 def run_clippy():
-    """(per-file warning Counter, rendered errors)."""
-    env = {**os.environ, "RUSTFLAGS": ""}
-    proc = subprocess.run(CLIPPY, cwd=ROOT, env=env, capture_output=True, text=True)
+    """(per-file warning Counter, rendered errors), over both profiles."""
     warnings = Counter()
     errors = []
     seen = set()
+    for profile in PROFILES:
+        run_profile(CLIPPY + profile, warnings, errors, seen)
+    return warnings, errors
+
+
+def run_profile(command, warnings, errors, seen):
+    """Fold one clippy run's diagnostics into the shared tallies."""
+    env = {**os.environ, "RUSTFLAGS": ""}
+    proc = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
     for line in proc.stdout.splitlines():
         try:
             record = json.loads(line)
@@ -95,8 +113,7 @@ def run_clippy():
     # over (broken build, bad flags) — surface that instead of counting.
     if proc.returncode != 0 and not errors:
         sys.stderr.write(proc.stderr)
-        sys.exit("lint: cargo clippy failed without emitting diagnostics")
-    return warnings, errors
+        sys.exit(f"lint: `{' '.join(command)}` failed without emitting diagnostics")
 
 
 def render(warnings):

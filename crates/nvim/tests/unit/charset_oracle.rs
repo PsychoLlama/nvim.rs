@@ -148,7 +148,7 @@ fn the_digit_readers() {
             let c = until_nul(&text[i..]);
             for strict in [false, true] {
                 let (n, used) = getdigits_at(c, 0, strict, -7);
-                d.add(n as i64);
+                d.add(n);
                 d.add((i + used) as i64);
                 // `getdigits_int` and its `int32_t` twin, one reader now.
                 for _ in 0..2 {

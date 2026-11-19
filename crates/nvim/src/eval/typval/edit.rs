@@ -157,9 +157,12 @@ mod tests {
         let other = list.clone();
         list.edit().lv_lock = VarLock::Locked;
         other.edit().lv_lock = VarLock::Unlocked;
-        let mut first = other.edit().map(|l| &mut l.lv_items[0]);
-        first.li_lock = VarLock::Locked;
-        drop(first);
+        {
+            // A scope, not `drop`: without the checks an `Edit` has no
+            // `Drop`, and clippy refuses a `drop` of one.
+            let mut first = other.edit().map(|l| &mut l.lv_items[0]);
+            first.li_lock = VarLock::Locked;
+        }
         assert_eq!(list.edit().lv_items[0].li_lock, VarLock::Locked);
     }
 }

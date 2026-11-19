@@ -154,10 +154,11 @@ fn timer_due_cb(id: uint64_t) {
     // A zero timeout does not repeat by itself; it is re-armed here so
     // that it yields to the event loop between runs.
     with_timer(number, |timer| {
-        if !timer.stopped && timer.timeout == 0 {
-            if let Some(watcher) = &mut timer.watcher {
-                watcher.start(timer_due_cb, 0, 0);
-            }
+        if !timer.stopped
+            && timer.timeout == 0
+            && let Some(watcher) = &mut timer.watcher
+        {
+            watcher.start(timer_due_cb, 0, 0);
         }
     });
 }

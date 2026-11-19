@@ -183,7 +183,8 @@ lint-tools:
   @cargo clippy --quiet --all-targets --manifest-path tools/apigen/Cargo.toml -- -D warnings
   @cargo clippy --quiet --all-targets --manifest-path tools/ffigen/Cargo.toml -- -D warnings
 
-# Run clippy over every target and ratchet the warning count
+# Run clippy over every target, in the dev and the release profile (their
+# cfgs differ: `soundness_checks`), and ratchet the warning count
 # (metrics/clippy.json): per-file counts may only shrink, and deny-level
 # findings (the `correctness` group) fail the run outright. Lint levels live
 # in Cargo.toml's [lints.clippy]; the script clears RUSTFLAGS so the dev

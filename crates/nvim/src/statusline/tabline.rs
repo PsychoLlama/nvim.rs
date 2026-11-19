@@ -125,7 +125,7 @@ pub fn draw_tabline() {
             >= usize::try_from(COLUMNS.get()).unwrap_or(0),
         "tab_page_click_defs_size >= (size_t)Columns"
     );
-    with_tab_click_defs(|defs| clear_click_defs(defs));
+    with_tab_click_defs(clear_click_defs);
 
     if P_TAL.first_byte() != 0 {
         // Use the 'tabline' option instead.
