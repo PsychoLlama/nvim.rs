@@ -56,7 +56,7 @@ falls into four classes:
   [docs/unsafe-fn-allowlist.md](unsafe-fn-allowlist.md) (five rows today).
 - Checked builds add checks the release build compiles out: the main-thread
   and borrow checks of `GlobalCell`, the overlapping-edit check on Vimscript
-  values, the Lua stack's consuming-operation check. They are one cfg,
+  values. They are one cfg,
   `soundness_checks`, which `--features soundness-checks` turns on in a
   release build too. What the safe API over the unsafe code leaves to those
   checks, or to convention, is surveyed class by class in
@@ -117,8 +117,8 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 - **Contract:** a `Stack` is a view of a C function's frame rooted at a
   base slot. Dropping or moving a slot at or below the base aborts in every
   build. An operation that consumes values off the top (`set_field`,
-  `raw_set`, `next`, `concat`, …) consumes values this view pushed — **checked
-  in debug builds only** (see "Soundness by contract"). The `lua_State`
+  `raw_set`, `next`, `concat`, …) consumes values this view pushed — an
+  `assert!` in every build. The `lua_State`
   layout is read directly: LuaJIT is pinned by `nix/deps.json`, and
   `check_state_layout` aborts on every new state whose layout drifted. A Lua
   error (a C `longjmp`) is raised only after the Rust body has returned, so

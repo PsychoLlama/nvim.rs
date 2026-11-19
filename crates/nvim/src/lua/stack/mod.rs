@@ -123,13 +123,12 @@ use crate::types::LuaRef;
 
 /// A check the soundness of a `Stack` operation rests on: an operation
 /// that consumes values off the top consumes values its view pushed.
-/// `assert!` under the `soundness_checks` cfg (debug builds, and release
-/// with the `soundness-checks` feature), nothing otherwise.
+/// Always on, release included: one compare of `top - base` against a
+/// constant, +0.3 % to +0.7 % instructions on the Lua-heavy benches
+/// (docs/safe-surface.md, S7).
 macro_rules! soundness_check {
     ($check:expr, $what:literal) => {
-        if cfg!(soundness_checks) {
-            assert!($check, $what);
-        }
+        assert!($check, $what)
     };
 }
 

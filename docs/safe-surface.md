@@ -56,7 +56,7 @@ and the A/B benches (codegen-units = 1 both sides, one sitting, cachegrind):
   evalbench's parser phase (+4.5 G): `acquire`/`release` 2.0 G, idle
   0.7 G, the value handles' edit loans (`EditTable::lend`/`give_back`)
   0.29 G (+3 % of the plain phase). The Lua stack's checks are one inline
-  compare and do not show.
+  compare and do not show (they are always on now: S7).
 
 **Verdict.** The tracker _as built_ cannot be always-on. Its cost is the
 table, not the question: a borrow flag inline beside each cell's value
@@ -239,7 +239,7 @@ them.
   — `Deref` answers a tracked shared loan, or the walks take the handle and
   re-borrow per item. **M** + **L**.
 
-### S7 — the Lua stack's consuming operations (sound-by-debug-check)
+### ~~S7 — the Lua stack's consuming operations~~ (closed: check-always)
 
 `Stack::{concat, set_field, get_table, set_table, raw_get, raw_set,
 raw_set_index, set_metatable, next}`, `debug::function_info`,
@@ -249,10 +249,13 @@ its view pushed.
 - **Breaks:** an operation on a view that pushed too few values pops a slot
   of the view below it, or below the C frame's base — LuaJIT then reads and
   writes outside the frame.
-- **Closure:** check-always (one compare of `top - base`, measured
-  0.8–1.7 % on the Lua benches when this was last tried; re-measure inside
-  the evalbench run), or a pushed-count token the consuming operation takes.
-  **S.**
+- **Closed:** the compare of `top - base` is an `assert!` in every build
+  (`soundness_check!` in `lua/stack/mod.rs` no longer looks at the cfg).
+  Cost, release, codegen-units = 1, cachegrind Ir against the build without
+  it: evalbench +0.25 % (three runs a side, inside its 0.36 % run-to-run
+  spread; parser phase +0.00 %), markbench +0.68 %, rpcbench +0.31 %. A
+  pushed-count token would have threaded a value through every caller for
+  the same compare.
 
 ### S8 — event handles with `DerefMut` over pinned libuv objects (sound-by-convention, perimeter-internal)
 

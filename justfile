@@ -20,10 +20,10 @@ build-release:
   cargo build --release
 
 # A release binary that keeps the soundness checks debug builds carry
-# (`GlobalCell`'s borrow and thread tracking, the value handles' edit loans,
-# the Lua stack's consuming checks; docs/safe-surface.md), in its own target
-# dir: `target/checked/release/nvim`. The suites take it as asan's recipes
-# do: `NVIM_BIN=<it> NVIM_TEST_BUILD_DIR=target/checked/tree`.
+# (`GlobalCell`'s borrow and thread tracking, the value handles' edit loans;
+# docs/safe-surface.md), in its own target dir: `target/checked/release/nvim`.
+# The suites take it as asan's recipes do: `NVIM_BIN=<it>
+# NVIM_TEST_BUILD_DIR=target/checked/tree`.
 build-checked:
   cargo build --release --features soundness-checks --target-dir target/checked
 
