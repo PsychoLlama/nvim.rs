@@ -150,11 +150,11 @@ const M_ONLYONE: &::core::ffi::CStr = c"Already only one window";
 static SPLIT_DISALLOWED: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static CLOSE_DISALLOWED: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static FRAME_LOCKED: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-pub fn window_layout_lock() {
+pub(crate) fn window_layout_lock() {
     window_lock();
 }
 
-pub fn window_layout_unlock() {
+pub(crate) fn window_layout_unlock() {
     window_unlock();
 }
 

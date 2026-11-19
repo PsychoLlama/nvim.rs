@@ -29,18 +29,6 @@ binary as well as the default one.
 
 - `neovim::buffer::TOP_FILE_NUM`
 
-## `charset`
-
-- `neovim::charset::G_CHARTAB`
-
-## `cmdexpand`
-
-- `neovim::cmdexpand::CMDLINE_PUM`
-
-## `cmdhist`
-
-- `neovim::cmdhist::HISTORY`
-
 ## `diff`
 
 - `neovim::diff::DIFF_FLAGS`
@@ -63,15 +51,11 @@ binary as well as the default one.
 
 ## `getchar`
 
-- `neovim::getchar::READBUF1`
-- `neovim::getchar::READBUF2`
 - `neovim::getchar::typeahead::TYPEBUF`
 
 ## `grid`
 
-- `neovim::grid::DEFAULT_GRID`
 - `neovim::grid::grid_assign_handle::LAST_GRID_HANDLE`
-- `neovim::grid::line::BATCH`
 
 ## `guard`
 
@@ -91,10 +75,6 @@ binary as well as the default one.
 ## `lua`
 
 - `neovim::lua::executor::IN_FAST_CALLBACK`
-
-## `message`
-
-- `neovim::message::scrollback::SCROLLBACK`
 
 ## `option`
 
@@ -188,7 +168,6 @@ binary as well as the default one.
 - `neovim::ui::CURSOR_ROW`
 - `neovim::ui::PENDING_CURSOR_UPDATE`
 - `neovim::ui::PENDING_MODE_INFO_UPDATE`
-- `neovim::ui::UI_EXT`
 
 ## `ui_compositor`
 
