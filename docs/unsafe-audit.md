@@ -54,7 +54,7 @@ falls into four classes:
   must guarantee; the ratchet fails on one without. An `unsafe fn` whose
   signature shows no raw pointer needs a row in
   [docs/unsafe-fn-allowlist.md](unsafe-fn-allowlist.md) (five rows today).
-- Debug builds add checks the release build compiles out: the main-thread
+- Checked builds add checks the release build compiles out: the main-thread
   and borrow checks of `GlobalCell`, the overlapping-edit check on Vimscript
   values, the Lua stack's consuming-operation check. They are one cfg,
   `soundness_checks`, which `--features soundness-checks` turns on in a
@@ -257,10 +257,13 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   (13).
 - **Contract:** editor state is touched from the main thread only, and no
   reference handed out by `with`/`with_mut`/`with_field` overlaps another
-  access to the same cell. **Debug builds check both** — the thread on
-  every access, the borrows RefCell-style (a conflicting re-entry panics,
-  and `with_field` loans lock the field and the record); release builds
-  compile the checks out, which is why it is a contract. `ptr()`, the raw
+  access to the same cell. **Checked builds check both** — the thread on
+  every access, the borrows RefCell-style in a word beside the value (a
+  conflicting re-entry panics; a `with`/`with_field` loan is a node in the
+  borrower's frame, so a write checks only the loans open on its cell);
+  release builds compile the checks and the word out, which is why it is a
+  contract. The value comes first (`repr(C)`), so the exported cells keep
+  their C layout either way. `ptr()`, the raw
   escape hatch, is used only on the perimeter (22 sites: the globals libuv
   holds by address, and the cell's own tests).
 - **Retires:** never; it is the replacement.

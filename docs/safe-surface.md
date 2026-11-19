@@ -65,6 +65,70 @@ load of a line the access touches anyway. So S1/S2 are **check-always after a
 restructure of the tracker**, re-measured; S5/S6/S8 have no tracker to measure
 and are **restructure**.
 
+### The inline tracker, re-measured
+
+The table is gone. Each `GlobalCell` is `repr(C)`, value first, and a
+checked build adds one word after it: `FREE`, `EXCLUSIVE`, or a pointer to
+the innermost shared `Loan` — a `{start, end, outer}` node in the borrowing
+call's own frame, so `with` and `with_field` are the same mechanism and a
+field write walks only the loans open on its own cell. A conflict path is
+`#[cold]`; the emergency exits call `abandon_borrows()` (conflicts stop
+panicking for good) where they used to empty the table. The thread question
+is the `nvim-mainthread` thread-local byte, inlined in an optimised build.
+An unchecked build has no word and no checks: its instructions are the
+old release build's (−0.0 % to −1.0 %, from the hot-site changes below).
+
+Cost of the cell checks alone, on in a release build (codegen-units = 1,
+cachegrind, Ir against the unchecked build; the edit-loan and Lua-stack
+checks off):
+
+| bench      | shared table | inline: borrows + thread | inline: borrows only |
+| ---------- | -----------: | -----------------------: | -------------------: |
+| mlbench    |        +11 % |                   +3.0 % |               +0.7 % |
+| markbench  |        +23 % |                   +3.4 % |               +1.7 % |
+| inbench    |        +25 % |                   +5.8 % |               +3.3 % |
+| evalbench  |        +28 % |                   +4.8 % |               +2.7 % |
+| (parser)   |        +48 % |                  +11.1 % |               +5.3 % |
+| rebench    |        +29 % |                   +6.5 % |               +4.6 % |
+| edbench    |        +30 % |                   +8.5 % |               +3.6 % |
+| scrbench   |        +69 % |                  +10.5 % |               +6.1 % |
+| spellbench |        +78 % |                  +10.1 % |               +3.0 % |
+
+The whole checked build (`--features soundness-checks`, the edit loans and
+the Lua stack checks included) is +3.7 % (mlbench) to +15.3 % (the
+evalbench parser phase).
+
+Where the rest goes, by line attribution (a `line-tables-only` build of
+both sides, `cg_annotate` per file and function):
+
+- **The thread check is half of it.** The `IS_MAIN_THREAD` load and branch
+  is the hottest line in every profile; the borrow compare is the other.
+  Comparing the thread pointer (`fs:0`) with a stored main-thread value
+  instead was _worse_ (scrbench +21.6 %): the stored value is a static every
+  generic accessor names, so it is exported and read through the GOT.
+- **Restructured hot sites** (kept, they cost the unchecked build nothing):
+  the `'isprint'` table borrowed once per line walk (`with_byte_cells` in
+  `linesize_fast`, `getvcol`, `plines_win_col`: scrbench −0.9 G of checks);
+  `hl_combine_attr`'s build path out of line, so the per-cell cache hit
+  stays a leaf (it had grown a full prologue: +354 M); `arabic_maycombine`
+  tests the character before reading two options (every cluster step of
+  every walk read `'arabicshape'`/`'termbidi'`).
+- **What is left is diffuse.** No single site above ~5 % of a bench's
+  delta remains: functions that inlined before and now carry a prologue
+  (`script_is_lua`, `handle_subscript`, `do_one_cmd`, the `Depth`/`Bump`
+  guards), per-step `GOT_INT`/option reads in the spell trie walk and the
+  NFA matcher, per-byte `SPELLTAB` reads in `captype`/`spell_iswordp`, the
+  per-cell `LINEBUF.with_mut` (now ~6 instructions, no call). Each is a
+  restructure of its own for a fraction of a percent.
+
+**Verdict: not flipped.** The threshold was ≤ 2–3 % on every bench — the
+size of change the A/B benches are used to call a regression — and the
+cell checks are +3.0 % to +11.1 %. S1/S2 stay sound-by-debug-check, now on
+a tracker cheap enough to ship a checked release for diagnosis. The
+decision left: borrows-only always-on (S1 closed by an always-on check at
++0.7 % to +6.1 %, with a few more hot-site restructures on scrbench/the
+parser) with S2 kept behind the switch, versus both behind it.
+
 ## Classes
 
 Sizes: XS < 1 h, S ~1–2 h, M ~half a day, L ~days, XL multi-slice.
@@ -74,7 +138,7 @@ Sizes: XS < 1 h, S ~1–2 h, M ~half a day, L ~days, XL multi-slice.
 `GlobalCell::{with, with_mut, take, with_field, with_at}` lend a reference
 for a closure; `get`/`set`/`get_field`/`set_field`/`replace_field` and the
 `state_record!` accessors (`get`/`set`/`replace`/`take`/`with`/`with_mut`/
-`update`, `Level`) copy in and out. Debug builds track every loan.
+`update`, `Level`) copy in and out. Checked builds (`soundness_checks`) track every loan.
 
 - **Breaks:** a `with_mut` re-entered from inside a `with`/`with_mut` on the
   same cell → two `&mut` in release. Real shapes: an autocommand, Lua or
@@ -83,12 +147,12 @@ for a closure; `get`/`set`/`get_field`/`set_field`/`replace_field` and the
   field written from inside it; `LOADED_LANGS.with` around `os_breakcheck()`
   (libuv callbacks run there — sound today only because fast callbacks may
   not set `'spelllang'`).
-- **Closure:** check-always. Replace the shared table with a per-cell inline
-  borrow count (`GlobalCell` loses `repr(transparent)`; the exported cells in
-  [exported-cells.md](exported-cells.md) and the `curwin` C symbol need a
-  layout story), measure, then drop the cfg. Hot sites the measurement names
-  (`put_cell`'s per-cell `LINEBUF.with_mut`) take the buffer once. **M–L**,
-  two slices (tracker, then hot sites + flip).
+- **Closure:** check-always, not yet reached. The per-cell inline tracker
+  is in (layout: `repr(C)`, value first, so the exported cells and `curwin`
+  keep their addresses; the word exists only in a checked build), measured
+  above at +3.0 % to +11.1 % with the thread check and +0.7 % to +6.1 %
+  without. Open: the decision in the verdict above, then the remaining hot
+  sites if borrows go always-on. **M.**
 
 ### S2 — main-thread confinement (sound-by-debug-check)
 
@@ -98,9 +162,12 @@ and the rest are callable from any thread.
 - **Breaks:** any thread — a `vim.uv.new_thread` state, a libuv pool
   callback, `std::thread::spawn` — touching a cell: a data race in release,
   and a `!Send` value (`Rc`) moved across threads.
-- **Closure:** check-always, inlined: the thread question as a TLS load in
-  the caller (today a cross-crate call, 4 % of spellbench), measured with
-  S1's slice. **S.**
+- **Closure:** check-always, not reached. The thread question is inlined
+  now (a thread-local byte in place of the cross-crate call) and is still
+  half of the cells' cost: +2 % to +5 % on its own. Cheaper means fewer
+  questions (a token proving the main thread, threaded through the hot
+  paths), not a cheaper one: the thread-pointer compare lost to the GOT.
+  **S–M.**
 
 ### ~~S3 — `SharedCell<T>`~~ (closed: type holds it)
 
