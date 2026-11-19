@@ -143,7 +143,7 @@ pub struct signal_watcher {
 }
 /// A listening socket's connection callback: the watcher, and libuv's
 /// status for the connection.
-pub type socket_cb = Option<fn(&mut SocketWatcher, ::core::ffi::c_int)>;
+pub type socket_cb = Option<fn(&crate::event::socket::Incoming<'_>, ::core::ffi::c_int)>;
 pub type socket_close_cb = Option<unsafe fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> ()>;
 #[derive(Debug)]
 pub struct socket_watcher {

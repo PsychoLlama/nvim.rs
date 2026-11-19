@@ -20,7 +20,7 @@
 )]
 
 use core::ffi::{c_int, c_void};
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
 
 use crate::event::libuv::{uv_close, uv_signal_init, uv_signal_start, uv_signal_stop};
 use crate::event::r#loop::{EventLoop, RawEvent};
@@ -71,12 +71,13 @@ impl Deref for Signal {
     }
 }
 
-impl DerefMut for Signal {
-    fn deref_mut(&mut self) -> &mut SignalWatcher {
-        // SAFETY: the promise made at construction.
-        unsafe { &mut *self.0 }
-    }
-}
+crate::event::stream::field_writers!(Signal {
+    fn set_uv_data => uv.data: *mut c_void;
+    fn set_data => data: *mut c_void;
+    fn set_cb => cb: signal_cb;
+    fn set_close_cb => close_cb: signal_close_cb;
+    fn set_events => events: Option<QueueId>;
+});
 
 /// Attach `watcher` to `uv_loop`, delivering its events on the fast queue.
 ///
@@ -89,13 +90,13 @@ pub unsafe fn signal_watcher_init(
     data: *mut c_void,
 ) {
     // SAFETY: the caller's loop and storage.
-    let (uv_loop, mut watcher) = unsafe { (EventLoop::new(uv_loop), Signal::new(watcher)) };
+    let (uv_loop, watcher) = unsafe { (EventLoop::new(uv_loop), Signal::new(watcher)) };
     // SAFETY: the watcher's own handle, on the caller's loop.
     unsafe { uv_signal_init(uv_loop.uv(), watcher.uv()) };
-    watcher.uv.data = watcher.as_ptr().cast();
-    watcher.data = data;
-    watcher.cb = None;
-    watcher.events = Some(QueueId::FAST);
+    watcher.set_uv_data(watcher.as_ptr().cast());
+    watcher.set_data(data);
+    watcher.set_cb(None);
+    watcher.set_events(Some(QueueId::FAST));
 }
 
 /// Listen for `signum`, reporting each delivery to `cb`.
@@ -105,8 +106,8 @@ pub unsafe fn signal_watcher_init(
 /// call with the watcher's `data`.
 pub unsafe fn signal_watcher_start(watcher: *mut SignalWatcher, cb: signal_cb, signum: c_int) {
     // SAFETY: the caller's watcher.
-    let mut watcher = unsafe { Signal::new(watcher) };
-    watcher.cb = cb;
+    let watcher = unsafe { Signal::new(watcher) };
+    watcher.set_cb(cb);
     // SAFETY: the watcher's own handle, registered with a loop.
     unsafe { uv_signal_start(watcher.uv(), Some(signal_watcher_cb), signum) };
 }
@@ -125,8 +126,8 @@ pub unsafe fn signal_watcher_stop(watcher: *mut SignalWatcher) {
 /// `cb` runs.
 pub unsafe fn signal_watcher_close(watcher: *mut SignalWatcher, cb: signal_close_cb) {
     // SAFETY: the caller's watcher.
-    let mut watcher = unsafe { Signal::new(watcher) };
-    watcher.close_cb = cb;
+    let watcher = unsafe { Signal::new(watcher) };
+    watcher.set_close_cb(cb);
     // SAFETY: the watcher's own handle, still open.
     unsafe { uv_close(watcher.uv().cast(), Some(close_cb)) };
 }

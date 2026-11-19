@@ -37,63 +37,92 @@ use crate::event::uv::{uv_handle_t, uv_idle_t, uv_loop_t, uv_pipe_t, uv_stream_t
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
 use crate::message_fmt::msg_addr;
 use core::ffi::{c_int, c_void};
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
 use core::ptr;
+
+/// Field writers for a handle over an object libuv holds by address.
+///
+/// The handles below are `Copy` wrappers of a raw pointer, and none of them
+/// is `DerefMut`: a `&mut` to a registered stream, loop, child or watcher is
+/// what `mem::swap` needs to move one out from under libuv, and two copies
+/// of a handle would each hand one out. A writer stores one field in place
+/// through the wrapped pointer instead, so no `&mut` to the object exists.
+/// Reads still go through `Deref`.
+///
+/// `$handle` is a tuple struct over `*mut T` built by an `unsafe fn new`
+/// whose promise is that `T` is live; each line names the writer, its
+/// visibility, the field path and its type.
+macro_rules! field_writers {
+    ($handle:ty { $($vis:vis fn $name:ident => $($field:ident).+ : $ty:ty;)* }) => {
+        impl $handle {
+            $(
+                #[doc = concat!("Store `", stringify!($($field).+), "` in place.")]
+                $vis fn $name(self, value: $ty) {
+                    // SAFETY: the promise made at construction: the object
+                    // is live. A place write through the wrapped pointer
+                    // makes no reference to it.
+                    unsafe { (*self.0).$($field).+ = value }
+                }
+            )*
+        }
+    };
+}
+pub(super) use field_writers;
 
 /// A stream, reached through the raw pointer libuv keeps in its handle's
 /// `data` field.
 ///
 /// A stream never moves once it is initialised, so wrapping that pointer is
 /// the only unsafe step. The accessors derive their handle pointers from the
-/// wrapped pointer rather than from what `deref_mut` hands back: a pointer
-/// taken from a borrow would be invalidated by the next field write.
+/// wrapped pointer rather than from a borrow of the stream: a pointer taken
+/// from a borrow would be invalidated by the next field write.
 #[derive(Copy, Clone, Debug)]
-pub struct Conn(*mut Stream);
+pub(super) struct Conn(*mut Stream);
 
 impl Conn {
     /// # Safety
     /// `stream` is live, does not move while it is open, and outlives every
     /// use of this handle.
-    pub unsafe fn new(stream: *mut Stream) -> Self {
+    pub(super) unsafe fn new(stream: *mut Stream) -> Self {
         debug_assert!(!stream.is_null());
         Conn(stream)
     }
 
     /// The pointer back, for the callbacks and the callers that still take
     /// one.
-    pub fn as_ptr(self) -> *mut Stream {
+    pub(super) fn as_ptr(self) -> *mut Stream {
         self.0
     }
 
     /// The idle handle that stands in for readiness on a regular file. Only
     /// meaningful for a stream with no `uv_stream_t`.
-    pub fn idle(self) -> *mut uv_idle_t {
+    pub(super) fn idle(self) -> *mut uv_idle_t {
         // SAFETY: a field of the live stream.
         unsafe { &raw mut (*self.0).uv.idle }
     }
 
     /// The pipe handle a descriptor-backed stream owns.
-    pub fn pipe(self) -> *mut uv_pipe_t {
+    pub(super) fn pipe(self) -> *mut uv_pipe_t {
         // SAFETY: a field of the live stream.
         unsafe { &raw mut (*self.0).uv.pipe }
     }
 
     /// The TCP handle a socket-backed stream owns.
-    pub fn tcp(self) -> *mut uv_tcp_t {
+    pub(super) fn tcp(self) -> *mut uv_tcp_t {
         // SAFETY: a field of the live stream.
         unsafe { &raw mut (*self.0).uv.tcp }
     }
 
     /// The libuv handle the union holds, whichever arm it is. Every arm
     /// starts with a `uv_handle_t`, and they share an address.
-    pub fn uv_handle(self) -> *mut uv_handle_t {
+    pub(super) fn uv_handle(self) -> *mut uv_handle_t {
         // SAFETY: a field of the live stream.
         unsafe { (&raw mut (*self.0).uv).cast() }
     }
 
     /// The loop the stream's own handle is registered with. A stream that
     /// borrowed someone else's `uv_stream_t` has none of its own.
-    pub fn uv_loop(self) -> *mut uv_loop_t {
+    pub(super) fn uv_loop(self) -> *mut uv_loop_t {
         // SAFETY: a field of the live stream; every arm of the union starts
         // with the `uv_handle_t` header this reads.
         unsafe { (*self.idle()).loop_0 }
@@ -101,7 +130,7 @@ impl Conn {
 
     /// The `uv_stream_t` this stream reads and writes, when it has one. A
     /// regular file does not: it is read and written synchronously.
-    pub fn uv_stream(self) -> Option<*mut uv_stream_t> {
+    pub(super) fn uv_stream(self) -> Option<*mut uv_stream_t> {
         let uvstream = self.uvstream;
         (!uvstream.is_null()).then_some(uvstream)
     }
@@ -116,12 +145,21 @@ impl Deref for Conn {
     }
 }
 
-impl DerefMut for Conn {
-    fn deref_mut(&mut self) -> &mut Stream {
-        // SAFETY: the promise made at construction.
-        unsafe { &mut *self.0 }
-    }
-}
+crate::event::stream::field_writers!(Conn {
+    pub(super) fn set_closed => closed: bool;
+    pub(super) fn set_uvstream => uvstream: *mut uv_stream_t;
+    pub(super) fn set_fd => fd: c_int;
+    pub(super) fn set_fpos => fpos: i64;
+    pub(super) fn set_cb_data => cb_data: *mut c_void;
+    pub(super) fn set_close_cb => close_cb: crate::event::objects::stream_close_cb;
+    pub(super) fn set_internal_close_cb => internal_close_cb: crate::event::objects::stream_close_cb;
+    pub(super) fn set_close_cb_data => close_cb_data: *mut c_void;
+    pub(super) fn set_internal_data => internal_data: *mut c_void;
+    pub(super) fn set_pending_reqs => pending_reqs: usize;
+    pub(super) fn set_write_cb => write_cb: crate::event::objects::stream_write_cb;
+    pub(super) fn set_curmem => curmem: usize;
+    pub(super) fn set_maxmem => maxmem: usize;
+});
 
 /// Put `fd` into (or out of) blocking mode.
 ///
@@ -171,12 +209,12 @@ pub unsafe fn stream_init(
         "a stream is built from a descriptor or from a handle, not both"
     );
     // SAFETY: the caller's storage, filled in below before anything reads it.
-    let mut stream = unsafe { Conn::new(stream) };
-    stream.uvstream = uvstream;
+    let stream = unsafe { Conn::new(stream) };
+    stream.set_uvstream(uvstream);
     if fd >= 0 {
         // SAFETY: the caller's loop, given because `fd` was.
         let uv_loop = unsafe { EventLoop::new(uv_loop) }.uv();
-        stream.fd = fd;
+        stream.set_fd(fd);
         // SAFETY: the caller's open descriptor.
         let handle_type = unsafe { uv_guess_handle(fd) };
         if handle_type == UV_FILE {
@@ -195,22 +233,22 @@ pub unsafe fn stream_init(
                 uv_pipe_init(uv_loop, stream.pipe(), 0);
                 uv_pipe_open(stream.pipe(), fd);
             }
-            stream.uvstream = stream.pipe().cast();
+            stream.set_uvstream(stream.pipe().cast());
         }
     }
     if let Some(uvstream) = stream.uv_stream() {
         // SAFETY: the handle just opened, or the caller's.
         unsafe { (*uvstream).data = stream.as_ptr().cast() };
     }
-    stream.fpos = 0;
-    stream.internal_data = ptr::null_mut();
-    stream.curmem = 0;
-    stream.maxmem = 0;
-    stream.pending_reqs = 0;
-    stream.write_cb = None;
-    stream.close_cb = None;
-    stream.internal_close_cb = None;
-    stream.closed = false;
+    stream.set_fpos(0);
+    stream.set_internal_data(ptr::null_mut());
+    stream.set_curmem(0);
+    stream.set_maxmem(0);
+    stream.set_pending_reqs(0);
+    stream.set_write_cb(None);
+    stream.set_close_cb(None);
+    stream.set_internal_close_cb(None);
+    stream.set_closed(false);
 }
 
 /// Mark `stream` closed, and close its handle once nothing is outstanding.
@@ -226,7 +264,7 @@ pub unsafe fn stream_may_close(stream: *mut Stream) {
 }
 
 /// [`stream_may_close`] with the handle already built.
-pub fn may_close(mut stream: Conn) {
+pub(super) fn may_close(stream: Conn) {
     if stream.closed {
         return;
     }
@@ -238,14 +276,14 @@ pub fn may_close(mut stream: Conn) {
         "closing Stream: {}",
         msg_addr(stream.as_ptr().cast::<c_void>())
     );
-    stream.closed = true;
+    stream.set_closed(true);
     if stream.pending_reqs == 0 {
         close_handle(stream);
     }
 }
 
 /// Close the stream's libuv handle, running the before-close hook first.
-pub fn close_handle(mut stream: Conn) {
+pub(super) fn close_handle(stream: Conn) {
     let handle = match stream.uv_stream() {
         None => stream.idle().cast::<uv_handle_t>(),
         Some(uvstream) => {
@@ -269,11 +307,11 @@ pub fn close_handle(mut stream: Conn) {
     // pending request for its own duration.
     if let Some(before_close) = stream.before_close_cb {
         let data = stream.close_cb_data;
-        stream.pending_reqs += 1;
+        stream.set_pending_reqs(stream.pending_reqs + 1);
         // SAFETY: the hook and its data were installed together by the
         // stream's owner.
         unsafe { before_close(stream.as_ptr(), data) };
-        stream.pending_reqs -= 1;
+        stream.set_pending_reqs(stream.pending_reqs - 1);
     }
     // SAFETY: the handle chosen above, still registered with a loop.
     unsafe {

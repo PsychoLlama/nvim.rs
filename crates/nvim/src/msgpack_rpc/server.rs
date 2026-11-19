@@ -17,7 +17,7 @@ use core::ffi::{CStr, c_int};
 use crate::channel::channel_from_connection;
 use crate::env::{get_appname, xdg_var};
 use crate::eval::vars::{set_vim_var_string, with_vim_var_str};
-use crate::event::objects::SocketWatcher;
+use crate::event::socket::Incoming;
 use crate::event::socket::Listener;
 use crate::event::socket::address::is_bare_server_name;
 use crate::global_cell::GlobalCell;
@@ -299,7 +299,7 @@ pub fn server_addresses() -> Vec<CString> {
 }
 
 /// libuv accepted (or failed to accept) a connection on one of our sockets.
-fn connection_cb(watcher: &mut SocketWatcher, result: c_int) {
+fn connection_cb(incoming: &Incoming<'_>, result: c_int) {
     if result != 0 {
         logmsg!(
             LOGLVL_ERR,
@@ -310,5 +310,5 @@ fn connection_cb(watcher: &mut SocketWatcher, result: c_int) {
         );
         return;
     }
-    channel_from_connection(watcher);
+    channel_from_connection(incoming);
 }

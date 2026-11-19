@@ -329,7 +329,7 @@ typedef unsigned long pthread_t;
 typedef unsigned short sa_family_t;
 typedef void (*signal_cb)(SignalWatcher *, int, void *);
 typedef void (*signal_close_cb)(SignalWatcher *, void *);
-typedef void (*socket_cb)(SocketWatcher *, int);
+typedef struct socket_cb socket_cb;
 typedef void (*socket_close_cb)(SocketWatcher *, void *);
 typedef unsigned int socklen_t;
 typedef void (*stream_close_cb)(Stream *, void *);

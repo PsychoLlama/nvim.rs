@@ -32,8 +32,8 @@ use crate::event::channel::{
 };
 use crate::event::libuv_proc::libuv_proc_init;
 use crate::event::r#loop::main_loop_raw;
-use crate::event::objects::SocketWatcher;
 use crate::event::proc::exit_on_closed_chan;
+use crate::event::socket::Incoming;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
@@ -281,9 +281,9 @@ pub fn channel_connect(
 }
 
 /// Takes over an accepted connection from a listening socket. Always RPC.
-pub fn channel_from_connection(watcher: &mut SocketWatcher) {
+pub(crate) fn channel_from_connection(incoming: &Incoming<'_>) {
     let id = alloc_channel(None, |_| ChannelStream::Socket(unopened_rstream()));
-    if let Err(result) = accept_socket(id, watcher) {
+    if let Err(result) = accept_socket(id, incoming) {
         // The client handle is already closed; the channel never got going.
         logmsg!(
             LOGLVL_ERR,
@@ -297,9 +297,7 @@ pub fn channel_from_connection(watcher: &mut SocketWatcher) {
     }
     attach_socket(id);
     rpc_start(id);
-    let address = watcher.addr.map(core::ffi::c_char::cast_unsigned);
-    let address = crate::cstr::in_bytes(&address).to_owned();
-    channel_create_event(id, Some(&address));
+    channel_create_event(id, Some(&incoming.address()));
 }
 
 /// Wires a channel to this process's own stdin and stdout.

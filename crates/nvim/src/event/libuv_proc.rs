@@ -7,8 +7,8 @@
 //! here cast it back.
 //!
 //! Every one of those casts goes through [`Uv`], a wrapper whose construction
-//! is the unsafe step: past it, `uvproc.uvopts.file` and `uvproc.proc.pid` are
-//! ordinary Rust.
+//! is the unsafe step: past it, reading `uvproc.uvopts.file` is ordinary Rust,
+//! and a write is a field writer (`set_proc_pid`), never a `&mut LibuvProc`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `event/` row in docs/perimeter.md.
@@ -49,7 +49,7 @@ use crate::shell::Argv;
 use crate::startup::UI_CLIENT_FORWARD_STDIN;
 use ::libc::close;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
 use core::ptr;
 
 /// The slot is unused; the child inherits nothing there.
@@ -136,12 +136,13 @@ impl Deref for Uv {
     }
 }
 
-impl DerefMut for Uv {
-    fn deref_mut(&mut self) -> &mut LibuvProc {
-        // SAFETY: the promise made at construction.
-        unsafe { &mut *self.0 }
-    }
-}
+crate::event::stream::field_writers!(Uv {
+    fn set_uv_data => uv.data: *mut c_void;
+    fn set_uvopts => uvopts: uv_process_options_t;
+    fn set_uvstdio => uvstdio: [uv_stdio_container_t; 4];
+    fn set_proc_pid => proc.pid: c_int;
+    fn set_proc_status => proc.status: c_int;
+});
 
 /// A fresh, unspawned libuv child.
 pub fn libuv_proc_init(uv_loop: *mut Loop, data: *mut c_void) -> LibuvProc {
@@ -153,8 +154,9 @@ pub fn libuv_proc_init(uv_loop: *mut Loop, data: *mut c_void) -> LibuvProc {
     rv
 }
 
-/// Wire stdio slot `idx` to a fresh pipe, and return the descriptor the
-/// parent must close once the child has been spawned.
+/// Wire stdio slot `idx` to a fresh pipe: fill in `slot` with the child's
+/// end, and return that descriptor, which the parent must close once the
+/// child has been spawned.
 ///
 /// `child_readable` is true for the child's stdin — the child reads the read
 /// end and the parent keeps the write end — and false for its output
@@ -162,7 +164,12 @@ pub fn libuv_proc_init(uv_loop: *mut Loop, data: *mut c_void) -> LibuvProc {
 ///
 /// A `uv_pipe` pair is used rather than libuv's own `UV_CREATE_PIPE`, which
 /// as of libuv 1.51 is a `socketpair` and so breaks `/proc/<pid>/fd/0`.
-fn open_stdio_pipe(mut uvproc: Uv, idx: usize, child_readable: bool) -> c_int {
+fn open_stdio_pipe(
+    uvproc: Uv,
+    slot: &mut uv_stdio_container_t,
+    idx: usize,
+    child_readable: bool,
+) -> c_int {
     let (read_flags, write_flags) = if child_readable {
         (0, UV_NONBLOCK_PIPE)
     } else {
@@ -178,8 +185,8 @@ fn open_stdio_pipe(mut uvproc: Uv, idx: usize, child_readable: bool) -> c_int {
     } else {
         (write_end, read_end)
     };
-    uvproc.uvstdio[idx].flags = UV_INHERIT_FD;
-    uvproc.uvstdio[idx].data.fd = child_fd;
+    slot.flags = UV_INHERIT_FD;
+    slot.data.fd = child_fd;
     let parent_pipe = uvproc.parent_pipe(idx);
     // SAFETY: the child's own pipe handle, and a descriptor just opened.
     unsafe { uv_pipe_open(parent_pipe, parent_fd) };
@@ -193,31 +200,35 @@ fn open_stdio_pipe(mut uvproc: Uv, idx: usize, child_readable: bool) -> c_int {
 /// and `env` filled in.
 pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
     // SAFETY: the caller's promise.
-    let mut uvproc = unsafe { Uv::new(uvproc) };
+    let uvproc = unsafe { Uv::new(uvproc) };
     // SAFETY: the child, whose argv the caller filled in.
     let exepath = unsafe { proc_get_exepath(uvproc.as_proc()) };
 
-    uvproc.uvopts.file = exepath;
-    uvproc.uvopts.args = uvproc.proc.argv;
-    uvproc.uvopts.flags = UV_PROCESS_WINDOWS_HIDE | UV_PROCESS_DETACHED;
-    uvproc.uvopts.exit_cb = Some(exit_cb);
-    uvproc.uvopts.cwd = uvproc.proc.cwd;
-    uvproc.uvopts.stdio = uvproc.stdio();
-    uvproc.uvopts.stdio_count = 3;
-    for slot in &mut uvproc.uvstdio[..3] {
+    // Both are filled in here and stored whole: libuv reads them, by
+    // address, while `uv_spawn` runs.
+    let mut opts = uvproc.uvopts;
+    let mut stdio = uvproc.uvstdio;
+    opts.file = exepath;
+    opts.args = uvproc.proc.argv;
+    opts.flags = UV_PROCESS_WINDOWS_HIDE | UV_PROCESS_DETACHED;
+    opts.exit_cb = Some(exit_cb);
+    opts.cwd = uvproc.proc.cwd;
+    opts.stdio = uvproc.stdio();
+    opts.stdio_count = 3;
+    for slot in &mut stdio[..3] {
         slot.flags = UV_IGNORE;
     }
 
     if UI_CLIENT_FORWARD_STDIN.get() {
         // A UI client reads the editor's own stdin, on the descriptor the
         // remote side knows as UI_CLIENT_STDIN_FD.
-        uvproc.uvopts.stdio_count = 4;
-        uvproc.uvstdio[3].data.fd = 0;
-        uvproc.uvstdio[3].flags = UV_INHERIT_FD;
+        opts.stdio_count = 4;
+        stdio[3].data.fd = 0;
+        stdio[3].flags = UV_INHERIT_FD;
     }
-    uvproc.uv.data = uvproc.as_proc().cast();
+    uvproc.set_uv_data(uvproc.as_proc().cast());
 
-    uvproc.uvopts.env = if uvproc.proc.env.is_null() {
+    opts.env = if uvproc.proc.env.is_null() {
         ptr::null_mut()
     } else {
         let env = uvproc.proc.env;
@@ -229,18 +240,20 @@ pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
     // dropped after the spawn, whether or not it succeeded.
     let mut to_close = [-1; 3];
     if !uvproc.proc.in_0.closed {
-        to_close[0] = open_stdio_pipe(uvproc, 0, true);
+        to_close[0] = open_stdio_pipe(uvproc, &mut stdio[0], 0, true);
     }
     if !uvproc.proc.out.s.closed {
-        to_close[1] = open_stdio_pipe(uvproc, 1, false);
+        to_close[1] = open_stdio_pipe(uvproc, &mut stdio[1], 1, false);
     }
     if !uvproc.proc.err.s.closed {
-        to_close[2] = open_stdio_pipe(uvproc, 2, false);
+        to_close[2] = open_stdio_pipe(uvproc, &mut stdio[2], 2, false);
     } else if uvproc.proc.fwd_err {
         // Not read by us, so let the child write straight to our stderr.
-        uvproc.uvstdio[2].flags = UV_INHERIT_FD;
-        uvproc.uvstdio[2].data.fd = STDERR_FILENO;
+        stdio[2].flags = UV_INHERIT_FD;
+        stdio[2].data.fd = STDERR_FILENO;
     }
+    uvproc.set_uvopts(opts);
+    uvproc.set_uvstdio(stdio);
 
     let (uv_loop, handle) = (uvproc.uv_loop(), uvproc.handle());
     let opts = uvproc.opts();
@@ -265,7 +278,7 @@ pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
             unsafe { free_child_env(env) };
         }
     } else {
-        uvproc.proc.pid = uvproc.uv.pid;
+        uvproc.set_proc_pid(uvproc.uv.pid);
     }
 
     for fd in to_close {
@@ -320,8 +333,8 @@ unsafe extern "C" fn close_cb(handle: *mut uv_handle_t) {
 unsafe extern "C" fn exit_cb(handle: *mut uv_process_t, status: i64, term_signal: c_int) {
     // SAFETY: the caller's promise; a `Proc` and its `LibuvProc` share an
     // address.
-    let mut uvproc = unsafe { Uv::new((*handle).data.cast()) };
-    uvproc.proc.status = exit_status(status, term_signal);
+    let uvproc = unsafe { Uv::new((*handle).data.cast()) };
+    uvproc.set_proc_status(exit_status(status, term_signal));
     let notify = uvproc.proc.internal_exit_cb;
     let notify = notify.expect("a spawned child has an exit callback");
     // SAFETY: the child's own exit callback.

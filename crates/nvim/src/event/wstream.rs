@@ -64,8 +64,8 @@ pub unsafe fn wstream_init_fd(uv_loop: *mut Loop, stream: *mut Stream, fd: c_int
 /// `stream` has been through [`stream_init`].
 pub unsafe fn wstream_init(stream: *mut Stream, maxmem: size_t) {
     // SAFETY: the caller's stream.
-    let mut stream = unsafe { Conn::new(stream) };
-    stream.maxmem = if maxmem != 0 { maxmem } else { DEFAULT_MAXMEM };
+    let stream = unsafe { Conn::new(stream) };
+    stream.set_maxmem(if maxmem != 0 { maxmem } else { DEFAULT_MAXMEM });
 }
 
 /// Report each completed write to `cb`.
@@ -75,9 +75,9 @@ pub unsafe fn wstream_init(stream: *mut Stream, maxmem: size_t) {
 /// `data`.
 pub unsafe fn wstream_set_write_cb(stream: *mut Stream, cb: stream_write_cb, data: *mut c_void) {
     // SAFETY: the caller's stream.
-    let mut stream = unsafe { Conn::new(stream) };
-    stream.write_cb = cb;
-    stream.cb_data = data;
+    let stream = unsafe { Conn::new(stream) };
+    stream.set_write_cb(cb);
+    stream.set_cb_data(data);
 }
 
 /// Queue `buffer` for writing to `stream`, which holds it until the write
@@ -88,7 +88,7 @@ pub unsafe fn wstream_set_write_cb(stream: *mut Stream, cb: stream_write_cb, dat
 /// `stream` has been through [`wstream_init`].
 pub(crate) unsafe fn wstream_write(stream: *mut Stream, buffer: SharedBuffer) -> c_int {
     // SAFETY: the caller's stream.
-    let mut stream = unsafe { Conn::new(stream) };
+    let stream = unsafe { Conn::new(stream) };
     debug_assert!(stream.maxmem != 0, "wstream_init was not called");
     debug_assert!(!stream.closed);
 
@@ -99,7 +99,7 @@ pub(crate) unsafe fn wstream_write(stream: *mut Stream, buffer: SharedBuffer) ->
         return UV_ENOMEM;
     }
     let uvbuf = buffer.uv_buf();
-    stream.curmem += uvbuf.len;
+    stream.set_curmem(stream.curmem + uvbuf.len);
     let request = Box::into_raw(Box::new(WRequest {
         stream: stream.as_ptr(),
         buffer,
@@ -121,10 +121,10 @@ pub(crate) unsafe fn wstream_write(stream: *mut Stream, buffer: SharedBuffer) ->
         )
     };
     if err == 0 {
-        stream.pending_reqs += 1;
+        stream.set_pending_reqs(stream.pending_reqs + 1);
         return 0;
     }
-    stream.curmem -= uvbuf.len;
+    stream.set_curmem(stream.curmem - uvbuf.len);
     // SAFETY: libuv refused the write, so nothing else holds the request.
     drop(unsafe { Box::from_raw(request) });
     err
@@ -133,7 +133,7 @@ pub(crate) unsafe fn wstream_write(stream: *mut Stream, buffer: SharedBuffer) ->
 /// The regular-file path: one synchronous `uv_fs_write` at the stream's
 /// current offset. Such a stream never has a write callback, so the outcome
 /// is reported by the return value alone.
-fn write_file(mut stream: Conn, buffer: &SharedBuffer) -> c_int {
+fn write_file(stream: Conn, buffer: &SharedBuffer) -> c_int {
     let uvbuf = buffer.uv_buf();
     let mut req = uv_fs_t::default();
     // SAFETY: the descriptor the stream was built from, the payload `uvbuf`
@@ -154,7 +154,9 @@ fn write_file(mut stream: Conn, buffer: &SharedBuffer) -> c_int {
     // SAFETY: the request the call just filled.
     unsafe { uv_fs_req_cleanup(&raw mut req) };
     debug_assert!(stream.write_cb.is_none());
-    stream.fpos += i64::try_from(result.max(0)).expect("a write fits in a file offset");
+    stream.set_fpos(
+        stream.fpos + i64::try_from(result.max(0)).expect("a write fits in a file offset"),
+    );
     if result > 0 {
         0
     } else if err != 0 {
@@ -175,8 +177,8 @@ unsafe extern "C" fn write_cb(req: *mut uv_write_t, status: c_int) {
     let request = unsafe { Box::from_raw((*req).data.cast::<WRequest>()) };
     // SAFETY: the stream the request was queued on, live until its last
     // request completes — which is this one only if `pending_reqs` says so.
-    let mut stream = unsafe { Conn::new(request.stream) };
-    stream.curmem -= request.buffer.bytes().len();
+    let stream = unsafe { Conn::new(request.stream) };
+    stream.set_curmem(stream.curmem - request.buffer.bytes().len());
     drop(request);
     if let Some(report) = stream.write_cb {
         let data = stream.cb_data;
@@ -184,7 +186,7 @@ unsafe extern "C" fn write_cb(req: *mut uv_write_t, status: c_int) {
         // `wstream_set_write_cb`.
         unsafe { report(stream.as_ptr(), data, status) };
     }
-    stream.pending_reqs -= 1;
+    stream.set_pending_reqs(stream.pending_reqs - 1);
     if stream.closed && stream.pending_reqs == 0 {
         close_handle(stream);
     }

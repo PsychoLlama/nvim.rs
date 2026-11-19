@@ -71,7 +71,7 @@ use crate::startup::{
 };
 use crate::types::Refcount;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
 use core::ptr;
 
 /// A child started through libuv's process API.
@@ -188,12 +188,15 @@ impl Deref for Child {
     }
 }
 
-impl DerefMut for Child {
-    fn deref_mut(&mut self) -> &mut Proc {
-        // SAFETY: the promise made at construction.
-        unsafe { &mut *self.0 }
-    }
-}
+crate::event::stream::field_writers!(Child {
+    fn set_status => status: c_int;
+    fn set_exit_signal => exit_signal: u8;
+    fn set_stopped_time => stopped_time: u64;
+    fn set_argv => argv: *mut *mut c_char;
+    fn set_internal_exit_cb => internal_exit_cb: crate::event::objects::internal_proc_cb;
+    fn set_internal_close_cb => internal_close_cb: crate::event::objects::internal_proc_cb;
+    fn set_closed => closed: bool;
+});
 
 /// A signal number as `exit_signal` records it.
 ///
@@ -257,7 +260,7 @@ pub unsafe fn proc_get_exepath(proc: *mut Proc) -> *const c_char {
 /// `proc` is a live, unspawned child built by [`proc_init`] on a live loop.
 pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: bool) -> c_int {
     // SAFETY: the caller's promise.
-    let mut child = unsafe { Child::new(proc) };
+    let child = unsafe { Child::new(proc) };
 
     // Forwarding stderr contradicts processing it internally.
     debug_assert!(!(has_err && child.fwd_err));
@@ -302,7 +305,7 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
         }
         // SAFETY: the caller's child, which owns its argv.
         unsafe { proc_free(child.as_ptr()) };
-        child.status = -1;
+        child.set_status(-1);
         return status;
     }
 
@@ -324,8 +327,8 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
         }
         child.refcount.retain();
     }
-    child.internal_exit_cb = Some(on_proc_exit);
-    child.internal_close_cb = Some(decref);
+    child.set_internal_exit_cb(Some(on_proc_exit));
+    child.set_internal_close_cb(Some(decref));
     child.refcount.retain();
 
     // SAFETY: the child's loop, which keeps the list of live children.
@@ -407,7 +410,7 @@ pub unsafe fn proc_close_streams(proc: *mut Proc) {
 /// `proc` is a live child.
 pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, events: Option<QueueId>) -> c_int {
     // SAFETY: the caller's promise.
-    let mut child = unsafe { Child::new(proc) };
+    let child = unsafe { Child::new(proc) };
 
     if child.refcount == Refcount::zero() {
         // Read the status before draining: an event may free the child.
@@ -440,7 +443,7 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, events: Option<QueueId>) -> 
             // SAFETY: as above.
             unsafe { process_events(child.loop_0, events, 0) };
         }
-        child.status = -2;
+        child.set_status(-2);
     }
 
     if child.refcount == Refcount::one() {
@@ -462,20 +465,20 @@ pub unsafe fn proc_wait(proc: *mut Proc, ms: c_int, events: Option<QueueId>) -> 
 /// `proc` is a live child.
 pub unsafe fn proc_stop(proc: *mut Proc) {
     // SAFETY: the caller's promise.
-    let mut child = unsafe { Child::new(proc) };
+    let child = unsafe { Child::new(proc) };
     if proc_is_stopped(&child) {
         return;
     }
-    child.stopped_time = os_hrtime();
+    child.set_stopped_time(os_hrtime());
 
     if child.is_pty() {
         // Closing every stream is what sends SIGHUP to a pty child.
-        child.exit_signal = as_exit_signal(libc::SIGHUP);
+        child.set_exit_signal(as_exit_signal(libc::SIGHUP));
         // SAFETY: a live child.
         unsafe { proc_close_streams(child.as_ptr()) };
         pty_proc_close_master(child.pty());
     } else {
-        child.exit_signal = as_exit_signal(libc::SIGTERM);
+        child.set_exit_signal(as_exit_signal(libc::SIGTERM));
         os_proc_tree_kill(child.pid, libc::SIGTERM);
     }
 
@@ -488,11 +491,11 @@ pub unsafe fn proc_stop(proc: *mut Proc) {
 /// `proc` is a live child.
 pub unsafe fn proc_free(proc: *mut Proc) {
     // SAFETY: the caller's promise.
-    let mut child = unsafe { Child::new(proc) };
+    let child = unsafe { Child::new(proc) };
     if !child.argv.is_null() {
         // SAFETY: the argv the child was spawned with, which it owns.
         unsafe { free_raw_argv(child.argv) };
-        child.argv = ptr::null_mut();
+        child.set_argv(ptr::null_mut());
     }
 }
 
@@ -585,7 +588,7 @@ unsafe extern "C" fn children_kill_cb(handle: *mut uv_timer_t) {
     let uv_loop: *mut Loop = unsafe { (*(*handle).loop_0).data }.cast();
     let mut i = 0;
     // SAFETY: the timer's loop is live for as long as the timer is.
-    while let Some(mut child) = unsafe { nth_child(uv_loop, i) } {
+    while let Some(child) = unsafe { nth_child(uv_loop, i) } {
         i += 1;
         let exited = child.status >= 0;
         if exited || child.stopped_time == 0 {
@@ -593,12 +596,12 @@ unsafe extern "C" fn children_kill_cb(handle: *mut uv_timer_t) {
         }
         let term_sent = child.stopped_time == u64::MAX;
         if !child.is_pty() || term_sent {
-            child.exit_signal = as_exit_signal(libc::SIGKILL);
+            child.set_exit_signal(as_exit_signal(libc::SIGKILL));
             os_proc_tree_kill(child.pid, libc::SIGKILL);
         } else {
-            child.exit_signal = as_exit_signal(libc::SIGTERM);
+            child.set_exit_signal(as_exit_signal(libc::SIGTERM));
             os_proc_tree_kill(child.pid, libc::SIGTERM);
-            child.stopped_time = u64::MAX;
+            child.set_stopped_time(u64::MAX);
             arm_kill_timer(child);
         }
     }
@@ -638,14 +641,14 @@ unsafe fn decref(proc: *mut Proc) {
 }
 
 /// Close the child's own handle (the process or the pty master).
-fn proc_close(mut child: Child) {
+fn proc_close(child: Child) {
     if PROC_IS_TEARING_DOWN.get() && child.closed && (child.detach || child.is_pty()) {
         // A detached or pty child that dies while being torn down gets here
         // twice: once from the teardown, once from its own exit callback.
         return;
     }
     debug_assert!(!child.closed);
-    child.closed = true;
+    child.set_closed(true);
 
     if child.detach && child.type_0 == PROC_TYPE_UV {
         // Let the loop exit without waiting for a child we no longer own.

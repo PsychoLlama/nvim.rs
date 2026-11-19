@@ -257,19 +257,27 @@ its view pushed.
   pushed-count token would have threaded a value through every caller for
   the same compare.
 
-### S8 — event handles with `DerefMut` over pinned libuv objects (sound-by-convention, perimeter-internal)
+### ~~S8 — event handles with `DerefMut` over pinned libuv objects~~ (closed: type holds it)
 
-`EventLoop`, `Reader`, `Conn` (`pub`), and the file-private `Uv`, `Child`,
-`Signal`, `Watcher`, timer `Handle`: `Copy` wrappers with `DerefMut` to
-objects libuv holds by address (`Stream` carries `PhantomPinned`). Every user
-is inside `event/`.
+`EventLoop`, `Reader`, `Conn`, and the file-private `Uv`, `Child`,
+`Signal`, socket `Watcher`, timer `Handle`: `Copy` wrappers of a raw pointer
+to an object libuv holds by address (`Stream` carries `PhantomPinned`).
 
-- **Breaks:** `mem::swap(&mut *a, &mut *b)` over two `Reader`s moves two
+- **Broke:** `mem::swap(&mut *a, &mut *b)` over two `Reader`s moved two
   registered `RStream`s — the transports swap hole the pinned
-  `Channel::stream` box closed, reopened one level down; or a handle used
-  after its close callback freed the watcher.
-- **Closure:** type holds it — `pub(super)`, and `Pin<&mut T>` projections
-  (or field accessors) in place of `DerefMut`. **S–M.**
+  `Channel::stream` box closed, reopened one level down. A listening
+  socket's connection callback was handed `&mut SocketWatcher` (an `Unpin`
+  type with `pub` fields), so `mem::replace` from the callback overwrote the
+  handles libuv was listening on.
+- **Closed:** no handle is `DerefMut`. Reads go through `Deref`; a write is a
+  generated field writer (`field_writers!` in `event/stream.rs`) that stores
+  one field through the wrapped pointer, so no `&mut` to the object is ever
+  made and nothing can move it. `EventLoop`, `Reader`, `Conn` and their
+  methods are `pub(super)`: no code outside `event/` can hold one. The
+  connection callback takes an `Incoming` that can accept the client and
+  read the address, nothing else. A handle used after its close callback
+  freed the object stays the construction contract (`unsafe fn new`),
+  perimeter-internal.
 
 ### ~~S9 — a safe function adopting a raw pointer~~ (closed: `unsafe fn`)
 

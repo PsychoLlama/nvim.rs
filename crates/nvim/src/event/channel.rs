@@ -461,12 +461,12 @@ pub(crate) fn connect_socket(
 /// answer libuv's error.
 pub(crate) fn accept_socket(
     id: u64,
-    watcher: &mut crate::event::objects::SocketWatcher,
+    incoming: &crate::event::socket::Incoming<'_>,
 ) -> Result<(), c_int> {
     let socket = socket_stream(id);
     // SAFETY: the socket channel's stream, at its fixed address, and the
     // caller's listening watcher.
-    let result = unsafe { socket_watcher_accept(watcher, socket) };
+    let result = unsafe { socket_watcher_accept(incoming.as_ptr(), socket) };
     if result == 0 { Ok(()) } else { Err(result) }
 }
 

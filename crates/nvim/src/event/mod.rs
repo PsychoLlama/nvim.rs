@@ -3,8 +3,11 @@
 //! Every module here is written the same way: the `*mut T` libuv threads
 //! through a handle's `data` field is wrapped once — `EventLoop`, `Conn`,
 //! `Reader`, `Queue`, `Child`, `Watcher`, `Timer`, `Signal` — so the field
-//! accesses beneath are ordinary Rust and the `unsafe` is paid at
-//! construction. The `extern "C"` callbacks libuv is handed keep their ABI;
+//! reads beneath are ordinary Rust and the `unsafe` is paid at
+//! construction. Writes go through `field_writers!` (`stream.rs`): no handle
+//! is `DerefMut`, since a `&mut` to an object libuv holds by address is all
+//! `mem::swap` needs to move it. The handles are visible only inside
+//! `event/`. The `extern "C"` callbacks libuv is handed keep their ABI;
 //! they unwrap the pointer and hand a handle to a safe function.
 //!
 //! Both denies are on this module and so reach every file below it, which is

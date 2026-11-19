@@ -79,8 +79,8 @@ pub(crate) use info::channel_stream_type;
 pub use info::{
     channel_all_info, channel_create_event, channel_info, channel_info_changed, channel_job_running,
 };
-pub(crate) use open::rpc_job_start;
-pub use open::{channel_connect, channel_from_connection, channel_from_stdio, channel_job_start};
+pub use open::{channel_connect, channel_from_stdio, channel_job_start};
+pub(crate) use open::{channel_from_connection, rpc_job_start};
 pub use reader::{callback_reader_free, callback_reader_start};
 pub use term::channel_terminal_alloc;
 

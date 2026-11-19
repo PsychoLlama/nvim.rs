@@ -26,7 +26,7 @@
 use crate::event::uv::{UV_RUN_DEFAULT, UV_RUN_NOWAIT, UV_RUN_ONCE};
 use crate::os::uv_error::UV_EBUSY;
 use core::ffi::{c_int, c_void};
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
 use core::ptr;
 
 use crate::event::libuv::{
@@ -53,25 +53,25 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 /// is the only unsafe step, and the accessors below derive their handle
 /// pointers from the wrapped pointer rather than from a borrow of it.
 #[derive(Copy, Clone, Debug)]
-pub struct EventLoop(*mut Loop);
+pub(super) struct EventLoop(*mut Loop);
 
 impl EventLoop {
     /// # Safety
     /// `uv_loop` is a live loop, through [`loop_init`] and not yet through
     /// [`main_loop_close`] (the only loop that is ever closed), that outlives
     /// every use of this handle.
-    pub unsafe fn new(uv_loop: *mut Loop) -> Self {
+    pub(super) unsafe fn new(uv_loop: *mut Loop) -> Self {
         debug_assert!(!uv_loop.is_null());
         EventLoop(uv_loop)
     }
 
     /// The pointer back, for the callers that still pass one around.
-    pub fn as_ptr(self) -> *mut Loop {
+    pub(super) fn as_ptr(self) -> *mut Loop {
         self.0
     }
 
     /// The libuv loop every handle in `event/` is registered with.
-    pub fn uv(self) -> *mut uv_loop_t {
+    pub(super) fn uv(self) -> *mut uv_loop_t {
         // SAFETY: a field of the live loop, derived from the wrapped pointer.
         unsafe { &raw mut (*self.0).uv }
     }
@@ -127,12 +127,13 @@ impl Deref for EventLoop {
     }
 }
 
-impl DerefMut for EventLoop {
-    fn deref_mut(&mut self) -> &mut Loop {
-        // SAFETY: the promise made at construction.
-        unsafe { &mut *self.0 }
-    }
-}
+crate::event::stream::field_writers!(EventLoop {
+    fn set_uv_data => uv.data: *mut c_void;
+    fn set_children => children: *mut Vec<*mut Proc>;
+    fn set_poll_timer_data => poll_timer.data: *mut c_void;
+    fn set_recursive => recursive: c_int;
+    fn set_closing => closing: bool;
+});
 
 // ---------------------------------------------------------------------------
 // Lifetime
@@ -146,13 +147,13 @@ impl DerefMut for EventLoop {
 /// has not already been initialised.
 pub unsafe fn loop_init(uv_loop: *mut Loop) {
     // SAFETY: the caller's storage, filled in below before anything reads it.
-    let mut uv_loop = unsafe { EventLoop::new(uv_loop) };
+    let uv_loop = unsafe { EventLoop::new(uv_loop) };
     // SAFETY: a fresh loop.
     unsafe { uv_loop_init(uv_loop.uv()) };
-    uv_loop.recursive = 0;
-    uv_loop.closing = false;
-    uv_loop.uv.data = uv_loop.as_ptr().cast();
-    uv_loop.children = Box::into_raw(Box::new(Vec::<*mut Proc>::new()));
+    uv_loop.set_recursive(0);
+    uv_loop.set_closing(false);
+    uv_loop.set_uv_data(uv_loop.as_ptr().cast());
+    uv_loop.set_children(Box::into_raw(Box::new(Vec::<*mut Proc>::new())));
     event_queue::create_loop_queues(wake_main_loop);
     // SAFETY: every handle below is a field of the loop just initialised,
     // and each is registered with that same loop.
@@ -165,7 +166,7 @@ pub unsafe fn loop_init(uv_loop: *mut Loop) {
     }
     // The poll timer's only job is to flip this flag; it outlives every
     // `loop_uv_run` and is released by the handle's close callback.
-    uv_loop.poll_timer.data = Box::into_raw(Box::new(false)).cast();
+    uv_loop.set_poll_timer_data(Box::into_raw(Box::new(false)).cast());
     // Other threads wake the loop through this handle from now on.
     WAKEUP.store(uv_loop.wakeup(), Ordering::Release);
 }
@@ -246,8 +247,8 @@ pub(crate) fn main_loop_drain() {
 /// Once, on the way out: nothing may use the loop afterwards.
 pub(crate) fn main_loop_close(wait: bool) -> bool {
     // SAFETY: the static loop, up and no longer in use.
-    let mut uv_loop = unsafe { EventLoop::new(main_loop_raw()) };
-    uv_loop.closing = true;
+    let uv_loop = unsafe { EventLoop::new(main_loop_raw()) };
+    uv_loop.set_closing(true);
     WAKEUP.store(ptr::null_mut(), Ordering::Release);
     // SAFETY: the loop's own handles, each still open.
     unsafe {
@@ -265,7 +266,7 @@ pub(crate) fn main_loop_close(wait: bool) -> bool {
     // SAFETY: the children list this loop boxed. Nothing reaches it after
     // the loop is closed.
     drop(unsafe { Box::from_raw(uv_loop.children) });
-    uv_loop.children = ptr::null_mut();
+    uv_loop.set_children(ptr::null_mut());
     rv
 }
 
@@ -366,12 +367,12 @@ unsafe extern "C" fn loop_walk_cb(handle: *mut uv_handle_t, _arg: *mut c_void) {
 /// `uv_loop` is live, and so is everything its ready handles reach.
 pub unsafe fn loop_poll_events(uv_loop: *mut Loop, ms: i64) -> bool {
     // SAFETY: the caller's loop.
-    let mut uv_loop = unsafe { EventLoop::new(uv_loop) };
+    let uv_loop = unsafe { EventLoop::new(uv_loop) };
     if uv_loop.recursive > 0 {
         // SAFETY: `abort` does not return.
         unsafe { abort() };
     }
-    uv_loop.recursive += 1;
+    uv_loop.set_recursive(uv_loop.recursive + 1);
 
     let timeout_expired = uv_loop.timeout_expired();
     // SAFETY: the flag `loop_init` boxed, written here and by `timer_cb`.
@@ -397,7 +398,7 @@ pub unsafe fn loop_poll_events(uv_loop: *mut Loop, ms: i64) -> bool {
         // SAFETY: the timer started above.
         unsafe { uv_timer_stop(uv_loop.poll_timer()) };
     }
-    uv_loop.recursive -= 1;
+    uv_loop.set_recursive(uv_loop.recursive - 1);
 
     // Read before the queue is drained: a handler may poll again.
     // SAFETY: as above.

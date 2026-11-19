@@ -44,7 +44,7 @@ use crate::os::fs::{os_err_name, os_strerror};
 use crate::os::libc::{size_t, ssize_t};
 use crate::os::uv_error::{UV_ENOBUFS, UV_EOF};
 use core::ffi::{c_char, c_int, c_void};
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
 use core::ptr;
 
 /// The size of the arena block an `RStream` reads into.
@@ -57,24 +57,24 @@ pub(crate) const ARENA_BLOCK_SIZE: usize = 4096;
 /// also a [`Conn`] — but the two are kept apart on purpose: only the reading
 /// half knows about the block, and only the common half knows about closing.
 #[derive(Copy, Clone, Debug)]
-pub struct Reader(*mut RStream);
+pub(super) struct Reader(*mut RStream);
 
 impl Reader {
     /// # Safety
     /// `stream` is live, does not move while it is open, and outlives every
     /// use of this handle.
-    pub unsafe fn new(stream: *mut RStream) -> Self {
+    pub(super) unsafe fn new(stream: *mut RStream) -> Self {
         debug_assert!(!stream.is_null());
         Reader(stream)
     }
 
     /// The pointer back, for the consumer's callback, which still takes one.
-    pub fn as_ptr(self) -> *mut RStream {
+    pub(super) fn as_ptr(self) -> *mut RStream {
         self.0
     }
 
     /// The common half: the libuv handle, and closing.
-    pub fn conn(self) -> Conn {
+    pub(super) fn conn(self) -> Conn {
         // SAFETY: a field of the live stream, so it inherits this handle's
         // promise.
         unsafe { Conn::new(&raw mut (*self.0).s) }
@@ -100,12 +100,18 @@ impl Deref for Reader {
     }
 }
 
-impl DerefMut for Reader {
-    fn deref_mut(&mut self) -> &mut RStream {
-        // SAFETY: the promise made at construction.
-        unsafe { &mut *self.0 }
-    }
-}
+crate::event::stream::field_writers!(Reader {
+    fn set_did_eof => did_eof: bool;
+    fn set_want_read => want_read: bool;
+    fn set_pending_read => pending_read: bool;
+    fn set_paused_full => paused_full: bool;
+    fn set_buffer => buffer: *mut c_char;
+    fn set_read_pos => read_pos: *mut c_char;
+    fn set_write_pos => write_pos: *mut c_char;
+    fn set_uvbuf => uvbuf: uv_buf_t;
+    fn set_read_cb => read_cb: stream_read_cb;
+    fn set_num_bytes => num_bytes: size_t;
+});
 
 /// # Safety
 /// `uv_loop` is live, `stream` points at storage that does not move
@@ -125,15 +131,15 @@ pub unsafe fn rstream_init_fd(uv_loop: *mut Loop, stream: *mut RStream, fd: c_in
 /// `stream` has been through [`stream_init`] and has no block yet.
 pub unsafe fn rstream_init(stream: *mut RStream) {
     // SAFETY: the caller's stream.
-    let mut stream = unsafe { Reader::new(stream) };
-    stream.read_cb = None;
-    stream.num_bytes = 0;
+    let stream = unsafe { Reader::new(stream) };
+    stream.set_read_cb(None);
+    stream.set_num_bytes(0);
     // SAFETY: a block from the arena, given back by `rstream_close_cb`.
-    stream.buffer = unsafe { alloc_block() }.cast::<c_char>();
-    stream.write_pos = stream.buffer;
-    stream.read_pos = stream.write_pos;
-    stream.s.close_cb = Some(rstream_close_cb);
-    stream.s.close_cb_data = stream.as_ptr().cast();
+    stream.set_buffer(unsafe { alloc_block() }.cast::<c_char>());
+    stream.set_write_pos(stream.buffer);
+    stream.set_read_pos(stream.write_pos);
+    stream.conn().set_close_cb(Some(rstream_close_cb));
+    stream.conn().set_close_cb_data(stream.as_ptr().cast());
 }
 
 /// Ask libuv for reads, without touching `want_read`. Used to resume after
@@ -166,10 +172,10 @@ fn start_reading(stream: Reader) {
 /// `data`.
 pub unsafe fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut c_void) {
     // SAFETY: the caller's stream.
-    let mut stream = unsafe { Reader::new(stream) };
-    stream.read_cb = cb;
-    stream.s.cb_data = data;
-    stream.want_read = true;
+    let stream = unsafe { Reader::new(stream) };
+    stream.set_read_cb(cb);
+    stream.conn().set_cb_data(data);
+    stream.set_want_read(true);
     if !stream.paused_full {
         start_reading(stream);
     }
@@ -197,9 +203,9 @@ fn stop_reading(stream: Reader) {
 /// `stream` has been through [`rstream_init`].
 pub unsafe fn rstream_stop(stream: *mut RStream) {
     // SAFETY: the caller's stream.
-    let mut stream = unsafe { Reader::new(stream) };
+    let stream = unsafe { Reader::new(stream) };
     stop_reading(stream);
-    stream.want_read = false;
+    stream.set_want_read(false);
 }
 
 /// Bytes read but not yet consumed.
@@ -232,12 +238,12 @@ unsafe extern "C" fn alloc_cb(handle: *mut uv_handle_t, _suggested: size_t, buf:
 /// bytes were written into the span [`alloc_cb`] handed out.
 unsafe extern "C" fn read_cb(uvstream: *mut uv_stream_t, cnt: ssize_t, _buf: *const uv_buf_t) {
     // SAFETY: `stream_init` put the stream's address in `data`.
-    let mut stream = unsafe { Reader::new((*uvstream).data.cast()) };
+    let stream = unsafe { Reader::new((*uvstream).data.cast()) };
     if cnt > 0 {
-        stream.num_bytes += cnt.cast_unsigned();
+        stream.set_num_bytes(stream.num_bytes + cnt.cast_unsigned());
         // SAFETY: libuv wrote `cnt` bytes into the free tail, which is where
         // `write_pos` pointed and which is at least that long.
-        stream.write_pos = unsafe { stream.write_pos.offset(cnt) };
+        stream.set_write_pos(unsafe { stream.write_pos.offset(cnt) });
         invoke_read_cb(stream, false);
         return;
     }
@@ -281,9 +287,11 @@ unsafe extern "C" fn read_cb(uvstream: *mut uv_stream_t, cnt: ssize_t, _buf: *co
 /// libuv's idle callback: `handle` is a file-backed reading stream's own.
 unsafe extern "C" fn fread_idle_cb(handle: *mut uv_idle_t) {
     // SAFETY: `stream_init` put the stream's address in `data`.
-    let mut stream = unsafe { Reader::new((*handle).data.cast()) };
-    stream.uvbuf.base = stream.write_pos;
-    stream.uvbuf.len = stream.space();
+    let stream = unsafe { Reader::new((*handle).data.cast()) };
+    stream.set_uvbuf(uv_buf_t {
+        base: stream.write_pos,
+        len: stream.space(),
+    });
     // SAFETY: the descriptor the stream was built from, and a request and a
     // buffer descriptor that both live as long as the synchronous call.
     let result = unsafe {
@@ -307,8 +315,10 @@ unsafe extern "C" fn fread_idle_cb(handle: *mut uv_idle_t) {
         return;
     }
     // SAFETY: the read filled `result` bytes of the free tail.
-    stream.write_pos = unsafe { stream.write_pos.offset(result) };
-    stream.s.fpos += i64::try_from(result).expect("a read fits in a file offset");
+    stream.set_write_pos(unsafe { stream.write_pos.offset(result) });
+    stream
+        .conn()
+        .set_fpos(stream.s.fpos + i64::try_from(result).expect("a read fits in a file offset"));
     invoke_read_cb(stream, false);
 }
 
@@ -316,23 +326,23 @@ unsafe extern "C" fn fread_idle_cb(handle: *mut uv_idle_t) {
 /// way further up the stack (the consumer can poll the loop).
 ///
 /// Filling the block stops the reads: [`rstream_consume`] restarts them.
-fn invoke_read_cb(mut stream: Reader, eof: bool) {
-    stream.did_eof |= eof;
+fn invoke_read_cb(stream: Reader, eof: bool) {
+    stream.set_did_eof(stream.did_eof | eof);
     if stream.space() == 0 {
         stop_reading(stream);
-        stream.paused_full = true;
+        stream.set_paused_full(true);
     }
     if stream.pending_read {
         return;
     }
-    stream.s.pending_reqs += 1;
-    stream.pending_read = true;
+    stream.conn().set_pending_reqs(stream.s.pending_reqs + 1);
+    stream.set_pending_read(true);
     deliver_reads(stream);
 }
 
 /// Hand the filled span to the consumer and take back what it consumed.
-fn deliver_reads(mut stream: Reader) {
-    stream.pending_read = false;
+fn deliver_reads(stream: Reader) {
+    stream.set_pending_read(false);
     if let Some(consume) = stream.read_cb {
         let available = stream.available();
         let (read_pos, cb_data, did_eof) = (stream.read_pos, stream.s.cb_data, stream.did_eof);
@@ -342,7 +352,7 @@ fn deliver_reads(mut stream: Reader) {
         debug_assert!(consumed <= available);
         consume_bytes(stream, consumed);
     }
-    stream.s.pending_reqs -= 1;
+    stream.conn().set_pending_reqs(stream.s.pending_reqs - 1);
     if stream.s.closed && stream.s.pending_reqs == 0 {
         close_handle(stream.conn());
     }
@@ -360,9 +370,9 @@ pub unsafe fn rstream_consume(stream: *mut RStream, consumed: size_t) {
 }
 
 /// [`rstream_consume`] with the handle already built.
-fn consume_bytes(mut stream: Reader, consumed: size_t) {
+fn consume_bytes(stream: Reader, consumed: size_t) {
     // SAFETY: the caller's promise: `consumed` bytes of the unread head.
-    stream.read_pos = unsafe { stream.read_pos.add(consumed) };
+    stream.set_read_pos(unsafe { stream.read_pos.add(consumed) });
     let remaining = stream.available();
     if remaining > 0 && stream.read_pos > stream.buffer {
         // SAFETY: both spans are inside the one block, and `memmove` is
@@ -373,16 +383,16 @@ fn consume_bytes(mut stream: Reader, consumed: size_t) {
                 .cast::<u8>()
                 .copy_from(stream.read_pos.cast(), remaining);
         }
-        stream.read_pos = stream.buffer;
+        stream.set_read_pos(stream.buffer);
         // SAFETY: `remaining` bytes of the block, just moved to its front.
-        stream.write_pos = unsafe { stream.buffer.add(remaining) };
+        stream.set_write_pos(unsafe { stream.buffer.add(remaining) });
     } else if remaining == 0 {
-        stream.write_pos = stream.buffer;
-        stream.read_pos = stream.write_pos;
+        stream.set_write_pos(stream.buffer);
+        stream.set_read_pos(stream.write_pos);
     }
     if stream.want_read && stream.paused_full && stream.space() != 0 {
         debug_assert!(stream.read_cb.is_some());
-        stream.paused_full = false;
+        stream.set_paused_full(false);
         start_reading(stream);
     }
 }

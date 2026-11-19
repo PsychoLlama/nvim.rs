@@ -32,7 +32,7 @@ use crate::message_fmt::msg_cstr;
 use crate::os::uv_error::{UV_EACCES, UV_EADDRINUSE, UV_EINVAL, UV_ENOENT};
 use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
 use core::{mem, ptr};
 
 use crate::charset::try_getdigits_at;
@@ -114,6 +114,13 @@ impl Watcher {
         unsafe { (&raw mut (*self.0).addr).cast() }
     }
 
+    /// The address buffer as a string, for as long as the caller keeps the
+    /// watcher alive: it is always NUL-terminated (`xstrlcpy` writes it).
+    fn addr<'a>(self) -> &'a CStr {
+        // SAFETY: a field of the live watcher, NUL-terminated.
+        unsafe { CStr::from_ptr(self.addr_ptr()) }
+    }
+
     /// Bind the local-socket arm to the address. A path too long for a
     /// socket fails with `UV_EINVAL` rather than being truncated, which would
     /// serve a different path than `v:servername` reports.
@@ -166,12 +173,12 @@ impl Deref for Watcher {
     }
 }
 
-impl DerefMut for Watcher {
-    fn deref_mut(&mut self) -> &mut SocketWatcher {
-        // SAFETY: the promise made at construction.
-        unsafe { &mut *self.0 }
-    }
-}
+crate::event::stream::field_writers!(Watcher {
+    fn set_stream => stream: *mut uv_stream_t;
+    fn set_data => data: *mut c_void;
+    fn set_cb => cb: socket_cb;
+    fn set_close_cb => close_cb: socket_close_cb;
+});
 
 /// The libuv loop inside one of the editor's.
 ///
@@ -205,7 +212,7 @@ pub unsafe fn socket_watcher_init(
     endpoint: *const c_char,
 ) -> c_int {
     // SAFETY: the caller's promise.
-    let mut watcher = unsafe { Watcher::new(watcher) };
+    let watcher = unsafe { Watcher::new(watcher) };
     let addr = watcher.addr_ptr();
     // SAFETY: the watcher's own buffer, and the caller's endpoint.
     unsafe { xstrlcpy(addr, endpoint, SOCKET_ADDR_LEN) };
@@ -276,22 +283,22 @@ pub unsafe fn socket_watcher_init(
                 uv_tcp_init(uv_of(uv_loop), handle);
                 uv_tcp_nodelay(handle, 1);
             }
-            watcher.stream = handle.cast();
+            watcher.set_stream(handle.cast());
         }
         None => {
             let handle = watcher.pipe();
             // SAFETY: the caller's loop and the handle just chosen.
             unsafe { uv_pipe_init(uv_of(uv_loop), handle, 0) };
-            watcher.stream = handle.cast();
+            watcher.set_stream(handle.cast());
         }
     }
 
     let stream = watcher.stream;
     // SAFETY: the handle initialised just above.
     unsafe { (*stream).data = watcher.as_ptr().cast() };
-    watcher.cb = None;
-    watcher.close_cb = None;
-    watcher.data = ptr::null_mut();
+    watcher.set_cb(None);
+    watcher.set_close_cb(None);
+    watcher.set_data(ptr::null_mut());
     0
 }
 
@@ -309,8 +316,8 @@ pub unsafe fn socket_watcher_start(
     cb: socket_cb,
 ) -> c_int {
     // SAFETY: the caller's promise.
-    let mut watcher = unsafe { Watcher::new(watcher) };
-    watcher.cb = cb;
+    let watcher = unsafe { Watcher::new(watcher) };
+    watcher.set_cb(cb);
     let addr = watcher.addr_ptr();
     let stream = watcher.stream;
     let mut result = UV_EINVAL;
@@ -393,7 +400,7 @@ fn record_bound_port(watcher: Watcher) {
 ///
 /// Returns the new bind result, or `failure` unchanged if the socket is live
 /// or could not be removed.
-fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
+fn rebind_stale_socket(watcher: Watcher, failure: c_int) -> c_int {
     let addr = watcher.addr_ptr();
     let stream = watcher.stream;
     // SAFETY: the watcher's handle, which libuv gave the editor's loop.
@@ -451,7 +458,7 @@ fn rebind_stale_socket(mut watcher: Watcher, failure: c_int) -> c_int {
 
     // SAFETY: a fresh handle, on the loop the closed one used.
     unsafe { uv_pipe_init(handle_loop, handle, 0) };
-    watcher.stream = handle.cast();
+    watcher.set_stream(handle.cast());
     // SAFETY: the handle just re-initialised.
     unsafe { (*handle).data = watcher.as_ptr().cast() };
     watcher.bind_pipe().err().unwrap_or(0)
@@ -530,8 +537,8 @@ pub unsafe fn socket_watcher_accept(watcher: *mut SocketWatcher, stream: *mut RS
 /// `cb` runs.
 pub unsafe fn socket_watcher_close(watcher: *mut SocketWatcher, cb: socket_close_cb) {
     // SAFETY: the caller's promise.
-    let mut watcher = unsafe { Watcher::new(watcher) };
-    watcher.close_cb = cb;
+    let watcher = unsafe { Watcher::new(watcher) };
+    watcher.set_close_cb(cb);
     let stream = watcher.stream;
     // SAFETY: the watcher's own listening handle.
     unsafe { uv_close(stream.cast(), Some(close_cb)) };
@@ -565,14 +572,13 @@ impl Listener {
     /// The address it listens on: the endpoint as resolved, with the port
     /// the kernel picked once it is bound.
     pub(crate) fn address(&self) -> &CStr {
-        // SAFETY: the watcher this value owns, live until `close`; its
-        // address buffer is always NUL-terminated (`xstrlcpy` writes it).
-        unsafe { CStr::from_ptr((*self.0.as_ptr()).addr.as_ptr()) }
+        // The watcher this value owns, live until `close`.
+        Watcher(self.0.as_ptr()).addr()
     }
 
     /// Bind and listen, reporting each connection to `cb`; the libuv error
     /// otherwise.
-    pub(crate) fn start(&mut self, backlog: c_int, cb: fn(&mut SocketWatcher, c_int)) -> c_int {
+    pub(crate) fn start(&mut self, backlog: c_int, cb: fn(&Incoming<'_>, c_int)) -> c_int {
         // SAFETY: a watcher `socket_watcher_init` set up and nothing closed.
         unsafe { socket_watcher_start(self.0.as_ptr(), backlog, Some(cb)) }
     }
@@ -593,6 +599,27 @@ impl Listener {
             unsafe { uv_freeaddrinfo(watcher.addrinfo()) };
         }
         self.close();
+    }
+}
+
+/// A client waiting on a listening socket, as its connection callback sees
+/// it: the listener lent for that one call. It hands out no `&mut` to the
+/// watcher, whose handles libuv holds by address; a callback can accept the
+/// client and read the address, nothing else.
+pub struct Incoming<'call> {
+    watcher: Watcher,
+    _call: core::marker::PhantomData<&'call mut SocketWatcher>,
+}
+
+impl Incoming<'_> {
+    /// The listener, for [`socket_watcher_accept`].
+    pub(in crate::event) fn as_ptr(&self) -> *mut SocketWatcher {
+        self.watcher.0
+    }
+
+    /// The address the listener is bound to.
+    pub(crate) fn address(&self) -> CString {
+        self.watcher.addr().to_owned()
     }
 }
 
@@ -626,7 +653,7 @@ pub unsafe fn socket_connect(
     timeout: c_int,
 ) -> Result<(), &'static CStr> {
     // SAFETY: the caller's stream, live until this returns.
-    let mut conn = unsafe { Reader::new(stream) }.conn();
+    let conn = unsafe { Reader::new(stream) }.conn();
     // SAFETY: `uv_getaddrinfo_t` is inhabited by the all-zero bit pattern.
     let mut addr_req: uv_getaddrinfo_t = unsafe { mem::zeroed() };
 
@@ -689,8 +716,8 @@ pub unsafe fn socket_connect(
         };
         // SAFETY: the caller's stream, now holding the connect attempt.
         unsafe { stream_init(ptr::null_mut(), conn.as_ptr(), -1, uv_stream) };
-        conn.internal_close_cb = Some(connect_close_cb);
-        conn.internal_data = closed.as_ptr().cast();
+        conn.set_internal_close_cb(Some(connect_close_cb));
+        conn.set_internal_data(closed.as_ptr().cast());
         closed.set(false);
         status.set(1);
 
@@ -721,8 +748,8 @@ pub unsafe fn socket_connect(
         candidate = next;
     };
 
-    conn.internal_close_cb = None;
-    conn.internal_data = ptr::null_mut();
+    conn.set_internal_close_cb(None);
+    conn.set_internal_data(ptr::null_mut());
     // SAFETY: the lookup made above, if any; libuv takes a null one.
     unsafe { uv_freeaddrinfo(addr_req.addrinfo) };
     settled
@@ -741,9 +768,11 @@ unsafe extern "C" fn connection_cb(handle: *mut uv_stream_t, status: c_int) {
     // SAFETY: the caller's promise.
     let watcher = unsafe { Watcher::new((*handle).data.cast()) };
     let notify = watcher.cb.expect("a started watcher has a callback");
-    // SAFETY: the watcher is live while it listens, and nothing else
-    // borrows it while its callback runs.
-    notify(unsafe { &mut *watcher.as_ptr() }, status);
+    let incoming = Incoming {
+        watcher,
+        _call: core::marker::PhantomData,
+    };
+    notify(&incoming, status);
 }
 
 /// libuv: the listening handle is closed.

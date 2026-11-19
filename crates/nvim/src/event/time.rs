@@ -121,12 +121,13 @@ impl core::ops::Deref for Handle {
     }
 }
 
-impl core::ops::DerefMut for Handle {
-    fn deref_mut(&mut self) -> &mut Watcher {
-        // SAFETY: the promise made at construction.
-        unsafe { &mut *self.0 }
-    }
-}
+crate::event::stream::field_writers!(Handle {
+    fn set_uv_data => uv.data: *mut c_void;
+    fn set_on_due => on_due: OnDue;
+    fn set_on_closed => on_closed: Option<fn(u64)>;
+    fn set_closing => closing: bool;
+    fn set_free_on_close => free_on_close: bool;
+});
 
 /// A libuv timer this module owns at a fixed address. See the module docs.
 #[derive(Debug)]
@@ -158,11 +159,11 @@ impl OwnedTimer {
         }));
         // SAFETY: the box just made, at the address it keeps until the close
         // event frees it.
-        let mut handle = unsafe { Handle::new(watcher) };
+        let handle = unsafe { Handle::new(watcher) };
         // SAFETY: the box's own timer, on the editor's loop, live from
         // startup until exit.
         unsafe { uv_timer_init(&raw mut (*main_loop_raw()).uv, handle.uv()) };
-        handle.uv.data = watcher.cast();
+        handle.set_uv_data(watcher.cast());
         OwnedTimer(handle)
     }
 
@@ -178,7 +179,7 @@ impl OwnedTimer {
         if self.0.closing {
             return;
         }
-        self.0.on_due = on_due;
+        self.0.set_on_due(on_due);
         // libuv counts `timeout` from the loop's cached time, taken when the
         // loop last woke; the editor may have run for a while since (a
         // script calling `timer_start()`), and the timer would fire that
@@ -220,14 +221,14 @@ impl Drop for OwnedTimer {
 
 /// Stop and close `watcher`, unless it is closing already. The box passes
 /// to [`close_cb`], which frees it.
-fn close_watcher(mut watcher: Handle, on_closed: Option<fn(u64)>) {
+fn close_watcher(watcher: Handle, on_closed: Option<fn(u64)>) {
     if watcher.closing {
         // A `ScopedTimer` that closed itself at loop shutdown: the close is
         // under way and will not free the box, which goes with the process.
         return;
     }
-    watcher.closing = true;
-    watcher.on_closed = on_closed;
+    watcher.set_closing(true);
+    watcher.set_on_closed(on_closed);
     // SAFETY: the box's own timer, open until now; its close callback is
     // the last thing libuv does with it.
     unsafe {
@@ -301,8 +302,7 @@ unsafe extern "C" fn time_event(argv: *mut *mut c_void) {
             if unsafe { (*main_loop_raw()).closing } {
                 // The box stays with the frame that owns it, which is never
                 // going to drop it.
-                let mut watcher = watcher;
-                watcher.free_on_close = false;
+                watcher.set_free_on_close(false);
                 close_watcher(watcher, None);
             }
         }
