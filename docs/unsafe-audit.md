@@ -56,7 +56,11 @@ falls into four classes:
   [docs/unsafe-fn-allowlist.md](unsafe-fn-allowlist.md) (five rows today).
 - Debug builds add checks the release build compiles out: the main-thread
   and borrow checks of `GlobalCell`, the overlapping-edit check on Vimscript
-  values, the Lua stack's consuming-operation check. The functional, old-style
+  values, the Lua stack's consuming-operation check. They are one cfg,
+  `soundness_checks`, which `--features soundness-checks` turns on in a
+  release build too. What the safe API over the unsafe code leaves to those
+  checks, or to convention, is surveyed class by class in
+  [docs/safe-surface.md](safe-surface.md). The functional, old-style
   and unit suites run against debug builds; whole-suite AddressSanitizer runs
   and Miri (over the crate's own tests) back them. `just miri-perimeter` runs
   Miri over the raw-memory rows' own tests alone: each of those files holds
