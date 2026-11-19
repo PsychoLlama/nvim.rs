@@ -78,9 +78,9 @@ impl ScreenHost for ScreenReports {
         _old_pos: VTermPos,
         _visible: c_int,
     ) -> Option<c_int> {
-        let mut term = self.0;
-        term.cursor.row = new_pos.row;
-        term.cursor.col = new_pos.col;
+        let term = self.0;
+        term.cursor.row.set(new_pos.row);
+        term.cursor.col.set(new_pos.col);
         invalidate_terminal(term, None);
         Some(1)
     }
@@ -138,7 +138,7 @@ pub(crate) fn buf_set_term_title(buffer: Option<Buf>, title: &[u8]) {
 
 /// Accumulate a fragmented title, publishing it once the last fragment
 /// arrives.
-fn accumulate_title(mut term: Term, frag: &Fragment<'_>) {
+fn accumulate_title(term: Term, frag: &Fragment<'_>) {
     let bytes = frag.bytes();
     let buf = term_buf(term);
     if frag.initial && frag.last {
@@ -146,18 +146,18 @@ fn accumulate_title(mut term: Term, frag: &Fragment<'_>) {
         return;
     }
     if frag.initial {
-        term.title.clear();
+        term.title.borrow_mut().clear();
     }
-    term.title.extend_from_slice(bytes);
+    term.title.borrow_mut().extend_from_slice(bytes);
     if frag.last {
         // Taken rather than borrowed: publishing reaches the editor, and
         // the accumulator is done with either way.
-        let title = ::core::mem::take(&mut term.title);
+        let title = term.title.take();
         buf_set_term_title(buf, &title);
     }
 }
 
-fn apply_termprop(mut term: Term, prop: VTermProp, val: &Value<'_>) -> c_int {
+fn apply_termprop(term: Term, prop: VTermProp, val: &Value<'_>) -> c_int {
     if prop == VTERM_PROP_TITLE {
         if let Value::Str(frag) = val {
             accumulate_title(term, frag);
@@ -168,29 +168,29 @@ fn apply_termprop(mut term: Term, prop: VTermProp, val: &Value<'_>) -> c_int {
     let number = val.int();
     let flag = number != 0;
     match prop {
-        VTERM_PROP_ALTSCREEN => term.in_altscreen = flag,
+        VTERM_PROP_ALTSCREEN => term.in_altscreen.set(flag),
         VTERM_PROP_CURSORVISIBLE => {
-            term.cursor.visible = flag;
+            term.cursor.visible.set(flag);
             invalidate_terminal(term, None);
         }
-        VTERM_PROP_MOUSE => term.forward_mouse = flag,
+        VTERM_PROP_MOUSE => term.forward_mouse.set(flag),
         VTERM_PROP_CURSORBLINK => {
-            term.cursor.blink = flag;
-            term.pending.cursor = true;
+            term.cursor.blink.set(flag);
+            term.pending.cursor.set(true);
             invalidate_terminal(term, None);
         }
         VTERM_PROP_CURSORSHAPE => {
-            term.cursor.shape = number;
-            term.pending.cursor = true;
+            term.cursor.shape.set(number);
+            term.pending.cursor.set(true);
             invalidate_terminal(term, None);
         }
-        VTERM_PROP_THEMEUPDATES => term.theme_updates = flag,
+        VTERM_PROP_THEMEUPDATES => term.theme_updates.set(flag),
         VTERM_PROP_SYNCOUTPUT => {
             // While synchronized output is on, damage is recorded but not
             // refreshed; leaving it owes the screen one flush.
-            term.synchronized_output = flag;
+            term.synchronized_output.set(flag);
             if !flag {
-                term.sync_flush_pending = true;
+                term.sync_flush_pending.set(true);
             }
         }
         _ => return 0,
@@ -235,13 +235,13 @@ impl SelectionHost for Clipboard {
 
     /// Accumulate a clipboard write, queueing it once complete.
     fn set(&mut self, mask: VTermSelectionMask, frag: Fragment<'_>) -> Option<c_int> {
-        let mut term = self.0;
+        let term = self.0;
         if frag.initial {
-            term.selection.clear();
+            term.selection.borrow_mut().clear();
         }
-        term.selection.extend_from_slice(frag.bytes());
+        term.selection.borrow_mut().extend_from_slice(frag.bytes());
         if frag.last {
-            let payload = term.selection.clone();
+            let payload = term.selection.borrow().clone();
             put_job_on_main_loop(move || term_clipboard_set(mask, &payload));
         }
         Some(1)

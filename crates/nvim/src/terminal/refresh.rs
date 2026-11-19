@@ -84,12 +84,13 @@ pub(super) fn refresh_queue() -> Option<QueueId> {
 /// Nothing is queued while the child holds synchronized output open: it has
 /// asked for the screen to stay as it is until it says otherwise, and the
 /// damage it is making meanwhile would be a half-drawn frame.
-pub(crate) fn invalidate_terminal(mut term: Term, rows: Option<(c_int, c_int)>) {
+pub(crate) fn invalidate_terminal(term: Term, rows: Option<(c_int, c_int)>) {
     if let Some((start_row, end_row)) = rows {
-        term.invalid_start = term.invalid_start.min(start_row);
-        term.invalid_end = term.invalid_end.max(end_row);
+        term.invalid_start
+            .set(term.invalid_start.get().min(start_row));
+        term.invalid_end.set(term.invalid_end.get().max(end_row));
     }
-    if term.synchronized_output {
+    if term.synchronized_output.get() {
         return;
     }
     INVALIDATED.with_mut(|queued| {
@@ -124,7 +125,7 @@ fn refresh_timer_cb(_owner: uint64_t) {
     // Taken rather than iterated in place: refreshing runs editor code that
     // damages terminals, and those belong to the next round.
     for term in INVALIDATED.with_mut(::core::mem::take) {
-        if !term.synchronized_output {
+        if !term.synchronized_output.get() {
             refresh_terminal(term);
         }
     }
@@ -169,7 +170,7 @@ pub(crate) fn refresh_terminal(term: Term) {
     }
     // Events the child's output produced were held back until the buffer
     // agreed with the screen; it does now.
-    if let Some(events) = &term.pending.events {
+    if let Some(events) = &*term.pending.events.borrow() {
         event_queue::move_events(QueueId::MAIN, events.id());
     }
 }
@@ -177,15 +178,15 @@ pub(crate) fn refresh_terminal(term: Term) {
 /// Tell the child about a resize the editor already applied to vterm.
 ///
 /// Returns whether anything was sent.
-fn refresh_size(mut term: Term) -> bool {
-    if !term.pending.resize || term.closed {
+fn refresh_size(term: Term) -> bool {
+    if !term.pending.resize.get() || term.closed.get() {
         return false;
     }
-    term.pending.resize = false;
+    term.pending.resize.set(false);
     let (height, width) = term.size();
     // vterm reflowed everything; none of the old rows can be trusted.
-    term.invalid_start = 0;
-    term.invalid_end = height;
+    term.invalid_start.set(0);
+    term.invalid_end.set(height);
     // Read out before the call: the channel is free to re-enter.
     let (resize_cb, owner) = (term.opts.resize_cb, term.opts.owner);
     let (width, height) = (number_as_u16(width.into()), number_as_u16(height.into()));
@@ -204,7 +205,7 @@ pub(crate) fn on_scrollback_changed_in(buffer: Buf) {
 /// `'scrollback'` changed; trim or extend to match, but only once the
 /// scrollback has been sized at all.
 fn on_scrollback_option_changed(term: Term) {
-    if term.sb.is_sized() {
+    if term.sb.borrow().is_sized() {
         refresh_terminal(term);
     }
 }
@@ -214,21 +215,22 @@ fn on_scrollback_option_changed(term: Term) {
 /// Only the rows marked invalid are re-read. Rows past the end of the
 /// buffer are appended instead — that is how a terminal buffer grows to a
 /// full screen after it opens.
-pub(crate) fn refresh_screen(mut term: Term, buffer: Buf) {
+pub(crate) fn refresh_screen(term: Term, buffer: Buf) {
     let mut changed = 0;
     let mut added = 0;
     let (height, width) = term.size();
-    term.invalid_end = term.invalid_end.min(height);
-    if term.invalid_start >= term.invalid_end {
+    term.invalid_end.set(term.invalid_end.get().min(height));
+    if term.invalid_start.get() >= term.invalid_end.get() {
         clear_invalid(term);
         return;
     }
 
-    let first_linenr = row_to_linenr(term, term.invalid_start);
-    for (offset, row) in (0..).zip(term.invalid_start..term.invalid_end) {
+    let first_linenr = row_to_linenr(term, term.invalid_start.get());
+    for (offset, row) in (0..).zip(term.invalid_start.get()..term.invalid_end.get()) {
         let linenr = LineNr::new(first_linenr + offset);
         fetch_row(term, row, width);
-        let text = crate::cstr::in_bytes(&term.textbuf);
+        let textbuf = term.textbuf.borrow();
+        let text = crate::cstr::in_bytes(&textbuf);
         // Past the end of the buffer means the terminal is still filling
         // out its first screen.
         if linenr <= buffer.line_count() {
@@ -240,8 +242,8 @@ pub(crate) fn refresh_screen(mut term: Term, buffer: Buf) {
         }
     }
 
-    term.old_height = height;
-    let change_start = LineNr::new(row_to_linenr(term, term.invalid_start));
+    term.old_height.set(height);
+    let change_start = LineNr::new(row_to_linenr(term, term.invalid_start.get()));
     let change_end = change_start + changed;
     clear_invalid(term);
     // Reports the lines replaced and appended above.
@@ -258,9 +260,9 @@ pub(crate) fn refresh_screen(mut term: Term, buffer: Buf) {
 
 /// Reset the damaged-row range to "nothing damaged" — an empty range that
 /// any real damage widens.
-fn clear_invalid(mut term: Term) {
-    term.invalid_start = c_int::MAX;
-    term.invalid_end = -1;
+fn clear_invalid(term: Term) {
+    term.invalid_start.set(c_int::MAX);
+    term.invalid_end.set(-1);
 }
 
 /// Every window showing `buffer`.
@@ -309,12 +311,12 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buffer: Buf, added: c_int) {
 /// cursor is invisible, and republish the cursor shape when it changes.
 ///
 /// Only for the terminal the user is typing at — the shape is global.
-pub(crate) fn refresh_cursor(mut term: Term, cursor_visible: &mut bool) {
+pub(crate) fn refresh_cursor(term: Term, cursor_visible: &mut bool) {
     if !is_focused(term) {
         return;
     }
-    if term.cursor.visible != *cursor_visible {
-        *cursor_visible = term.cursor.visible;
+    if term.cursor.visible.get() != *cursor_visible {
+        *cursor_visible = term.cursor.visible.get();
         // "Busy" is what hides the cursor; the UI has no other way to be
         // told the cursor is not to be drawn.
         if *cursor_visible {
@@ -323,12 +325,12 @@ pub(crate) fn refresh_cursor(mut term: Term, cursor_visible: &mut bool) {
             ui_busy_start();
         }
     }
-    if !term.pending.cursor {
+    if !term.pending.cursor.get() {
         return;
     }
-    term.pending.cursor = false;
-    let blink = if term.cursor.blink { 500 } else { 0 };
-    let shape = term.cursor.shape;
+    term.pending.cursor.set(false);
+    let blink = if term.cursor.blink.get() { 500 } else { 0 };
+    let shape = term.cursor.shape.get();
     update_shape_entry(SHAPE_IDX_TERM, |entry| {
         entry.blinkon = blink;
         entry.blinkoff = blink;

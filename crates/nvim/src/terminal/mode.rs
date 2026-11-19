@@ -68,7 +68,7 @@ use super::input::{is_mouse_key, send_mouse_event, terminal_send_key};
 use super::refresh::{
     adjust_topline_cursor, invalidate_terminal, refresh_cursor, terminal_check_refresh,
 };
-use super::{Term, row_to_linenr, terminal_check_size, terminal_set_state};
+use super::{Term, row_to_linenr, terminal_check_size, terminal_set_state, with_vt};
 use crate::optionstr::OptStringRef;
 use crate::search::FORWARD;
 
@@ -135,8 +135,8 @@ fn current_buf() -> Buf {
 
 /// Tell the child whether it has focus, so it can show its own cursor
 /// accordingly.
-fn terminal_focus(mut term: Term, focus: bool) {
-    term.vt.focus(focus);
+fn terminal_focus(term: Term, focus: bool) {
+    with_vt(term, |vt| vt.focus(focus));
 }
 
 /// Force the current window's options to what a terminal needs, saving what
@@ -219,7 +219,7 @@ fn restore_saved_winopts(s: &mut TerminalState) {
     let Some(mut wp) = s.save_curwin.and_then(WinId::get) else {
         return;
     };
-    if wp.buffer().handle != s.term.buf_handle {
+    if wp.buffer().handle != s.term.buf_handle.get() {
         // The window went elsewhere; the terminal's buffer kept a copy of
         // the options this window had while it was showing it.
         let Some(mut buf) = super::term_buf(s.term) else {
@@ -272,7 +272,7 @@ pub(crate) fn terminal_enter() -> bool {
     MAPPED_CTRL_C.set(MAPPED_CTRL_C.get() | MODE_TERMINAL);
     let redraw = Allow::redraw();
     set_terminal_winopts(s);
-    s.term.pending.cursor = true;
+    s.term.pending.cursor.set(true);
     adjust_topline_cursor(s.term, buf, 0);
     showmode();
     ui_cursor_shape();
@@ -280,13 +280,13 @@ pub(crate) fn terminal_enter() -> bool {
     let mut buf = current_buf();
     buf.b_last_changedtick_i = buf_get_changedtick(buf);
 
-    s.term.refcount.retain();
+    s.term.retain();
     // SAFETY: TermEnter against a live buffer; nothing of the terminal or
     // the session is borrowed across it.
     apply_autocmds(AutoEvent::TermEnter, None, None, false, Some(buf));
     may_trigger_modechanged();
-    s.term.refcount.release();
-    if s.term.buf_handle == Handle::NONE {
+    s.term.release();
+    if s.term.buf_handle.get() == Handle::NONE {
         s.close = true;
     }
 
@@ -318,16 +318,16 @@ pub(crate) fn terminal_enter() -> bool {
     // TermLeave can reach the terminal, so hold it open even though it is
     // about to be destroyed.
     if s.close {
-        s.term.refcount.retain();
+        s.term.retain();
     }
 
     let buffer = Some(current_buf());
 
     apply_autocmds(AutoEvent::TermLeave, None, None, false, buffer);
     if s.close {
-        s.term.refcount.release();
-        let buf_handle = s.term.buf_handle;
-        s.term.destroy = true;
+        s.term.release();
+        let buf_handle = s.term.buf_handle.get();
+        s.term.destroy.set(true);
         // Read out before the call: the channel's close callback is free to
         // free the terminal.
         let (close_cb, owner) = (s.term.opts.close_cb, s.term.opts.owner);
@@ -347,7 +347,7 @@ pub(crate) fn terminal_enter() -> bool {
 pub(super) fn terminal_check_cursor(term: Term) {
     let mut win = current_win();
     let buf = current_buf();
-    let cursor_line = LineNr::new(row_to_linenr(term, term.cursor.row));
+    let cursor_line = LineNr::new(row_to_linenr(term, term.cursor.row.get()));
     win.w_cursor.lnum = buf.line_count().min(cursor_line);
 
     // Terminal windows always show the bottom of the buffer.
@@ -357,7 +357,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
         set_topline(win, topline);
     }
 
-    if term.suspended && STATE.get() & MODE_TERMINAL != 0 {
+    if term.suspended.get() && STATE.get() & MODE_TERMINAL != 0 {
         win.w_cursor = Pos {
             lnum: buf.line_count(),
             col: ColNr::ZERO,
@@ -372,7 +372,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
     } else {
         -1
     };
-    let col = ColNr::new((term.cursor.col + off).max(0));
+    let col = ColNr::new((term.cursor.col.get() + off).max(0));
     // SAFETY: a live window, and a column of the line its cursor is on.
     coladvance(win, col);
 }
@@ -395,7 +395,7 @@ fn terminal_check_focus(s: &mut TerminalState) -> bool {
         // The terminal being left was already finished; nothing else will
         // come back to close it.
         if s.close {
-            s.term.destroy = true;
+            s.term.destroy.set(true);
             // Read out before the call: the channel's close callback is
             // free to free the terminal.
             let (close_cb, owner) = (s.term.opts.close_cb, s.term.opts.owner);
@@ -405,7 +405,7 @@ fn terminal_check_focus(s: &mut TerminalState) -> bool {
         s.term = current_buf()
             .terminal_handle()
             .expect("checked to be a terminal buffer above");
-        s.term.pending.cursor = true;
+        s.term.pending.cursor.set(true);
         invalidate_terminal(s.term, None);
         terminal_focus(s.term, true);
     }
@@ -416,7 +416,8 @@ fn terminal_check_focus(s: &mut TerminalState) -> bool {
 /// cursor. Returning zero leaves terminal mode.
 pub(crate) fn terminal_check(s: &mut TerminalState) -> Step {
     debug_assert!(
-        !s.close || (s.term.buf_handle == Handle::NONE && s.term.raw() != current_buf().terminal),
+        !s.close
+            || (s.term.buf_handle.get() == Handle::NONE && s.term.raw() != current_buf().terminal),
         "a terminal marked closed is still the current buffer's"
     );
     if STOP_INSERT_MODE.get() || !terminal_check_focus(s) {
@@ -428,7 +429,7 @@ pub(crate) fn terminal_check(s: &mut TerminalState) -> Step {
     validate_cursor(current_win());
 
     // TextChangedT observers can close the terminal.
-    s.term.refcount.retain();
+    s.term.retain();
     // SAFETY: reads the editor's own event table.
     let observed = has_event(AutoEvent::TextChangedT);
     let buf = current_buf();
@@ -441,8 +442,8 @@ pub(crate) fn terminal_check(s: &mut TerminalState) -> Step {
         buf.b_last_changedtick_i = buf_get_changedtick(buf);
     }
     may_trigger_win_scrolled_resized();
-    s.term.refcount.release();
-    if s.term.buf_handle == Handle::NONE {
+    s.term.release();
+    if s.term.buf_handle.get() == Handle::NONE {
         s.close = true;
     }
 
@@ -495,10 +496,10 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
         }
         Some(SpecialKey::Event) => {
             // An event handler can close the terminal.
-            s.term.refcount.retain();
+            s.term.retain();
             state_handle_k_event();
-            s.term.refcount.release();
-            if s.term.buf_handle == Handle::NONE {
+            s.term.release();
+            if s.term.buf_handle.get() == Handle::NONE {
                 s.close = true;
             }
             return Step::Go;
@@ -534,7 +535,7 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
     }
     if mod_key == Key::CTRL_BSL && !s.got_bsl {
         s.got_bsl = true;
-    } else if s.term.suspended {
+    } else if s.term.suspended.get() {
         // Any key wakes a suspended child rather than being sent to it.
         //
         // Read out before the call: the channel's resume callback may
@@ -543,7 +544,7 @@ pub(crate) fn terminal_execute(s: &mut TerminalState, key: Key) -> Step {
         resume_cb.expect("every terminal's channel sets a resume callback")(owner);
         terminal_set_state(s.term, false);
     } else {
-        if s.term.closed {
+        if s.term.closed.get() {
             s.close = true;
             return Step::Leave;
         }

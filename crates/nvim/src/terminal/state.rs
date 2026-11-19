@@ -15,6 +15,7 @@
 use crate::os::libc::uint16_t;
 use crate::types::{Handle, RefcountSize};
 use crate::vterm::types::{VTerm, VTermScreenCell, VTermTerminator};
+use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 
 /// How much of a selection sequence vterm decodes before it hands a chunk
@@ -27,44 +28,55 @@ pub(crate) const SELECTIONBUF_SIZE: usize = 0x400;
 /// `terminal_destroy` frees it. Not `Copy` — there is exactly one of
 /// these per terminal buffer, reached through `Buffer::terminal`, and
 /// duplicating it would duplicate the allocations it owns. Reached
-/// through `winlayer::Term`.
+/// through `winlayer::Term`, which lends only `&terminal`: every field that
+/// changes is a `Cell` (a value read and stored whole) or a `RefCell` (a
+/// value borrowed across a call), so a write through one copy of the handle
+/// while another copy is mid-call is a `set`, or a borrow the `RefCell`
+/// refuses with a panic -- never a second `&mut`. The emulator is the one
+/// that matters: `vt.borrow_mut().input_write(..)` runs vterm's callbacks,
+/// which reach this terminal again through their own copy.
 #[derive(Debug)]
 pub struct terminal {
     pub opts: TerminalOptions,
     /// The emulator the child's output is written into.
-    pub vt: Box<VTerm>,
+    pub vt: RefCell<Box<VTerm>>,
     /// Where a screen row is rendered to text before being written into
     /// the buffer's lines. Grown to fit the widest row seen and then
     /// reused, so the refresh does not allocate per line.
-    pub textbuf: Vec<u8>,
-    pub sb: Scrollback,
-    pub old_sb_deleted: usize,
-    pub old_height: ::core::ffi::c_int,
+    pub textbuf: RefCell<Vec<u8>>,
+    pub sb: RefCell<Scrollback>,
+    pub old_sb_deleted: Cell<usize>,
+    pub old_height: Cell<::core::ffi::c_int>,
     /// The window title being reassembled from the fragments vterm hands
     /// over. Empty between titles.
-    pub title: Vec<u8>,
-    pub buf_handle: Handle,
-    pub in_altscreen: bool,
-    pub suspended: bool,
-    pub closed: bool,
-    pub destroy: bool,
-    pub forward_mouse: bool,
-    pub invalid_start: ::core::ffi::c_int,
-    pub invalid_end: ::core::ffi::c_int,
+    pub title: RefCell<Vec<u8>>,
+    pub buf_handle: Cell<Handle>,
+    pub in_altscreen: Cell<bool>,
+    pub suspended: Cell<bool>,
+    pub closed: Cell<bool>,
+    pub destroy: Cell<bool>,
+    pub forward_mouse: Cell<bool>,
+    pub invalid_start: Cell<::core::ffi::c_int>,
+    pub invalid_end: Cell<::core::ffi::c_int>,
     pub cursor: TerminalCursor,
     pub pending: TerminalPending,
-    pub streamed_paste: bool,
-    pub theme_updates: bool,
-    pub synchronized_output: bool,
-    pub sync_flush_pending: bool,
-    pub color_set: [bool; 16],
+    pub streamed_paste: Cell<bool>,
+    pub theme_updates: Cell<bool>,
+    pub synchronized_output: Cell<bool>,
+    pub sync_flush_pending: Cell<bool>,
+    pub color_set: Cell<[bool; 16]>,
     /// The clipboard write being reassembled. Empty between writes.
-    pub selection: Vec<u8>,
+    pub selection: RefCell<Vec<u8>>,
     /// The escape sequence currently being reassembled from the fragments
     /// vterm hands over, terminator excluded.
-    pub termrequest_buffer: Vec<u8>,
-    pub termrequest_terminator: VTermTerminator,
-    pub refcount: RefcountSize,
+    pub termrequest_buffer: RefCell<Vec<u8>>,
+    pub termrequest_terminator: Cell<VTermTerminator>,
+    pub refcount: Cell<RefcountSize>,
+    /// What vterm wrote for the child during the emulator call in progress
+    /// (key and mouse encodings, query replies). Sent once the call has
+    /// returned and let go of `vt` (`terminal::with_vt`): sending runs the
+    /// driver's write callback, which may be Lua that feeds this terminal.
+    pub output: RefCell<Vec<u8>>,
 }
 impl terminal {
     /// A terminal with everything at rest, for `terminal_alloc` to fill in.
@@ -79,32 +91,47 @@ impl terminal {
         );
         Self {
             opts,
-            buf_handle,
-            vt,
-            textbuf: Vec::new(),
-            sb: Scrollback::default(),
-            old_sb_deleted: 0,
-            old_height: 0,
-            title: Vec::new(),
-            in_altscreen: false,
-            suspended: false,
-            closed: false,
-            destroy: false,
-            forward_mouse: false,
-            invalid_start: 0,
-            invalid_end: 0,
+            buf_handle: Cell::new(buf_handle),
+            vt: RefCell::new(vt),
+            textbuf: RefCell::default(),
+            sb: RefCell::default(),
+            old_sb_deleted: Cell::new(0),
+            old_height: Cell::new(0),
+            title: RefCell::default(),
+            in_altscreen: Cell::new(false),
+            suspended: Cell::new(false),
+            closed: Cell::new(false),
+            destroy: Cell::new(false),
+            forward_mouse: Cell::new(false),
+            invalid_start: Cell::new(0),
+            invalid_end: Cell::new(0),
             cursor: TerminalCursor::default(),
             pending: TerminalPending::default(),
-            streamed_paste: false,
-            theme_updates: false,
-            synchronized_output: false,
-            sync_flush_pending: false,
-            color_set: [false; 16],
-            selection: Vec::new(),
-            termrequest_buffer: Vec::new(),
-            termrequest_terminator: 0,
-            refcount: RefcountSize::ZERO,
+            streamed_paste: Cell::new(false),
+            theme_updates: Cell::new(false),
+            synchronized_output: Cell::new(false),
+            sync_flush_pending: Cell::new(false),
+            color_set: Cell::new([false; 16]),
+            selection: RefCell::default(),
+            termrequest_buffer: RefCell::default(),
+            termrequest_terminator: Cell::new(0),
+            refcount: Cell::new(RefcountSize::ZERO),
+            output: RefCell::default(),
         }
+    }
+
+    /// One more owner: a request or a terminal-mode loop standing on it.
+    pub fn retain(&self) {
+        let mut count = self.refcount.get();
+        count.retain();
+        self.refcount.set(count);
+    }
+
+    /// One fewer owner.
+    pub fn release(&self) {
+        let mut count = self.refcount.get();
+        count.release();
+        self.refcount.set(count);
     }
 }
 
@@ -241,22 +268,22 @@ impl Scrollback {
 }
 #[derive(Debug, Default)]
 pub struct TerminalPending {
-    pub resize: bool,
-    pub cursor: bool,
+    pub resize: Cell<bool>,
+    pub cursor: Cell<bool>,
     /// Where writes to the child go while a `TermRequest` autocommand is
     /// running, so that a handler's reply lands after the request has been
     /// fully reported. `None` the rest of the time, meaning "write through".
     /// Shared with the in-flight request, which flushes it.
-    pub send: Option<std::rc::Rc<std::cell::RefCell<Vec<u8>>>>,
-    pub(crate) events: Option<crate::event_queue::ParkingQueue>,
+    pub send: RefCell<Option<std::rc::Rc<RefCell<Vec<u8>>>>>,
+    pub(crate) events: RefCell<Option<crate::event_queue::ParkingQueue>>,
 }
 #[derive(Debug, Default)]
 pub struct TerminalCursor {
-    pub row: ::core::ffi::c_int,
-    pub col: ::core::ffi::c_int,
-    pub shape: ::core::ffi::c_int,
-    pub visible: bool,
-    pub blink: bool,
+    pub row: Cell<::core::ffi::c_int>,
+    pub col: Cell<::core::ffi::c_int>,
+    pub shape: Cell<::core::ffi::c_int>,
+    pub visible: Cell<bool>,
+    pub blink: Cell<bool>,
 }
 
 /// What a terminal is built with: its size and its driver's callbacks, each

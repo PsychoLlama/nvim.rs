@@ -6,10 +6,15 @@
 //! while the first is still running: the emulator reports while the child's
 //! output is being written into it, and an autocommand fired from any of them
 //! can run Vimscript that reaches the terminal again. So the editor carries a
-//! `Copy` handle, as it does a [`Win`] or a [`Buf`], and every borrow of the
-//! terminal through it lasts one expression: **no reference into a terminal
-//! is held across a callback, an autocommand, an emulator write or a
-//! refresh**. Read the field out first and call afterwards.
+//! `Copy` handle, as it does a [`Win`] or a [`Buf`].
+//!
+//! The handle lends only `&Terminal`. Everything about a terminal that
+//! changes is a `Cell` or a `RefCell` (see `Terminal`), so two copies of the
+//! handle in use at once share it the way two `&RefCell`s do: a store is a
+//! `set`, and a borrow held across a call that re-enters -- the emulator's
+//! `vt.borrow_mut()` across `input_write`, whose callbacks reach the terminal
+//! through their own copy -- makes a second `borrow_mut` of the same field
+//! panic instead of aliasing.
 //!
 //! A terminal is allocated once ([`Term::alloc`]) and freed once
 //! ([`Term::free`], which `terminal_destroy` reaches when nothing stands on
@@ -29,7 +34,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
 use core::ptr::NonNull;
 
 use crate::terminal::state::Terminal;
@@ -49,14 +54,6 @@ impl Deref for Term {
         // owns the terminal, and the terminal lives until `free`, after which
         // its buffer and channel have dropped every copy (the module docs).
         unsafe { self.0.as_ref() }
-    }
-}
-
-impl DerefMut for Term {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Terminal {
-        // SAFETY: as above; each borrow lasts one expression.
-        unsafe { self.0.as_mut() }
     }
 }
 
@@ -110,27 +107,32 @@ mod tests {
     }
 
     /// A terminal's life: allocated once, reached through copies held by
-    /// its buffer and its driver -- each borrow one expression, writes
-    /// through either seen by the other -- then freed once, with what it
-    /// owns.
+    /// its buffer and its driver -- writes through either seen by the
+    /// other, a field one copy holds borrowed refused to the other -- then
+    /// freed once, with what it owns.
     #[test]
     fn copies_of_a_terminal_share_it_until_the_free() {
         let _held = editor_state_lock();
-        let mut driver = Term::alloc(Terminal::new(options(), Handle::new(1)));
+        let driver = Term::alloc(Terminal::new(options(), Handle::new(1)));
         let mut buffer = bare_buffer();
         assert_eq!(buffer.terminal_handle(), None);
         buffer.terminal = driver.raw();
-        let mut drawn = buffer.terminal_handle().expect("a terminal buffer");
+        let drawn = buffer.terminal_handle().expect("a terminal buffer");
         assert_eq!(drawn, driver);
 
-        drawn.title.extend_from_slice(b"shell");
-        driver.title.push(b'!');
-        assert_eq!(drawn.title, b"shell!");
-        driver.textbuf.resize(64, b' ');
-        drawn.closed = true;
-        assert!(driver.closed);
-        assert_eq!(drawn.textbuf.len(), 64);
+        drawn.title.borrow_mut().extend_from_slice(b"shell");
+        driver.title.borrow_mut().push(b'!');
+        assert_eq!(*drawn.title.borrow(), b"shell!");
+        driver.textbuf.borrow_mut().resize(64, b' ');
+        drawn.closed.set(true);
+        assert!(driver.closed.get());
+        assert_eq!(drawn.textbuf.borrow().len(), 64);
         assert_eq!(drawn.opts.width, 4);
+        {
+            let _writing = driver.vt.borrow_mut();
+            assert!(drawn.vt.try_borrow().is_err(), "no read under a write");
+        }
+        assert!(drawn.vt.try_borrow_mut().is_ok());
 
         buffer.terminal = ::core::ptr::null_mut();
         driver.free();

@@ -214,14 +214,31 @@ line's bytes for the life of a `&Buf`, i.e. a local).
   which has no `with`/`with_mut` — the only way to the grid is a handle, so
   there is no tracker loan to go around. ~~The null form~~: the handle is a
   `NonNull`, and the one place a null could enter (a window's `w_grid`
-  before `win_grid_alloc`) is `try_grid_of_view`'s `None`;
-  `grid_of_view` panics on it (always on: one compare per view resolved).
+  before `win_grid_alloc`) is `try_grid_of_view`'s `None`; `grid_of_view`
+  panics on it (always on: one compare per view resolved). Two callers had
+  built a null handle they never dereferenced (a float's anchor offsets, a
+  winbar scrolled off the top); they read the offsets without resolving.
   The constructor is private: the three that make a handle are in its
-  module. scrbench (cgu1 release, cachegrind Ir): see p46-5's row in the
-  history below. **Left in this class:** `GridRef`'s `Deref` — a
-  `&ScreenGrid` held across a write through another copy (`let c =
-g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with the other
-  handles' `Deref`s.
+  module. Cost, scrbench (release, codegen-units = 1, cachegrind Ir):
+  13.1482 G → 13.1497 G, +0.012 %.
+- **Closed — `Term` (type holds it, checked):** ~~`DerefMut`~~ is gone, and
+  `Deref` lends only `&Terminal`: every field that changes is a `Cell` or a
+  `RefCell` (`terminal/state.rs`), `opts` is never written. Two copies in
+  use at once share the terminal as two `&RefCell`s do; the emulator is
+  `vt: RefCell<Box<VTerm>>`, so a vterm callback reaching `vt` through its
+  own copy while `input_write` holds it panics instead of aliasing. That
+  found a real one: vterm's output sink called the driver's write callback
+  from inside the emulator call, and `nvim_open_term`'s `on_input` (Lua)
+  can feed the terminal from there — two live `&mut VTerm` before. The
+  sink now collects (`Terminal::output`, or the in-flight `TermRequest`'s
+  hold, keeping its order) and `terminal::with_vt` sends once `vt` is let
+  go. Not measured: no bench drives a terminal,
+  and the borrow flags sit on per-chunk and per-row paths.
+- **Left in this class from these two:** `GridRef`'s `Deref` — a
+  `&ScreenGrid` held across a write through another copy
+  (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with
+  the other handles' `Deref`s; `Term::free` on a `Copy` handle is the
+  liveness half.
 
 - **Breaks — aliasing:** two copies give two live `&mut`
   (`let c = &mut w1.w_cursor; w2.w_cursor.lnum = 1; c.col = 0`);
@@ -237,8 +254,8 @@ g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with the other
   cannot carry it — it may be freed); a check-always that wants its own
   measurement. Aliasing: no `DerefMut` on a `Copy` type — reads by `&`
   through a checked handle, writes through a scoped, tracked `with_mut`
-  (S1's tracker keyed by object). Order: ~~`GridRef` + `of_cell` (S)~~, `Term`
-  (S), `syn_block_mut` (13 sites, S), `held_line` (the matcher's line
+  (S1's tracker keyed by object). Order: ~~`GridRef` + `of_cell` (S)~~, ~~`Term`
+  (S)~~, `syn_block_mut` (13 sites, S), `held_line` (the matcher's line
   cursor, M), `Live<T>` users (M), then `Win`/`Buf`/`TabPage` (XL; 553 files
   name them). **XL** overall.
 

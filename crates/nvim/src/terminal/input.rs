@@ -52,7 +52,7 @@ use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
 use super::refresh::invalidate_terminal;
-use super::{Term, terminal_send};
+use super::{Term, terminal_send, with_vt};
 // vterm's key names, from libvterm's `VTermKey`. Function keys are not
 // named individually: they are `FUNCTION_0 + n`, see [`function_key`].
 use crate::vterm::vterm::{
@@ -219,8 +219,8 @@ fn convert_key(key: &mut Key, mods: ModMask, state: &mut VTermModifier) -> VTerm
 ///
 /// A keycode with no vterm name is a codepoint, unless it is negative — one
 /// of the extras vterm has no equivalent for, which is simply dropped.
-pub(super) fn terminal_send_key(mut term: Term, c: Key) {
-    send_key(&mut term.vt, c, MOD_MASK.get());
+pub(super) fn terminal_send_key(term: Term, c: Key) {
+    with_vt(term, |vt| send_key(vt, c, MOD_MASK.get()));
 }
 
 /// [`terminal_send_key`] with the emulator and the editor's modifiers named,
@@ -259,17 +259,17 @@ fn is_filter_char(c: c_int) -> bool {
 /// call, so the child of `buffer`'s terminal, if it has one, sees one paste
 /// rather than several.
 pub(crate) fn buf_terminal_set_streamed_paste(buffer: Buf, streamed: bool) {
-    let Some(mut term) = buffer.terminal_handle() else {
+    let Some(term) = buffer.terminal_handle() else {
         return;
     };
-    if term.streamed_paste != streamed {
+    if term.streamed_paste.get() != streamed {
         if streamed {
-            term.vt.keyboard_start_paste();
+            with_vt(term, |vt| vt.keyboard_start_paste());
         } else {
-            term.vt.keyboard_end_paste();
+            with_vt(term, |vt| vt.keyboard_end_paste());
         }
     }
-    term.streamed_paste = streamed;
+    term.streamed_paste.set(streamed);
 }
 
 /// Paste `lines` into the current terminal `count` times.
@@ -281,12 +281,12 @@ pub(crate) fn terminal_paste(lines: &[XString], count: c_int) {
         return;
     }
     // A paste only reaches here while the current buffer has a terminal.
-    let mut term = Buf::current()
+    let term = Buf::current()
         .terminal_handle()
         .expect("a paste into a terminal buffer");
-    let bracket = !term.streamed_paste;
+    let bracket = !term.streamed_paste.get();
     if bracket {
-        term.vt.keyboard_start_paste();
+        with_vt(term, |vt| vt.keyboard_start_paste());
     }
     let mut filtered: Vec<u8> = Vec::new();
     for _ in 0..count {
@@ -309,7 +309,7 @@ pub(crate) fn terminal_paste(lines: &[XString], count: c_int) {
         }
     }
     if bracket {
-        term.vt.keyboard_end_paste();
+        with_vt(term, |vt| vt.keyboard_end_paste());
     }
 }
 
@@ -382,7 +382,7 @@ fn scroll_window(mouse_win: Win, key: Key, direction: c_int) {
 /// the child gets the event, the editor scrolls the window under the
 /// pointer, or the event is pushed back for normal-mode processing (which
 /// is what makes clicking out of a terminal work).
-pub(super) fn send_mouse_event(mut term: Term, c: Key) -> bool {
+pub(super) fn send_mouse_event(term: Term, c: Key) -> bool {
     let mut pos = MousePos::current();
     let mouse_win = find_win_inner(&mut pos);
     let MousePos { grid, row, col } = pos;
@@ -397,7 +397,8 @@ pub(super) fn send_mouse_event(mut term: Term, c: Key) -> bool {
             && col >= offset
             && (grid > 1 || col < mouse_win.w_width);
         let showing_term = mouse_win.buffer().terminal == term.raw();
-        let forwarding = !term.suspended && !term.closed && term.forward_mouse && showing_term;
+        let forwarding =
+            !term.suspended.get() && !term.closed.get() && term.forward_mouse.get() && showing_term;
 
         if forwarding && inside {
             let Some((button, pressed)) = mouse_button(c) else {
@@ -405,9 +406,9 @@ pub(super) fn send_mouse_event(mut term: Term, c: Key) -> bool {
             };
             let mut state = VTERM_MOD_NONE;
             convert_modifiers(&mut { c }, MOD_MASK.get(), &mut state);
-            term.vt.mouse_move(row, col - offset, state);
+            with_vt(term, |vt| vt.mouse_move(row, col - offset, state));
             if button != 0 {
-                term.vt.mouse_button(button, pressed, state);
+                with_vt(term, |vt| vt.mouse_button(button, pressed, state));
             }
             return false;
         }

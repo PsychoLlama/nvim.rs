@@ -869,7 +869,7 @@
     "crates/nvim/src/winlayer/grid.rs": {"cell_ptr": 1, "pub_items": 1, "unsafe_stmts": 2},
     "crates/nvim/src/winlayer/handles.rs": {"pub_items": 1},
     "crates/nvim/src/winlayer/live.rs": {"cell_ptr": 1, "unsafe_stmts": 5},
-    "crates/nvim/src/winlayer/terminal.rs": {"unsafe_stmts": 3},
+    "crates/nvim/src/winlayer/terminal.rs": {"unsafe_stmts": 2},
     "crates/nvim/src/xdiff/ffi.rs": {"unsafe_stmts": 1}
   }
 }
