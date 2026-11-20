@@ -212,6 +212,31 @@ pub struct MemFile {
     pub mf_infile_count: BlockNr,
     pub mf_page_size: c_uint,
     pub mf_dirty: MfDirty,
+    /// How many [`HeldLines`](crate::memline::HeldLines) have the memfile
+    /// pinned. While any does, a block a line was lent from is neither
+    /// written, nor freed, nor released, and the memfile is not dropped.
+    pins: u32,
+    /// The current pin: a block whose `lent_in` equals it is lent. Moves on
+    /// each time the last pin goes, which un-lends every block at once.
+    lend_epoch: u64,
+}
+
+impl Drop for MemFile {
+    fn drop(&mut self) {
+        // Not a second panic while one unwinds: that one already ends the
+        // process.
+        if self.pins != 0 && !std::thread::panicking() {
+            lent_page_changed();
+        }
+    }
+}
+
+/// A block a running match holds a line of was about to change or go.
+#[cold]
+#[inline(never)]
+#[track_caller]
+fn lent_page_changed() -> ! {
+    panic!("a buffer line a running match holds is changed or freed under it");
 }
 
 impl MemFile {
@@ -233,6 +258,8 @@ impl MemFile {
             mf_infile_count: 0,
             mf_page_size: MEMFILE_PAGE_SIZE,
             mf_dirty: MfDirty::No,
+            pins: 0,
+            lend_epoch: 1,
         })
     }
 
@@ -398,9 +425,75 @@ impl MemFile {
     }
 
     /// [`MemFile::page`], writable.
+    ///
+    /// # Panics
+    /// Also when a running match holds a line of the block
+    /// ([`MemFile::lend_page`]).
     #[inline]
+    #[track_caller]
     pub(crate) fn page_mut(&mut self, id: BlockId) -> &mut [u8] {
+        self.refuse_if_lent(id);
         &mut self.used.block_mut(id).data
+    }
+
+    /// [`MemFile::page`], for a line handed to a running match: the block
+    /// counts as lent until the last pin goes ([`MemFile::unpin`]), and
+    /// until then [`MemFile::page_mut`], [`MemFile::pages_mut`],
+    /// [`MemFile::resize_page`] and [`MemFile::free_block`] refuse it,
+    /// [`MemFile::release_unlocked`] keeps it, and dropping the memfile
+    /// panics. So the bytes answered stay where they are, unchanged, for as
+    /// long as the pin.
+    ///
+    /// Lending with nothing pinned lends nothing (a lent block is one whose
+    /// mark is the *pinned* epoch's), so the one caller,
+    /// [`HeldLines`](crate::memline::HeldLines), pins first; the bytes
+    /// answered are then [`MemFile::page`]'s, borrowed from `self`. Checked
+    /// in debug builds only: this is on the per-line path of every search.
+    #[inline]
+    pub(crate) fn lend_page(&self, id: BlockId) -> &[u8] {
+        debug_assert!(self.pins != 0, "a page is lent only under a pin");
+        let block = self.used.block(id);
+        block.lent_in.set(self.lend_epoch);
+        &block.data
+    }
+
+    /// Pin the memfile for a [`HeldLines`](crate::memline::HeldLines):
+    /// pages lent from here on stay put until the matching
+    /// [`MemFile::unpin`].
+    pub(crate) fn pin(&mut self) {
+        self.pins = self.pins.checked_add(1).expect("fewer than 2^32 pins");
+    }
+
+    /// Let go of one [`MemFile::pin`]. The last one un-lends every page.
+    ///
+    /// # Panics
+    /// When the memfile is not pinned.
+    pub(crate) fn unpin(&mut self) {
+        self.pins = self.pins.checked_sub(1).expect("an unpin has its pin");
+        if self.pins == 0 {
+            self.lend_epoch += 1;
+        }
+    }
+
+    /// Whether anything has the memfile pinned.
+    pub(crate) fn is_pinned(&self) -> bool {
+        self.pins != 0
+    }
+
+    /// Whether a running match holds a line of block `id`.
+    #[inline]
+    fn is_lent(&self, id: BlockId) -> bool {
+        self.pins != 0 && self.used.block(id).lent_in.get() == self.lend_epoch
+    }
+
+    /// Panic if block `id` is lent: the one check every write or drop of a
+    /// block's bytes makes, a compare while nothing is pinned.
+    #[inline(always)]
+    #[track_caller]
+    fn refuse_if_lent(&self, id: BlockId) {
+        if self.is_lent(id) {
+            lent_page_changed();
+        }
     }
 
     /// Two different blocks' bytes at once, for copying from one into the
@@ -409,6 +502,8 @@ impl MemFile {
     /// # Panics
     /// When `a` and `b` are the same block, or either is not in memory.
     pub(crate) fn pages_mut(&mut self, a: BlockId, b: BlockId) -> (&mut [u8], &mut [u8]) {
+        self.refuse_if_lent(a);
+        self.refuse_if_lent(b);
         let (a, b) = self.used.block_pair_mut(a, b);
         (&mut a.data, &mut b.data)
     }
@@ -433,6 +528,7 @@ impl MemFile {
     /// Grow (or shrink) block `id` to `bytes`, keeping what fits: block zero
     /// of a swap file being recovered was read at a guessed page size.
     pub(crate) fn resize_page(&mut self, id: BlockId, bytes: usize) {
+        self.refuse_if_lent(id);
         let block = self.used.block_mut(id);
         let mut data = vec![0u8; bytes].into_boxed_slice();
         let keep = bytes.min(block.data.len());
@@ -467,6 +563,7 @@ impl MemFile {
     /// Give up a block for good. Its pages in the file, if it has any, go
     /// back on the free list, and `id` names nothing from here on.
     pub(crate) fn free_block(&mut self, id: BlockId) {
+        self.refuse_if_lent(id);
         let block = self.used.remove(id);
         let (bnum, page_count) = (block.bnum, block.page_count);
         drop(block);
@@ -566,7 +663,8 @@ impl MemFile {
         self.mf_dirty = MfDirty::Yes;
     }
 
-    /// Drop every block nobody holds, writing the dirty ones out first:
+    /// Drop every block nobody holds (locked, or lent to a running match),
+    /// writing the dirty ones out first:
     /// what running out of memory does to each memfile. Answers whether
     /// anything was released. A block that is locked — the one a memline
     /// is holding — stays, and so does its handle.
@@ -579,7 +677,12 @@ impl MemFile {
         while i < self.used.len() {
             let id = self.used.id_at(i);
             let flags = self.used.block(id).flags;
-            if flags & BH_LOCKED == 0 && (flags & BH_DIRTY == 0 || self.write(id).is_ok()) {
+            // A block a running match holds a line of stays, as the locked
+            // one does.
+            if flags & BH_LOCKED == 0
+                && !self.is_lent(id)
+                && (flags & BH_DIRTY == 0 || self.write(id).is_ok())
+            {
                 // Dropping it releases the block's pages.
                 drop(self.used.remove(id));
                 released = true;
@@ -850,6 +953,49 @@ pub(crate) type BlockNr = int64_t;
 mod tests {
     use super::*;
     use std::os::unix::ffi::OsStrExt;
+
+    #[test]
+    fn a_lent_page_stays_put_until_the_last_pin_goes() {
+        let mut memfile = MemFile::in_memory();
+        let lent = memfile.new_block(false, 1);
+        let other = memfile.new_block(false, 1);
+        memfile.page_mut(lent)[0] = 7;
+        memfile.pin();
+        memfile.pin();
+        assert_eq!(memfile.lend_page(lent)[0], 7);
+        // A block nobody was lent a line of is still written freely ...
+        memfile.page_mut(other)[0] = 1;
+        // ... and the lent one is lent until the *last* pin goes.
+        assert!(memfile.is_lent(lent) && !memfile.is_lent(other));
+        memfile.unpin();
+        assert!(memfile.is_lent(lent));
+        memfile.unpin();
+        assert!(!memfile.is_lent(lent));
+        memfile.page_mut(lent)[0] = 8;
+        memfile.free_block(lent);
+        memfile.put(other, false, false);
+        memfile.close(false);
+    }
+
+    #[test]
+    #[should_panic(expected = "a running match holds")]
+    fn writing_a_lent_page_panics() {
+        let mut memfile = MemFile::in_memory();
+        let id = memfile.new_block(false, 1);
+        memfile.pin();
+        let _ = memfile.lend_page(id);
+        memfile.page_mut(id)[0] = 1;
+    }
+
+    #[test]
+    #[should_panic(expected = "a running match holds")]
+    fn freeing_a_lent_page_panics() {
+        let mut memfile = MemFile::in_memory();
+        let id = memfile.new_block(false, 1);
+        memfile.pin();
+        let _ = memfile.lend_page(id);
+        memfile.free_block(id);
+    }
 
     #[test]
     fn a_memory_only_memfile_releases_nothing() {

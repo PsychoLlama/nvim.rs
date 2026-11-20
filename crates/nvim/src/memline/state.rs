@@ -418,6 +418,44 @@ impl MemLine {
         }
     }
 
+    /// [`Self::cached_bytes_with_nul`] for a [`HeldLines`]: a line in a
+    /// block is lent ([`MemFile::lend_page`]), so its bytes stay put until
+    /// the memfile's pin goes; the stand-ins are static.
+    ///
+    /// [`HeldLines`]: crate::memline::HeldLines
+    ///
+    /// # Panics
+    /// When the cached line is a pending replacement, which the pin flushed
+    /// and which no write may cache while it lasts
+    /// ([`Self::cache_replacement`]).
+    pub(crate) fn lend_cached_bytes_with_nul(&self) -> &[u8] {
+        let len = usize::try_from(self.ml_line.textlen).unwrap_or(0).max(1);
+        match &self.ml_line.text {
+            CachedText::None => b"\0",
+            CachedText::Owned(_) => panic!("a held line is never a pending replacement"),
+            CachedText::Placeholder(text) => text.to_bytes_with_nul(),
+            &CachedText::Block { id, start, .. } => {
+                let page = self
+                    .ml_mfp
+                    .as_deref()
+                    .expect("an open memline")
+                    .lend_page(id);
+                &page[start as usize..start as usize + len]
+            }
+        }
+    }
+
+    /// Panic if a running match holds lines of this memline: a replacement
+    /// cached now would be text a held line could be read from and then
+    /// dropped under it.
+    #[track_caller]
+    fn refuse_while_held(&self) {
+        assert!(
+            !self.ml_mfp.as_deref().is_some_and(MemFile::is_pinned),
+            "a buffer line changes while a running match holds its lines"
+        );
+    }
+
     /// [`Self::cached_bytes`], writable: only the bytes already there.
     pub(crate) fn cached_bytes_mut(&mut self) -> &mut [u8] {
         let len = usize::try_from(self.ml_line.textlen - 1).unwrap_or(0);
@@ -498,7 +536,12 @@ impl MemLine {
     /// `text` holds the line and its NUL. The block it came from is stale
     /// until the line is flushed, and the buffer is no longer the untouched
     /// empty one.
+    ///
+    /// # Panics
+    /// While a running match holds lines of the buffer.
+    #[track_caller]
     pub(crate) fn cache_replacement(&mut self, text: Vec<u8>, lnum: LineNr) {
+        self.refuse_while_held();
         let textlen = ColNr::try_from(text.len()).expect("a line shorter than INT_MAX");
         self.ml_line.lnum = lnum;
         self.ml_line.text = CachedText::Owned(text);
@@ -518,7 +561,12 @@ impl MemLine {
 
     /// Swap the cached line's text for `text` (the line and its NUL), which
     /// the memline now owns, keeping the line number.
+    ///
+    /// # Panics
+    /// While a running match holds lines of the buffer.
+    #[track_caller]
     pub fn swap_cached_text(&mut self, text: Vec<u8>) {
+        self.refuse_while_held();
         let textlen = ColNr::try_from(text.len()).expect("a line shorter than INT_MAX");
         self.ml_line.text = CachedText::Owned(text);
         self.ml_line.textlen = textlen;

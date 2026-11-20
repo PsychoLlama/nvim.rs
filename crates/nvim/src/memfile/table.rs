@@ -20,6 +20,7 @@
 
 use super::BlockMap;
 use crate::memfile::BlockNr;
+use core::cell::Cell;
 use core::ffi::c_uint;
 
 /// A handle on a block in memory.
@@ -56,6 +57,10 @@ pub(crate) struct BlockHdr {
     pub(super) page_count: c_uint,
     /// `BH_DIRTY` and/or `BH_LOCKED`.
     pub(super) flags: c_uint,
+    /// The pin a line of this block was last lent under
+    /// ([`MemFile::lend_page`](super::MemFile::lend_page)); the block is
+    /// lent while that pin is the memfile's current one.
+    pub(super) lent_in: Cell<u64>,
 }
 
 impl BlockHdr {
@@ -66,6 +71,7 @@ impl BlockHdr {
             data: Box::new([]),
             page_count: 0,
             flags: 0,
+            lent_in: Cell::new(0),
         }
     }
 
@@ -82,6 +88,7 @@ impl BlockHdr {
             data: vec![0u8; bytes].into_boxed_slice(),
             page_count,
             flags: 0,
+            lent_in: Cell::new(0),
         }
     }
 }

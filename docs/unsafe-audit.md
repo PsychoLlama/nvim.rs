@@ -344,18 +344,10 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 
 ## Soundness by contract
 
-Five places are sound by a rule the type system does not hold. Each was
+Four places are sound by a rule the type system does not hold. Each was
 decided in writing; each has a cheaper-to-break form that was measured and
 not taken, or a fix listed for later.
 
-- **`memline::held_line`** (`memline/lines.rs`): the regexp matcher borrows
-  a buffer line for as long as its buffer handle lives, on upstream's
-  `ml_get_buf` contract — the bytes are good until another line of the
-  buffer is read — and fetches the line again after anything that may have
-  moved it (`\%V`, `\%'m`, a back-reference to another line). The sound
-  form, a copy of each line a match reads, measured +0.6 % on the regexp
-  benchmark, most of it the per-line context the copy needs; a matcher-shaped
-  line cursor is the listed fix.
 - **The Lua stack's consuming operations** (`lua/stack/`): an operation that
   consumes values off the top consumes values its view pushed. Debug builds
   check it; the release check cost 0.8–1.7 % on the Lua benchmarks, so the
@@ -386,5 +378,5 @@ socket's address buffer (build the watcher whole instead of through
 `Box::new_uninit`), the read stream's block positions (a read callback that
 hands a slice), a child's `char **` argv/environment (an owned argv type
 handed to libuv at the one spawn call), `handle.rs`'s `Box` allocation and
-generic handle, the matcher's line cursor (`held_line`), and the emulator's
+generic handle, and the emulator's
 offset keepers.

@@ -271,8 +271,8 @@ gains a `Cell` or a raw pointer fails to build.
 registries, which check); every dereference after is safe and unchecked.
 Rows: the eight `Deref`/`DerefMut` pairs; `Win::syn_block`/~~`syn_block_mut`~~
 (may be the buffer's `b_s`); ~~`GridRef::of_cell` (a cell's grid outside its
-tracker)~~; ~~`GridRef`'s null "unresolved" form~~; `memline::held_line` (a
-line's bytes for the life of a `&Buf`, i.e. a local).
+tracker)~~; ~~`GridRef`'s null "unresolved" form~~; ~~`memline::held_line` (a
+line's bytes for the life of a `&Buf`, i.e. a local)~~.
 
 - **Closed — `GridRef`'s write half (type holds it):** ~~`DerefMut`~~ is
   gone. A write is one of the handle's in-place writers (`grid_writes!` in
@@ -317,6 +317,28 @@ line's bytes for the life of a `&Buf`, i.e. a local).
   read half (`syn_block()`'s `&SynBlock` held across a write through
   another copy) and `Win::syntax()`, a `Live<SynBlock>` whose `DerefMut`
   is the `Live<T>` users row below. No instruction cost: the same stores.
+- **Closed — `memline::held_line` (check-always):** ~~`held_line`~~ is
+  gone. The matcher reads buffer lines through `HeldLines`
+  (`memline/lines.rs`), which its match context owns: the slices it hands
+  out borrow it, and while it lives the bytes stay put. Its first read
+  writes a pending replacement back and pins the buffer's memfile; each
+  line read out of a data block lends that block (a mark of the current
+  pin). A lent block refuses `page_mut`/`pages_mut`/`resize_page`/
+  `free_block` (a panic), `release_unlocked` keeps it, no replacement
+  line can be cached (`cache_replacement`/`swap_cached_text` panic) and a
+  pinned memfile panics on drop; the last unpin moves the epoch, which
+  un-lends every block at once. So the buffer's _text_ cannot change under
+  a running match — reading other lines (redraw, `Lines`, the matcher's
+  own next line) still can. A search's line walk holds one pin for the
+  walk (it changes nothing between lines); `:substitute` runs a match, and
+  so a pin, per line. Never fired across functional (9,358) and oldtest
+  (4,682). Cost (release, codegen-units = 1, cachegrind Ir): one compare
+  per page write while nothing is pinned, and a pin flag test plus a mark
+  store per line read — rebench 17.982 G → 18.045 G (+0.35 %), scrbench
+  +0.19 %, edbench +0.30 %, mlbench +1.64 % (its `search` phase is
+  120k-line sequential reads of a pattern that never matches: the
+  per-line path and nothing else). The per-match context the copy
+  alternative needed (+0.6 % rebench, measured earlier) is not built.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with
@@ -327,8 +349,8 @@ line's bytes for the life of a `&Buf`, i.e. a local).
   (`let c = &mut w1.w_cursor; w2.w_cursor.lnum = 1; c.col = 0`);
   ~~`syn_block_mut()` held while the buffer's block is reached through a
   `Buf`~~;
-  `GRID.with(|g| { grid_ref.cols = 0; g.cols })`; `held_line`'s slice
-  outliving the cache when a copy of the `Buf` reads another line.
+  `GRID.with(|g| { grid_ref.cols = 0; g.cols })`; ~~`held_line`'s slice
+  outliving the cache when a copy of the `Buf` reads another line~~.
 - **Breaks — liveness:** a handle held across a call that runs user code
   (an autocommand, a Lua callback — the p45 hazard — Vimscript) and
   dereferenced after `:bwipeout`/`:close` freed the object: use-after-free in
@@ -339,8 +361,8 @@ line's bytes for the life of a `&Buf`, i.e. a local).
   measurement. Aliasing: no `DerefMut` on a `Copy` type — reads by `&`
   through a checked handle, writes through a scoped, tracked `with_mut`
   (S1's tracker keyed by object). Order: ~~`GridRef` + `of_cell` (S)~~, ~~`Term`
-  (S)~~, ~~`syn_block_mut` (13 sites, S)~~, `held_line` (the matcher's line
-  cursor, M), `Live<T>` users (M), then `Win`/`Buf`/`TabPage` (XL; 553 files
+  (S)~~, ~~`syn_block_mut` (13 sites, S)~~, ~~`held_line` (the matcher's line
+  cursor, M)~~, `Live<T>` users (M), then `Win`/`Buf`/`TabPage` (XL; 553 files
   name them). **XL** overall.
 
 ### S6 — value-handle edits (~~write half: check-always~~, read half by convention)

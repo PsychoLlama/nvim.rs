@@ -51,6 +51,7 @@ use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::types::Failed;
 use crate::winlayer::Buf;
+use core::cell::Cell;
 use core::ffi::{CStr, c_int};
 
 /// A buffer's one-line cache, borrowed.
@@ -191,30 +192,98 @@ impl Lines {
     }
 }
 
-/// Line `lnum` of `buffer`, its NUL included, borrowed for as long as the
-/// handle is rather than for as long as a [`Lines`] borrow.
+/// A buffer's lines held for one running match: the regexp matcher's line
+/// cursor.
 ///
-/// This is upstream's `ml_get_buf` contract with a slice in place of the
-/// pointer: the bytes are good until the next read of a *different* line of
-/// the buffer, and nothing in the type says so. [`Lines`] says so, and is
-/// what everything else reads lines through; this exists for the one reader
-/// that holds its line across a stretch of work it knows reads no other —
-/// the regexp matcher, whose cursor is an offset into the line it is on and
-/// which fetches the line again, through here, after anything that might
-/// have moved it (`\%V`'s virtual columns, `\%'m`'s mark lookup, a
-/// back-reference to another line). See `regexp::rex` for that side of it.
+/// [`Lines`] lends one line at a time, the next read needing the last slice
+/// dropped. The matcher cannot work that way: it keeps the line it is on
+/// while it reads another (the next one, a back-reference's, `\%V`'s), and
+/// it reads through a shared context, so no `&mut` can stand between two
+/// reads. So for as long as this lives, every line it hands out **stays
+/// put**:
 ///
-/// The NUL is part of the slice because the matcher reads it as a position:
-/// `$` matches there and a character step stops there.
+/// - the first read flushes a pending replacement back into its block and
+///   pins the buffer's memfile ([`MemFile::pin`]);
+/// - a line read out of a data block lends that block
+///   ([`MemFile::lend_page`]), and a lent block refuses to be written,
+///   freed or resized (a panic, always on: one compare while nothing is
+///   pinned) and is kept when memory runs short;
+/// - no replacement line can be cached ([`MemLine::cache_replacement`]
+///   panics), and the memfile cannot be dropped.
 ///
-/// The matcher is the only caller left, and the borrow stays a convention
-/// there because the sound forms cost the matcher's hot path: copying each
-/// line a match reads (into a store that lives exactly as long as the
-/// match) is sound but needs a context per line rather than one re-seated
-/// per walk, and measured ~0.6 % of the regexp benchmark's instructions.
-pub(crate) fn held_line(buffer: &Buf, lnum: LineNr) -> &[u8] {
-    fetch_line(*buffer, lnum, false);
-    buffer.b_ml.cached_bytes_with_nul()
+/// Reading other lines meanwhile is fine — through here, through
+/// [`Lines`], from anywhere: the memline's cache moves, the lent bytes do
+/// not. *Changing* the buffer's text while this lives is what panics,
+/// rather than leaving the match a dangling slice. The pin goes when this
+/// is dropped, with the match context that owns it: after one match, or
+/// after a whole line walk (a search, which changes nothing between its
+/// lines; `:substitute`, which does, runs a match per line).
+///
+/// [`MemFile::pin`]: crate::memfile::MemFile::pin
+/// [`MemFile::lend_page`]: crate::memfile::MemFile::lend_page
+/// [`MemLine::cache_replacement`]: super::state::MemLine::cache_replacement
+#[derive(Debug)]
+pub(crate) struct HeldLines {
+    buffer: Buf,
+    /// Whether this holds a pin on the buffer's memfile; taken at the first
+    /// read that finds one, so a match that reads no line pays nothing.
+    pinned: Cell<bool>,
+}
+
+impl HeldLines {
+    /// Hold `buffer`'s lines for a match; nothing is pinned until a line
+    /// is read.
+    #[inline(always)]
+    pub(crate) fn new(buffer: Buf) -> HeldLines {
+        HeldLines {
+            buffer,
+            pinned: Cell::new(false),
+        }
+    }
+
+    /// Line `lnum`, its NUL included, good for as long as `self` is.
+    ///
+    /// The NUL is part of the slice because the matcher reads it as a
+    /// position: `$` matches there and a character step stops there.
+    #[inline]
+    pub(crate) fn line(&self, lnum: LineNr) -> &[u8] {
+        if !self.pinned.get() {
+            self.pin();
+        }
+        fetch_line(self.buffer, lnum, false);
+        self.buffer.b_ml.lend_cached_bytes_with_nul()
+    }
+
+    /// Pin the memfile, if the buffer has one yet (a memline that is not
+    /// open answers static stand-ins, which need none).
+    #[inline(never)]
+    fn pin(&self) {
+        let mut buffer = self.buffer;
+        if !buffer.b_ml.is_open() {
+            return;
+        }
+        // A pending replacement goes back into its block first: once
+        // pinned, nothing may cache one, nor write it back.
+        if buffer.b_ml.line_is_dirty() {
+            ml_flush_line(buffer);
+        }
+        buffer.b_ml.memfile().pin();
+        self.pinned.set(true);
+    }
+}
+
+impl Drop for HeldLines {
+    #[inline]
+    fn drop(&mut self) {
+        if self.pinned.get() {
+            self.buffer
+                .b_ml
+                .ml_mfp
+                .as_deref_mut()
+                .expect("a pinned memfile is not dropped")
+                .unpin();
+        }
+    }
 }
 
 /// A line taken out of the cache, with the terminator the cache had after it.

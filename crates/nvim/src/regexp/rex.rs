@@ -21,14 +21,13 @@
 //! inside the slice.
 //!
 //! A string match's line is the caller's string, borrowed for the match. A
-//! buffer match's lines are borrowed from the memline's one-line cache
-//! through [`held_line`], whose contract is upstream's: the bytes are good
-//! until the next read of a *different* line of the buffer. The engines keep
-//! it — they fetch the next line through [`super::reg_getline`] and replace
-//! the cursor's line at once, and after anything that may read another line
-//! (`\%V`'s virtual columns, `\%'m`'s mark lookup, a multi-line
-//! back-reference) they fetch their own line again. The offset survives
-//! that; a pointer would not have.
+//! buffer match's lines come through the context's [`HeldLines`], which
+//! keeps every line it hands out where it is for as long as the context
+//! lives — the buffer's text cannot change meanwhile (that panics instead)
+//! — so a line is good for the context's lifetime, a whole line walk's
+//! included. The engines fetch the next line through
+//! [`super::reg_getline`] and replace the cursor's line at once; the cursor
+//! is an offset into it.
 //!
 //! The accessors are `#[inline(always)]` and the whole type is on the
 //! per-character path: nothing here may allocate, and the hot loops take the
@@ -50,7 +49,7 @@ use super::pos::{MatchPos, PosKind, SavedInput};
 use super::word_char_at;
 use super::{ExtMatch, ExtMatchRef, ExtOut, NSUBEXP, TimeBudget};
 use super::{char_at_nul, char_len_at, cluster_len_at};
-use crate::memline::held_line;
+use crate::memline::HeldLines;
 use crate::types::{ColNr, LPos, LineNr, ProfTime};
 use crate::winlayer::{Buf, Win};
 
@@ -81,6 +80,9 @@ pub(crate) struct RegExec<'t> {
     /// The buffer line the match's line 0 sits on. A [`Cell`] because a
     /// line walk ([`RegExec::seat`]) moves it from one line to the next.
     firstlnum: Cell<LineNr>,
+    /// The buffer's lines, held for as long as the context: see the
+    /// module docs.
+    lines: HeldLines,
     /// The last line the match may reach, relative to `firstlnum`.
     maxline: Cell<LineNr>,
     /// Is a line break in the text a character to match rather than the
@@ -274,6 +276,7 @@ impl<'t> RegExec<'t> {
         RegExec {
             multi,
             buf: setup.buf,
+            lines: HeldLines::new(*setup.buf),
             win: setup.win,
             firstlnum: Cell::new(LineNr::ZERO),
             maxline: Cell::new(LineNr::ZERO),
@@ -380,10 +383,9 @@ impl<'t> RegExec<'t> {
         self.nfa.reset();
     }
 
-    /// Let go of the buffer line the match last read. A walk calls this
-    /// after each line, so that between lines — when the caller may run
-    /// anything, and the memline may drop the line — the context holds no
-    /// borrow of it; the next line's match fetches its own.
+    /// Let go of the buffer line the match last read, after each line of a
+    /// walk: the next line's match fetches its own. (The line itself stays
+    /// held until the context goes: [`HeldLines`].)
     #[inline(always)]
     pub(crate) fn release_line(&self) {
         self.line.set(b"\0");
@@ -582,11 +584,11 @@ impl<'t> Rex<'t> {
         self.0.maxcol
     }
 
-    /// Buffer line `lnum`, its NUL included, borrowed for the match: see
-    /// the module docs for how long the bytes stay good.
+    /// Buffer line `lnum`, its NUL included, held for as long as the
+    /// context: see the module docs.
     #[inline(always)]
     pub(crate) fn buffer_line(self, lnum: LineNr) -> &'t [u8] {
-        held_line(self.0.buf, lnum)
+        self.0.lines.line(lnum)
     }
 
     // -------------------------------------------------------- the flags
