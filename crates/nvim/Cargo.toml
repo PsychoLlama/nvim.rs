@@ -51,10 +51,11 @@ nvim-mainthread = { path = "../mainthread" }
 thiserror = { version = "2", default-features = false, features = ["std"] }
 
 [features]
-# The soundness checks debug builds always carry -- `GlobalCell`'s main-thread
-# check, the value handles' overlapping-edit loans -- in a build without debug
-# assertions too.
-# build.rs turns either into the one `soundness_checks` cfg the sites test.
+# The soundness check debug builds always carry -- `GlobalCell`'s per-access
+# main-thread check, the only one still switched (the cell borrows, the value
+# handles' edit loans and the Lua stack checks are in every build) -- in a
+# build without debug assertions too.
+# build.rs turns either into the `soundness_checks` cfg the sites test.
 # `cargo build --release --features soundness-checks` is a release binary
 # that panics where a debug one would.
 soundness-checks = []

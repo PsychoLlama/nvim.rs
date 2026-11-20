@@ -52,8 +52,7 @@
 
 use ::core::ptr::NonNull;
 
-#[cfg(soundness_checks)]
-use super::edit::{Loan, assert_not_lent};
+use super::edit::Lent;
 use super::*;
 use crate::hashtab::{HashValue, SlotEntry};
 use crate::hashtab::{hash_bytes, hash_bytes_len};
@@ -139,18 +138,11 @@ impl ListRef {
     /// The `Live` promise, spelled out: the borrow lasts for the
     /// statement that asked for it and **never spans a call that can
     /// run user code**, because every other holder of this object can
-    /// reach it from there. Debug builds check the half of it that two
+    /// reach it from there. Every build checks the half of it that two
     /// writers break: see [`Edit`].
     #[inline(always)]
     pub fn edit(&self) -> Edit<'_, List> {
-        // SAFETY: the handle holds a reference, so the object is live;
-        // exclusivity is the caller's promise above, checked in debug
-        // builds by the loan.
-        Edit {
-            #[cfg(soundness_checks)]
-            loan: Loan::new(self.0),
-            target: unsafe { &mut *self.0.as_ptr() },
-        }
+        lend(&self.0, ::core::mem::offset_of!(List, lv_lent))
     }
 
     /// The reference count, through its own bytes only: a clone or
@@ -214,8 +206,7 @@ impl ::core::ops::Deref for ListRef {
 impl ::core::ops::DerefMut for ListRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut List {
-        #[cfg(soundness_checks)]
-        assert_not_lent(self.0);
+        self.lv_lent.assert_not_lent::<List>();
         // SAFETY: as `deref`.
         unsafe { self.0.as_mut() }
     }
@@ -369,14 +360,7 @@ impl DictRef {
 
     #[inline(always)]
     pub fn edit(&self) -> Edit<'_, Dict> {
-        // SAFETY: the handle holds a reference, so the object is live;
-        // exclusivity is the caller's promise above, checked in debug
-        // builds by the loan.
-        Edit {
-            #[cfg(soundness_checks)]
-            loan: Loan::new(self.0),
-            target: unsafe { &mut *self.0.as_ptr() },
-        }
+        lend(&self.0, ::core::mem::offset_of!(Dict, dv_lent))
     }
 
     /// As [`ListRef::count`].
@@ -429,8 +413,7 @@ impl ::core::ops::Deref for DictRef {
 impl ::core::ops::DerefMut for DictRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Dict {
-        #[cfg(soundness_checks)]
-        assert_not_lent(self.0);
+        self.dv_lent.assert_not_lent::<Dict>();
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_mut() }
     }
@@ -447,6 +430,7 @@ pub fn tv_dict_alloc() -> DictRef {
     unsafe {
         raw.write(Dict {
             dv_lock: VarLock::Unlocked,
+            dv_lent: Lent::new(),
             dv_scope: VAR_NO_SCOPE,
             dv_refcount: Refcount::one(),
             dv_copy_id: 0,
@@ -545,14 +529,7 @@ impl BlobRef {
 
     #[inline(always)]
     pub fn edit(&self) -> Edit<'_, Blob> {
-        // SAFETY: the handle holds a reference, so the object is live;
-        // exclusivity is the caller's promise above, checked in debug
-        // builds by the loan.
-        Edit {
-            #[cfg(soundness_checks)]
-            loan: Loan::new(self.0),
-            target: unsafe { &mut *self.0.as_ptr() },
-        }
+        lend(&self.0, ::core::mem::offset_of!(Blob, bv_lent))
     }
 
     /// As [`ListRef::count`].
@@ -596,8 +573,7 @@ impl ::core::ops::Deref for BlobRef {
 impl ::core::ops::DerefMut for BlobRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Blob {
-        #[cfg(soundness_checks)]
-        assert_not_lent(self.0);
+        self.bv_lent.assert_not_lent::<Blob>();
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_mut() }
     }
@@ -614,6 +590,7 @@ pub fn tv_blob_alloc() -> BlobRef {
         bv_data: Vec::new(),
         bv_refcount: Refcount::zero(),
         bv_lock: VarLock::Unlocked,
+        bv_lent: Lent::new(),
     });
     // The count starts at the handle's one.
     blob.bv_refcount.retain();
@@ -647,14 +624,7 @@ impl PartialRef {
 
     #[inline(always)]
     pub fn edit(&self) -> Edit<'_, Partial> {
-        // SAFETY: the handle holds a reference, so the object is live;
-        // exclusivity is the caller's promise above, checked in debug
-        // builds by the loan.
-        Edit {
-            #[cfg(soundness_checks)]
-            loan: Loan::new(self.0),
-            target: unsafe { &mut *self.0.as_ptr() },
-        }
+        lend(&self.0, ::core::mem::offset_of!(Partial, pt_lent))
     }
 
     /// As [`ListRef::count`].
@@ -697,10 +667,51 @@ impl ::core::ops::Deref for PartialRef {
 impl ::core::ops::DerefMut for PartialRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Partial {
-        #[cfg(soundness_checks)]
-        assert_not_lent(self.0);
+        self.pt_lent.assert_not_lent::<Partial>();
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_mut() }
+    }
+}
+
+/// The object `at` names, writable for as long as the handle holding `at`
+/// is borrowed: every `edit()`. `lent` is `offset_of!` its [`Lent`] flag.
+#[inline(always)]
+fn lend<T>(at: &NonNull<T>, lent: usize) -> Edit<'_, T> {
+    let loan = Loan::new(*at, lent);
+    // SAFETY: the handle holds a reference, so the object is live;
+    // exclusivity is the `edit()` caller's promise, its write half checked
+    // by the loan just taken.
+    let target = unsafe { &mut *at.as_ptr() };
+    Edit { target, loan }
+}
+
+/// An [`Edit`]'s claim on its object: the object's [`Lent`] flag, raised
+/// while the edit lives and lowered when it goes. The flag's address, not a
+/// borrow: the edit holds the whole object `&mut`, flag included, so the
+/// flag is reached only through the handle's pointer, projected (never
+/// re-borrowed), before the edit is made and after its last use.
+#[derive(Debug)]
+pub(super) struct Loan(*const Lent);
+
+impl Loan {
+    /// Lend the object at `at`, whose flag is the field at `offset`.
+    #[inline(always)]
+    fn new<T>(at: NonNull<T>, offset: usize) -> Loan {
+        let lent = at.as_ptr().cast_const().wrapping_byte_add(offset);
+        let lent = lent.cast::<Lent>();
+        // SAFETY: a `Lent` field of the live object a handle names; the
+        // borrow covers the flag alone and ends before the edit's begins.
+        unsafe { &*lent }.lend::<T>();
+        Loan(lent)
+    }
+}
+
+impl Drop for Loan {
+    #[inline(always)]
+    fn drop(&mut self) {
+        // SAFETY: the flag of an object the edit's handle keeps alive; the
+        // edit's borrow of the object, dropped first, has had its last use.
+        unsafe { &*self.0 }.give_back();
     }
 }
 

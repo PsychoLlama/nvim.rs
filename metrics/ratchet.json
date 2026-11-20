@@ -1,6 +1,6 @@
 {
   "internal_exports": 0,
-  "test_reached_pub": 663,
+  "test_reached_pub": 664,
   "cell_ptr_keepers": 3,
   "cell_ptr_accessors": 2,
   "cell_copy_owner": 7,
@@ -58,7 +58,7 @@
   "files_allowing_non_snake_case": 3,
   "files_allowing_non_upper_case_globals": 0,
   "files": {
-    "crates/mainthread/lib.rs": {"pub_items": 4},
+    "crates/mainthread/lib.rs": {"pub_items": 3},
     "crates/nvim/src/allocator.rs": {"unsafe_stmts": 20},
     "crates/nvim/src/api/autocmd/create.rs": {"pub_items": 3},
     "crates/nvim/src/api/autocmd/exec.rs": {"pub_items": 1},
@@ -307,9 +307,9 @@
     "crates/nvim/src/eval/typval/check.rs": {"pub_items": 24},
     "crates/nvim/src/eval/typval/dict.rs": {"pub_items": 8},
     "crates/nvim/src/eval/typval/dictitem.rs": {"pub_items": 25},
-    "crates/nvim/src/eval/typval/edit.rs": {"pub_items": 1},
+    "crates/nvim/src/eval/typval/edit.rs": {"pub_items": 2},
     "crates/nvim/src/eval/typval/get.rs": {"pub_items": 10},
-    "crates/nvim/src/eval/typval/handle.rs": {"pub_items": 10, "unsafe_stmts": 51},
+    "crates/nvim/src/eval/typval/handle.rs": {"pub_items": 10, "unsafe_stmts": 50},
     "crates/nvim/src/eval/typval/list.rs": {"pub_items": 2},
     "crates/nvim/src/eval/typval/listops.rs": {"pub_items": 11},
     "crates/nvim/src/eval/typval/listrange.rs": {"pub_items": 6},

@@ -19,9 +19,8 @@ build:
 build-release:
   cargo build --release
 
-# A release binary that keeps the soundness checks debug builds carry
-# (`GlobalCell`'s thread check, the value handles' edit loans;
-# docs/safe-surface.md), in its own target dir: `target/checked/release/nvim`.
+# A release binary that keeps the soundness check debug builds carry
+# (`GlobalCell`'s per-access thread check; docs/safe-surface.md), in its own target dir: `target/checked/release/nvim`.
 # The suites take it as asan's recipes do: `NVIM_BIN=<it>
 # NVIM_TEST_BUILD_DIR=target/checked/tree`.
 build-checked:

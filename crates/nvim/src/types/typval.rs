@@ -12,7 +12,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 use crate::eval::gc::RootId;
-use crate::eval::typval::{BlobRef, DictRef, DictTab, ListRef, PartialRef};
+use crate::eval::typval::{BlobRef, DictRef, DictTab, Lent, ListRef, PartialRef};
 use crate::eval::userfunc::FcId;
 use crate::memory::ThinCString;
 use crate::os::libc::{int64_t, size_t, uint64_t};
@@ -382,6 +382,8 @@ pub struct Blob {
     pub bv_data: Vec<u8>,
     pub bv_refcount: Refcount,
     pub bv_lock: VarLock,
+    /// Whether an [`Edit`](crate::eval::typval::Edit) holds it.
+    pub bv_lent: Lent,
 }
 /// A `Dict`.
 ///
@@ -391,6 +393,8 @@ pub struct Blob {
 #[derive(Debug)]
 pub struct Dict {
     pub dv_lock: VarLock,
+    /// Whether an [`Edit`](crate::eval::typval::Edit) holds it.
+    pub dv_lent: Lent,
     pub dv_scope: ScopeType,
     pub dv_refcount: Refcount,
     pub dv_copy_id: ::core::ffi::c_int,
@@ -497,6 +501,8 @@ pub struct List {
     pub lv_refcount: Refcount,
     pub lv_copy_id: ::core::ffi::c_int,
     pub lv_lock: VarLock,
+    /// Whether an [`Edit`](crate::eval::typval::Edit) holds it.
+    pub lv_lent: Lent,
     pub lua_table_ref: LuaRef,
 }
 
@@ -518,6 +524,7 @@ impl List {
             lv_refcount: Refcount::zero(),
             lv_copy_id: 0,
             lv_lock: VarLock::Unlocked,
+            lv_lent: Lent::new(),
             // `LUA_NOREF`: no Lua table mirrors this list.
             lua_table_ref: -2,
         }
@@ -558,6 +565,8 @@ pub struct Partial {
     pub pt_name: Option<ThinCString>,
     pub pt_func: Option<::std::rc::Rc<UserFunc>>,
     pub pt_auto: bool,
+    /// Whether an [`Edit`](crate::eval::typval::Edit) holds it.
+    pub pt_lent: Lent,
     pub pt_argv: Vec<TypVal>,
     pub pt_dict: Option<DictRef>,
 }

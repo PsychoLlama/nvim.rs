@@ -95,6 +95,7 @@ impl Partial {
             pt_name: None,
             pt_func: None,
             pt_auto: false,
+            pt_lent: Lent::new(),
             pt_argv: Vec::new(),
             pt_dict: None,
         }

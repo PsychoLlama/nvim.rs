@@ -128,8 +128,9 @@ bench.
 ### Decided: the borrows always on, the thread question closed by audit
 
 The borrow check is unconditional code now (not a default feature): the
-borrow word is in every build, and `soundness_checks` switches only the
-thread check and the value handles' edit loans. Before the flip, the
+borrow word is in every build, and `soundness_checks` switched only the
+thread check and the value handles' edit loans (now only the thread check:
+the loans went always-on with S6a). Before the flip, the
 profile of the always-on build was taken apart per function and line
 against the build without it (codegen-units = 1, a `line-tables-only`
 build of each side, which changes no code) and the reads made once per
@@ -329,22 +330,35 @@ line's bytes for the life of a `&Buf`, i.e. a local).
   cursor, M), `Live<T>` users (M), then `Win`/`Buf`/`TabPage` (XL; 553 files
   name them). **XL** overall.
 
-### S6 — value-handle edits (write half by debug check, read half by convention)
+### S6 — value-handle edits (~~write half: check-always~~, read half by convention)
 
 `ListRef`/`DictRef`/`BlobRef`/`PartialRef`: `edit(&self) -> Edit<'_, T>`,
 `DerefMut`, `Deref`, and the `&Dict` walks (`items`, `items_mut`) through
 them.
 
-- **Breaks — write/write:** two live `edit()`s of one object through two
-  handles, or a `DerefMut` under an `edit()` (checked: `Loan`).
-- **Breaks — read/write:** a `&List` from one handle's `Deref` live while a
-  clone's `edit()` reallocates (`for item in l.items() { other.edit()… }`),
+- ~~**S6a — write/write:**~~ (closed: check-always) two live `edit()`s of
+  one object through two handles, or a `DerefMut` under an `edit()`. Every
+  build now panics where it happens: each object carries a `Lent` flag (a
+  `Cell<bool>` field beside its lock, in padding for `List`/`Dict`/`Partial`;
+  `Blob` grows 32 → 40 bytes, the same allocator size class), `edit()`
+  raises it and the `Edit`'s loan lowers it on drop; `DerefMut` tests it.
+  The loan reaches the flag through the handle's pointer projected to the
+  field (`offset_of!`), never a borrow of the object, which the edit holds
+  `&mut` (Miri: `edit::tests` under `just miri-perimeter`). The table it
+  replaces (`EditTable`, a thread-local `Vec` of addresses, debug builds
+  only) is gone. Cost, release, codegen-units = 1, cachegrind Ir against
+  the build without it (three runs a side for evalbench and spellbench):
+  evalbench +0.74 % (parser phase +0.35 %), undobench +0.74 %, edbench
+  +0.24 %, rpcbench +0.15 %, markbench +0.09 %, scrbench +0.06 %,
+  mlbench/rebench/inbench/spellbench within ±0.05 %. No hot site needed
+  hoisting. `soundness_checks` now switches only
+  `GlobalCell`'s per-access thread check.
+- **Breaks — read/write (S6b):** a `&List` from one handle's `Deref` live
+  while a clone's `edit()` reallocates (`for item in l.items() { other.edit()… }`),
   or an `edit()` held across a call that runs user code which reads the
   object. Unchecked.
-- **Closure:** write half check-always (the loan table is S1's shape;
-  restructure it the same way, measure on evalbench); read half restructure
-  — `Deref` answers a tracked shared loan, or the walks take the handle and
-  re-borrow per item. **M** + **L**.
+- **Closure (S6b):** restructure — `Deref` answers a tracked shared loan, or
+  the walks take the handle and re-borrow per item. **L**.
 
 ### ~~S7 — the Lua stack's consuming operations~~ (closed: check-always)
 

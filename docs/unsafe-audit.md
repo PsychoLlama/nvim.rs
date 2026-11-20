@@ -54,9 +54,9 @@ falls into four classes:
   must guarantee; the ratchet fails on one without. An `unsafe fn` whose
   signature shows no raw pointer needs a row in
   [docs/unsafe-fn-allowlist.md](unsafe-fn-allowlist.md) (five rows today).
-- Checked builds add checks the release build compiles out: `GlobalCell`'s
-  main-thread check (its borrow checks are in every build) and the
-  overlapping-edit check on Vimscript values. They are one cfg,
+- Checked builds add one check the release build compiles out: `GlobalCell`'s
+  per-access main-thread check (its borrow checks, and the overlapping-edit
+  check on Vimscript values, are in every build). It is the cfg
   `soundness_checks`, which `--features soundness-checks` turns on in a
   release build too. What the safe API over the unsafe code leaves to those
   checks, or to convention, is surveyed class by class in
@@ -87,7 +87,7 @@ unsafe_placement` lists any misplaced attribute (none);
 | `memory/`                                   | memory   |     4 |         99 |           36 | `xmalloc`, the block pool, owned C strings       |
 | `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
 | `winlayer.rs`, `winlayer/`                  | memory   |     5 |         51 |           10 | window, buffer, grid and terminal handles        |
-| `eval/typval/handle.rs`                     | memory   |     1 |         51 |            8 | Vimscript value handles                          |
+| `eval/typval/handle.rs`                     | memory   |     1 |         50 |            8 | Vimscript value handles                          |
 | `vterm/abi/`                                | test ABI |     3 |         90 |           31 | libvterm's C interface                           |
 | `harness.rs`                                | test ABI |     1 |          8 |            5 | editor symbols the harnesses resolve             |
 
@@ -293,17 +293,19 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 ### `eval/typval/handle.rs` — Vimscript value handles
 
 - **What:** `ListRef`, `DictRef`, `BlobRef` and `PartialRef`, and a
-  dictionary's item store (51): the dereference core (16), allocation and
+  dictionary's item store (50): the dereference core (13), the edit flag
+  each object carries, reached through its own bytes (2), allocation and
   release (14), the item slots that name a boxed or an embedded `DictItem`
   (10), `TypVal::bit_copy` and its two users (3), the deep copy's memo (2),
   two raw bridges for callers that still hold a pointer (2) and four test
   cases.
 - **Contract:** a value is reached from many holders at once and the
   evaluator re-enters at every call, so `edit()` lends `&mut` from a shared
-  handle for as long as no user code runs. **Debug builds check it:** two
-  overlapping `edit()`s of one object, or a `DerefMut` under an `edit()`,
-  panic (`typval/edit.rs`). The reference count is a `Cell`, so a count read
-  never forms `&mut`. `bit_copy` duplicates a value without its reference:
+  handle for as long as no user code runs. **Every build checks the
+  write half:** two overlapping `edit()`s of one object, or a `DerefMut`
+  under an `edit()`, panic (the object's `Lent` flag, `typval/edit.rs`).
+  The reference count and the flag are `Cell`s, each reached through its
+  own bytes, so neither forms a borrow of the whole object. `bit_copy` duplicates a value without its reference:
   exactly one of the two may be released (`docs/unsafe-fn-allowlist.md`).
 - **Retires:** only with a different value model. Two cuts are listed: Lists
   and Dictionaries in a `Box` (needs the unit suite's allocation log
