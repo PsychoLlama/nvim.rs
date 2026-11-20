@@ -429,6 +429,26 @@ them.
     builtin (a local sweep: `v:`/`b:` at each argument position, nested,
     and beside a dictionary sharing a `v:` key);
     `test/functional/vimscript/vvars_spec.lua` keeps the cases.
+  - **Methods that call out under `&mut self`**: an `impl Dict`/`List`/
+    `Blob` method holding the object exclusively must not put out a
+    message nor run anything that can reach the object (the evaluator, a
+    variable lookup, an autocommand, a watcher, a callback). Audited
+    tree-wide (every `&mut self` method, `&mut Dict`/`&mut List` parameter
+    and `edit()` binding live across such a call): `Dict::add_item` still
+    ran the Funcref name check (a lookup in the very scope) -- now an
+    invariant, with `dict_add_item` the only way a Funcref reaches `g:`/`l:`;
+    `extend_from_self` reported under `&mut self` -- now `&self`;
+    `remove()` on a list or blob checked its lock and converted `args`
+    under the edit -- now it checks through the handle, then edits once.
+    The `&mut Dict`/`&mut List` parameters left that put out messages fill
+    a fresh result nobody else holds (`msgpackparse()`, `wordcount()`,
+    `taglist()`, swap-file recovery). `just ratchet --check` refuses a
+    message or call-out inside a value object's `&mut self` method
+    (`CONTAINER_CALLOUT`); a free function holding an `Edit` is not
+    checked mechanically. A `vim.ui_attach` `msg_show` handler is the one
+    callback a message could run; for internal messages it runs in
+    `api-fast` context, where it cannot reach a variable (a probe under
+    `extend({..}, g:, 'error')` saw it not run during the call at all).
   - **Cost**, release, codegen-units = 1, cachegrind Ir against the build
     before the partial/blob/list/dict changes (three runs a side for
     evalbench): evalbench +1.8 % (+1.72..+2.06 %; parser phase +1.18 %),

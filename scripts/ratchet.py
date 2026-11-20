@@ -4309,6 +4309,57 @@ def check_cell_ptr(tree):
         )
 
 
+# What a value object's `&mut self` method must not call: a message (it
+# writes `v:errmsg` into `v:`, which may be the object) or anything that runs
+# the evaluator, looks a variable up, fires an autocommand or watcher, or
+# calls back into user code -- each can reach the object the method holds
+# exclusively. Such a check runs at the handle, before the edit is taken
+# (`dict_add_item`, `list_remove`; docs/safe-surface.md S6).
+CONTAINER_CALLOUT = re.compile(
+    rf"{EMIT_CALL.pattern}|\b(?:eval\w*|call_func\w*|callback_call\w*"
+    r"|apply_autocmds\w*|find_var\w*|var_wrong_func_name\w*|dict_wrong_func_name"
+    r"|function_exists|dict_watcher_notify|do_cmdline\w*|nlua_call\w*"
+    r"|value_check_lock\w*|var_check_\w+|valid_varname\w*|tv_get_\w*_chk"
+    r"|tv_check_\w+)\s*\("
+)
+CONTAINER_IMPL = re.compile(r"^impl(?:<[^>]*>)?\s+(?:Dict|List|Blob)\s*\{", re.M)
+
+
+def container_callouts(tree):
+    """`file: Type::method calls callee` for every `&mut self` method of an
+    `impl Dict`/`impl List`/`impl Blob` block whose body calls a
+    CONTAINER_CALLOUT."""
+    found = []
+    for file, masked in tree.items():
+        for block in CONTAINER_IMPL.finditer(masked):
+            opened = masked.find("{", block.start())
+            end = matching_brace(masked, opened)
+            for sig in fn_signatures(masked[opened:end]):
+                if not re.match(r"\(\s*&\s*(?:'\w+\s+)?mut\s+self\b", sig.params):
+                    continue
+                body = masked.find("{", opened + sig.end)
+                for call in CONTAINER_CALLOUT.finditer(
+                    masked, body, matching_brace(masked, body)
+                ):
+                    line = masked.count("\n", 0, call.start()) + 1
+                    found.append(f"{file}:{line}: {sig.name} calls {call.group(0)}")
+    return found
+
+
+def check_container_callouts(tree):
+    """Fail the run on a CONTAINER_CALLOUT inside a value object's `&mut
+    self` method: the battery was the only oracle for the last one
+    (`Dict::add_item`'s Funcref name check looked the name up in `g:` under
+    `g:`'s own edit)."""
+    if found := container_callouts(tree):
+        sys.exit(
+            "ratchet: a value object's `&mut self` method may not put out a "
+            "message or call out (docs/safe-surface.md S6):\n  "
+            + "\n  ".join(found)
+            + "\nRun the check at the handle before taking the edit."
+        )
+
+
 def check_names(tree):
     """Every allowlisted name still declares a cell.
 
@@ -6242,6 +6293,7 @@ def main():
     check_temporary_addresses(tree)
     check_deref_field_writes(tree)
     check_cell_ptr(tree)
+    check_container_callouts(tree)
     check_names(tree)
     check_perimeter(stats)
     check_unsafe_placement(tree, sources)
