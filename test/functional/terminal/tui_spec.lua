@@ -3293,9 +3293,12 @@ describe('TUI', function()
         'echo "foo"',
         '--cmd',
         -- The screen below is the one during this sleep, before the first
-        -- full redraw. 10 ms was shorter than a loaded terminal's refresh, so
-        -- the two states reached the screen as one and the wait never matched.
-        'sleep 500',
+        -- full redraw. A sleep the test could outlast was a race: 10 ms was
+        -- shorter than a loaded terminal's refresh (the two states reached
+        -- the screen as one), and 500 ms ended before a loaded startup had
+        -- drawn the first state (the full redraw replaced it). The sleep
+        -- outlasts every wait; the job goes with the session.
+        'sleep 1000',
       }, {
         term = true,
         env = { VIMRUNTIME = os.getenv('VIMRUNTIME') },
