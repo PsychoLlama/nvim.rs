@@ -312,7 +312,7 @@ pub(crate) fn inc_msg_scrolled() {
                 crate::formatted!(room, gettext(c"%s line %ld").to_bytes(), &name[..], lnum)
             }
         };
-        set_vim_var_string(Vv::Scrollstart, Some(&start));
+        set_message_row(Vv::Scrollstart, &start);
     }
     MSG_SCROLLED.set(MSG_SCROLLED.get() + 1);
     set_must_redraw(UPD_VALID);

@@ -44,6 +44,7 @@ use crate::types::{Key, SaveVEvent};
 
 /// The `v:` dictionary, built on first use.
 pub(crate) fn vimvar_dict() -> DictRef {
+    flush_message_rows();
     match SCOPE_VIM.with(|vim| vim.entry.di_tv.dict_handle()) {
         Some(dict) => dict,
         None => build_vim_scope(),
@@ -128,6 +129,9 @@ fn vimvar_at_hint<R, F: FnOnce(&mut DictItem) -> R>(idx: Vv, f: &mut Option<F>) 
 /// must be a leaf, as [`vimvar_at_hint`]'s.
 #[inline]
 fn with_vimvar_ref<R>(idx: Vv, f: impl FnOnce(&DictItem) -> R) -> R {
+    if is_message_row(idx) {
+        flush_message_rows();
+    }
     let mut f = Some(f);
     let hinted = SCOPE_VIM.with(|vim| {
         let (hint, addr) = vim.slots[idx as usize];
@@ -186,6 +190,10 @@ fn with_vimvar_found<R>(idx: Vv, f: impl FnOnce(&mut DictItem) -> R) -> R {
 
 /// Replace `v:` variable `idx`'s value with `value`, releasing the old one.
 fn replace_vimvar(idx: Vv, value: TypVal) {
+    // An older message's row must not land over this write later.
+    if is_message_row(idx) {
+        flush_message_rows();
+    }
     let old = with_vimvar_item(idx, |item| mem::replace(&mut item.di_tv, value));
     drop(old);
 }
@@ -374,50 +382,60 @@ pub fn set_vim_var_string(idx: Vv, val: Option<&[u8]>) {
     set_vim_var_owned(idx, val.map(ThinCString::from_bytes));
 }
 
-/// The count of open [`ReadScope`](crate::eval::typval::ReadScope)s, and the
-/// `v:` rows messages wrote meanwhile, written for real when the last scope
-/// ends: a scope may be holding `v:` itself (`mapset(v:)`, `json_encode([v:,
-/// ..])`), which a row write would have to edit.
-static HELD_MESSAGE_ROWS: GlobalCell<(u32, Vec<HeldRow>)> = GlobalCell::new((0, Vec::new()));
+/// The `v:` rows the message path wrote while something held `v:` itself,
+/// in the order written: a builtin reading a dictionary argument can be
+/// handed `v:` (`json_encode([v:])`, `mapset(v:)`), and a message it puts
+/// out meanwhile must not edit what it reads -- nor panic, since input
+/// reaches it. Written for real as soon as `v:` is free again, before
+/// anything else reaches `v:` ([`flush_message_rows`]).
+static PENDING_MESSAGE_ROWS: GlobalCell<Vec<PendingRow>> = GlobalCell::new(Vec::new());
 
 /// A row a message wrote, and what it wrote.
-type HeldRow = (Vv, Option<ThinCString>);
+type PendingRow = (Vv, Option<ThinCString>);
 
-/// A [`ReadScope`](crate::eval::typval::ReadScope) opened.
-pub(crate) fn hold_message_rows() {
-    HELD_MESSAGE_ROWS.with_mut(|(open, _)| *open += 1);
+/// Whether `idx` is a row the message path writes, which waits in
+/// [`PENDING_MESSAGE_ROWS`] while `v:` is held.
+fn is_message_row(idx: Vv) -> bool {
+    matches!(
+        idx,
+        Vv::Errmsg | Vv::Warningmsg | Vv::Statusmsg | Vv::Scrollstart
+    )
 }
 
-/// A [`ReadScope`](crate::eval::typval::ReadScope) ended, its shares
-/// already given back: the last one writes the rows held for it.
-pub(crate) fn release_message_rows() {
-    let rows = HELD_MESSAGE_ROWS.with_mut(|(open, rows)| {
-        *open -= 1;
-        if *open == 0 {
-            mem::take(rows)
-        } else {
-            Vec::new()
-        }
-    });
-    for (idx, text) in rows {
-        set_vim_var_owned(idx, text);
+/// Write the rows waiting in [`PENDING_MESSAGE_ROWS`], when `v:` is free:
+/// called wherever `v:` is reached (its handle, a message row's read or
+/// write) and when a [`ReadScope`](crate::eval::typval::ReadScope) ends.
+/// While a borrow still holds `v:` they keep waiting; only that borrow's
+/// holder could read the old value meanwhile, which a [`Read`] of a value
+/// object promises anyway (what it reads does not change under it).
+#[inline]
+pub(crate) fn flush_message_rows() {
+    if PENDING_MESSAGE_ROWS.with(Vec::is_empty) {
+        return;
+    }
+    flush_message_rows_now();
+}
+
+#[cold]
+fn flush_message_rows_now() {
+    let free = SCOPE_VIM.with(|vim| vim.entry.di_tv.dict_shared().is_none_or(DictRef::is_free));
+    if !free {
+        return;
+    }
+    // Taken first: a write reaches `v:`'s handle, which flushes again.
+    for (idx, text) in PENDING_MESSAGE_ROWS.take() {
+        replace_vimvar(idx, TypVal::string(text));
     }
 }
 
-/// What a message writes to `v:errmsg`/`v:warningmsg`/`v:statusmsg`: at
-/// once, or once the open read scopes end.
+/// What the message path writes to `v:errmsg`/`v:warningmsg`/`v:statusmsg`/
+/// `v:scrollstart`: at once, or once `v:` is free (see
+/// [`PENDING_MESSAGE_ROWS`]).
 pub(crate) fn set_message_row(idx: Vv, text: &[u8]) {
+    debug_assert!(is_message_row(idx), "{idx:?} is not a message row");
     let text = ThinCString::from_bytes(text);
-    let now = HELD_MESSAGE_ROWS.with_mut(|(open, rows)| {
-        if *open == 0 {
-            return Some(text);
-        }
-        rows.push((idx, Some(text)));
-        None
-    });
-    if let Some(text) = now {
-        set_vim_var_owned(idx, Some(text));
-    }
+    PENDING_MESSAGE_ROWS.with_mut(|rows| rows.push((idx, Some(text))));
+    flush_message_rows();
 }
 
 /// Set `v:` variable `idx` to `val`, which it takes over; `None` is the null

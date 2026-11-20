@@ -416,13 +416,19 @@ them.
     `ReadScope`.
   - **Messages under a read**: a message writes `v:errmsg` into `v:`, and a
     caller may pass `v:` where a dictionary is read (`json_encode([v:, 1])`,
-    `mapset(v:)`, `has_key(v:, v:)`, `foreach(v:, ..)`). A `ReadScope` holds
-    the message rows (`v:errmsg`, `v:warningmsg`, `v:statusmsg`) until the
-    last scope ends; reading a `v:` row is a shared read. Found by passing
-    `v:` to ~60 dict-taking functions (`test/functional/vimscript/vvars_spec.lua`
-    keeps the seven that panicked). A site holding a plain `Read` of a
-    caller's dictionary across a message is still a panic, not a crash —
-    fail-stop, where it used to be a value write the reader could see.
+    `mapset(v:)`, `has_key(v:, v:)`, `foreach(v:, ..)`,
+    `extend({'count': 1}, v:, 'error')`). The message rows (`v:errmsg`,
+    `v:warningmsg`, `v:statusmsg`, `v:scrollstart`) are written only while
+    `v:` is free (`DictRef::is_free`, the `Lent` word read without a
+    borrow); under any read of `v:` -- a plain `Read` or a `ReadScope` --
+    they wait in a queue and land as soon as `v:` is free again: every way
+    to `v:` (its handle, `vimvar_dict()`; a message row's read or write)
+    and every scope's end writes them first. Only the read's own holder can
+    see the old row meanwhile, which is what a read promises it anyway.
+    Reading a `v:` row is a shared read. Found by passing `v:` to every
+    builtin (a local sweep: `v:`/`b:` at each argument position, nested,
+    and beside a dictionary sharing a `v:` key);
+    `test/functional/vimscript/vvars_spec.lua` keeps the cases.
   - **Cost**, release, codegen-units = 1, cachegrind Ir against the build
     before the partial/blob/list/dict changes (three runs a side for
     evalbench): evalbench +1.8 % (+1.72..+2.06 %; parser phase +1.18 %),
@@ -434,7 +440,7 @@ them.
     mostly a codegen shift between `Object`'s drop and `release`, with
     ~0.2 % from the encoders' `ReadScope`. The list/dict commit alone
     measured evalbench +1.3 % (parser +1.02 %); the rest is the message-row
-    hold and the `Edit` pointer.
+    hold (since replaced by the queue) and the `Edit` pointer.
   - **Miri** found the `Edit` of the write half unsound once a test moved
     one into a call (`drop(edit)`): a `&mut T` field is retagged protected
     for the call and the loan's release writes the word inside the object

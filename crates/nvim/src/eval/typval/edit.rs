@@ -16,7 +16,7 @@
 
 use super::handle::{Loan, Share};
 use crate::deref::deref_to_field;
-use crate::eval::vars::{hold_message_rows, release_message_rows};
+use crate::eval::vars::flush_message_rows;
 use ::core::cell::Cell;
 
 /// A writable borrow of a value object, taken through a shared handle: what
@@ -99,14 +99,14 @@ deref_to_field!(impl['a, T: ?Sized] Read<'a, T> => T, target);
 /// out while the reference lives. Every object read under it refuses an
 /// edit until then, so a scope never spans a call that runs user code.
 ///
-/// A message put out under a scope writes its `v:` row (`v:errmsg`) once
-/// the last scope ends: the scope may be holding `v:` itself.
+/// A message put out while a scope holds `v:` writes its row (`v:errmsg`)
+/// once the scope ends, as under any other read of `v:`
+/// ([`set_message_row`](crate::eval::vars::set_message_row)).
 #[derive(Debug)]
 pub(crate) struct ReadScope(::core::cell::RefCell<Vec<Share>>);
 
 impl ReadScope {
     pub(crate) fn new() -> ReadScope {
-        hold_message_rows();
         ReadScope(::core::cell::RefCell::new(Vec::new()))
     }
 
@@ -123,9 +123,9 @@ impl ReadScope {
 
 impl Drop for ReadScope {
     fn drop(&mut self) {
-        // The shares first: the held rows may be `v:`'s.
+        // The shares first: one may be `v:`'s, which the rows wait on.
         self.0.get_mut().clear();
-        release_message_rows();
+        flush_message_rows();
     }
 }
 
@@ -179,6 +179,13 @@ impl Lent {
             refused::<T>("read", state, self);
         }
         self.0.set(state + 1);
+    }
+
+    /// Whether no borrow holds the object: an `edit()` now would not be
+    /// refused.
+    #[inline(always)]
+    pub(super) fn is_free(&self) -> bool {
+        self.0.get() == 0
     }
 
     /// One read has gone.

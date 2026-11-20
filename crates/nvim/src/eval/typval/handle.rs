@@ -73,10 +73,8 @@ use crate::types::Refcount;
 /// destructor does by itself.  The count is now exactly the number of live
 /// holders, and there is no state in which a list is alive with none.
 ///
-/// [`Deref`](core::ops::Deref) is [`Live`](crate::winlayer::Live)'s: the
-/// borrow lasts as long as the field access that asked for it and never
-/// spans a call, because the evaluator re-enters and the same list is
-/// reachable through a `*mut List` somewhere else at the same time.
+/// The list itself is borrowed only through [`ListRef::read`] and
+/// [`ListRef::edit`].
 ///
 /// The two constructors are the two things a raw pointer can mean.  A handle
 /// is not null: `v:_null_list` is `TypVal::list(None)`, which
@@ -134,13 +132,9 @@ impl ListRef {
         self.0 == other.0
     }
 
-    /// The object, writable, from a shared handle.
-    ///
-    /// The `Live` promise, spelled out: the borrow lasts for the
-    /// statement that asked for it and **never spans a call that can
-    /// run user code**, because every other holder of this object can
-    /// reach it from there. Every build checks the half of it that two
-    /// writers break: see [`Edit`].
+    /// The object, writable, from a shared handle, for the statement that
+    /// asked: **never across a call that can run user code**, which reaches
+    /// it through every other holder. Every build checks it: see [`Edit`].
     #[inline(always)]
     pub fn edit(&self) -> Edit<'_, List> {
         lend(&self.0, ::core::mem::offset_of!(List, lv_lent))
@@ -362,6 +356,12 @@ impl DictRef {
         // SAFETY: the handle holds a reference, so the object is live;
         // the borrow covers the count alone.
         unsafe { &(*self.0.as_ptr()).dv_refcount }
+    }
+
+    /// Whether no borrow holds it: an `edit()` now would not be refused.
+    pub(crate) fn is_free(&self) -> bool {
+        let offset = ::core::mem::offset_of!(Dict, dv_lent);
+        Claim::new(self.0, offset).word().is_free()
     }
 }
 

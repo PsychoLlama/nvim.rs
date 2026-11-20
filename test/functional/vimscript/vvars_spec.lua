@@ -82,4 +82,20 @@ describe('v: as an argument', function()
     eq('string', eval('type(g:last) == v:t_string ? "string" : "other"'))
     n.assert_alive()
   end)
+
+  -- A plain read of a dictionary argument held across a message: the row
+  -- waits until `v:` is free, then lands before anything reads it.
+  it('lets a message row wait while v: is read', function()
+    command('let v:errmsg = ""')
+    command("silent! call extend({'count': 1}, v:, 'error')")
+    t.matches('E737: Key already exists: count', eval('v:errmsg'))
+    -- A later write wins over the waiting row.
+    command("silent! call extend({'count': 1}, v:, 'error') | let v:errmsg = 'mine'")
+    eq('mine', eval('v:errmsg'))
+    eq(
+      'E737: Key already exists: count',
+      t.pcall_err(command, "call extend({'count': 1}, v:, 'error')"):match('E737:.*$')
+    )
+    n.assert_alive()
+  end)
 end)
