@@ -288,6 +288,26 @@ describe('thread', function()
 
       eq({ 'notification', 'result', { { false, 0 } } }, next_msg())
     end)
+
+    it('nvim__get_runtime reads the main search path', function()
+      local main = exec_lua [[
+        return vim.api.nvim__get_runtime({ 'lua/vim/_core/shared.lua' }, false, { is_lua = true })
+      ]]
+      eq(1, #main)
+      exec_lua [[
+        local entry = function(async)
+          local found = vim.api.nvim__get_runtime({ 'lua/vim/_core/shared.lua' }, false, { is_lua = true })
+          async:send(vim.mpack.encode(found))
+        end
+        local on_async = function(ret)
+          vim.rpcnotify(1, 'result', vim.mpack.decode(ret))
+        end
+        local thread_test = Thread_Test.new(entry, on_async)
+        thread_test:do_test()
+      ]]
+
+      eq({ 'notification', 'result', { main } }, next_msg())
+    end)
   end)
 end)
 
