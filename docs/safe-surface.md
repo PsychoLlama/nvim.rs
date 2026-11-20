@@ -12,7 +12,8 @@ impl (`Deref`/`DerefMut`, `Sync`/`Send`, `Drop`) a
   `soundness_checks` cfg panic where it does. That cfg is on in every build
   with debug assertions and in a release build with the `soundness-checks`
   feature (`cargo build --release --features soundness-checks`);
-  `crates/nvim/build.rs` derives it. A shipped release build checks nothing.
+  `crates/nvim/build.rs` derives it. A shipped release build checks none of
+  these (what it does check is an always-on check, a class closed).
 - **sound-by-convention** — a caller can, and nothing checks it.
 
 The work list is by **class**: rows that fail by the same mechanism and close
@@ -121,53 +122,122 @@ both sides, `cg_annotate` per file and function):
   per-cell `LINEBUF.with_mut` (now ~6 instructions, no call). Each is a
   restructure of its own for a fraction of a percent.
 
-**Verdict: not flipped.** The threshold was ≤ 2–3 % on every bench — the
-size of change the A/B benches are used to call a regression — and the
-cell checks are +3.0 % to +11.1 %. S1/S2 stay sound-by-debug-check, now on
-a tracker cheap enough to ship a checked release for diagnosis. The
-decision left: borrows-only always-on (S1 closed by an always-on check at
-+0.7 % to +6.1 %, with a few more hot-site restructures on scrbench/the
-parser) with S2 kept behind the switch, versus both behind it.
+**Verdict then: not flipped**, against a threshold of ≤ 2–3 % on every
+bench.
+
+### Decided: the borrows always on, the thread question closed by audit
+
+The borrow check is unconditional code now (not a default feature): the
+borrow word is in every build, and `soundness_checks` switches only the
+thread check and the value handles' edit loans. Before the flip, the
+profile of the always-on build was taken apart per function and line
+against the build without it (codegen-units = 1, a `line-tables-only`
+build of each side, which changes no code) and the reads made once per
+step of an inner loop were moved out (`breakcheck_every`'s counter is an
+atomic, `'maxmempattern'` is read once per match, the spell walk's
+`GOT_INT` once per breakcheck). Cost of the always-on borrow check in the
+shipped release build, cachegrind Ir, codegen-units = 1, one sitting:
+
+| bench      | without | always-on |      Δ | before the hot sites |
+| ---------- | ------: | --------: | -----: | -------------------: |
+| mlbench    |  7.80 G |    7.92 G | +1.6 % |               +1.7 % |
+| markbench  |  5.06 G |    5.16 G | +2.0 % |               +2.0 % |
+| inbench    | 30.87 G |   31.91 G | +3.4 % |               +3.8 % |
+| evalbench  | 65.54 G |   67.41 G | +2.9 % |               +2.8 % |
+| (parser)   |  9.32 G |    9.83 G | +5.4 % |               +5.4 % |
+| rebench    | 17.70 G |   17.98 G | +1.6 % |               +5.8 % |
+| edbench    | 14.59 G |   15.08 G | +3.4 % |               +3.8 % |
+| scrbench   | 13.16 G |   14.00 G | +6.4 % |               +6.4 % |
+| spellbench | 10.55 G |   10.85 G | +2.9 % |               +2.4 % |
+
+("Without" is the tree before this change; "always-on" also carries the
+thread-safety fixes of S2 below. The hot-site column is the flip alone.
+Whole-bench swings of ±0.3 % between builds that differ by unrelated
+inlining are normal here.)
+
+What is left is diffuse: about a third is the compares themselves (the
+per-cell `LINEBUF.with_mut` and search-highlight state in `win_line`, the
+`ExState` guards per command, `vgetorpeek`'s typeahead loans, the spell
+table's per-byte reads), the rest inlining moving — a function that grew
+a compare is kept out of line and its caller pays a call and moves
+(`prepare_line`, `hl_combine_attr`, `findmatchlimit`, `parse_cmd_address`).
+Forcing those back in (`#[inline]`, a cold split) was tried and measured
+nothing: the inliner shuffles what it keeps.
 
 ## Classes
 
 Sizes: XS < 1 h, S ~1–2 h, M ~half a day, L ~days, XL multi-slice.
 
-### S1 — cell borrows (sound-by-debug-check)
+### ~~S1 — cell borrows~~ (closed: check-always)
 
 `GlobalCell::{with, with_mut, take, with_field, with_at}` lend a reference
 for a closure; `get`/`set`/`get_field`/`set_field`/`replace_field` and the
 `state_record!` accessors (`get`/`set`/`replace`/`take`/`with`/`with_mut`/
-`update`, `Level`) copy in and out. Checked builds (`soundness_checks`) track every loan.
+`update`, `Level`) copy in and out.
 
-- **Breaks:** a `with_mut` re-entered from inside a `with`/`with_mut` on the
+- **Broke:** a `with_mut` re-entered from inside a `with`/`with_mut` on the
   same cell → two `&mut` in release. Real shapes: an autocommand, Lua or
   Vimscript run inside the closure (`tui::with_tui`, the options record); a
   `get`/`set` of the cell inside its own `with_mut`; a `with_field` loan's
-  field written from inside it; `LOADED_LANGS.with` around `os_breakcheck()`
-  (libuv callbacks run there — sound today only because fast callbacks may
-  not set `'spelllang'`).
-- **Closure:** check-always, not yet reached. The per-cell inline tracker
-  is in (layout: `repr(C)`, value first, so the exported cells and `curwin`
-  keep their addresses; the word exists only in a checked build), measured
-  above at +3.0 % to +11.1 % with the thread check and +0.7 % to +6.1 %
-  without. Open: the decision in the verdict above, then the remaining hot
-  sites if borrows go always-on. **M.**
+  field written from inside it; `LOADED_LANGS.with` around `os_breakcheck()`.
+- **Closed:** every build tracks every loan in the word beside the value
+  (`FREE`, `EXCLUSIVE`, or the innermost shared `Loan` in the borrower's
+  frame), and a conflicting access panics. Layout: `repr(C)`, value first,
+  so an exported cell's address is still its value's; `just state-exports`
+  and `just drop-glue` (default and codegen-units = 1) are clean with the
+  word in. Cost: the table above.
 
-### S2 — main-thread confinement (sound-by-debug-check)
+### ~~S2 — main-thread confinement~~ (closed: `unsafe` entry points with an audited contract)
 
 `unsafe impl<T> Sync for GlobalCell<T>` for any `T`; `ptr()`, `get`, `set`
 and the rest are callable from any thread.
 
-- **Breaks:** any thread — a `vim.uv.new_thread` state, a libuv pool
-  callback, `std::thread::spawn` — touching a cell: a data race in release,
-  and a `!Send` value (`Rc`) moved across threads.
-- **Closure:** check-always, not reached. The thread question is inlined
-  now (a thread-local byte in place of the cross-crate call) and is still
-  half of the cells' cost: +2 % to +5 % on its own. Cheaper means fewer
-  questions (a token proving the main thread, threaded through the hot
-  paths), not a cheaper one: the thread-pointer compare lost to the GOT.
-  **S–M.**
+- **Breaks:** any thread touching a cell — a data race in release, and a
+  `!Send` value (`Rc`) moved across threads.
+- **Found:** a real one. A luv thread's `require` of a module that is not
+  preloaded calls `nvim__get_runtime`, whose pattern list went through the
+  api converter, which kept its walk stack in a `GlobalCell` (`pop_object`'s
+  `OPEN_VALUES`): two threads taking and putting back one `Vec` at once. The
+  same converter reached `MAIN_REFS` (a `with_mut` on every reference
+  made), and `vim.diff`'s `on_hunk` reference was given back through the
+  _main_ state from the thread (upstream's bug too). Fixed: the walk stack
+  is per thread (`thread_local!`), the reference bookkeeping is atomics, and
+  `vim.diff` gives the reference back to the state that made it.
+- **Closed — every way off the main thread is an audited entry point:**
+  - _luv thread states_ (`vim.uv.new_thread`, `new_work`). luv calls
+    `nlua_thread_acquire_vm` on the thread; the `unsafe` call that hands it
+    to luv (`nlua_init`) carries the contract. A thread state can call only
+    what `nlua_init_state` gives it, and that list is written there:
+    `print` (posts its text through the loop's mutex-guarded inbox),
+    `add_common` (`vim.is_thread`, the sentinels' metamethods, the
+    preloader), `add_vendored` (mpack, lpeg, `vim.diff`, cjson), luv with
+    the thread hooks (`install_luv`; errors are posted), `thread_api`
+    (`nvim__get_runtime`, against its own mutex-guarded snapshot of the
+    search path), the standard library. None reaches a cell now; the
+    userdata claims were already a lock (`lua/stack/userdata.rs`).
+  - _Rust threads and the panic hook_: `std::thread::{spawn, scope}`,
+    `Builder::{spawn, spawn_scoped}` and `std::panic::set_hook` are
+    `disallowed_methods` (`crates/nvim/clippy.toml`, denied in
+    `Cargo.toml`). Each of the four sites carries an `#[expect]` saying what
+    its thread touches: `nvim__panic`'s thread only panics; the panic hook
+    asks which thread it is on (`main_thread_is_current`) before any editor
+    state and hands another thread's cleanup to the main loop; two tests
+    (the allocation log, the regexp watchdog) touch thread-local state and
+    an atomic.
+  - _The allocator's failure path_ (`allocation_failed`, any thread): asks
+    the thread first, as the panic hook does.
+  - libuv's pool runs only libuv's own work (`uv_fs_*`, `getaddrinfo`);
+    completion callbacks run on the loop thread. No Rust code queues pool
+    work, and signals arrive through the loop.
+- **Kept as a net:** builds with `soundness_checks` (every debug build, so
+  every suite) still check the thread on every access, and two
+  `thread_spec` cases drive the converter paths above on a thread (the
+  `require` case panicked before the fix). A release build does not ask:
+  that read per access cost +2 % to +5 % on its own.
+- **What would reopen it:** a function added to a thread state's list, or a
+  new thread or hook, that reaches a cell. The first is reviewed at
+  `nlua_init_state`'s list (and caught by a debug `thread_spec` run when it
+  has a case); the second fails clippy.
 
 ### ~~S3 — `SharedCell<T>`~~ (closed: type holds it)
 

@@ -52,8 +52,8 @@ thiserror = { version = "2", default-features = false, features = ["std"] }
 
 [features]
 # The soundness checks debug builds always carry -- `GlobalCell`'s main-thread
-# and borrow tracking, the value handles' overlapping-edit loans, the Lua
-# stack's consuming checks -- in a build without debug assertions too.
+# check, the value handles' overlapping-edit loans -- in a build without debug
+# assertions too.
 # build.rs turns either into the one `soundness_checks` cfg the sites test.
 # `cargo build --release --features soundness-checks` is a release binary
 # that panics where a debug one would.

@@ -1118,9 +1118,13 @@ impl<'w> Emitter<'w> {
                     return Some(CTy::Named { name, konst: false });
                 }
                 if name == "GlobalCell" || name == "RawStatic" || name == "ManuallyDrop" {
-                    // All three are `repr(transparent)` over the thing the C
-                    // sees, and the last of them is how a typval says the
-                    // compiler must not drop its payload.
+                    // `RawStatic` and `ManuallyDrop` are `repr(transparent)`
+                    // over the thing the C sees, and the latter is how a
+                    // typval says the compiler must not drop its payload.
+                    // `GlobalCell` is `repr(C)` with it first and its borrow
+                    // word after: the same address for the statics it
+                    // wraps, which is the only place one appears (no
+                    // struct holds one).
                     if let syn::PathArguments::AngleBracketed(ab) = &seg.arguments {
                         if let Some(syn::GenericArgument::Type(t)) = ab.args.first() {
                             let t = t.clone();

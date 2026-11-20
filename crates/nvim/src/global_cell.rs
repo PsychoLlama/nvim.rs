@@ -5,44 +5,47 @@
 //! autocmd firing mid-operation and touching the same global, say — is
 //! undefined behavior even single-threaded. `GlobalCell` funnels every
 //! access through a single `UnsafeCell` so the compiler stops assuming
-//! uniqueness, and checks the two invariants the soundness argument rests
-//! on in every build with the `soundness_checks` cfg: every build with
-//! debug assertions, and a release build with the `soundness-checks`
-//! feature (crates/nvim/build.rs). "Checked builds" below means those.
+//! uniqueness, and holds the two invariants the soundness argument rests on.
 //!
 //! # Soundness contract
 //!
 //! - **Main-thread only.** Editor state is only touched from the main
-//!   thread. `unsafe impl Sync` below is justified by that invariant, and
-//!   checked builds assert it on every access (see [`init_main_thread`]):
-//!   an access from any other thread panics before it reads anything, the
-//!   borrow state included.
+//!   thread. `unsafe impl Sync` below is justified by that invariant, which
+//!   holds by keeping the ways off the main thread few and audited: luv's
+//!   thread states, whose every function is on the list `nlua_init_state`
+//!   keeps; the panic hook and the allocator's failure path, which touch
+//!   editor state only after asking which thread they are on; and starting
+//!   a thread, which clippy refuses outside an audited site
+//!   (`crates/nvim/clippy.toml`). docs/safe-surface.md (S2) has the audit.
+//!   Builds with the `soundness_checks` cfg (debug assertions, or the
+//!   `soundness-checks` feature) also check it on every access (see
+//!   [`init_main_thread`]): an access from any other thread panics before
+//!   it reads anything, the borrow state included.
 //! - **No outstanding references across accesses.** `get`/`set` copy values
 //!   in and out without forming references. `with`/`with_mut`/`with_field`
-//!   hand out a scoped reference, which checked builds record in the cell,
-//!   RefCell-style: a conflicting access while it lives panics. `ptr` is the
+//!   hand out a scoped reference, which the cell records, RefCell-style, in
+//!   every build: a conflicting access while it lives panics. `ptr` is the
 //!   raw escape hatch for the mechanically converted call sites:
 //!   writes/reads through it are exempt from borrow tracking, and callers
 //!   must not let a reference from `with`/`with_mut` overlap such an access.
 //!
 //! # Layout
 //!
-//! `repr(C)` with the value first, then (checked builds only) one word of
-//! borrow state. An unmangled `pub static X: GlobalCell<T>` therefore
-//! exports a symbol whose address is the value's in every build: the C deps
-//! and the LuaJIT-FFI unit suite keep resolving and poking the same bytes,
-//! and a checked build's object only grew a word past what they read.
+//! `repr(C)` with the value first, then one word of borrow state. An
+//! unmangled `pub static X: GlobalCell<T>` therefore exports a symbol whose
+//! address is the value's: the C deps and the LuaJIT-FFI unit suite resolve
+//! and poke the value's bytes, and the borrow word lies past what they read.
 //!
 //! # Cost
 //!
-//! The checks cost a compare each: the borrow state sits beside the value
-//! (one word, no table), and the thread question is one thread-local byte,
-//! read in place in an optimised build and through one direct call into the
-//! always-optimised `nvim-mainthread` crate in an unoptimised one (a
-//! `thread_local!` compiled at opt-level 0 costs ~3× per check). In a
-//! release build that is +3 % to +11 % instructions across the A/B benches
-//! (the shared borrow table this replaced cost +11 % to +78 %); see
-//! docs/safe-surface.md for the numbers and why that is not yet always-on.
+//! The borrow check costs a compare per access: the state sits beside the
+//! value (one word, no table), on a line the access touches anyway. In a
+//! release build that is a few percent of instructions across the A/B
+//! benches (docs/safe-surface.md has the numbers). The thread question --
+//! one thread-local byte, read in place in an optimised build and through
+//! one direct call into the always-optimised `nvim-mainthread` crate in an
+//! unoptimised one -- cost as much again, which is why only checked builds
+//! ask it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `global_cell.rs` row in docs/perimeter.md.
@@ -55,9 +58,7 @@
     clippy::ptr_as_ptr
 )]
 
-#[cfg(soundness_checks)]
-use core::cell::Cell;
-use core::cell::UnsafeCell;
+use core::cell::{Cell, UnsafeCell};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A global editor-state cell. See the module docs for the contract.
@@ -68,9 +69,7 @@ pub struct GlobalCell<T> {
     value: UnsafeCell<T>,
     /// What is borrowed: [`FREE`], [`EXCLUSIVE`], or the innermost of the
     /// shared [`Loan`]s live on the stack, each pointing at the one outside
-    /// it. Read and written only on the main thread, after the thread
-    /// check.
-    #[cfg(soundness_checks)]
+    /// it. Read and written only on the main thread.
     borrow: Cell<State>,
 }
 
@@ -100,38 +99,32 @@ struct Loan {
 }
 
 /// Puts a cell's borrow state back when the borrow ends, however it ends
-/// (an unwinding panic in a lib test included). Nothing at all, with no
-/// `Drop`, when the checks are compiled out.
+/// (an unwinding panic in a lib test included).
 #[derive(Debug)]
 struct Restore<'a> {
-    #[cfg(soundness_checks)]
     borrow: &'a Cell<State>,
-    #[cfg(soundness_checks)]
     to: State,
-    #[cfg(not(soundness_checks))]
-    _cell: core::marker::PhantomData<&'a ()>,
 }
 
-#[cfg(soundness_checks)]
 impl Drop for Restore<'_> {
     #[inline(always)]
     fn drop(&mut self) {
-        // On the main thread: the access that made this guard checked it.
+        // On the main thread, as the access that made this guard was.
         self.borrow.set(self.to);
     }
 }
 
-// SAFETY: editor globals are only accessed from the main thread, and a
-// checked build checks it before touching the value or the borrow state. The
-// `Sync` bound is required for `static` items; it is not a claim of actual
-// thread safety.
+// SAFETY: editor globals are only accessed from the main thread: nothing
+// that runs on another thread reaches a cell (the module docs say why, and
+// docs/safe-surface.md S2 has the audit), and a checked build checks it
+// before touching the value or the borrow state. The `Sync` bound is
+// required for `static` items; it is not a claim of actual thread safety.
 unsafe impl<T> Sync for GlobalCell<T> {}
 
 impl<T> GlobalCell<T> {
     pub const fn new(value: T) -> Self {
         GlobalCell {
             value: UnsafeCell::new(value),
-            #[cfg(soundness_checks)]
             borrow: Cell::new(FREE),
         }
     }
@@ -154,36 +147,21 @@ impl<T> GlobalCell<T> {
         self.value.get()
     }
 
-    /// The borrow state, after the thread check; [`FREE`], which folds
-    /// every conflict branch away, when the checks are compiled out.
+    /// The borrow state, after the thread check.
     #[inline(always)]
     fn borrowed(&self) -> State {
         check_main_thread();
-        #[cfg(soundness_checks)]
-        return self.borrow.get();
-        #[cfg(not(soundness_checks))]
-        FREE
+        self.borrow.get()
     }
 
     /// Record `now` as the borrow state until the guard drops, and `back`
-    /// then. Nothing when the checks are compiled out.
+    /// then.
     #[inline(always)]
     fn hold(&self, now: State, back: State) -> Restore<'_> {
-        #[cfg(soundness_checks)]
-        {
-            // On the main thread: the caller's `borrowed` checked it.
-            self.borrow.set(now);
-            Restore {
-                borrow: &self.borrow,
-                to: back,
-            }
-        }
-        #[cfg(not(soundness_checks))]
-        {
-            let _ = (now, back);
-            Restore {
-                _cell: core::marker::PhantomData,
-            }
+        self.borrow.set(now);
+        Restore {
+            borrow: &self.borrow,
+            to: back,
         }
     }
 
@@ -987,9 +965,8 @@ mod tests {
         // repr(C), value first: the cell's address IS the value's address,
         // which is what an exported cell's C readers rely on.
         assert_eq!(core::ptr::from_ref(&CELL).addr(), CELL.as_raw().addr());
-        // The borrow word is a checked build's alone.
-        let word = if cfg!(soundness_checks) { 8 } else { 0 };
-        assert_eq!(size_of::<GlobalCell<u64>>(), 8 + word);
+        // Then the borrow word, in every build.
+        assert_eq!(size_of::<GlobalCell<u64>>(), 16);
     }
 
     #[test]
@@ -1004,7 +981,6 @@ mod tests {
         assert_eq!(A.get(), 11);
     }
 
-    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "reentrant global access")]
     fn reentrant_with_mut_panics() {
@@ -1012,7 +988,6 @@ mod tests {
         CELL.with_mut(|_| CELL.with_mut(|inner| *inner));
     }
 
-    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "with_mut borrow")]
     fn get_during_with_mut_panics() {
@@ -1113,13 +1088,8 @@ mod tests {
         name: Option<Vec<u8>>,
     }
     const LENT_COUNT: Field<Lent, i32> = field!(Lent, count);
-    #[cfg_attr(
-        not(soundness_checks),
-        expect(dead_code, reason = "only the checked tests lend it")
-    )]
     const LENT_NAME: Field<Lent, Option<Vec<u8>>> = field!(Lent, name);
 
-    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "while with_field lends it")]
     fn a_write_to_the_lent_field_panics() {
@@ -1130,7 +1100,6 @@ mod tests {
         cell.with_at(LENT_NAME, |_| cell.set_at(LENT_NAME, None));
     }
 
-    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "while with_field lends one of its fields")]
     fn a_whole_record_write_under_a_field_loan_panics() {
@@ -1141,7 +1110,6 @@ mod tests {
         cell.with_at(LENT_COUNT, |_| cell.with_mut(|record| record.count = 2));
     }
 
-    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "during an active with borrow")]
     fn a_field_write_under_a_whole_record_borrow_panics() {
@@ -1152,7 +1120,6 @@ mod tests {
         cell.with(|_| cell.set_at(LENT_COUNT, 2));
     }
 
-    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "while with_field lends it")]
     fn an_outer_field_loan_is_found_under_an_inner_one() {
@@ -1167,7 +1134,6 @@ mod tests {
         });
     }
 
-    #[cfg(soundness_checks)]
     #[test]
     #[should_panic(expected = "reentrant global access")]
     fn a_set_inside_with_panics() {
@@ -1175,7 +1141,6 @@ mod tests {
         cell.with(|_| cell.set(1));
     }
 
-    #[cfg(soundness_checks)]
     #[test]
     fn a_panicking_borrow_gives_the_cell_back() {
         let cell = GlobalCell::new(0);

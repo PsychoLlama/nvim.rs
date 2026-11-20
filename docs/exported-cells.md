@@ -21,41 +21,13 @@ cell), a cell that was a constant in disguise becoming a `const`, or the
 access moving into a body that is not a leaf. Check a `codegen-units = 1`
 binary as well as the default one.
 
-## `api`
-
-- `neovim::api::extmark::ns::NEXT_NAMESPACE_ID`
-
-## `buffer`
-
-- `neovim::buffer::TOP_FILE_NUM`
-
-## `diff`
-
-- `neovim::diff::DIFF_FLAGS`
-
-## `drawscreen`
-
-- `neovim::drawscreen::state::NEED_MAKETITLE`
-- `neovim::drawscreen::state::REDRAW_TABLINE`
-
-## `ex_docmd`
-
-- `neovim::ex_docmd::EX_PRESSEDRETURN`
-
 ## `ex_getln`
 
 - `neovim::ex_getln::CCLINE`
-- `neovim::ex_getln::CMDPREVIEW_BUFNR`
-- `neovim::ex_getln::CMDPREVIEW_NS`
-- `neovim::ex_getln::LAST_PROMPT_ID`
 
 ## `getchar`
 
 - `neovim::getchar::typeahead::TYPEBUF`
-
-## `grid`
-
-- `neovim::grid::grid_assign_handle::LAST_GRID_HANDLE`
 
 ## `guard`
 
@@ -72,15 +44,10 @@ binary as well as the default one.
 - `neovim::log::G_MIN_LOG_LEVEL`
 - `neovim::log::G_STATS`
 
-## `lua`
-
-- `neovim::lua::executor::IN_FAST_CALLBACK`
-
 ## `option`
 
 - `neovim::option::vars::BKC_FLAGS`
 - `neovim::option::vars::BO_FLAGS`
-- `neovim::option::vars::BREAKAT_FLAGS`
 - `neovim::option::vars::CB_FLAGS`
 - `neovim::option::vars::CMP_FLAGS`
 - `neovim::option::vars::COT_FLAGS`
@@ -96,30 +63,6 @@ binary as well as the default one.
 - `neovim::option::vars::VE_FLAGS`
 - `neovim::option::vars::VOP_FLAGS`
 - `neovim::option::vars::WOP_FLAGS`
-
-## `os`
-
-- `neovim::os::input::BLOCKING`
-- `neovim::os::input::INPUT_READ_POS`
-- `neovim::os::input::INPUT_WRITE_POS`
-- `neovim::os::signal::REJECTING_DEADLY`
-
-## `popupmenu`
-
-- `neovim::popupmenu::PUM_EXTERNAL`
-- `neovim::popupmenu::PUM_FIRST`
-- `neovim::popupmenu::PUM_INVALID`
-- `neovim::popupmenu::PUM_IS_VISIBLE`
-- `neovim::popupmenu::PUM_SIZE`
-- `neovim::popupmenu::state::PUM_WANT`
-
-## `runtime`
-
-- `neovim::runtime::state::CURRENT_SCTX`
-
-## `search`
-
-- `neovim::search::pattern::LAST_IDX`
 
 ## `spell`
 
@@ -152,10 +95,6 @@ binary as well as the default one.
 - `neovim::startup::V_DYING`
 - `neovim::startup::VIM_IGNORED`
 
-## `state`
-
-- `neovim::state::WAS_SAFE`
-
 ## `tui`
 
 - `neovim::tui::cursor::CURSOR_STYLE_ENABLED`
@@ -163,29 +102,12 @@ binary as well as the default one.
 ## `ui`
 
 - `neovim::ui::callbacks::UI_CB_EXT`
-- `neovim::ui::CURSOR_COL`
-- `neovim::ui::CURSOR_GRID_HANDLE`
-- `neovim::ui::CURSOR_ROW`
-- `neovim::ui::PENDING_CURSOR_UPDATE`
-- `neovim::ui::PENDING_MODE_INFO_UPDATE`
-
-## `ui_compositor`
-
-- `neovim::ui_compositor::COMPOSED_UIS`
-- `neovim::ui_compositor::MSG_SEP_ROW`
-- `neovim::ui_compositor::VALID_SCREEN`
-
-## `window`
-
-- `neovim::window::FRAME_LOCKED`
-- `neovim::window::LAST_WIN_ID`
 
 ## `winlayer`
 
 - `neovim::winlayer::graph::CURRENT_BUF`
 - `neovim::winlayer::graph::CURRENT_TAB`
 - `neovim::winlayer::graph::CURRENT_WIN`
-- `neovim::winlayer::graph::CMDWIN_TYPE`
 - `neovim::winlayer::graph::CURBUF`
 - `neovim::winlayer::graph::CURTAB`
 - `neovim::winlayer::handles::BUFFERS`

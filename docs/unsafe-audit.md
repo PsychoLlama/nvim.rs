@@ -54,9 +54,9 @@ falls into four classes:
   must guarantee; the ratchet fails on one without. An `unsafe fn` whose
   signature shows no raw pointer needs a row in
   [docs/unsafe-fn-allowlist.md](unsafe-fn-allowlist.md) (five rows today).
-- Checked builds add checks the release build compiles out: the main-thread
-  and borrow checks of `GlobalCell`, the overlapping-edit check on Vimscript
-  values. They are one cfg,
+- Checked builds add checks the release build compiles out: `GlobalCell`'s
+  main-thread check (its borrow checks are in every build) and the
+  overlapping-edit check on Vimscript values. They are one cfg,
   `soundness_checks`, which `--features soundness-checks` turns on in a
   release build too. What the safe API over the unsafe code leaves to those
   checks, or to convention, is surveyed class by class in
@@ -257,13 +257,16 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   (13).
 - **Contract:** editor state is touched from the main thread only, and no
   reference handed out by `with`/`with_mut`/`with_field` overlaps another
-  access to the same cell. **Checked builds check both** — the thread on
-  every access, the borrows RefCell-style in a word beside the value (a
-  conflicting re-entry panics; a `with`/`with_field` loan is a node in the
-  borrower's frame, so a write checks only the loans open on its cell);
-  release builds compile the checks and the word out, which is why it is a
-  contract. The value comes first (`repr(C)`), so the exported cells keep
-  their C layout either way. `ptr()`, the raw
+  access to the same cell. **The borrows are checked in every build**,
+  RefCell-style in a word beside the value (a conflicting re-entry panics;
+  a `with`/`with_field` loan is a node in the borrower's frame, so a write
+  checks only the loans open on its cell). **The thread is a contract**,
+  held by keeping the ways off the main thread few and audited (luv's
+  thread states and their function list, the panic hook and the
+  allocation-failure path, and thread starts, which clippy refuses outside
+  an audited site; [safe-surface.md](safe-surface.md) S2), and checked on
+  every access in checked builds only. The value comes first (`repr(C)`),
+  so the exported cells keep their C address. `ptr()`, the raw
   escape hatch, is used only on the perimeter (22 sites: the globals libuv
   holds by address, and the cell's own tests).
 - **Retires:** never; it is the replacement.
