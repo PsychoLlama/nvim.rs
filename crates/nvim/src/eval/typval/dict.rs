@@ -60,12 +60,17 @@ pub(crate) fn dict_add_item(dict: &DictRef, item: Box<DictItem>) -> Result<(), B
 
 impl Dict {
     /// Add `item`, which the dictionary takes over.  `Err` hands it back
-    /// when the key is already there, or when it would shadow a builtin
-    /// function in a scope dictionary.
+    /// when the key is already there.
+    ///
+    /// A Funcref bound for `g:` or `l:` goes through [`dict_add_item`]
+    /// instead: the check that it does not shadow a function looks variables
+    /// up -- in this very dictionary -- and puts out a message, neither of
+    /// which may run under the exclusive borrow `self` is.
     pub fn add_item(&mut self, item: Box<DictItem>) -> Result<(), Box<DictItem>> {
-        if dict_wrong_func_name(self, &item) {
-            return Err(item);
-        }
+        assert!(
+            !(item.di_tv.is_func() && (is_globvar_dict(self) || is_funccal_local_dict(self))),
+            "a Funcref is added to a scope dictionary through dict_add_item"
+        );
         self.insert(item)
     }
 
@@ -217,7 +222,10 @@ impl Dict {
     /// `"force"` and `"move"` branches are all no-ops — `"force"` by
     /// upstream's own `di2 != di1` guard — and what is left is `"error"`
     /// reporting the first key, plus the scope check that runs ahead of it.
-    pub fn extend_from_self(&mut self, action: u8) {
+    ///
+    /// A shared borrow: the scope check and the report put out messages,
+    /// which write `v:errmsg` -- and `self` may be `v:`.
+    pub fn extend_from_self(&self, action: u8) {
         let scoped = self.dv_scope != VAR_NO_SCOPE;
         for di in self.items() {
             if scoped && valid_varname_named(di.key()).is_err() {
@@ -728,7 +736,7 @@ mod tests {
         let _held = editor_state_lock();
         let d = dict_of(&["a", "b", "c"]);
         let order = slot_order(&d.read());
-        d.edit().extend_from_self(b'f');
+        d.read().extend_from_self(b'f');
         assert_eq!(slot_order(&d.read()), order);
         assert_eq!(number_at(&d.read(), b"a"), Some(0));
         assert_eq!(number_at(&d.read(), b"c"), Some(2));

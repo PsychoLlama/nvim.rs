@@ -240,13 +240,17 @@ pub(crate) fn list_concat_values(
 /// `result`, which holds no value yet. `args` holds at least two values,
 /// the first a `VAR_LIST`; `arg_errmsg` names the argument in a lock error,
 /// translated.
+///
+/// A handle, not `&mut List`: the checks put out messages and convert
+/// `args` -- which may hold this same list -- so every one of them runs
+/// before the one edit that takes the items out.
 pub fn list_remove(
-    list: Option<&mut List>,
+    list: Option<&ListRef>,
     args: &[TypVal],
     result: &mut TypVal,
     arg_errmsg: &'static CStr,
 ) {
-    let lock = list.as_deref().map_or(VarLock::Fixed, List::lock);
+    let lock = list.map_or(VarLock::Fixed, |l| l.read().lock());
     if value_check_lock(lock, LockName::Translate(arg_errmsg)) {
         return;
     }
@@ -257,14 +261,15 @@ pub fn list_remove(
         return;
     };
     let at = ::core::ffi::c_int::try_from(idx).ok();
-    let Some(first) = at.and_then(|n| list_index(Some(list), n)) else {
+    let first = at.and_then(|n| list_index(Some(&list.read()), n));
+    let Some(first) = first else {
         semsg!("E684: List index out of range: {}", idx);
         return;
     };
 
     if args.len() <= 2 {
         // Remove one item, return its value.
-        let mut taken = list.take_range(first, first);
+        let mut taken = list.edit().take_range(first, first);
         *result = taken[0].li_tv.take();
         return;
     }
@@ -274,7 +279,8 @@ pub fn list_remove(
         return;
     };
     let at = ::core::ffi::c_int::try_from(end).ok();
-    let Some(last) = at.and_then(|n| list_index(Some(list), n)) else {
+    let last = at.and_then(|n| list_index(Some(&list.read()), n));
+    let Some(last) = last else {
         semsg!("E684: List index out of range: {}", end);
         return;
     };
@@ -286,7 +292,7 @@ pub fn list_remove(
     let cnt = last - first + 1;
     let mut tgt = tv_list_alloc_ret(result, ptrdiff_t::try_from(cnt).unwrap_or(-1));
     // The target is a list of this call's own, so it is never `list`.
-    list.move_range_to(first, last, &mut tgt);
+    list.edit().move_range_to(first, last, &mut tgt);
 }
 
 /// Whether `l1` and `l2` hold equal items in the same order.  An empty list and

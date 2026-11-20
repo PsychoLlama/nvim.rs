@@ -917,13 +917,12 @@ pub(crate) fn starts_with_ic(hay: &[u8], needle: &[u8]) -> bool {
 /// where the index arithmetic and the `end` argument live.
 pub fn f_remove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let arg_errmsg = c"remove() argument";
-    // Each takes the vector itself, and is reached only for the type it
-    // handles; none runs user code, so the container is borrowed for the
-    // call.
+    // Each takes the container's handle, and is reached only for the type
+    // it handles; each checks before it edits.
     match Container::of(&args[0]) {
         Container::Dict(_) => tv_dict_remove(args, result, arg_errmsg),
-        Container::Blob(b) => blob_remove(b.get().as_deref_mut(), args, result, arg_errmsg),
-        Container::List(l) => list_remove(l.get().as_deref_mut(), args, result, arg_errmsg),
+        Container::Blob(b) => blob_remove(b.0, args, result, arg_errmsg),
+        Container::List(l) => list_remove(l.0, args, result, arg_errmsg),
         _ => {
             let arg0 = "remove()";
             semsg!("E896: Argument of {arg0} must be a List, Dictionary or Blob");

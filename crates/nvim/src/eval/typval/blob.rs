@@ -367,13 +367,16 @@ pub(crate) fn set_range(
 /// `remove()` over a blob: take out one byte, or the range `[idx, end]`, and
 /// store what was removed in `result`. `arg_errmsg` is the message literal
 /// a locked blob reports, translated.
+///
+/// A handle, for [`list_remove`](super::list_remove)'s reason: every check
+/// runs before the edit.
 pub fn blob_remove(
-    blob: Option<&mut Blob>,
+    blob: Option<&BlobRef>,
     args: &[TypVal],
     result: &mut TypVal,
     arg_errmsg: &'static ::core::ffi::CStr,
 ) {
-    let lock = blob.as_ref().map_or(VarLock::Unlocked, |b| b.bv_lock);
+    let lock = blob.map_or(VarLock::Unlocked, |b| b.read().bv_lock);
     if value_check_lock(lock, LockName::Translate(arg_errmsg)) {
         return;
     }
@@ -382,7 +385,7 @@ pub fn blob_remove(
         return;
     };
 
-    let len = int64_t::from(blob_len(blob.as_deref()));
+    let len = int64_t::from(blob.map_or(0, |b| blob_len(Some(&b.read()))));
     if idx < 0 {
         // count from the end
         idx += len;
@@ -398,8 +401,9 @@ pub fn blob_remove(
 
     if args.len() <= 2 {
         // Remove one item, return its value.
-        result.write_number(VarNumber::from(blob.bytes()[first]));
-        blob.drain(first, first);
+        let mut edit = blob.edit();
+        result.write_number(VarNumber::from(edit.bytes()[first]));
+        edit.drain(first, first);
         return;
     }
 
@@ -418,12 +422,13 @@ pub fn blob_remove(
     let last = usize::try_from(end).expect("a byte of the blob");
 
     let taken_held = tv_blob_alloc();
+    let mut edit = blob.edit();
     taken_held
         .edit()
         .claim(last - first + 1)
-        .copy_from_slice(&blob.bytes()[first..=last]);
+        .copy_from_slice(&edit.bytes()[first..=last]);
     tv_blob_set_ret(result, Some(taken_held));
-    blob.drain(first, last);
+    edit.drain(first, last);
 }
 
 /// `blob2list()`: the blob's bytes as a list of numbers.
