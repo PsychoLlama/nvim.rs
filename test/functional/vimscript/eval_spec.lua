@@ -276,3 +276,18 @@ it('no heap-use-after-free with EXITFREE and partial as prompt callback', functi
   ]])
   expect_exit(command, 'qall!')
 end)
+
+describe(':lockvar! over a self-referencing container', function()
+  before_each(clear)
+  -- Each item's lock is written under an edit of its container, and the
+  -- item may be that container.
+  it('stops at the nesting limit', function()
+    command('let g:L = [1, 2] | call add(g:L, g:L)')
+    command("let g:D = {'a': 1} | let g:D.self = g:D")
+    for _, name in ipairs({ 'g:L', 'g:D' }) do
+      t.matches('E743:', pcall_err(command, 'lockvar! ' .. name))
+      t.matches('E743:', pcall_err(command, 'unlockvar! ' .. name))
+    end
+    assert_alive()
+  end)
+end)

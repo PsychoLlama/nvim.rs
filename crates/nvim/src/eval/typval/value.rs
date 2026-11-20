@@ -257,19 +257,21 @@ fn lock_slot(
     check_refcount: bool,
 ) -> Option<Held> {
     *slot_lock = slot_lock.changed(lock);
+    // The count without a read: the slot is under an edit of its own
+    // container, which may be the very container the slot holds.
     let skip = |count: &crate::types::Refcount| check_refcount && count.is_shared();
     match tv {
         TypVal::Blob(blob) => blob
             .as_ref()
-            .filter(|b| !skip(&b.read().bv_refcount))
+            .filter(|b| !skip(b.count()))
             .map(|b| Held::Blob(b.clone())),
         TypVal::List(list) => list
             .as_ref()
-            .filter(|l| !skip(&l.read().lv_refcount))
+            .filter(|l| !skip(l.count()))
             .map(|l| Held::List(l.clone())),
         TypVal::Dict(dict) => dict
             .as_ref()
-            .filter(|d| !skip(&d.read().dv_refcount))
+            .filter(|d| !skip(d.count()))
             .map(|d| Held::Dict(d.clone())),
         TypVal::Unknown => ::std::process::abort(),
         _ => None,

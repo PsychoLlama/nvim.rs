@@ -425,10 +425,26 @@ them.
     fail-stop, where it used to be a value write the reader could see.
   - **Cost**, release, codegen-units = 1, cachegrind Ir against the build
     before the partial/blob/list/dict changes (three runs a side for
-    evalbench and spellbench): evalbench +1.3 % (+1.27..+1.35 %; parser
-    phase +1.02 %), undobench +0.85 %, edbench +0.28 %, scrbench +0.17 %,
-    rpcbench +0.11 %, markbench +0.09 %, rebench +0.03 %,
-    inbench/mlbench/spellbench within ±0.04 %.
+    evalbench): evalbench +1.8 % (+1.72..+2.06 %; parser phase +1.18 %),
+    rpcbench +1.65 %, edbench +0.39 %, scrbench +0.28 %, spellbench
+    +0.21 %, markbench +0.18 %, inbench +0.15 %, rebench +0.05 %, mlbench
+    −0.01 %, undobench −0.30 %. The evalbench delta sits in variable lookup
+    and assignment (`locate`, `eval_variable`, `set_var_const`: a read of
+    the scope dictionary per access) and the call path; rpcbench's is
+    mostly a codegen shift between `Object`'s drop and `release`, with
+    ~0.2 % from the encoders' `ReadScope`. The list/dict commit alone
+    measured evalbench +1.3 % (parser +1.02 %); the rest is the message-row
+    hold and the `Edit` pointer.
+  - **Miri** found the `Edit` of the write half unsound once a test moved
+    one into a call (`drop(edit)`): a `&mut T` field is retagged protected
+    for the call and the loan's release writes the word inside the object
+    under it. The edit now holds its object by address (`NonNull`), its
+    `Deref`/`DerefMut` in the handle file.
+  - **The battery** found two more reads under an edit that no suite
+    reaches: `:lockvar!` over a self-referencing container (the item's
+    shared check read the container whose edit held the item's lock) and a
+    Funcref added to `g:`/`l:` by key (the name check looked the name up in
+    that scope under its edit). Both now run their read first.
 
 ### ~~S7 — the Lua stack's consuming operations~~ (closed: check-always)
 

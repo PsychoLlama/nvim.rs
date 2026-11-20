@@ -513,7 +513,7 @@ impl BlobRef {
 
     /// As [`ListRef::count`].
     #[inline(always)]
-    fn count(&self) -> &Refcount {
+    pub(super) fn count(&self) -> &Refcount {
         // SAFETY: the handle holds a reference, so the object is live;
         // the borrow covers the count alone.
         unsafe { &(*self.0.as_ptr()).bv_refcount }
@@ -597,7 +597,7 @@ impl PartialRef {
 
     /// As [`ListRef::count`].
     #[inline(always)]
-    fn count(&self) -> &Refcount {
+    pub(super) fn count(&self) -> &Refcount {
         // SAFETY: the handle holds a reference, so the object is live;
         // the borrow covers the count alone.
         unsafe { &(*self.0.as_ptr()).pt_refcount }
