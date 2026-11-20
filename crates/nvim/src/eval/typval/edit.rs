@@ -30,41 +30,18 @@ use ::core::cell::Cell;
 /// cell. A [`Read`] out while it starts, or one asked for while it lives,
 /// panics the same way.
 ///
-/// The loan is a field of its own rather than a `Drop` on the borrow: a
-/// binding's borrow of the object ends at its last use, and only the loan
-/// waits for the end of the scope (drop the binding to end it sooner).
+/// The loan waits for the end of the scope (drop the binding to end it
+/// sooner). The object is held by address, not as a `&mut` field: an edit
+/// passed by value (`drop(edit)`) has its reference fields retagged as
+/// protected for the call, and the loan's release writes the word inside
+/// the object under it. `Deref`, `DerefMut` and the projections are the
+/// handle file's.
 #[derive(Debug)]
 pub struct Edit<'a, T> {
-    pub(super) target: &'a mut T,
+    pub(super) target: ::core::ptr::NonNull<T>,
     pub(super) loan: Loan<'a>,
+    pub(super) borrow: ::core::marker::PhantomData<&'a mut T>,
 }
-
-impl<'a, T> Edit<'a, T> {
-    /// A borrow of part of the object, under the same loan.
-    #[inline(always)]
-    pub fn map<U>(self, part: impl FnOnce(&'a mut T) -> &'a mut U) -> Edit<'a, U> {
-        let Edit { target, loan } = self;
-        Edit {
-            target: part(target),
-            loan,
-        }
-    }
-
-    /// [`Edit::map`] for a part that may be absent.
-    #[inline(always)]
-    pub fn filter_map<U>(
-        self,
-        part: impl FnOnce(&'a mut T) -> Option<&'a mut U>,
-    ) -> Option<Edit<'a, U>> {
-        let Edit { target, loan } = self;
-        Some(Edit {
-            target: part(target)?,
-            loan,
-        })
-    }
-}
-
-deref_to_field!(impl[T] Edit<'_, T> => mut T, target);
 
 /// A shared borrow of a value object, taken through a handle: what
 /// [`BlobRef::read`](super::BlobRef::read) and its siblings answer.
@@ -301,5 +278,20 @@ mod tests {
             first.li_lock = VarLock::Locked;
         }
         assert_eq!(list.edit().lv_items[0].li_lock, VarLock::Locked);
+    }
+
+    /// An edit handed by value to a function that ends it: the loan's
+    /// release writes the word inside the object, which a `&mut` field
+    /// protected for the call would forbid (Miri).
+    #[test]
+    fn an_edit_moved_into_a_call_gives_its_loan_back() {
+        let _held = editor_state_lock();
+        let list = tv_list_alloc(0);
+        let mut edit = list.edit();
+        edit.push_number(1);
+        drop(edit);
+        let part = list.edit().map(|l| &mut l.lv_items[0]);
+        drop(part);
+        assert_eq!(list.read().len(), 1);
     }
 }

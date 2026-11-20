@@ -14,6 +14,7 @@ use crate::eval::VARNUMBER_MAX;
 use crate::eval::VARNUMBER_MIN;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::CallFrame;
+use crate::eval::typval::ReadScope;
 use crate::eval::typval::{
     NumBuf, dict_len, list_iter, list_len, tv_check_for_number_arg, tv_check_for_string_arg,
     tv_copy, tv_get_number_chk,
@@ -39,7 +40,10 @@ const fn number_tv(n: VarNumber) -> TypVal {
 
 /// The shared body of `max()` and `min()`.
 fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
-    // The container is only read: nothing below runs user code.
+    // The container is only read: nothing below runs user code. A number
+    // that does not convert puts out a message under the read, and the
+    // container may be `v:`: the scope holds the message's row.
+    let _messages = ReadScope::new();
     result.write_number(0);
     // Seeded at the far end so the first item always wins. An empty
     // container returns the 0 written above instead.

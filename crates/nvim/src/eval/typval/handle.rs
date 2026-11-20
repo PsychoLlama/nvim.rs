@@ -637,11 +637,61 @@ impl ::core::ops::Deref for PartialRef {
 #[inline(always)]
 fn lend<T>(at: &NonNull<T>, lent: usize) -> Edit<'_, T> {
     let loan = Loan::new(*at, lent);
-    // SAFETY: the handle holds a reference, so the object is live;
-    // exclusivity is the `edit()` caller's promise, its write half checked
-    // by the loan just taken.
-    let target = unsafe { &mut *at.as_ptr() };
-    Edit { target, loan }
+    Edit {
+        target: *at,
+        loan,
+        borrow: PhantomData,
+    }
+}
+
+impl<'a, T> Edit<'a, T> {
+    /// A borrow of part of the object, under the same loan.
+    #[inline(always)]
+    pub fn map<U>(self, part: impl FnOnce(&'a mut T) -> &'a mut U) -> Edit<'a, U> {
+        let Edit { target, loan, .. } = self;
+        // SAFETY: as `deref_mut`'s.
+        let part = part(unsafe { &mut *target.as_ptr() });
+        Edit {
+            target: NonNull::from(part),
+            loan,
+            borrow: PhantomData,
+        }
+    }
+
+    /// [`Edit::map`] for a part that may be absent.
+    #[inline(always)]
+    pub fn filter_map<U>(
+        self,
+        part: impl FnOnce(&'a mut T) -> Option<&'a mut U>,
+    ) -> Option<Edit<'a, U>> {
+        let Edit { target, loan, .. } = self;
+        // SAFETY: as `deref_mut`'s.
+        let part = part(unsafe { &mut *target.as_ptr() })?;
+        Some(Edit {
+            target: NonNull::from(part),
+            loan,
+            borrow: PhantomData,
+        })
+    }
+}
+
+impl<T> ::core::ops::Deref for Edit<'_, T> {
+    type Target = T;
+
+    #[inline(always)]
+    fn deref(&self) -> &T {
+        // SAFETY: as `deref_mut`'s, shared.
+        unsafe { self.target.as_ref() }
+    }
+}
+
+impl<T> ::core::ops::DerefMut for Edit<'_, T> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut T {
+        // SAFETY: the handle the edit borrows keeps the object live, and
+        // the loan keeps every other borrow of it out until the edit ends.
+        unsafe { self.target.as_mut() }
+    }
 }
 
 /// A borrow's claim on its object's [`Lent`] word: the word's address, not

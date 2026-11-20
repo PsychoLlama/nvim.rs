@@ -69,6 +69,8 @@ describe('v: as an argument', function()
       { 'call sign_place(1, "", "x", "", v:)', 'E474:' },
       { 'call has_key(v:, v:)', 'E731:' },
       { 'call setmatches([v:])', 'E474:' },
+      { 'call max(v:)', 'E7' },
+      { 'call min(v:)', 'E7' },
     }
     for _, case in ipairs(cases) do
       command('let v:errmsg = ""')
