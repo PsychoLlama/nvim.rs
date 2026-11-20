@@ -159,7 +159,8 @@ fn do_unlet_var(mut lval: LValue<'_>, forceit: bool) -> Result<(), Failed> {
             span,
         } => {
             let (list, index, span) = (list.clone(), *index, *span);
-            if value_check_lock_named({ list_locked(Some(&list.read())) }, lval.name()) {
+            let lock = list_locked(Some(&list.read()));
+            if value_check_lock_named(lock, lval.name()) {
                 return Err(Failed);
             }
             if span.range {
@@ -174,7 +175,8 @@ fn do_unlet_var(mut lval: LValue<'_>, forceit: bool) -> Result<(), Failed> {
             ..
         } => {
             let (dict, key) = (dict.clone(), key.clone());
-            if value_check_lock_named({ dict.read().dv_lock }, lval.name()) {
+            let lock = dict.read().dv_lock;
+            if value_check_lock_named(lock, lval.name()) {
                 return Err(Failed);
             }
             let watched = dict_is_watched(Some(&dict.read()));

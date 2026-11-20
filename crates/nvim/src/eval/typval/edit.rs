@@ -16,6 +16,7 @@
 
 use super::handle::{Loan, Share};
 use crate::deref::deref_to_field;
+use crate::eval::vars::{hold_message_rows, release_message_rows};
 use ::core::cell::Cell;
 
 /// A writable borrow of a value object, taken through a shared handle: what
@@ -120,12 +121,16 @@ deref_to_field!(impl['a, T: ?Sized] Read<'a, T> => T, target);
 /// until the scope is dropped -- which the borrow `'s` of the scope rules
 /// out while the reference lives. Every object read under it refuses an
 /// edit until then, so a scope never spans a call that runs user code.
-#[derive(Debug, Default)]
+///
+/// A message put out under a scope writes its `v:` row (`v:errmsg`) once
+/// the last scope ends: the scope may be holding `v:` itself.
+#[derive(Debug)]
 pub(crate) struct ReadScope(::core::cell::RefCell<Vec<Share>>);
 
 impl ReadScope {
     pub(crate) fn new() -> ReadScope {
-        ReadScope::default()
+        hold_message_rows();
+        ReadScope(::core::cell::RefCell::new(Vec::new()))
     }
 
     /// The object `read` borrows, for the life of the scope.
@@ -136,6 +141,14 @@ impl ReadScope {
             self.0.borrow_mut().push(share);
         }
         read.target
+    }
+}
+
+impl Drop for ReadScope {
+    fn drop(&mut self) {
+        // The shares first: the held rows may be `v:`'s.
+        self.0.get_mut().clear();
+        release_message_rows();
     }
 }
 

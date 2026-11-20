@@ -289,7 +289,8 @@ impl Held {
                 let changed = list.read().lv_lock.changed(lock);
                 list.edit().lv_lock = changed;
                 // Recursive: lock/unlock the items the List contains.
-                for at in { 0..if descend { list.read().len() } else { 0 } } {
+                let len = if descend { list.read().len() } else { 0 };
+                for at in 0..len {
                     tv_list_item_lock(&list, at, deep - 1, lock, check_refcount);
                 }
             }

@@ -56,3 +56,28 @@ describe('v:startreason', function()
     t.matches('E46', t.pcall_err(command, "let v:startreason = 'restart'"))
   end)
 end)
+
+describe('v: as an argument', function()
+  before_each(clear)
+  -- Each reads `v:` while its error message writes `v:errmsg` into it, or
+  -- walks `v:` while setting `v:key`/`v:val`.
+  it('can be read while a message writes v:errmsg', function()
+    local cases = {
+      { 'call json_encode([v:, 1])', 'E474:' },
+      { 'call msgpackdump([v:])', 'E5004:' },
+      { 'call mapset(v:)', 'E460:' },
+      { 'call sign_place(1, "", "x", "", v:)', 'E474:' },
+      { 'call has_key(v:, v:)', 'E731:' },
+      { 'call setmatches([v:])', 'E474:' },
+    }
+    for _, case in ipairs(cases) do
+      command('let v:errmsg = ""')
+      command('silent! ' .. case[1])
+      t.matches(case[2], eval('v:errmsg'))
+    end
+    command('call jobstart(["true"], v:)')
+    command('call foreach(v:, "let g:last = v:key")')
+    eq('string', eval('type(g:last) == v:t_string ? "string" : "other"'))
+    n.assert_alive()
+  end)
+end)

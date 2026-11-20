@@ -270,7 +270,8 @@ fn set_blob_var(lval: &LValue<'_>, blob: &BlobRef, span: Span, value: &TypVal, o
         semsg!("E734: Wrong variable type for {op}=");
         return;
     }
-    if value_check_lock_named({ blob.read().bv_lock }, lval.name()) {
+    let lock = blob.read().bv_lock;
+    if value_check_lock_named(lock, lval.name()) {
         return;
     }
 

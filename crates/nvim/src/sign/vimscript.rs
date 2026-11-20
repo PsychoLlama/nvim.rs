@@ -452,6 +452,8 @@ pub(crate) fn f_sign_place(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         buffer: Some(&args[3]),
     };
     let id = sign_place_from_dict(given, dict.as_deref());
+    // Before the report, whose message writes `v:errmsg`: `dict` may be `v:`.
+    drop(dict);
     result.write_number(VarNumber::from(answer_or_report(id)));
 }
 

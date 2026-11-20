@@ -319,7 +319,9 @@ impl<'a> Item<'a> {
     /// remove this very item runs.
     #[inline(always)]
     pub(crate) fn set_val(self) {
-        set_vim_var_tv(Vv::Val, &mut self.get().li_tv);
+        // Copied out first: the container may be `v:` itself.
+        let mut value = self.get().li_tv.clone();
+        set_vim_var_tv(Vv::Val, &mut value);
     }
 
     #[inline(always)]
@@ -566,7 +568,9 @@ impl<'a> DictItemRef<'a> {
     /// Copy the value into `v:val`; see [`Item::set_val`].
     #[inline(always)]
     pub(crate) fn set_val(self) {
-        set_vim_var_tv(Vv::Val, &mut self.get().di_tv);
+        // Copied out first: the dict may be `v:` itself.
+        let mut value = self.read().di_tv.clone();
+        set_vim_var_tv(Vv::Val, &mut value);
     }
 
     #[inline(always)]

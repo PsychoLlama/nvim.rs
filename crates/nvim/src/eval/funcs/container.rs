@@ -128,6 +128,8 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
     let Some(list) = args[0].list_shared() else {
         return;
     };
+    // Read before the check's message, which writes `v:errmsg`.
+    let lock = list.read().lock();
     if make_copy {
         // No conversion, a fresh copyID.
         let copy = list_copy(None, list, false, get_copy_id());
@@ -138,10 +140,7 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
         if !found {
             return;
         }
-    } else if value_check_lock(
-        { list.read().lock() },
-        LockName::Translate(c"flatten() argument"),
-    ) {
+    } else if value_check_lock(lock, LockName::Translate(c"flatten() argument")) {
         return;
     }
     // The answer holds the list to flatten: the argument's own, or its copy.

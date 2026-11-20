@@ -347,9 +347,10 @@ pub(crate) fn do_unlet(name: &[u8], forceit: bool) -> Result<(), Failed> {
             .read()
             .item_at(slot)
             .map_or(0, |item| c_int::from(item.di_flags));
+        let lock = lock_dict.read().dv_lock;
         if var_check_fixed_named(flags, name)
             || var_check_ro_named(flags, name)
-            || value_check_lock({ lock_dict.read().dv_lock }, LockName::Bytes(name))
+            || value_check_lock(lock, LockName::Bytes(name))
         {
             return Err(Failed);
         }
@@ -357,7 +358,7 @@ pub(crate) fn do_unlet(name: &[u8], forceit: bool) -> Result<(), Failed> {
         // answer the same way -- nothing above it changes `dv_lock` -- so
         // the repetition is dead; kept because deleting it is a change no
         // gate could confirm.
-        if value_check_lock({ lock_dict.read().dv_lock }, LockName::Bytes(name)) {
+        if value_check_lock(lock, LockName::Bytes(name)) {
             return Err(Failed);
         }
 

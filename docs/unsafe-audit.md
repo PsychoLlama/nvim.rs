@@ -293,19 +293,20 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 ### `eval/typval/handle.rs` — Vimscript value handles
 
 - **What:** `ListRef`, `DictRef`, `BlobRef` and `PartialRef`, and a
-  dictionary's item store (50): the dereference core (13), the edit flag
+  dictionary's item store (50): the dereference core (13), the borrow word
   each object carries, reached through its own bytes (2), allocation and
   release (14), the item slots that name a boxed or an embedded `DictItem`
   (10), `TypVal::bit_copy` and its two users (3), the deep copy's memo (2),
   two raw bridges for callers that still hold a pointer (2) and four test
   cases.
 - **Contract:** a value is reached from many holders at once and the
-  evaluator re-enters at every call, so `edit()` lends `&mut` from a shared
-  handle for as long as no user code runs. **Every build checks the
-  write half:** two overlapping `edit()`s of one object, or a `DerefMut`
-  under an `edit()`, panic (the object's `Lent` flag, `typval/edit.rs`).
-  The reference count and the flag are `Cell`s, each reached through its
-  own bytes, so neither forms a borrow of the whole object. `bit_copy` duplicates a value without its reference:
+  evaluator re-enters at every call, so a List, Dict or Blob is borrowed
+  only through `read()` and `edit()` from a shared handle. **Every build
+  counts both:** any number of reads or one edit, as a `RefCell` (the
+  object's `Lent` word, `typval/edit.rs`); a partial is never written once
+  built, except by its last holder (`PartialRef::get_mut`). The reference
+  count and the word are `Cell`s, each reached through its own bytes, so
+  neither forms a borrow of the whole object. `bit_copy` duplicates a value without its reference:
   exactly one of the two may be released (`docs/unsafe-fn-allowlist.md`).
 - **Retires:** only with a different value model. Two cuts are listed: Lists
   and Dictionaries in a `Box` (needs the unit suite's allocation log

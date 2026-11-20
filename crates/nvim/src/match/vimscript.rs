@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::eval::typval::ReadScope;
 use crate::eval::typval::{DictRef, NumBuf, list_items, list_iter};
 use crate::mbyte::Codepoint;
 use crate::narrow::number_as_int;
@@ -134,6 +135,9 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     let Some(win) = win else {
         return;
     };
+    // Declared first, so it ends last: the messages below go out under the
+    // reads, which may be of `v:`.
+    let _messages = ReadScope::new();
     let l = args[0].list_ref();
 
     // To some extent make sure this really came from getmatches().

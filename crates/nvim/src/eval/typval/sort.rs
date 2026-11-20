@@ -456,10 +456,8 @@ pub(crate) fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bool) {
     } else {
         c"uniq() argument"
     };
-    if !value_check_lock(
-        { list_locked(first.list_ref().as_deref()) },
-        LockName::Translate(arg_errmsg),
-    ) {
+    let lock = list_locked(first.list_ref().as_deref());
+    if !value_check_lock(lock, LockName::Translate(arg_errmsg)) {
         // The answer is the argument's own list, with a reference of its
         // own.
         result.write_list(first.list_handle());

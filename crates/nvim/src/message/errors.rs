@@ -160,7 +160,7 @@ pub fn emsg_multiline(s: &CStr, kind: Option<&CStr>, hl_id: c_int, multiline: bo
         }
 
         // set "v:errmsg", also when using ":silent! cmd"
-        set_vim_var_string(Vv::Errmsg, Some(s.to_bytes()));
+        set_message_row(Vv::Errmsg, s.to_bytes());
 
         // When using ":silent! cmd" don't display the error message, but
         // do write it to the redirection and the log.
@@ -330,7 +330,7 @@ pub fn give_warning(message: &CStr, hl: bool, hist: bool) {
     MSG_HIST_OFF.set(!hist);
 
     let no_prompt = Suppress::wait_return();
-    set_vim_var_string(Vv::Warningmsg, Some(message.to_bytes()));
+    set_message_row(Vv::Warningmsg, message.to_bytes());
     KEEP_MSG.set(None);
     KEEP_MSG_HL_ID.set(if hl { HLF_W } else { 0 });
 

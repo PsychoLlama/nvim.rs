@@ -73,6 +73,9 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         return;
     }
 
+    // The `{opts}` strings, copied: the prompt runs user code, which may
+    // edit the dictionary they came from.
+    let (mut opt_prompt, mut opt_defstr, mut opt_xp_name) = (None, None, None);
     let prompt: &::core::ffi::CStr;
     let mut defstr: &::core::ffi::CStr = c"";
     // A copy of the positional cancel value; `tv_copy` puts another copy
@@ -83,8 +86,6 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     // or remove the entry.
     let mut cancelreturn_in_opts = false;
     let mut xp_name: Option<&::core::ffi::CStr> = None;
-    // The options' strings are borrowed for the whole prompt.
-    let reads = ReadScope::new();
     let mut input_callback = Callback::None;
     let mut prompt_buf = NumBuf::new();
     let mut defstr_buf = NumBuf::new();
@@ -96,18 +97,19 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             emsg(gettext(c"E5050: {opts} must be the only argument"));
             return;
         }
+        let reads = ReadScope::new();
         let dict = args[0].dict_in(&reads);
 
         let Some(text) = dict_get_string_buf_chk(dict, b"prompt", &mut prompt_buf, Some(c""))
         else {
             return;
         };
-        prompt = text;
+        prompt = opt_prompt.insert(text.to_owned());
         let Some(text) = dict_get_string_buf_chk(dict, b"default", &mut defstr_buf, Some(c""))
         else {
             return;
         };
-        defstr = text;
+        defstr = opt_defstr.insert(text.to_owned());
         // `v:_null_dict` is a `VAR_DICT` holding nothing, so the lookup has
         // to tolerate it -- `input(v:_null_dict)` reaches here.
         cancelreturn_in_opts = opts_cancelreturn(&args[0]).is_some();
@@ -118,8 +120,9 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             else {
                 return;
             };
-            xp_name = Some(text);
+            xp_name = Some(opt_xp_name.insert(text.to_owned()));
         }
+        drop(reads);
         if let Err(refused) =
             dict_get_callback(args[0].dict_shared(), b"highlight", &mut input_callback)
         {

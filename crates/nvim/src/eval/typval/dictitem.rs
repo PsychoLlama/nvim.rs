@@ -451,7 +451,10 @@ pub fn f_has_key(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if tv_check_for_dict_arg(args, 0).is_err() {
         return;
     }
-    let found = dict_has_key(args[0].dict_ref().as_deref(), numbuf.bytes(&args[1]));
+    // The key first: its conversion may put out a message, which writes
+    // `v:errmsg` -- and the dictionary may be `v:`.
+    let key = numbuf.bytes(&args[1]);
+    let found = dict_has_key(args[0].dict_ref().as_deref(), key);
     result.write_number(VarNumber::from(found));
 }
 

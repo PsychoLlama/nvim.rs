@@ -71,8 +71,10 @@ pub(crate) fn filter_map_dict(
         {
             break;
         }
-        set_key_string(&di.key());
-        let key = DictKey::new(&di.key());
+        // Copied out first: the dict may be `v:` itself.
+        let key_bytes = di.key().to_vec();
+        set_key_string(&key_bytes);
+        let key = DictKey::new(&key_bytes);
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
         di.set_val();

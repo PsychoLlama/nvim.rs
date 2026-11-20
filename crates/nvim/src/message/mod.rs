@@ -78,7 +78,7 @@ use crate::drawscreen::{
 };
 use crate::eval::callback_call;
 use crate::eval::typval::tv_clear;
-use crate::eval::vars::{set_vim_var_string, var_redir_str, with_vim_var_str};
+use crate::eval::vars::{set_message_row, set_vim_var_string, var_redir_str, with_vim_var_str};
 use crate::ex_docmd::do_sleep;
 use crate::ex_docmd::state::GLOBAL_BUSY;
 use crate::ex_eval::cause_errthrow;
@@ -388,7 +388,7 @@ pub(crate) fn show_message(s: &CStr, hl_id: c_int, keep: bool, multiline: bool) 
     }
 
     if hl_id == 0 {
-        set_vim_var_string(Vv::Statusmsg, Some(s.to_bytes()));
+        set_message_row(Vv::Statusmsg, s.to_bytes());
     }
 
     // Displaying a message can cause a problem (e.g. when redrawing the

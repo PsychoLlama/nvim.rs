@@ -123,11 +123,36 @@ fn vimvar_at_hint<R, F: FnOnce(&mut DictItem) -> R>(idx: Vv, f: &mut Option<F>) 
     })
 }
 
-/// Lend row `idx`'s item to `f` to read. `f` must be a leaf, as
-/// [`vimvar_at_hint`]'s.
+/// Lend row `idx`'s item to `f` to read: under a shared read of `v:`, so
+/// that a reader of `v:` itself (`foreach(v:, ..)`) may read a row. `f`
+/// must be a leaf, as [`vimvar_at_hint`]'s.
 #[inline]
 fn with_vimvar_ref<R>(idx: Vv, f: impl FnOnce(&DictItem) -> R) -> R {
-    with_vimvar_item(idx, |item| f(item))
+    let mut f = Some(f);
+    let hinted = SCOPE_VIM.with(|vim| {
+        let (hint, addr) = vim.slots[idx as usize];
+        let dict = vim.entry.di_tv.dict_shared()?;
+        let read = dict.read();
+        let item = read.item_at(hint)?;
+        if ::core::ptr::from_ref(item).addr() != addr {
+            return None;
+        }
+        f.take().map(|f| f(item))
+    });
+    if let Some(answer) = hinted {
+        return answer;
+    }
+    let f = f.expect("the hint did not run it");
+    let dict = vimvar_dict();
+    let read = dict.read();
+    match vimvar_slot(&read, idx) {
+        Some(slot) => f(read.item_at(slot).expect("a kept slot")),
+        None => OUTSIDE_VIMVARS.with(|outside| {
+            f(outside[outside_index(idx)]
+                .as_ref()
+                .expect("a row out of v: waits outside it"))
+        }),
+    }
 }
 
 /// Lend row `idx`'s item to `f` to write. `f` must be a leaf, as
@@ -347,6 +372,52 @@ pub fn set_vim_var_char(c: Key) {
 /// did.
 pub fn set_vim_var_string(idx: Vv, val: Option<&[u8]>) {
     set_vim_var_owned(idx, val.map(ThinCString::from_bytes));
+}
+
+/// The count of open [`ReadScope`](crate::eval::typval::ReadScope)s, and the
+/// `v:` rows messages wrote meanwhile, written for real when the last scope
+/// ends: a scope may be holding `v:` itself (`mapset(v:)`, `json_encode([v:,
+/// ..])`), which a row write would have to edit.
+static HELD_MESSAGE_ROWS: GlobalCell<(u32, Vec<HeldRow>)> = GlobalCell::new((0, Vec::new()));
+
+/// A row a message wrote, and what it wrote.
+type HeldRow = (Vv, Option<ThinCString>);
+
+/// A [`ReadScope`](crate::eval::typval::ReadScope) opened.
+pub(crate) fn hold_message_rows() {
+    HELD_MESSAGE_ROWS.with_mut(|(open, _)| *open += 1);
+}
+
+/// A [`ReadScope`](crate::eval::typval::ReadScope) ended, its shares
+/// already given back: the last one writes the rows held for it.
+pub(crate) fn release_message_rows() {
+    let rows = HELD_MESSAGE_ROWS.with_mut(|(open, rows)| {
+        *open -= 1;
+        if *open == 0 {
+            mem::take(rows)
+        } else {
+            Vec::new()
+        }
+    });
+    for (idx, text) in rows {
+        set_vim_var_owned(idx, text);
+    }
+}
+
+/// What a message writes to `v:errmsg`/`v:warningmsg`/`v:statusmsg`: at
+/// once, or once the open read scopes end.
+pub(crate) fn set_message_row(idx: Vv, text: &[u8]) {
+    let text = ThinCString::from_bytes(text);
+    let now = HELD_MESSAGE_ROWS.with_mut(|(open, rows)| {
+        if *open == 0 {
+            return Some(text);
+        }
+        rows.push((idx, Some(text)));
+        None
+    });
+    if let Some(text) = now {
+        set_vim_var_owned(idx, Some(text));
+    }
 }
 
 /// Set `v:` variable `idx` to `val`, which it takes over; `None` is the null

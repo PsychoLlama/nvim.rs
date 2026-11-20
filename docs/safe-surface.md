@@ -365,7 +365,7 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   cursor, M)~~, `Live<T>` users (M), then `Win`/`Buf`/`TabPage` (XL; 553 files
   name them). **XL** overall.
 
-### S6 — value-handle edits (~~write half: check-always~~, read half by convention)
+### ~~S6 — value-handle edits~~ (closed: check-always, and a type for partials)
 
 `ListRef`/`DictRef`/`BlobRef`/`PartialRef`: `edit(&self) -> Edit<'_, T>`,
 `DerefMut`, `Deref`, and the `&Dict` walks (`items`, `items_mut`) through
@@ -388,12 +388,47 @@ them.
   mlbench/rebench/inbench/spellbench within ±0.05 %. No hot site needed
   hoisting. `soundness_checks` now switches only
   `GlobalCell`'s per-access thread check.
-- **Breaks — read/write (S6b):** a `&List` from one handle's `Deref` live
-  while a clone's `edit()` reallocates (`for item in l.items() { other.edit()… }`),
-  or an `edit()` held across a call that runs user code which reads the
-  object. Unchecked.
-- **Closure (S6b):** restructure — `Deref` answers a tracked shared loan, or
-  the walks take the handle and re-borrow per item. **L**.
+- ~~**S6b — read/write:**~~ (closed: check-always) a `&List` from one
+  handle's `Deref` live while a clone's `edit()` reallocates
+  (`for item in l.items() { other.edit()… }`), or an `edit()` held across a
+  call that runs user code which reads the object. `ListRef`, `DictRef` and
+  `BlobRef` lost `Deref`/`DerefMut`: an object is borrowed only through
+  `read()` (a `Read`, one count in the `Lent` word, now a `Cell<u32>`:
+  0 free, `u32::MAX` an edit, else the count of reads) and `edit()`, as a
+  `RefCell` counts its borrows, every build. A partial is fixed once built
+  (a type: `Deref` only, `PartialRef::get_mut` for its last holder, its copy
+  mark a `Cell`). The compiler holds the holder's own half: `Read` has a
+  destructor and an `Edit`'s loan carries the handle's lifetime, so a
+  `&mut` of the holder or a move of the handle under a live guard does not
+  compile (it found 17 edits still open when their handle was moved into a
+  result or a provider call, and a `d.key` lookup clearing its result under
+  the read).
+  - **Read sites that run user code**, surveyed by converting every one:
+    `filter()`/`map()`/`mapnew()`/`foreach()`, `sort()`/`uniq()` with a
+    function, `indexof()`, `reduce()`, `:for`, `call()`, `complete()`
+    lists, `matchfuzzy()` with a `key`/`text_cb`, `getreg()`/`setreg()`
+    lists, dict watchers, the collector's marking (it writes the mark of
+    the container it walks) and the deep copy. Each reads per step and
+    clones the item out before the call; the deep copy holds its reads
+    across the copy because its only write, the copy memo, lands before a
+    container is first read. A walker that hands out plain references for
+    its whole run (the encoders, job/`call()` options) keeps its shares in a
+    `ReadScope`.
+  - **Messages under a read**: a message writes `v:errmsg` into `v:`, and a
+    caller may pass `v:` where a dictionary is read (`json_encode([v:, 1])`,
+    `mapset(v:)`, `has_key(v:, v:)`, `foreach(v:, ..)`). A `ReadScope` holds
+    the message rows (`v:errmsg`, `v:warningmsg`, `v:statusmsg`) until the
+    last scope ends; reading a `v:` row is a shared read. Found by passing
+    `v:` to ~60 dict-taking functions (`test/functional/vimscript/vvars_spec.lua`
+    keeps the seven that panicked). A site holding a plain `Read` of a
+    caller's dictionary across a message is still a panic, not a crash —
+    fail-stop, where it used to be a value write the reader could see.
+  - **Cost**, release, codegen-units = 1, cachegrind Ir against the build
+    before the partial/blob/list/dict changes (three runs a side for
+    evalbench and spellbench): evalbench +1.3 % (+1.27..+1.35 %; parser
+    phase +1.02 %), undobench +0.85 %, edbench +0.28 %, scrbench +0.17 %,
+    rpcbench +0.11 %, markbench +0.09 %, rebench +0.03 %,
+    inbench/mlbench/spellbench within ±0.04 %.
 
 ### ~~S7 — the Lua stack's consuming operations~~ (closed: check-always)
 

@@ -476,7 +476,8 @@ pub fn tv_dict_remove(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static
     let Some(dict) = &**dict else {
         return;
     };
-    if value_check_lock({ dict.read().dv_lock }, LockName::Translate(arg_errmsg)) {
+    let lock = dict.read().dv_lock;
+    if value_check_lock(lock, LockName::Translate(arg_errmsg)) {
         return;
     }
     let Ok(key) = numbuf.string_chk(&args[1]) else {
