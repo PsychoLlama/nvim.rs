@@ -62,7 +62,7 @@ impl Dict {
     /// Add `item`, which the dictionary takes over.  `Err` hands it back
     /// when the key is already there.
     ///
-    /// A Funcref bound for `g:` or `l:` goes through [`dict_add_item`]
+    /// A Funcref bound for `g:` or `l:` goes through `dict_add_item`
     /// instead: the check that it does not shadow a function looks variables
     /// up -- in this very dictionary -- and puts out a message, neither of
     /// which may run under the exclusive borrow `self` is.
