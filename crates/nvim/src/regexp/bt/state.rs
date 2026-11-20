@@ -306,6 +306,9 @@ pub(crate) struct RegStack {
     behinds: Vec<RegBehind>,
     /// What upstream's byte stack would be this long — see the module docs.
     bytes: usize,
+    /// `'maxmempattern'` (KiB), read once when the match begins rather than
+    /// per frame pushed: a match runs no code that could set it.
+    limit_kb: i64,
 }
 
 impl RegStack {
@@ -315,6 +318,7 @@ impl RegStack {
             stars: Vec::new(),
             behinds: Vec::new(),
             bytes: 0,
+            limit_kb: i64::MAX,
         }
     }
 
@@ -324,6 +328,7 @@ impl RegStack {
         self.stars.clear();
         self.behinds.clear();
         self.bytes = 0;
+        self.limit_kb = p_mmp();
         if self.frames.capacity() < KEEP_FRAMES {
             self.frames.reserve(KEEP_FRAMES);
         }
@@ -357,7 +362,7 @@ impl RegStack {
         // 'maxmempattern' is bounded far below `i64::MAX`, so a stack that
         // does not fit in one is over any limit there could be.
         let kbytes = i64::try_from(self.bytes >> 10).unwrap_or(i64::MAX);
-        if kbytes >= p_mmp() {
+        if kbytes >= self.limit_kb {
             emsg(gettext(E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN));
             return Err(Failed);
         }

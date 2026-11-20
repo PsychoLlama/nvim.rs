@@ -59,6 +59,7 @@ use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::MaybeUninit;
 use core::ptr;
+use std::sync::atomic::{AtomicI32, Ordering};
 
 /// The longest byte sequence one key can become: `K_SPECIAL KS_MODIFIER mod`
 /// plus `K_SPECIAL KS_EXTRA code`.
@@ -352,23 +353,29 @@ fn test_loop_up(uv_loop: *mut crate::event::objects::Loop) -> bool {
 }
 
 const BREAKCHECK_SKIP: c_int = 1000;
-static BREAKCHECK_COUNT: GlobalCell<c_int> = GlobalCell::new(0);
+
+/// Calls since [`breakcheck_every`] last checked. An atomic rather than a
+/// `GlobalCell`: it is never lent, so the cell's borrow check would only
+/// cost the matchers' inner loops a compare per step (rebench +5 %).
+/// Main-thread only all the same; `Relaxed` is a plain load and store.
+static BREAKCHECK_COUNT: AtomicI32 = AtomicI32::new(0);
 
 /// Start the [`fast_breakcheck`] count over, so a lib test that adds matches
 /// never reaches the event loop it has not got.
 #[cfg(test)]
 pub(crate) fn reset_breakcheck_count() {
-    BREAKCHECK_COUNT.set(0);
+    BREAKCHECK_COUNT.store(0, Ordering::Relaxed);
 }
 
 /// [`os_breakcheck`], but only once every `every` calls.
+#[inline]
 fn breakcheck_every(every: c_int) {
-    let count = BREAKCHECK_COUNT.get() + 1;
+    let count = BREAKCHECK_COUNT.load(Ordering::Relaxed) + 1;
     if count >= every {
-        BREAKCHECK_COUNT.set(0);
+        BREAKCHECK_COUNT.store(0, Ordering::Relaxed);
         os_breakcheck();
     } else {
-        BREAKCHECK_COUNT.set(count);
+        BREAKCHECK_COUNT.store(count, Ordering::Relaxed);
     }
 }
 

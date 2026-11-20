@@ -324,6 +324,10 @@ pub(crate) struct Walk<'a> {
     /// Counts down to the next check for CTRL-C, which is too slow to do
     /// every round.
     breakcheckcount: c_int,
+    /// `GOT_INT` as of the last check for CTRL-C: nothing else in a step
+    /// sets it, so reading the global once per check rather than once per
+    /// step answers the same.
+    interrupted: bool,
 }
 
 /// Try finding suggestions by adding, removing and swapping letters.
@@ -392,6 +396,7 @@ impl<'a> Walk<'a> {
             depth: 0,
             finished: false,
             breakcheckcount: 1000,
+            interrupted: false,
         };
         walk.stack[0].child = 1;
 
@@ -417,7 +422,8 @@ impl<'a> Walk<'a> {
     /// gives up, or the user interrupts.
     #[inline(always)]
     fn run(&mut self) {
-        while !self.finished && !self.su.su_gave_up && !GOT_INT.get() {
+        self.interrupted = GOT_INT.get();
+        while !self.finished && !self.su.su_gave_up && !self.interrupted {
             self.step();
         }
     }
@@ -463,6 +469,7 @@ impl<'a> Walk<'a> {
         self.breakcheckcount -= 1;
         if self.breakcheckcount == 0 {
             os_breakcheck();
+            self.interrupted = GOT_INT.get();
             self.breakcheckcount = 1000;
             if SPELL_SUGGEST_TIMEOUT.get() > 0 && profile_passed_limit(self.time_limit) {
                 self.su.su_gave_up = true;
