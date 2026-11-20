@@ -16,7 +16,7 @@ use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::provider::{PROVIDER_CALL_NESTING, PROVIDER_CALLER_SCOPE};
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{
-    NumBuf, blob_bytes, dict_get_bool, dict_get_callback, dict_get_number, tv_list_alloc,
+    NumBuf, dict_get_bool, dict_get_callback, dict_get_number, tv_list_alloc,
 };
 use crate::eval::userfunc::{CallStackAside, set_current_fc};
 use crate::ex_cmds::check_secure;
@@ -110,7 +110,7 @@ pub fn f_chansend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let input: Vec<u8> = if args[1].v_type() == VAR_BLOB {
         // A Blob goes over byte for byte; an empty one sends nothing
         // and is reported as a failure below.
-        blob_bytes(args[1].blob_ref()).to_vec()
+        args[1].blob_bytes().to_vec()
     } else {
         // `false` for both: a List joins with NL, not CR-NL, and the
         // trailing NL is the caller's business.

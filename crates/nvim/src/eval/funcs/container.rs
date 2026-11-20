@@ -11,13 +11,13 @@
 
 use super::wrappers::{arg_copy, arg_number_chk};
 use crate::eval::funcs::builtin::EvalFuncData;
-use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE};
 use crate::eval::typval::{
-    ListRef, LockName, NumBuf, blob_bytes, blob_len, dict_get_number_def, dict_len, index_of,
-    list_copy, list_flatten, list_index, list_len, list_uidx, tv_check_for_list_or_blob_arg,
+    BlobRef, ListRef, LockName, NumBuf, dict_get_number_def, dict_len, index_of, list_copy,
+    list_flatten, list_index, list_len, list_uidx, tv_check_for_list_or_blob_arg,
     tv_check_for_opt_bool_arg, tv_check_for_opt_dict_arg, tv_check_for_string_or_func_arg,
     tv_clear, tv_copy, tv_dict_alloc, tv_equal, tv_get_bool_chk, tv_list_alloc, value_check_lock,
 };
+use crate::eval::typval::{CallFrame, TV_INITIAL_VALUE};
 use crate::eval::userfunc::{func_ref_name, get_func_arity};
 use crate::eval::vars::{
     clear_vimvar, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type, with_vim_var,
@@ -33,10 +33,10 @@ use crate::narrow::{len_as_integer, number_as_int};
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    BOOL_VAR_TRUE, Blob, BoolVarValue, List, SPECIAL_VAR_NULL, TypVal, VAR_BLOB, VAR_BOOL,
-    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING,
-    VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST,
-    VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv,
+    BOOL_VAR_TRUE, BoolVarValue, List, SPECIAL_VAR_NULL, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT,
+    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB,
+    VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER,
+    VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv,
 };
 use core::ffi::{CStr, c_int};
 
@@ -73,7 +73,7 @@ pub fn f_empty(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         VAR_FLOAT => (tv.float_or_zero()) == 0.0,
         VAR_LIST => tv.list_ref().is_none_or(List::is_empty),
         VAR_DICT => (dict_len(tv.dict_ref())) == 0,
-        VAR_BLOB => tv.blob_ref().is_none_or(Blob::is_empty),
+        VAR_BLOB => tv.blob_len() == 0,
         VAR_SPECIAL => tv.as_special() == Some(SPECIAL_VAR_NULL),
         // A Bool other than the two named values leaves the answer at its
         // "empty" default, as upstream's switch does.
@@ -191,7 +191,7 @@ fn get_from_blob(args: &[TypVal], result: &mut TypVal) -> bool {
     if error {
         return false;
     }
-    let bytes = blob_bytes(args[0].blob_ref());
+    let bytes = args[0].blob_bytes();
     let len = c_int::try_from(bytes.len()).expect("a short blob");
     result.write_empty(VAR_NUMBER);
     if idx < 0 {
@@ -349,7 +349,7 @@ fn index_blob(args: &[TypVal], result: &mut TypVal) {
     let Some(b) = args[0].blob_ref() else {
         return;
     };
-    let len = blob_len(Some(b));
+    let len = b.len_int();
     if start < 0 {
         start = (len + start).max(0);
     }
@@ -439,7 +439,7 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let saved_did_emsg = DID_EMSG.get();
     DID_EMSG.set(0);
     result.write_number(if args[0].v_type() == VAR_BLOB {
-        indexof_blob(args[0].blob_ref(), startidx, &args[1])
+        indexof_blob(args[0].blob_shared(), startidx, &args[1])
     } else {
         indexof_list(args[0].list_shared(), startidx, &args[1])
     });
@@ -469,11 +469,14 @@ fn indexof_matches(expr: &TypVal) -> bool {
 }
 
 /// Walk a Blob's bytes, answering the index of the first `expr` accepts.
-fn indexof_blob(b: Option<&Blob>, startidx: VarNumber, expr: &TypVal) -> VarNumber {
+///
+/// The predicate is the user's and can reach the blob, so the blob is read
+/// per step, never across the call.
+fn indexof_blob(b: Option<&BlobRef>, startidx: VarNumber, expr: &TypVal) -> VarNumber {
     let Some(b) = b else {
         return -1;
     };
-    let len = VarNumber::from(blob_len(Some(b)));
+    let len = VarNumber::from(b.read().len_int());
     let start = if startidx < 0 {
         (len + startidx).max(0)
     } else {
@@ -485,10 +488,10 @@ fn indexof_blob(b: Option<&Blob>, startidx: VarNumber, expr: &TypVal) -> VarNumb
     // The length is re-read at every step, as upstream does: the predicate
     // is the user's, and may shorten the blob.
     let mut idx = start;
-    while idx < VarNumber::from(blob_len(Some(b))) {
+    while idx < VarNumber::from(b.read().len_int()) {
         set_vim_var_nr(Vv::Key, idx);
         let at = c_int::try_from(idx).expect("a byte of the blob");
-        set_vim_var_nr(Vv::Val, VarNumber::from(b.byte(at)));
+        set_vim_var_nr(Vv::Val, VarNumber::from(b.read().byte(at)));
         if indexof_matches(expr) {
             return idx;
         }
@@ -546,7 +549,7 @@ pub fn f_len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Number is measured through its String spelling.
     result.write_number(match tv.v_type() {
         VAR_STRING | VAR_NUMBER => len_as_integer(numbuf.bytes(&args[0]).len()),
-        VAR_BLOB => VarNumber::from(blob_len(tv.blob_ref())),
+        VAR_BLOB => VarNumber::from(tv.blob_len()),
         VAR_LIST => VarNumber::from(list_len(tv.list_ref())),
         VAR_DICT => dict_len(tv.dict_ref()) as VarNumber,
         // The remaining tags are Unknown, Funcref, Partial, Float,

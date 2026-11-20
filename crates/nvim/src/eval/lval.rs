@@ -37,7 +37,7 @@ use core::ops::ControlFlow;
 use crate::ascii::ascii_iswhite;
 use crate::cstr::byte_at;
 use crate::eval::typval::{
-    BlobRef, DictRef, ListRef, NumBuf, blob_check_index, blob_check_range, blob_len, index_of,
+    BlobRef, DictRef, ListRef, NumBuf, blob_check_index, blob_check_range, index_of,
     list_check_range_index_one, list_check_range_index_two, list_items_mut, tv_blob_alloc_ret,
     tv_check_str, tv_dict_alloc, tv_get_number, tv_list_alloc_ret,
 };
@@ -664,7 +664,7 @@ impl Walk<'_, '_> {
         var2: &TypVal,
         empty1: bool,
     ) -> Result<(), LvalError> {
-        let bloblen = blob_len(Some(blob));
+        let bloblen = blob.read().len_int();
         self.span.n1 = if empty1 {
             0
         } else {

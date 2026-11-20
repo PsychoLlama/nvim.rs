@@ -21,7 +21,7 @@ use crate::eval::buffer::find_buffer;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::funcs::builtin::{EvalFuncDef, WrongArity};
 use crate::eval::typval::{
-    CallFrame, NumBuf, Unconvertible, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy,
+    CallFrame, Edit, NumBuf, Unconvertible, tv_blob_alloc_ret, tv_check_str_or_nr, tv_copy,
     tv_dict_alloc_ret, tv_get_bool, tv_get_bool_chk, tv_get_lnum, tv_get_number, tv_get_number_chk,
 };
 use crate::eval::userfunc::{
@@ -112,7 +112,7 @@ pub(crate) fn dict_alloc_ret(result: &mut TypVal) {
 }
 
 /// Make `result` a fresh, empty Blob.
-pub(crate) fn blob_alloc_ret(result: &mut TypVal) -> &mut Blob {
+pub(crate) fn blob_alloc_ret(result: &mut TypVal) -> Edit<'_, Blob> {
     tv_blob_alloc_ret(result)
 }
 

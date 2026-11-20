@@ -147,7 +147,7 @@ pub(crate) fn eval_number(
     } else if at(0) == b'0' && matches!(at(1), b'z' | b'Z') {
         // The handle owns the allocation for the length of the walk: every
         // way out of it below drops what it holds.
-        let mut held = evaluate.then(tv_blob_alloc);
+        let held = evaluate.then(tv_blob_alloc);
         let mut bp = 2;
         while ascii_isxdigit(c_int::from(at(bp))) {
             if !ascii_isxdigit(c_int::from(at(bp + 1))) {
@@ -157,9 +157,9 @@ pub(crate) fn eval_number(
                 }
                 return Err(Failed);
             }
-            if let Some(blob) = held.as_mut() {
+            if let Some(blob) = &held {
                 let pair = (hex2nr(at(bp)) << 4) + hex2nr(at(bp + 1));
-                blob.push(u8::try_from(pair).unwrap_or_default());
+                blob.edit().push(u8::try_from(pair).unwrap_or_default());
             }
             // A dot may separate byte pairs: `0z00.11.22`.
             if at(bp + 2) == b'.' && ascii_isxdigit(c_int::from(at(bp + 3))) {

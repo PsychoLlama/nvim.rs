@@ -261,7 +261,7 @@ fn lock_slot(
     match tv {
         TypVal::Blob(blob) => blob
             .as_ref()
-            .filter(|b| !skip(&b.bv_refcount))
+            .filter(|b| !skip(&b.read().bv_refcount))
             .map(|b| Held::Blob(b.clone())),
         TypVal::List(list) => list
             .as_ref()
@@ -282,7 +282,7 @@ impl Held {
         let descend = !(0..=1).contains(&deep);
         match self {
             Held::Blob(blob) => {
-                let changed = blob.bv_lock.changed(lock);
+                let changed = blob.read().bv_lock.changed(lock);
                 blob.edit().bv_lock = changed;
             }
             Held::List(list) => {
@@ -348,7 +348,9 @@ impl TypVal {
     /// container has none.
     fn container_lock(&self) -> VarLock {
         match self {
-            TypVal::Blob(blob) => blob.as_ref().map_or(VarLock::Unlocked, |b| b.bv_lock),
+            TypVal::Blob(blob) => blob
+                .as_ref()
+                .map_or(VarLock::Unlocked, |b| b.read().bv_lock),
             TypVal::List(list) => list.as_ref().map_or(VarLock::Unlocked, |l| l.lv_lock),
             TypVal::Dict(dict) => dict.as_ref().map_or(VarLock::Unlocked, |d| d.dv_lock),
             _ => VarLock::Unlocked,
@@ -454,7 +456,7 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
             let _recursing = Depth::of(&RECURSIVE_CNT);
             func_equal(tv1, tv2, ic)
         }
-        VAR_BLOB => blob_equal(tv1.blob_ref(), tv2.blob_ref()),
+        VAR_BLOB => *tv1.blob_bytes() == *tv2.blob_bytes(),
         VAR_NUMBER => a.as_number() == b.as_number(),
         VAR_FLOAT => a.as_float() == b.as_float(),
         VAR_STRING => {
@@ -498,8 +500,8 @@ mod tests {
     #[test]
     fn a_cleared_value_keeps_its_kind() {
         let _serial = editor_state_lock();
-        let mut blob = tv_blob_alloc();
-        blob.extend(&[1]);
+        let blob = tv_blob_alloc();
+        blob.edit().extend(&[1]);
         let mut values = [
             TypVal::Number(3),
             TypVal::Float(2.5),

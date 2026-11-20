@@ -55,18 +55,18 @@ fn tv_op_blob(lhs: &mut TypVal, rhs: &TypVal, op: u8) -> Result<(), Failed> {
     if op != b'+' || rhs.v_type() != VAR_BLOB {
         return Err(Failed);
     }
-    let Some(tail) = rhs.blob_ref() else {
+    if rhs.blob_shared().is_none() {
         return Ok(());
-    };
-    if lhs.blob_ref().is_none() {
+    }
+    if lhs.blob_shared().is_none() {
         // Appending to an unallocated blob shares the right-hand one
         // rather than copying it.
         lhs.write_blob(rhs.blob_handle());
         return Ok(());
     }
     // Copied out first: `b1 += b1` appends a copy of itself.
-    let tail = tail.bytes().to_vec();
-    if let Some(blob) = lhs.blob_mut() {
+    let tail = rhs.blob_bytes().to_vec();
+    if let Some(mut blob) = lhs.blob_mut() {
         blob.extend(&tail);
     }
     Ok(())

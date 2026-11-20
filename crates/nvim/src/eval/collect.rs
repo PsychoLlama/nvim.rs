@@ -592,7 +592,7 @@ pub(crate) fn var_item_copy(
                 ret = Err(Failed);
             }
         }
-        VAR_BLOB => blob_copy(src.blob_ref(), to),
+        VAR_BLOB => blob_copy(src.blob_ref().as_deref(), to),
         VAR_UNKNOWN => {
             internal_error(c"var_item_copy(UNKNOWN)");
             ret = Err(Failed);

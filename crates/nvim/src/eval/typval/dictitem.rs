@@ -117,7 +117,7 @@ pub fn tv_dict_item_remove(dict: &DictRef, key: &[u8]) {
 
 /// `items()` over a blob: a list of `[index, byte]` pairs.
 pub(crate) fn tv_blob2items(args: &[TypVal], result: &mut TypVal) {
-    let bytes = blob_bytes(args[0].blob_ref());
+    let bytes = args[0].blob_bytes();
     tv_list_alloc_ret(result, ptrdiff_t::try_from(bytes.len()).unwrap_or(-1));
     let Some(list) = result.list_mut() else {
         return;

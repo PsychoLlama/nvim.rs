@@ -217,7 +217,7 @@ fn read_blob(fd: &mut File, result: &mut TypVal, offset: FileOffset, size_arg: F
     let len = usize::try_from(size).expect("a positive size");
     let filled = result
         .blob_mut()
-        .is_some_and(|blob| fd.read(blob.claim(len)) >= len);
+        .is_some_and(|mut blob| fd.read(blob.claim(len)) >= len);
     if filled {
         return true;
     }

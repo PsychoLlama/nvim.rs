@@ -129,30 +129,36 @@ pub(crate) fn blob_bytes(b: Option<&Blob>) -> &[u8] {
 /// a [`BlobRef`]: it can be borrowed but never handed out, since a copy of
 /// it would be a reference nobody took.
 impl TypVal {
-    /// The blob this value holds, borrowed -- `None` for every other kind
+    /// The blob this value holds, shared -- `None` for every other kind
     /// and for `v:_null_blob`.
     ///
-    /// The one the `blob_*` family reads its argument in: the borrow lasts
-    /// as long as the value does.
+    /// The one the `blob_*` family reads its argument in. The [`Read`] is
+    /// counted on the blob: an `edit()` of it while the read lives panics,
+    /// so a body that runs user code holds [`TypVal::blob_shared`] and
+    /// reads per step.
     #[inline(always)]
-    pub(crate) fn blob_ref(&self) -> Option<&Blob> {
-        match self {
-            TypVal::Blob(blob) => blob.as_deref(),
-            _ => None,
-        }
+    pub(crate) fn blob_ref(&self) -> Option<Read<'_, Blob>> {
+        self.blob_shared().map(BlobRef::read)
     }
 
-    /// The blob this value holds, borrowed for writing.
-    ///
-    /// The exclusive borrow is the whole point: a caller holding one cannot
-    /// also be reading the blob through the value, which the raw pointer
-    /// let it do.
+    /// The bytes of the blob this value holds; a NULL blob (or another
+    /// kind) is empty. A [`Read`], as [`TypVal::blob_ref`].
     #[inline(always)]
-    pub(crate) fn blob_mut(&mut self) -> Option<&mut Blob> {
-        match self {
-            TypVal::Blob(blob) => blob.as_deref_mut(),
-            _ => None,
-        }
+    pub(crate) fn blob_bytes(&self) -> Read<'_, [u8]> {
+        self.blob_ref()
+            .map_or(Read::unshared(&[]), |b| b.map(Blob::bytes))
+    }
+
+    /// The length of the blob this value holds; a NULL blob is empty.
+    #[inline(always)]
+    pub(crate) fn blob_len(&self) -> ::core::ffi::c_int {
+        self.blob_ref().map_or(0, |b| b.len_int())
+    }
+
+    /// The blob this value holds, borrowed for writing: an [`Edit`].
+    #[inline(always)]
+    pub(crate) fn blob_mut(&mut self) -> Option<Edit<'_, Blob>> {
+        self.blob_shared().map(BlobRef::edit)
     }
 
     /// A blob value over `blob`, which the value takes over.
@@ -235,12 +241,13 @@ pub(crate) fn blob_slice(
         tv_clear(result);
         result.write_blob(None);
     } else {
-        let mut new_blob = tv_blob_alloc();
+        let new_blob = tv_blob_alloc();
         let from = usize::try_from(n1).expect("a byte of the blob");
         let to = usize::try_from(n2).expect("a byte of the blob");
         new_blob
+            .edit()
             .claim(to - from + 1)
-            .copy_from_slice(&blob_bytes(result.blob_ref())[from..=to]);
+            .copy_from_slice(&result.blob_bytes()[from..=to]);
         tv_clear(result);
         tv_blob_set_ret(result, Some(new_blob));
     }
@@ -268,7 +275,7 @@ pub(crate) fn blob_index(
     }
 
     let at = usize::try_from(idx).expect("a byte of the blob");
-    let v = blob_bytes(result.blob_ref())[at];
+    let v = result.blob_bytes()[at];
     tv_clear(result);
     result.write_number(VarNumber::from(v));
     Ok(())
@@ -286,7 +293,7 @@ pub fn blob_slice_or_index(
     exclusive: bool,
     result: &mut TypVal,
 ) -> Result<(), Failed> {
-    let len = blob_len(result.blob_ref());
+    let len = result.blob_len();
     if is_range {
         blob_slice(len, n1, n2, exclusive, result)
     } else {
@@ -342,7 +349,7 @@ pub(crate) fn set_range(
     n2: VarNumber,
     src: &TypVal,
 ) -> Result<(), Failed> {
-    if n2 - n1 + 1 != VarNumber::from(blob_len(src.blob_ref())) {
+    if n2 - n1 + 1 != VarNumber::from(src.blob_len()) {
         let msg = gettext(c"E972: Blob value does not have the right number of bytes");
         emsg(msg);
         return Err(Failed);
@@ -350,10 +357,10 @@ pub(crate) fn set_range(
     if src.blob_shared().is_some_and(|from| from.ptr_eq(dest)) {
         return Ok(());
     }
-    let bytes = blob_bytes(src.blob_ref());
+    let bytes = src.blob_bytes();
     let first = usize::try_from(n1).expect("a byte of the blob");
     // Two different blobs, so the borrows name different allocations.
-    dest.edit().bytes_mut()[first..first + bytes.len()].copy_from_slice(bytes);
+    dest.edit().bytes_mut()[first..first + bytes.len()].copy_from_slice(&bytes);
     Ok(())
 }
 
@@ -410,8 +417,9 @@ pub fn blob_remove(
     }
     let last = usize::try_from(end).expect("a byte of the blob");
 
-    let mut taken_held = tv_blob_alloc();
+    let taken_held = tv_blob_alloc();
     taken_held
+        .edit()
         .claim(last - first + 1)
         .copy_from_slice(&blob.bytes()[first..=last]);
     tv_blob_set_ret(result, Some(taken_held));
@@ -424,7 +432,7 @@ pub fn f_blob2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if tv_check_for_blob_arg(args, 0).is_err() {
         return;
     }
-    for &byte in blob_bytes(args[0].blob_ref()) {
+    for &byte in args[0].blob_bytes().iter() {
         list.push_number(VarNumber::from(byte));
     }
 }
@@ -433,7 +441,7 @@ pub fn f_blob2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 ///
 /// A value outside `0..=255` raises `E1239` and answers the empty blob.
 pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let blob = tv_blob_alloc_ret(result);
+    let mut blob = tv_blob_alloc_ret(result);
     if tv_check_for_list_arg(args, 0).is_err() {
         return;
     }
@@ -457,7 +465,7 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 ///
 /// The answer is a **borrow** of the slot's blob, for the callers that go on
 /// filling it; the slot owns the reference.
-pub fn tv_blob_alloc_ret(ret_tv: &mut TypVal) -> &mut Blob {
+pub fn tv_blob_alloc_ret(ret_tv: &mut TypVal) -> Edit<'_, Blob> {
     tv_blob_set_ret(ret_tv, Some(tv_blob_alloc()));
     ret_tv.blob_mut().expect("the blob just stored")
 }
@@ -470,8 +478,8 @@ pub fn blob_copy(from: Option<&Blob>, to: &mut TypVal) {
         to.write_blob(None);
         return;
     };
-    let mut copy = tv_blob_alloc();
-    copy.claim(from.len()).copy_from_slice(from.bytes());
+    let copy = tv_blob_alloc();
+    copy.edit().claim(from.len()).copy_from_slice(from.bytes());
     to.write_blob(Some(copy));
 }
 
@@ -482,8 +490,8 @@ mod tests {
 
     /// A blob holding `bytes`, owned by the handle it answers.
     fn blob_of(bytes: &[u8]) -> BlobRef {
-        let mut b = tv_blob_alloc();
-        b.claim(bytes.len()).copy_from_slice(bytes);
+        let b = tv_blob_alloc();
+        b.edit().claim(bytes.len()).copy_from_slice(bytes);
         b
     }
 
@@ -493,13 +501,13 @@ mod tests {
     #[test]
     fn an_untouched_blob_is_the_empty_slice() {
         let _held = editor_state_lock();
-        let mut b = tv_blob_alloc();
-        assert_eq!(b.bv_data.capacity(), 0);
-        assert_eq!(b.bytes(), b"");
-        assert_eq!(b.bytes_mut(), b"");
-        assert_eq!(b.len(), 0);
-        assert!(b.is_empty());
-        assert_eq!(blob_len(Some(&b)), 0);
+        let b = tv_blob_alloc();
+        assert_eq!(b.read().bv_data.capacity(), 0);
+        assert_eq!(b.read().bytes(), b"");
+        assert_eq!(b.edit().bytes_mut(), b"");
+        assert_eq!(b.read().len(), 0);
+        assert!(b.read().is_empty());
+        assert_eq!(blob_len(Some(&b.read())), 0);
         assert_eq!(blob_len(None), 0);
         assert_eq!(blob_bytes(None), b"");
     }
@@ -508,13 +516,15 @@ mod tests {
     #[test]
     fn claiming_room_answers_only_the_new_bytes() {
         let _held = editor_state_lock();
-        let mut b = blob_of(b"ab");
-        let room = b.claim(3);
+        let b = blob_of(b"ab");
+        let mut edit = b.edit();
+        let room = edit.claim(3);
         assert_eq!(room.len(), 3);
         room.copy_from_slice(b"cde");
-        assert_eq!(b.bytes(), b"abcde");
-        assert_eq!(b.claim(0).len(), 0);
-        assert_eq!(b.bytes(), b"abcde");
+        drop(edit);
+        assert_eq!(b.read().bytes(), b"abcde");
+        assert_eq!(b.edit().claim(0).len(), 0);
+        assert_eq!(b.read().bytes(), b"abcde");
     }
 
     /// `drain` closes the gap and shortens the blob; the run may be the
@@ -522,14 +532,14 @@ mod tests {
     #[test]
     fn draining_a_run_closes_the_gap() {
         let _held = editor_state_lock();
-        let mut b = blob_of(b"abcdef");
-        b.drain(1, 2);
-        assert_eq!(b.bytes(), b"adef");
-        b.drain(3, 3);
-        assert_eq!(b.bytes(), b"ade");
-        b.drain(0, 2);
-        assert_eq!(b.bytes(), b"");
-        assert!(b.is_empty());
+        let b = blob_of(b"abcdef");
+        b.edit().drain(1, 2);
+        assert_eq!(b.read().bytes(), b"adef");
+        b.edit().drain(3, 3);
+        assert_eq!(b.read().bytes(), b"ade");
+        b.edit().drain(0, 2);
+        assert_eq!(b.read().bytes(), b"");
+        assert!(b.read().is_empty());
     }
 
     /// `blob[idx] = byte` grows the blob by one at the slot just past the
@@ -537,13 +547,13 @@ mod tests {
     #[test]
     fn setting_the_slot_past_the_end_appends_and_no_further() {
         let _held = editor_state_lock();
-        let mut b = blob_of(b"ab");
-        b.set_or_append(0, b'z');
-        assert_eq!(b.bytes(), b"zb");
-        b.set_or_append(2, b'c');
-        assert_eq!(b.bytes(), b"zbc");
-        b.set_or_append(9, b'!');
-        assert_eq!(b.bytes(), b"zbc");
+        let b = blob_of(b"ab");
+        b.edit().set_or_append(0, b'z');
+        assert_eq!(b.read().bytes(), b"zb");
+        b.edit().set_or_append(2, b'c');
+        assert_eq!(b.read().bytes(), b"zbc");
+        b.edit().set_or_append(9, b'!');
+        assert_eq!(b.read().bytes(), b"zbc");
     }
 
     /// `:let b[0 : len(b) - 1] = b` names one blob twice.  The length check
@@ -558,7 +568,7 @@ mod tests {
         dest.write_blob(Some(held.clone()));
 
         assert_eq!(set_range(&held, 0, 3, &src), Ok(()));
-        assert_eq!(blob_bytes(dest.blob_ref()), b"abcd");
+        assert_eq!(&*dest.blob_bytes(), b"abcd");
 
         // A shorter range of the same blob never gets here: the length
         // check refuses it first, which is what keeps the identity the only
@@ -576,16 +586,17 @@ mod tests {
         let _held = editor_state_lock();
         let from = blob_of(b"xyz");
         let mut to = TypVal::Unknown;
-        blob_copy(Some(&from), &mut to);
+        blob_copy(Some(&from.read()), &mut to);
         let copy = to.blob_ref().expect("the copy");
         assert_eq!(copy.bytes(), b"xyz");
-        assert!(!::core::ptr::eq(copy, &*from));
-        assert!(blob_equal(Some(&from), Some(copy)));
+        assert!(!::core::ptr::eq(&*copy, &*from.read()));
+        assert!(blob_equal(Some(&from.read()), Some(&copy)));
+        drop(copy);
 
         let mut nothing = TypVal::Unknown;
         blob_copy(None, &mut nothing);
-        assert_eq!(nothing.blob_ref().map(Blob::len), None);
-        assert!(blob_equal(None, nothing.blob_ref()));
+        assert_eq!(nothing.blob_ref().map(|b| b.len()), None);
+        assert!(blob_equal(None, nothing.blob_ref().as_deref()));
 
         tv_clear(&mut to);
     }
@@ -600,14 +611,14 @@ mod tests {
         let mut two = TypVal::Unknown;
         tv_copy(&one, &mut two);
         assert!(two.blob_shared().is_some_and(|two| two.ptr_eq(&b)));
-        assert_eq!(b.bv_refcount.get(), 3);
+        assert_eq!(b.read().bv_refcount.get(), 3);
         two.blob_mut().expect("a blob").push(b'c');
-        assert_eq!(blob_bytes(one.blob_ref()), b"abc");
+        assert_eq!(&*one.blob_bytes(), b"abc");
         tv_clear(&mut one);
-        assert_eq!(b.bv_refcount.get(), 2);
+        assert_eq!(b.read().bv_refcount.get(), 2);
         tv_clear(&mut two);
-        assert_eq!(b.bv_refcount.get(), 1);
-        assert_eq!(b.bytes(), b"abc");
+        assert_eq!(b.read().bv_refcount.get(), 1);
+        assert_eq!(b.read().bytes(), b"abc");
     }
 
     /// The handle is the count: a clone retains, a drop releases, and the
@@ -616,13 +627,13 @@ mod tests {
     fn a_blob_handle_counts_its_references() {
         let _held = editor_state_lock();
         let b = tv_blob_alloc();
-        assert_eq!(b.bv_refcount.get(), 1);
+        assert_eq!(b.read().bv_refcount.get(), 1);
         let c = b.clone();
-        assert_eq!(c.bv_refcount.get(), 2);
+        assert_eq!(c.read().bv_refcount.get(), 2);
         drop(b);
-        assert_eq!(c.bv_refcount.get(), 1);
+        assert_eq!(c.read().bv_refcount.get(), 1);
         let d = c.clone();
-        assert_eq!(d.bv_refcount.get(), 2);
+        assert_eq!(d.read().bv_refcount.get(), 2);
         drop(c);
         drop(d);
     }

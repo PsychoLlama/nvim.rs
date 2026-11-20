@@ -20,7 +20,7 @@
 )]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{BlobRef, ListRef, blob_copy, blob_len, index_of, tv_copy};
+use crate::eval::typval::{BlobRef, ListRef, blob_copy, index_of, tv_copy};
 use crate::eval::vars::{VarList, ex_let_vars, skip_var_list};
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::{E_STRING_LIST_OR_BLOB_REQUIRED, eval0_in_cmd};
@@ -110,7 +110,7 @@ pub(crate) fn eval_for_line(excmd: &mut ExArg, skip: bool) -> (Box<ForInfo>, boo
                     // Copied, so the loop is not affected by later changes
                     // to the Blob it was handed.
                     let mut copy = TV_INITIAL_VALUE;
-                    blob_copy(tv.blob_ref(), &mut copy);
+                    blob_copy(tv.blob_ref().as_deref(), &mut copy);
                     if let Some(blob) = copy.take_blob() {
                         info.walk = Walk::Blob { blob, next: 0 };
                     }
@@ -144,7 +144,8 @@ pub(crate) fn next_for_item(info: &mut ForInfo, arg: &[u8]) -> bool {
     match &mut info.walk {
         Walk::Nothing => return false,
         Walk::Blob { blob, next } => {
-            if *next >= usize::try_from(blob_len(Some(blob))).unwrap_or(0) {
+            let blob = blob.read();
+            if *next >= blob.len() {
                 return false;
             }
             let at = i32::try_from(*next).expect("a Blob index fits an int");

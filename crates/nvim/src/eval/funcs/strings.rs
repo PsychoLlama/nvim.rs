@@ -13,8 +13,8 @@ use super::wrappers::{arg_bool_chk, arg_number, arg_number_chk, blob_alloc_ret, 
 use crate::eval::do_string_sub;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
-    NumBuf, blob_bytes, list_extend, list_len, tv_check_for_nonempty_string_arg,
-    tv_check_for_string_arg, tv_check_num, tv_list_alloc_ret,
+    NumBuf, list_extend, list_len, tv_check_for_nonempty_string_arg, tv_check_for_string_arg,
+    tv_check_num, tv_list_alloc_ret,
 };
 use crate::ex_getln::{VSE_NONE, fnameescape};
 use crate::highlight::Hlf;
@@ -169,8 +169,8 @@ fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
 }
 
 fn repeat_blob(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
-    let src = blob_bytes(args[0].blob_ref());
-    let out = blob_alloc_ret(result);
+    let src = args[0].blob_bytes();
+    let mut out = blob_alloc_ret(result);
     if src.is_empty() || n <= 0 {
         return;
     }
@@ -229,7 +229,7 @@ pub fn f_sha256(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     result.write_empty(VAR_STRING);
     let hash = if args[0].v_type() == VAR_BLOB {
-        hex_digest(args[0].blob_ref().map_or(&[][..], |b| b.bytes()))
+        hex_digest(&args[0].blob_bytes())
     } else {
         hex_digest(numbuf.bytes(&args[0]))
     };

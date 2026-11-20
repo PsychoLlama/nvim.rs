@@ -18,8 +18,7 @@ use crate::eval::typval::TV_INITIAL_VALUE;
 use core::ffi::c_int;
 
 use crate::eval::typval::{
-    NumBuf, blob_bytes, list_concat_values, tv_blob_alloc, tv_blob_set_ret, tv_clear,
-    tv_get_number_chk,
+    NumBuf, list_concat_values, tv_blob_alloc, tv_blob_set_ret, tv_clear, tv_get_number_chk,
 };
 use crate::eval::{VARNUMBER_MAX, VARNUMBER_MIN};
 use crate::message::emsg;
@@ -63,17 +62,19 @@ pub(crate) fn num_modulus(n1: VarNumber, n2: VarNumber) -> VarNumber {
 /// The answer is a blob of this call's own, so it overlaps neither operand
 /// even when the two are the same blob.
 pub(crate) fn eval_addblob(tv1: &mut TypVal, tv2: &TypVal) {
-    let (b1, b2) = (blob_bytes(tv1.blob_ref()), blob_bytes(tv2.blob_ref()));
-    let mut held = tv_blob_alloc();
+    let (b1, b2) = (tv1.blob_bytes(), tv2.blob_bytes());
+    let held = tv_blob_alloc();
     let total = b1.len() + b2.len();
 
     // A result that would not fit a garray is silently dropped: the
     // answer is an empty Blob and nothing is reported.
     if c_int::try_from(total).is_ok() {
+        let mut held = held.edit();
         let room = held.claim(total);
-        room[..b1.len()].copy_from_slice(b1);
-        room[b1.len()..].copy_from_slice(b2);
+        room[..b1.len()].copy_from_slice(&b1);
+        room[b1.len()..].copy_from_slice(&b2);
     }
+    drop((b1, b2));
     tv_clear(tv1);
     tv_blob_set_ret(tv1, Some(held));
 }

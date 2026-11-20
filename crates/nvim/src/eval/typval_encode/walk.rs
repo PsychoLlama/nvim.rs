@@ -23,7 +23,7 @@ use super::{
 };
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::partial_name;
-use crate::eval::typval::{blob_bytes, dict_find, list_len};
+use crate::eval::typval::{dict_find, list_len};
 use crate::eval::vars::msgpack_type_of;
 use crate::message::internal_error;
 use crate::types::{
@@ -129,7 +129,7 @@ fn convert_one_value<'a, S: TypvalSink>(
         }
         VAR_NUMBER => sink.conv_number(tv.number_or_zero()),
         VAR_FLOAT => item_hook!(sink.conv_float(tv.float_or_zero())),
-        VAR_BLOB => sink.conv_blob(blob_bytes(tv.blob_ref())),
+        VAR_BLOB => sink.conv_blob(&tv.blob_bytes()),
         VAR_FUNC => {
             let name = tv.func_name().map(|name| name.as_cstr());
             let path = ConvPath { stack, objname };

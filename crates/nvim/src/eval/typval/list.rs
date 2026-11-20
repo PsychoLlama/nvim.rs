@@ -418,6 +418,16 @@ pub fn list_free_contents(list: &ListRef) {
     drop(items);
 }
 
+impl ListRef {
+    /// Mark this list as copied to `copy` under `copy_id`: the deep copy's
+    /// memo, which [`List::copy_under`] reads back.
+    pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &ListRef) {
+        let mut this = self.edit();
+        this.lv_copy_id = copy_id;
+        this.lv_copylist = copy.as_ptr();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -623,7 +623,7 @@ impl<'a> BlobArg<'a> {
 
     #[inline(always)]
     pub(crate) fn lock(self) -> VarLock {
-        self.0.map_or(VarLock::Fixed, |b| b.bv_lock)
+        self.0.map_or(VarLock::Fixed, |b| b.read().bv_lock)
     }
 
     #[inline(always)]
@@ -636,12 +636,12 @@ impl<'a> BlobArg<'a> {
     /// Length in bytes; a NULL blob is empty.
     #[inline(always)]
     pub(crate) fn len(self) -> c_int {
-        self.0.map_or(0, |b| b.len_int())
+        self.0.map_or(0, |b| b.read().len_int())
     }
 
     #[inline(always)]
     pub(crate) fn byte(self, idx: c_int) -> uint8_t {
-        self.0.expect("a live blob").byte(idx)
+        self.0.expect("a live blob").read().byte(idx)
     }
 
     #[inline(always)]
@@ -685,7 +685,7 @@ impl<'a> BlobArg<'a> {
     /// Copy the blob into `result` and answer the copy, for `mapnew()`.
     #[inline(always)]
     pub(crate) fn copy_to(self, result: &mut TypVal) -> BlobArg<'_> {
-        blob_copy(self.0.map(|b| &**b), result);
+        blob_copy(self.0.map(BlobRef::read).as_deref(), result);
         BlobArg(result.blob_shared())
     }
 }

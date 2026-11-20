@@ -52,11 +52,10 @@
 
 use ::core::ptr::NonNull;
 
-use super::edit::Lent;
+use super::edit::{Lent, Read};
 use super::*;
 use crate::hashtab::{HashValue, SlotEntry};
-use crate::hashtab::{hash_bytes, hash_bytes_len};
-use crate::types::{Failed, Refcount};
+use crate::types::Refcount;
 
 /// An owning reference to a heap-allocated [`List`].
 ///
@@ -143,6 +142,13 @@ impl ListRef {
     #[inline(always)]
     pub fn edit(&self) -> Edit<'_, List> {
         lend(&self.0, ::core::mem::offset_of!(List, lv_lent))
+    }
+
+    /// The object, shared while the [`Read`] lives: an `edit()` through any
+    /// handle meanwhile panics, so a body running user code lets it go.
+    #[inline(always)]
+    pub fn read(&self) -> Read<'_, List> {
+        share(&self.0, ::core::mem::offset_of!(List, lv_lent))
     }
 
     /// The reference count, through its own bytes only: a clone or
@@ -363,6 +369,12 @@ impl DictRef {
         lend(&self.0, ::core::mem::offset_of!(Dict, dv_lent))
     }
 
+    /// As [`ListRef::read`].
+    #[inline(always)]
+    pub fn read(&self) -> Read<'_, Dict> {
+        share(&self.0, ::core::mem::offset_of!(Dict, dv_lent))
+    }
+
     /// As [`ListRef::count`].
     #[inline(always)]
     fn count(&self) -> &Refcount {
@@ -532,6 +544,11 @@ impl BlobRef {
         lend(&self.0, ::core::mem::offset_of!(Blob, bv_lent))
     }
 
+    #[inline(always)]
+    pub fn read(&self) -> Read<'_, Blob> {
+        share(&self.0, ::core::mem::offset_of!(Blob, bv_lent))
+    }
+
     /// As [`ListRef::count`].
     #[inline(always)]
     fn count(&self) -> &Refcount {
@@ -557,25 +574,6 @@ impl Drop for BlobRef {
             // SAFETY: the last reference to the `Box` `tv_blob_alloc` leaked.
             drop(unsafe { Box::from_raw(self.as_ptr()) });
         }
-    }
-}
-
-impl ::core::ops::Deref for BlobRef {
-    type Target = Blob;
-
-    #[inline(always)]
-    fn deref(&self) -> &Blob {
-        // SAFETY: as `ListRef`'s.
-        unsafe { self.0.as_ref() }
-    }
-}
-
-impl ::core::ops::DerefMut for BlobRef {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Blob {
-        self.bv_lent.assert_not_lent::<Blob>();
-        // SAFETY: as `ListRef`'s.
-        unsafe { self.0.as_mut() }
     }
 }
 
@@ -684,34 +682,79 @@ fn lend<T>(at: &NonNull<T>, lent: usize) -> Edit<'_, T> {
     Edit { target, loan }
 }
 
-/// An [`Edit`]'s claim on its object: the object's [`Lent`] flag, raised
-/// while the edit lives and lowered when it goes. The flag's address, not a
-/// borrow: the edit holds the whole object `&mut`, flag included, so the
-/// flag is reached only through the handle's pointer, projected (never
+/// A borrow's claim on its object's [`Lent`] word: the word's address, not
+/// a borrow of it. An edit holds the whole object `&mut`, word included, so
+/// the word is reached only through the handle's pointer, projected (never
 /// re-borrowed), before the edit is made and after its last use.
 #[derive(Debug)]
-pub(super) struct Loan(*const Lent);
+struct Claim(*const Lent);
+
+impl Claim {
+    /// The word of the object at `at`, the field at `offset`.
+    #[inline(always)]
+    fn new<T>(at: NonNull<T>, offset: usize) -> Claim {
+        Claim(at.as_ptr().cast_const().wrapping_byte_add(offset).cast())
+    }
+
+    #[inline(always)]
+    fn word(&self) -> &Lent {
+        // SAFETY: a `Lent` field of a live object a handle names, which the
+        // borrow's handle keeps alive; the borrow covers the word alone, and
+        // an edit's own borrow of the object is not live across it.
+        unsafe { &*self.0 }
+    }
+}
+
+/// An [`Edit`]'s claim: the word raised to the edit's for its life.
+#[derive(Debug)]
+pub(super) struct Loan(Claim);
 
 impl Loan {
-    /// Lend the object at `at`, whose flag is the field at `offset`.
     #[inline(always)]
     fn new<T>(at: NonNull<T>, offset: usize) -> Loan {
-        let lent = at.as_ptr().cast_const().wrapping_byte_add(offset);
-        let lent = lent.cast::<Lent>();
-        // SAFETY: a `Lent` field of the live object a handle names; the
-        // borrow covers the flag alone and ends before the edit's begins.
-        unsafe { &*lent }.lend::<T>();
-        Loan(lent)
+        let claim = Claim::new(at, offset);
+        claim.word().lend::<T>();
+        Loan(claim)
     }
 }
 
 impl Drop for Loan {
     #[inline(always)]
     fn drop(&mut self) {
-        // SAFETY: the flag of an object the edit's handle keeps alive; the
-        // edit's borrow of the object, dropped first, has had its last use.
-        unsafe { &*self.0 }.give_back();
+        self.0.word().give_back();
     }
+}
+
+/// A [`Read`]'s claim: one count in the word for its life.
+#[derive(Debug)]
+pub(super) struct Share(Claim);
+
+impl Share {
+    #[inline(always)]
+    fn new<T>(at: NonNull<T>, offset: usize) -> Share {
+        let claim = Claim::new(at, offset);
+        claim.word().share::<T>();
+        Share(claim)
+    }
+}
+
+impl Drop for Share {
+    #[inline(always)]
+    fn drop(&mut self) {
+        self.0.word().unshare();
+    }
+}
+
+/// The object `at` names, shared for as long as the handle holding `at` is
+/// borrowed: every `read()`. `lent` is `offset_of!` its [`Lent`] word.
+#[inline(always)]
+fn share<T>(at: &NonNull<T>, lent: usize) -> Read<'_, T> {
+    let share = Share::new(*at, lent);
+    // SAFETY: the handle holds a reference, so the object is live; the
+    // share just taken refuses an edit while this borrow lives.
+    let target = unsafe { at.as_ref() };
+    let share = Some(share);
+    Read { target, share }
 }
 
 /// What a dictionary's hash table holds in an occupied slot: the item.
@@ -799,19 +842,12 @@ impl Dict {
 
     /// The slot `key` (hashing to `hash`) occupies, or the one it belongs in.
     #[inline]
-    fn probe_key(&self, key: &[u8], hash: HashValue) -> ItemSlot {
+    pub(super) fn probe_key(&self, key: &[u8], hash: HashValue) -> ItemSlot {
         // SAFETY: the probe hands the test only this dictionary's kept
         // entries, each naming a live item -- which owns its key -- that the
         // borrow of the dictionary keeps alive for the walk.
         self.dv_hashtab
             .probe(hash, |entry| unsafe { (*entry.0).di_key.bytes() } == key)
-    }
-
-    /// The slot holding `key`, if any.
-    #[inline]
-    pub(crate) fn slot_of(&self, key: &[u8]) -> Option<usize> {
-        let hi = self.probe_key(key, hash_bytes_len(key));
-        hi.is_kept().then(|| hi.index())
     }
 
     /// Put `item` in the table, which takes it over. When its key is
@@ -823,19 +859,6 @@ impl Dict {
         self.dv_hashtab
             .insert_at(hi, DictEntry(Box::into_raw(item)), hash);
         Ok(())
-    }
-
-    /// Where an item keyed `key` goes, with the key's hash. A key already
-    /// there is an internal error (E685), said here.
-    fn vacant_slot(&self, key: &DictKey) -> Result<(ItemSlot, HashValue), Failed> {
-        let hash = hash_bytes(key.bytes());
-        let hi = self.probe_key(key.bytes(), hash);
-        if hi.is_kept() {
-            let key = crate::message_fmt::msg_bytes(key.bytes());
-            crate::siemsg!("E685: Internal error: hash_add(): duplicate key \"{key}\"");
-            return Err(Failed);
-        }
-        Ok((hi, hash))
     }
 
     /// Take the item in slot `slot` out of the table.
@@ -850,18 +873,6 @@ impl Dict {
         self.dv_hashtab.remove_at(hi);
         // SAFETY: the item the slot named, out of the table now.
         unsafe { take_item(hi.hi_key.item()) }
-    }
-
-    /// Stop the table resizing while a walk removes as it goes.
-    #[inline]
-    pub(crate) fn lock_table(&mut self) {
-        self.dv_hashtab.lock();
-    }
-
-    /// Undo one [`Dict::lock_table`], resizing now if the table wanted to.
-    #[inline]
-    pub(crate) fn unlock_table(&mut self) {
-        self.dv_hashtab.unlock();
     }
 }
 
@@ -953,15 +964,7 @@ impl<const N: usize> CallFrame<N> {
 /// before copying the items, so that an item naming the original again gets
 /// the copy. The copy is held by the walk that made it for as long as that
 /// `copy_id` is the one asked about, which is what the reads rest on.
-impl ListRef {
-    /// Mark this list as copied to `copy` under `copy_id`.
-    pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &ListRef) {
-        let mut this = self.edit();
-        this.lv_copy_id = copy_id;
-        this.lv_copylist = copy.as_ptr();
-    }
-}
-
+/// (`remember_copy`, the marking, is safe code: `list.rs`, `dict.rs`.)
 impl List {
     /// The copy this list was given under `copy_id` by the walk still
     /// running, with a reference of its own.
@@ -972,15 +975,6 @@ impl List {
         // SAFETY: written by `remember_copy` under this id, by the walk that
         // still holds the copy.
         unsafe { ListRef::retained(self.lv_copylist) }
-    }
-}
-
-impl DictRef {
-    /// Mark this dictionary as copied to `copy` under `copy_id`.
-    pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &DictRef) {
-        let mut this = self.edit();
-        this.dv_copy_id = copy_id;
-        this.dv_copydict = copy.as_ptr();
     }
 }
 

@@ -311,7 +311,7 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     let written = match args[0].v_type() {
-        VAR_BLOB => write_blob(&mut out, args[0].blob_ref()),
+        VAR_BLOB => write_blob(&mut out, args[0].blob_ref().as_deref()),
         VAR_STRING => write_data(
             &mut out,
             args[0].string_ref().map_or(&[], ThinCString::as_bytes),

@@ -671,8 +671,8 @@ mod tests {
     #[test]
     fn scalars_and_flat_containers_print_as_their_literals() {
         let _serial = ready();
-        let mut blob = tv_blob_alloc();
-        blob.extend(&[1, 0xab]);
+        let blob = tv_blob_alloc();
+        blob.edit().extend(&[1, 0xab]);
         let mut d = tv_dict_alloc();
         d.add_number(b"n", 1).expect("fresh key");
         let tv = TypVal::list(Some(list(vec![

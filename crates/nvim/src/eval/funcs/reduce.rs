@@ -15,7 +15,7 @@ use crate::eval::VARNUMBER_MIN;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{
-    NumBuf, blob_bytes, dict_len, list_items, list_iter, list_len, tv_check_for_number_arg,
+    NumBuf, dict_len, list_items, list_iter, list_len, tv_check_for_number_arg,
     tv_check_for_string_arg, tv_copy, tv_get_number_chk,
 };
 use crate::eval::{eval_expr_typval, partial_name};
@@ -235,7 +235,6 @@ fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
 fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // The blob is re-measured every pass, as the C does, so a fold that
     // shortens it cannot walk off the end.
-    let bytes = blob_bytes(args[0].blob_ref());
     let called_emsg_start = CALLED_EMSG.get();
     let mut at = if args.len() > 2 {
         if tv_check_for_number_arg(args, 2).is_err() {
@@ -244,7 +243,7 @@ fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
         tv_copy(&args[2], result);
         0
     } else {
-        let Some(&first) = bytes.first() else {
+        let Some(&first) = args[0].blob_bytes().first() else {
             semsg!("E998: Reduce of an empty {} with no initial value", "Blob");
             return;
         };
@@ -253,8 +252,8 @@ fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     };
     // By index and re-read each step: the fold runs a user function, which
     // can grow or free the blob under the walk.
-    while at < blob_bytes(args[0].blob_ref()).len() {
-        let item = number_tv(VarNumber::from(blob_bytes(args[0].blob_ref())[at]));
+    while at < args[0].blob_bytes().len() {
+        let item = number_tv(VarNumber::from(args[0].blob_bytes()[at]));
         if !fold_step(expr, result, &item, BLOB_CLEANUP, called_emsg_start) {
             return;
         }

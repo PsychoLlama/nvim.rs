@@ -172,6 +172,7 @@ pub(crate) fn typval_compare(
         // SAFETY: `same_type` has held before either closure runs, so the
         // union member each reads is the one the tag names.
         let (b1, b2) = (typ1.blob_ref(), typ2.blob_ref());
+        let (b1, b2) = (b1.as_deref(), b2.as_deref());
         let same = || b1.map(::core::ptr::from_ref) == b2.map(::core::ptr::from_ref);
         let eq = || blob_equal(b1, b2);
         let wrong_type = c"E977: Can only compare Blob with Blob";

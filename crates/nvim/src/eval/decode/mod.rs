@@ -83,8 +83,8 @@ pub fn decode_create_map_special_dict(len: ptrdiff_t) -> (TypVal, ListRef) {
 /// copied.
 pub fn decode_string(bytes: &[u8], force_blob: bool) -> TypVal {
     if force_blob || bytes.contains(&0) {
-        let mut blob = tv_blob_alloc();
-        blob.extend(bytes);
+        let blob = tv_blob_alloc();
+        blob.edit().extend(bytes);
         return TypVal::blob(Some(blob));
     }
     TypVal::string(Some(ThinCString::from_bytes(bytes)))
@@ -95,8 +95,8 @@ pub fn decode_string(bytes: &[u8], force_blob: bool) -> TypVal {
 /// copied.
 pub(crate) fn decode_owned_string(bytes: Vec<u8>) -> TypVal {
     if bytes.contains(&0) {
-        let mut blob = tv_blob_alloc();
-        blob.bv_data = bytes;
+        let blob = tv_blob_alloc();
+        blob.edit().bv_data = bytes;
         return TypVal::blob(Some(blob));
     }
     TypVal::string(Some(ThinCString::from_vec(bytes)))

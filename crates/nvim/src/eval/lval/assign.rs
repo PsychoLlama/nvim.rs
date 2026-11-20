@@ -32,7 +32,7 @@ use crate::semsg;
 use super::{LValue, Slot, Span, Target};
 use crate::eval::executor::eexe_mod_op;
 use crate::eval::typval::{
-    BlobRef, DictRef, assign_range, blob_len, dict_is_watched, dict_watcher_notify, set_range,
+    BlobRef, DictRef, assign_range, dict_is_watched, dict_watcher_notify, set_range,
     tv_check_lock_named, tv_copy, tv_get_number_chk, value_check_lock_named,
 };
 use crate::eval::vars::{
@@ -270,13 +270,13 @@ fn set_blob_var(lval: &LValue<'_>, blob: &BlobRef, span: Span, value: &TypVal, o
         semsg!("E734: Wrong variable type for {op}=");
         return;
     }
-    if value_check_lock_named(blob.bv_lock, lval.name()) {
+    if value_check_lock_named(blob.read().bv_lock, lval.name()) {
         return;
     }
 
     if span.range && value.v_type() == VAR_BLOB {
         let n2 = if span.empty2 {
-            blob_len(Some(blob)) - 1
+            blob.read().len_int() - 1
         } else {
             span.n2
         };
@@ -292,7 +292,7 @@ fn set_blob_var(lval: &LValue<'_>, blob: &BlobRef, span: Span, value: &TypVal, o
             semsg!("E1239: Invalid value for blob: 0xlX");
         } else {
             let byte = u8::try_from(val).expect("a byte, just checked");
-            blob.clone().set_or_append(span.n1, byte);
+            blob.edit().set_or_append(span.n1, byte);
         }
     }
 }

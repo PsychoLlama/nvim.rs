@@ -15,15 +15,13 @@ use crate::eval::encode::{
     encode_vim_to_msgpack,
 };
 use crate::eval::funcs::builtin::EvalFuncData;
-use crate::eval::typval::{NumBuf, blob_bytes, tv_list_alloc};
+use crate::eval::typval::{NumBuf, tv_list_alloc};
 use crate::event::rstream::ARENA_BLOCK_SIZE;
 use crate::message_fmt::msg_bytes;
 use crate::mpack::mpack_core::Stop;
 use crate::msgpack_rpc::packer::pack_to_bytes;
 use crate::semsg;
-use crate::types::{
-    Blob, LIST_LEN_MAY_KNOW, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
-};
+use crate::types::{LIST_LEN_MAY_KNOW, List, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING, VAR_UNKNOWN};
 use core::ffi::CStr;
 use core::fmt::Write as _;
 
@@ -155,9 +153,8 @@ fn msgpackparse_unpack_list(list: &List, ret_list: &mut List) {
 }
 
 /// Unpack a Blob, which is already one contiguous buffer.
-fn msgpackparse_unpack_blob(blob: Option<&Blob>, ret_list: &mut List) {
+fn msgpackparse_unpack_blob(mut data: &[u8], ret_list: &mut List) {
     // `unpack_typval` advances the cursor past each object.
-    let mut data = blob_bytes(blob);
     while !data.is_empty() {
         match unpack_typval(&mut data) {
             Ok(value) => {
@@ -184,7 +181,7 @@ pub fn f_msgpackparse(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
             msgpackparse_unpack_list(list, &mut ret_list);
         }
     } else {
-        msgpackparse_unpack_blob(args[0].blob_ref(), &mut ret_list);
+        msgpackparse_unpack_blob(&args[0].blob_bytes(), &mut ret_list);
     }
     result.write_list(Some(ret_list));
 }

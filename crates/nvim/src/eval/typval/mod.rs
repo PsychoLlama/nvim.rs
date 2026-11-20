@@ -44,7 +44,7 @@ pub use self::access::*;
 mod handle;
 pub use self::handle::*;
 mod edit;
-pub use self::edit::{Edit, Lent};
+pub use self::edit::{Edit, Lent, Read};
 mod frame;
 pub(crate) use self::frame::CallFrame;
 mod list;

@@ -37,6 +37,7 @@ use crate::message_fmt::msg_cstr;
 use ::core::ffi::CStr;
 
 use super::*;
+use crate::hashtab::{HashValue, hash_bytes};
 use crate::mbyte::CONV_NONE;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
@@ -516,6 +517,52 @@ impl Dict {
     /// Whether the dictionary holds no entries.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+/// The table's own bookkeeping, through [`Dict::probe_key`]: safe code
+/// over the item store `handle.rs` keeps.
+impl Dict {
+    /// The slot holding `key`, if any.
+    #[inline]
+    pub(crate) fn slot_of(&self, key: &[u8]) -> Option<usize> {
+        let hi = self.probe_key(key, crate::hashtab::hash_bytes_len(key));
+        hi.is_kept().then(|| hi.index())
+    }
+
+    /// Where an item keyed `key` goes, with the key's hash. A key already
+    /// there is an internal error (E685), said here.
+    pub(super) fn vacant_slot(&self, key: &DictKey) -> Result<(ItemSlot, HashValue), Failed> {
+        let hash = hash_bytes(key.bytes());
+        let hi = self.probe_key(key.bytes(), hash);
+        if hi.is_kept() {
+            let key = msg_bytes(key.bytes());
+            crate::siemsg!("E685: Internal error: hash_add(): duplicate key \"{key}\"");
+            return Err(Failed);
+        }
+        Ok((hi, hash))
+    }
+
+    /// Stop the table resizing while a walk removes as it goes.
+    #[inline]
+    pub(crate) fn lock_table(&mut self) {
+        self.dv_hashtab.lock();
+    }
+
+    /// Undo one [`Dict::lock_table`], resizing now if the table wanted to.
+    #[inline]
+    pub(crate) fn unlock_table(&mut self) {
+        self.dv_hashtab.unlock();
+    }
+}
+
+impl DictRef {
+    /// Mark this dictionary as copied to `copy` under `copy_id`: the deep
+    /// copy's memo, which [`Dict::copy_under`] reads back.
+    pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &DictRef) {
+        let mut this = self.edit();
+        this.dv_copy_id = copy_id;
+        this.dv_copydict = copy.as_ptr();
     }
 }
 
