@@ -120,6 +120,7 @@ use crate::lua::ffi::{
 use crate::lua::state::MAIN_REFS;
 use crate::os::libc::size_t;
 use crate::types::LuaRef;
+use std::sync::atomic::Ordering;
 
 /// A check the soundness of a `Stack` operation rests on: an operation
 /// that consumes values off the top consumes values its view pushed.
@@ -779,7 +780,7 @@ impl Stack {
         self.push_value(at);
         let reference = unsafe { luaL_ref(self.l(), LUA_REGISTRYINDEX) };
         if reference > 0 {
-            MAIN_REFS.with_mut(|refs| refs.ref_count += 1);
+            MAIN_REFS.ref_count.fetch_add(1, Ordering::Relaxed);
         }
         reference
     }
@@ -787,7 +788,7 @@ impl Stack {
     /// Give `reference` back. A sentinel is a no-op.
     pub fn unreference(&mut self, reference: LuaRef) {
         if reference > 0 {
-            MAIN_REFS.with_mut(|refs| refs.ref_count -= 1);
+            MAIN_REFS.ref_count.fetch_sub(1, Ordering::Relaxed);
             unsafe { luaL_unref(self.l(), LUA_REGISTRYINDEX, reference) };
         }
     }
@@ -802,13 +803,13 @@ impl Stack {
 
     /// Push `vim.NIL`, the userdata Lua code sees for a Vimscript or API nil.
     pub fn push_vim_nil(&mut self) {
-        let reference = MAIN_REFS.get_field(|refs| &refs.nil_ref);
+        let reference = MAIN_REFS.nil_ref.load(Ordering::Relaxed);
         self.push_reference(reference);
     }
 
     /// Push the metatable `vim.empty_dict()` marks an empty dictionary with.
     pub fn push_empty_dict_metatable(&mut self) {
-        let reference = MAIN_REFS.get_field(|refs| &refs.empty_dict_ref);
+        let reference = MAIN_REFS.empty_dict_ref.load(Ordering::Relaxed);
         self.push_reference(reference);
     }
 

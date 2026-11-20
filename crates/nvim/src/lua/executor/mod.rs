@@ -28,7 +28,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use core::ffi::c_int;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicI32};
 
 use crate::global_cell::GlobalCell;
 use crate::lua::ffi::LUA_REFNIL;
@@ -94,9 +94,18 @@ static IN_SCRIPT: AtomicBool = AtomicBool::new(false);
 /// The stock `require`, kept so `--startuptime`'s wrapper can delegate to it.
 static REQUIRE_REF: GlobalCell<LuaRef> = GlobalCell::new(LUA_REFNIL);
 
+/// The main state's reference bookkeeping ([`MAIN_REFS`](crate::lua::state::MAIN_REFS)).
+///
+/// Atomics rather than a `GlobalCell`: [`Stack::reference`](crate::lua::stack::Stack::reference)
+/// counts here, and a luv thread's state makes references too (a function
+/// in `vim.diff`'s options), on its own thread.
 #[derive(Debug)]
 pub struct NluaRefState {
-    pub nil_ref: LuaRef,
-    pub empty_dict_ref: LuaRef,
-    pub ref_count: ::core::ffi::c_int,
+    /// `vim.NIL`'s reference in the main state's registry. Set once while
+    /// the main state is built, before any thread exists.
+    pub nil_ref: AtomicI32,
+    /// `vim.empty_dict()`'s metatable's reference, set alongside `nil_ref`.
+    pub empty_dict_ref: AtomicI32,
+    /// How many references are held (what the leak checks read).
+    pub ref_count: AtomicI32,
 }

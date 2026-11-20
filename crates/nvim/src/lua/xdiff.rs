@@ -25,7 +25,7 @@ use crate::api_error;
 use crate::linematch::{block_from_lnum, linematch_nbuffers};
 use crate::lua::abi::lua_Integer;
 use crate::lua::converter::pop_keydict;
-use crate::lua::executor::{release_luaref, until_nul};
+use crate::lua::executor::until_nul;
 use crate::lua::stack::{At, CFunction, Kind, Raise, Stack};
 use crate::lua_functions;
 use crate::message_fmt::msg_bytes_opt;
@@ -177,8 +177,10 @@ fn process_xdl_diff_opts(stack: &mut Stack, config: &mut Config) -> (Mode, Optio
     // when both wrote through one slot.
     let (mode, why) = apply_opts(stack, &opts, config);
 
+    // The reference is in the registry of the state that made it, which on
+    // a luv thread is not the main one: give it back there.
     if let Some(on_hunk) = opts.on_hunk {
-        release_luaref(on_hunk);
+        stack.unreference(on_hunk);
     }
     (mode, why.or(popped.err()))
 }

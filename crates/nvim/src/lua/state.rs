@@ -18,16 +18,16 @@ use crate::global_cell::GlobalCell;
 use crate::lua::executor::NluaRefState;
 use crate::lua::ffi::LUA_NOREF;
 use crate::os::libc::uint64_t;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicI32};
 
 /// The main state's reference bookkeeping: how many references it holds
 /// (what the leak checks read), and the `vim.NIL` and `vim.empty_dict()`
 /// sentinels, which are references too.
-pub(crate) static MAIN_REFS: GlobalCell<NluaRefState> = GlobalCell::new(NluaRefState {
-    nil_ref: LUA_NOREF,
-    empty_dict_ref: LUA_NOREF,
-    ref_count: 0,
-});
+pub(crate) static MAIN_REFS: NluaRefState = NluaRefState {
+    nil_ref: AtomicI32::new(LUA_NOREF),
+    empty_dict_ref: AtomicI32::new(LUA_NOREF),
+    ref_count: AtomicI32::new(0),
+};
 /// `--luamod-dev`: the `vim` dev modules are not preloaded, so they load
 /// from the runtime path.
 pub(crate) static NLUA_DISABLE_PRELOAD: AtomicBool = AtomicBool::new(false);

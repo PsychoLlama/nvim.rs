@@ -155,6 +155,9 @@ fn to_stderr(message: &[u8]) {
 
 /// The vendored C libraries every state gets: libmpack, lpeg, `vim.diff` and
 /// cjson, on the `vim` table on top of `stack`'s state.
+///
+/// On the thread-state list ([`nlua_init_state`]): nothing these modules
+/// run may touch a `GlobalCell`.
 fn add_vendored(stack: &mut Stack) {
     // vim.mpack -- shared, or luv is reinitialised by require'mpack'.
     luaopen_mpack(stack);
@@ -244,7 +247,10 @@ pub fn nlua_init(argv: &[CString], lua_arg0: c_int) {
             os_exit(1);
         }
         // SAFETY: two functions of the right shape, for luv to call on a
-        // thread's behalf.
+        // thread's behalf -- on that thread. This is the way off the main
+        // thread: everything the state `nlua_thread_acquire_vm` builds can
+        // call is on the thread-state list (`nlua_init_state`), none of
+        // which touches a `GlobalCell`.
         unsafe { luv_set_thread_cb(Some(nlua_thread_acquire_vm), Some(nlua_common_free_all_mem)) };
 
         // SAFETY: libuv's thread id of the caller, which needs nothing.
@@ -276,6 +282,20 @@ pub fn nlua_run_script(argv: &[CString], lua_arg0: c_int) -> ! {
 /// It gets the shared half of the `vim` table and the thread-safe half of the
 /// standard library; a thread also gets the one api function it is allowed.
 /// Called on the thread the state will belong to.
+///
+/// # The thread-state list
+///
+/// A thread's state runs on that thread, so everything it can call must
+/// touch no `GlobalCell`, directly or through what it calls: the cells are
+/// `Sync` on exactly that promise, and nothing checks it in a release
+/// build. What it can call is what this function gives it and nothing
+/// else: `print` (which posts its text to the main loop), [`add_common`],
+/// [`add_vendored`] (mpack, lpeg, `vim.diff`, cjson), luv with the thread
+/// hooks ([`install_luv`]), [`thread_api`], the preloaders
+/// ([`init_packages`]), and the standard library. Adding a function to any
+/// of those is adding it to this list: audit it (docs/safe-surface.md, S2),
+/// and give it a case in `test/functional/lua/thread_spec.lua`, which a
+/// debug build runs with every cell access checked for the main thread.
 pub(crate) fn nlua_init_state(thread: bool) -> *mut lua_State {
     // The runtime path is shared, so only the main thread may rebuild it.
     // SAFETY: libuv's id of the calling thread, and two ids compared.

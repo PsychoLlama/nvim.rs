@@ -67,7 +67,8 @@ lua_functions! {
     }
 }
 
-/// A luv thread's `vim.api` functions.
+/// A luv thread's `vim.api` functions: on the thread-state list
+/// (`nlua_init_state`), so none may touch a `GlobalCell`.
 pub(crate) fn thread_api() -> &'static [Function] {
     THREAD_API
 }
@@ -103,6 +104,9 @@ fn empty_dict_tostring(stack: &mut Stack) -> Result<c_int, Raise> {
 /// one: `vim.is_thread` and the two identity sentinels. On the main state
 /// the sentinels are references, which is how the converter pushes them.
 ///
+/// On the thread-state list (`nlua_init_state`): nothing it registers may
+/// touch a `GlobalCell`.
+///
 /// Expects the `vim` table on top; leaves it there.
 pub(crate) fn add_common(stack: &mut Stack, is_thread: bool) {
     let [
@@ -131,7 +135,7 @@ pub(crate) fn add_common(stack: &mut Stack, is_thread: bool) {
     stack.set_metatable(At::from_top(2));
     if !is_thread {
         let nil_ref = stack.reference(At::TOP);
-        MAIN_REFS.with_mut(|refs| refs.nil_ref = nil_ref);
+        MAIN_REFS.nil_ref.store(nil_ref, Ordering::Relaxed);
     }
     stack.push_value(At::TOP);
     stack.set_field(At::REGISTRY, c"mpack.NIL");
@@ -144,7 +148,9 @@ pub(crate) fn add_common(stack: &mut Stack, is_thread: bool) {
     stack.set_field(At::from_top(2), c"__tostring");
     if !is_thread {
         let empty_dict_ref = stack.reference(At::TOP);
-        MAIN_REFS.with_mut(|refs| refs.empty_dict_ref = empty_dict_ref);
+        MAIN_REFS
+            .empty_dict_ref
+            .store(empty_dict_ref, Ordering::Relaxed);
     }
     stack.push_value(At::TOP);
     stack.set_field(At::REGISTRY, c"mpack.empty_dict");

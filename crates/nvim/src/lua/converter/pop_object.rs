@@ -24,12 +24,12 @@
 )]
 
 use crate::types::DictBuilder;
+use core::cell::Cell;
 use core::ffi::CStr;
 
 use super::pop::TURN_SLOTS;
 use super::{API_INTEGER_MAX, API_INTEGER_MIN, classify_table};
 use crate::eval::typval::DictKey;
-use crate::global_cell::GlobalCell;
 use crate::lua::abi::lua_Number;
 use crate::lua::stack::{At, Kind, Stack};
 use crate::narrow::{float_as_i64, len_as_int};
@@ -289,11 +289,18 @@ fn walk(stack: &mut Stack, as_ref: bool, open: &mut Vec<OpenValue>) -> Result<Ob
     }
 }
 
-/// The walk's container stack, kept between conversions so that converting
-/// a table does not allocate one afresh. Taken for the length of a walk and
-/// put back empty; a conversion that started inside another (none does
-/// today) would find it taken and start an empty one of its own.
-static OPEN_VALUES: GlobalCell<Vec<OpenValue>> = GlobalCell::new(Vec::new());
+thread_local! {
+    /// The walk's container stack, kept between conversions so that
+    /// converting a table does not allocate one afresh. Taken for the length
+    /// of a walk and put back empty; a conversion that started inside
+    /// another (none does today) would find it taken and start an empty one
+    /// of its own.
+    ///
+    /// Per thread, not a `GlobalCell`: a luv thread's state converts too
+    /// (`nvim__get_runtime`'s pattern list, `vim.diff`'s options), at the
+    /// same time as the main thread does.
+    static OPEN_VALUES: Cell<Vec<OpenValue>> = const { Cell::new(Vec::new()) };
+}
 
 /// Convert the Lua value on top of the stack, popping exactly one value.
 ///

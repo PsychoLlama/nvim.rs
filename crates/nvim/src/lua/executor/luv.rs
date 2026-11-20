@@ -214,6 +214,9 @@ unsafe fn nlua_luv_thread_common_cfpcall(
 
 /// luv's `acquire_vm`: a thread that needs a state gets a fresh one.
 ///
+/// This runs off the main thread, and so does everything the state it
+/// answers can call: the thread-state list `nlua_init_state` keeps.
+///
 /// # Safety
 /// Called by luv on a thread with no state of its own.
 pub(crate) unsafe extern "C-unwind" fn nlua_thread_acquire_vm() -> *mut lua_State {

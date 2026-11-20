@@ -239,6 +239,55 @@ describe('thread', function()
         },
       }, next_msg())
     end)
+
+    -- A debug build checks every editor-state access for the main thread,
+    -- so these fail there if the thread's functions reach editor state.
+    it('diff with options and on_hunk', function()
+      local refcount = exec_lua('return vim.api.nvim__stats().lua_refcount')
+      exec_lua [[
+        local entry = function(async)
+          local hunks = {}
+          local indices = vim.diff('a\nb\n', 'b\nc\n', { result_type = 'indices' })
+          vim.diff('a\n', 'b\n', {
+            on_hunk = function(...)
+              hunks[#hunks + 1] = { ... }
+            end,
+          })
+          local ok, err = pcall(vim.diff, 'a\n', 'b\n', { bogus = 1 })
+          async:send(vim.mpack.encode({ indices, hunks, ok, err }))
+        end
+        local on_async = function(ret)
+          vim.rpcnotify(1, 'result', vim.mpack.decode(ret))
+        end
+        local thread_test = Thread_Test.new(entry, on_async)
+        thread_test:do_test()
+      ]]
+
+      eq({
+        'notification',
+        'result',
+        { { { { 1, 1, 0, 0 }, { 2, 0, 2, 1 } }, { { 1, 1, 1, 1 } }, false, 'invalid key: bogus' } },
+      }, next_msg())
+      -- The callback's reference was the thread's, given back there.
+      eq(refcount, exec_lua('return vim.api.nvim__stats().lua_refcount'))
+    end)
+
+    it('require of a module not preloaded', function()
+      exec_lua [[
+        local entry = function(async)
+          local ok = pcall(require, 'no_such_module_anywhere')
+          local found = vim.api.nvim__get_runtime({ 'lua/no_such_module_anywhere.lua' }, false, { is_lua = true })
+          async:send(vim.mpack.encode({ ok, #found }))
+        end
+        local on_async = function(ret)
+          vim.rpcnotify(1, 'result', vim.mpack.decode(ret))
+        end
+        local thread_test = Thread_Test.new(entry, on_async)
+        thread_test:do_test()
+      ]]
+
+      eq({ 'notification', 'result', { { false, 0 } } }, next_msg())
+    end)
   end)
 end)
 

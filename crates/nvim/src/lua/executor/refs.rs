@@ -22,11 +22,12 @@ use crate::lua::ffi::LUA_NOREF;
 use crate::lua::stack::{At, Kind};
 use crate::lua::state::MAIN_REFS;
 use crate::types::LuaRef;
+use std::sync::atomic::Ordering;
 
 /// How many references the main state is holding — what the functional tests
 /// assert against to catch a leak.
 pub(crate) fn nlua_get_global_ref_count() -> c_int {
-    MAIN_REFS.get_field(|refs| &refs.ref_count)
+    MAIN_REFS.ref_count.load(Ordering::Relaxed)
 }
 
 /// Give up a reference the caller owns, against the main state. A sentinel
