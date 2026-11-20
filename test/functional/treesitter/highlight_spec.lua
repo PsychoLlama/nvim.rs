@@ -1476,12 +1476,13 @@ end)
 
 it('no nil index for missing highlight query', function()
   clear()
-  local cqueries = t.paths.test_source_path .. '/runtime/queries/c/'
-  os.rename(cqueries .. 'highlights.scm', cqueries .. '_highlights.scm')
-  finally(function()
-    os.rename(cqueries .. '_highlights.scm', cqueries .. 'highlights.scm')
-  end)
+  -- An empty query is no query (`vim.treesitter.query.get` answers nil), as
+  -- a missing file is. Not by renaming the runtime's file: that is shared
+  -- with every spec running beside this one (query_spec's "; extends" read
+  -- no base query while it was gone).
   exec_lua([[
+    vim.treesitter.query.set('c', 'highlights', '')
+    assert(vim.treesitter.query.get('c', 'highlights') == nil)
     local parser = vim.treesitter.get_parser(0, 'c')
     vim.treesitter.highlighter.new(parser)
   ]])
