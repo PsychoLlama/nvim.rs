@@ -535,16 +535,6 @@ impl Win {
         unsafe { Live::new(self.w_s) }
     }
 
-    /// [`Win::syn_block`], writable. The block may be the buffer's `b_s`, so
-    /// the borrow must not be held across anything that reaches the buffer
-    /// through another handle -- take it per access, as [`DerefMut`] is.
-    #[inline(always)]
-    pub fn syn_block_mut(&mut self) -> &mut SynBlock {
-        // SAFETY: as `syn_block`; `&mut self` keeps this handle from
-        // lending a second borrow of the block while this one lives.
-        unsafe { &mut *self.w_s }
-    }
-
     /// The window's cursor, which lives inside the window.
     #[inline(always)]
     pub fn cursor(self) -> PosRef {

@@ -59,6 +59,7 @@ use crate::option::vars::{P_ENC, p_enc};
 use crate::option::{split_option_part, valid_name};
 use crate::os::fs::os_remove;
 use crate::path::{path_fnamecmp, path_full_compare, tail_index};
+use crate::regexp::OwnedProg;
 use crate::regexp::{RE_MAGIC, vim_regcomp};
 use crate::spell::{LangId, LangP, SpellLang};
 use crate::spellfile::spell_load_file;
@@ -297,7 +298,7 @@ pub fn parse_spelllang(window: Win) -> Result<(), OptError> {
 
     // The SpellFileMissing autocommands may change 'spelllang' underfoot.
     let spl_copy = window.syn_block().b_p_spl.bytes().to_vec();
-    parse.window.syn_block_mut().b_cjk = 0;
+    parse.window.set_spell_cjk(false);
 
     let mut splp: &[u8] = &spl_copy;
     let mut result = Ok(());
@@ -312,12 +313,10 @@ pub fn parse_spelllang(window: Win) -> Result<(), OptError> {
 
     if result.is_ok() {
         parse.add_spellfiles();
-        let LangParse {
-            mut window, mut ga, ..
-        } = parse;
+        let LangParse { window, mut ga, .. } = parse;
         lend_tables(&mut ga);
         // Everything worked; publish the new list.
-        window.syn_block_mut().b_langp = ga;
+        window.set_spell_langs(ga);
         redraw_later(window, UPD_NOT_VALID);
     }
 
@@ -371,7 +370,7 @@ impl LangParse {
             return Ok(());
         }
         if cstr::until_nul(&self.lang) == b"cjk" {
-            self.window.syn_block_mut().b_cjk = 1;
+            self.window.set_spell_cjk(true);
             return Ok(());
         }
 
@@ -659,10 +658,8 @@ fn lend_tables(ga: &mut [LangP]) {
 }
 
 /// Forget the midword characters recorded for `window`.
-fn clear_midword(mut window: Win) {
-    let syn = window.syn_block_mut();
-    syn.b_spell_ismw = [false; 256];
-    syn.b_spell_ismw_mb = Vec::new();
+fn clear_midword(window: Win) {
+    window.clear_spell_midword();
 }
 
 /// The index of region `region[..2]` in `regions` (which is `sl_regions`,
@@ -789,22 +786,65 @@ pub fn compile_cap_prog(synblock: &mut SynBlock) -> Result<(), OptError> {
 /// `b_spell_ismw_mb` string, which is scanned instead.
 ///
 /// [`spell_iswordp`]: super::chartab::spell_iswordp
-fn use_midword(id: LangId, mut window: Win) {
+fn use_midword(id: LangId, window: Win) {
     let midword = with_lang(id, |slang| slang.sl_midword.clone()).unwrap_or_default();
-    let syn = window.syn_block_mut();
-    let mut p = 0;
-    while p < midword.len() {
-        let rest = &midword[p..];
-        let c = char_at(rest);
-        let l = c_cluster_len(rest).max(1);
-        if let Ok(c) = usize::try_from(c.get())
-            && c < 256
-            && l <= 2
-        {
-            syn.b_spell_ismw[c] = true;
-        } else {
-            syn.b_spell_ismw_mb.extend_from_slice(&rest[..l]);
+    window.add_spell_midword(&midword);
+}
+
+/// The spell state a window's syntax block keeps, written in place.
+///
+/// The block may be the buffer's own `b_s`, reached through any copy of
+/// the buffer or of another window on it, so no `&mut` to it leaves these:
+/// each makes its write through a borrow that ends before it returns, and
+/// touches nothing but the block (no handle, no global write, no user
+/// code) while it holds one -- what an assignment drops is plain data, a
+/// language list or a compiled program.
+impl Win {
+    /// Whether `'spelllang'` named `cjk`: `b_cjk`.
+    pub(super) fn set_spell_cjk(self, cjk: bool) {
+        self.syntax().b_cjk = c_int::from(cjk);
+    }
+
+    /// Publish the languages `'spelllang'` resolved to: `b_langp`.
+    pub(super) fn set_spell_langs(self, langs: Vec<LangP>) {
+        self.syntax().b_langp = langs;
+    }
+
+    /// Take the compiled `'spellcapcheck'` out for a match, leaving none.
+    pub(super) fn take_cap_prog(self) -> Option<OwnedProg> {
+        self.syntax().b_cap_prog.take()
+    }
+
+    /// Put the compiled `'spellcapcheck'` back (or a new one).
+    pub(super) fn set_cap_prog(self, prog: Option<OwnedProg>) {
+        self.syntax().b_cap_prog = prog;
+    }
+
+    /// Forget the midword characters.
+    fn clear_spell_midword(self) {
+        let mut syn = self.syntax();
+        syn.b_spell_ismw = [false; 256];
+        syn.b_spell_ismw_mb = Vec::new();
+    }
+
+    /// Record `midword`'s characters as midword characters, beside those
+    /// already recorded.
+    fn add_spell_midword(self, midword: &[u8]) {
+        let mut syn = self.syntax();
+        let mut p = 0;
+        while p < midword.len() {
+            let rest = &midword[p..];
+            let c = char_at(rest);
+            let l = c_cluster_len(rest).max(1);
+            if let Ok(c) = usize::try_from(c.get())
+                && c < 256
+                && l <= 2
+            {
+                syn.b_spell_ismw[c] = true;
+            } else {
+                syn.b_spell_ismw_mb.extend_from_slice(&rest[..l]);
+            }
+            p += l;
         }
-        p += l;
     }
 }

@@ -247,7 +247,7 @@ impl LineSetup {
     ///
     /// An error raised while parsing disables syntax for the buffer rather
     /// than being reported once per redraw.
-    fn start_syntax(&mut self, mut window: Win, lnum: LineNr) {
+    fn start_syntax(&mut self, window: Win, lnum: LineNr) {
         if !syntax_present(window)
             || window.syn_block().b_syn_error
             || window.syn_block().b_syn_slow
@@ -259,7 +259,7 @@ impl LineSetup {
         DID_EMSG.set(0);
         window.syntax_start(lnum);
         if DID_EMSG.get() != 0 {
-            window.syn_block_mut().b_syn_error = true;
+            window.set_syn_error();
         } else {
             DID_EMSG.set(save_did_emsg);
             if !window.syn_block().b_syn_slow {

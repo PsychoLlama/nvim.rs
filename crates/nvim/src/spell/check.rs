@@ -126,10 +126,9 @@ impl Win {
             && self.syn_block().b_cap_prog.is_some()
         {
             // Did a sentence end here?
-            let mut block = self;
-            let mut regmatch = RegMatch::new(block.syn_block_mut().b_cap_prog.take(), false);
+            let mut regmatch = RegMatch::new(self.take_cap_prog(), false);
             let r = vim_regexec(&mut regmatch, &c_text(text), 0);
-            block.syn_block_mut().b_cap_prog = regmatch.regprog.take();
+            self.set_cap_prog(regmatch.regprog.take());
             if let Some(end) = regmatch.ends[0]
                 && r
             {
@@ -405,7 +404,7 @@ pub fn no_spell_checking(window: Win) -> bool {
 /// The question is whether a sentence ends just before it. At the start of
 /// a line that means looking at the previous line, with a space standing
 /// in for the line break.
-pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
+pub fn check_need_cap(window: Win, lnum: LineNr, col: ColNr) -> bool {
     if window.syn_block().b_cap_prog.is_none() {
         return false;
     }
@@ -432,7 +431,7 @@ pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
 
     // Does a sentence end before the word?
     let mut need_cap = false;
-    let mut regmatch = RegMatch::new(window.syn_block_mut().b_cap_prog.take(), false);
+    let mut regmatch = RegMatch::new(window.take_cap_prog(), false);
     // The walk starts at `endcol` and only ever moves back.
     let mut at = endcol;
     loop {
@@ -448,7 +447,7 @@ pub fn check_need_cap(mut window: Win, lnum: LineNr, col: ColNr) -> bool {
             break;
         }
     }
-    window.syn_block_mut().b_cap_prog = regmatch.regprog.take();
+    window.set_cap_prog(regmatch.regprog.take());
     need_cap
 }
 

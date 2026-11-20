@@ -315,7 +315,7 @@ impl Cells {
     /// whether it is in the `@Spell` cluster.
     pub(super) fn syntax_attr(
         &mut self,
-        mut window: Win,
+        window: Win,
         f: &LineFrame<'_>,
         at: ::core::ffi::c_int,
         can_spell: &mut bool,
@@ -333,7 +333,7 @@ impl Cells {
         self.decor_attr = cell.attr;
 
         if DID_EMSG.get() != 0 {
-            window.syn_block_mut().b_syn_error = true;
+            window.set_syn_error();
             self.has_syntax = false;
         } else {
             DID_EMSG.set(save_did_emsg);

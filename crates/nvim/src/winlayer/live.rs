@@ -276,8 +276,8 @@ mod tests {
         assert_eq!(through_window, through_buffer);
         through_window.b_syn_ic = 1;
         assert_eq!(through_buffer.b_syn_ic, 1);
-        win.syn_block_mut().b_syn_spell = 2;
-        assert_eq!(buffer.syntax().b_syn_spell, 2);
+        win.set_syn_error();
+        assert!(buffer.syntax().b_syn_error);
         assert_eq!(win.syn_block().b_syn_ic, 1);
         win.w_s = ::core::ptr::null_mut();
         free_bare_window(win);

@@ -474,6 +474,17 @@ impl SynBlockRef {
     }
 }
 
+impl Win {
+    /// Say the window's syntax failed while it drew: `b_syn_error`, which
+    /// stops syntax highlighting it until the syntax is cleared.
+    ///
+    /// A write in place rather than a `&mut` to the block, which may be the
+    /// buffer's own `b_s`: the borrow ends before this returns.
+    pub(crate) fn set_syn_error(self) {
+        self.syntax().b_syn_error = true;
+    }
+}
+
 /// Number of patterns in [`cur_syn_block`].
 #[inline]
 pub(crate) fn cur_pattern_count() -> ::core::ffi::c_int {

@@ -269,7 +269,7 @@ gains a `Cell` or a raw pointer fails to build.
 `Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, `Live<T>`, `GridRef`, `Term`:
 `Deref`/`DerefMut` from a `Copy` value. Constructors are `unsafe` (or the
 registries, which check); every dereference after is safe and unchecked.
-Rows: the eight `Deref`/`DerefMut` pairs; `Win::syn_block`/`syn_block_mut`
+Rows: the eight `Deref`/`DerefMut` pairs; `Win::syn_block`/~~`syn_block_mut`~~
 (may be the buffer's `b_s`); ~~`GridRef::of_cell` (a cell's grid outside its
 tracker)~~; ~~`GridRef`'s null "unresolved" form~~; `memline::held_line` (a
 line's bytes for the life of a `&Buf`, i.e. a local).
@@ -305,6 +305,18 @@ line's bytes for the life of a `&Buf`, i.e. a local).
   hold, keeping its order) and `terminal::with_vt` sends once `vt` is let
   go. Not measured: no bench drives a terminal,
   and the borrow flags sit on per-chunk and per-row paths.
+- **Closed — `Win::syn_block_mut` (type holds it):** ~~`syn_block_mut`~~
+  is gone. Its twelve writes are in-place writers on `Win` —
+  `set_syn_error` (`syntax/mod.rs`), and `set_spell_cjk`,
+  `set_spell_langs`, `take_cap_prog`/`set_cap_prog` and the two midword
+  writers (`spell/lang.rs`) — each storing through a borrow that ends
+  before it returns and touching only the block (what an assignment drops
+  is a language list or a compiled program: plain data). The
+  `'spellcapcheck'` program a match runs is taken out and put back, so no
+  borrow of the block is held across `vim_regexec`. What is left is the
+  read half (`syn_block()`'s `&SynBlock` held across a write through
+  another copy) and `Win::syntax()`, a `Live<SynBlock>` whose `DerefMut`
+  is the `Live<T>` users row below. No instruction cost: the same stores.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with
@@ -313,7 +325,8 @@ line's bytes for the life of a `&Buf`, i.e. a local).
 
 - **Breaks — aliasing:** two copies give two live `&mut`
   (`let c = &mut w1.w_cursor; w2.w_cursor.lnum = 1; c.col = 0`);
-  `syn_block_mut()` held while the buffer's block is reached through a `Buf`;
+  ~~`syn_block_mut()` held while the buffer's block is reached through a
+  `Buf`~~;
   `GRID.with(|g| { grid_ref.cols = 0; g.cols })`; `held_line`'s slice
   outliving the cache when a copy of the `Buf` reads another line.
 - **Breaks — liveness:** a handle held across a call that runs user code
@@ -326,7 +339,7 @@ line's bytes for the life of a `&Buf`, i.e. a local).
   measurement. Aliasing: no `DerefMut` on a `Copy` type — reads by `&`
   through a checked handle, writes through a scoped, tracked `with_mut`
   (S1's tracker keyed by object). Order: ~~`GridRef` + `of_cell` (S)~~, ~~`Term`
-  (S)~~, `syn_block_mut` (13 sites, S), `held_line` (the matcher's line
+  (S)~~, ~~`syn_block_mut` (13 sites, S)~~, `held_line` (the matcher's line
   cursor, M), `Live<T>` users (M), then `Win`/`Buf`/`TabPage` (XL; 553 files
   name them). **XL** overall.
 
