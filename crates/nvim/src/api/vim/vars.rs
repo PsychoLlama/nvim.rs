@@ -65,6 +65,7 @@ pub fn nvim_get_var(name: ApiString) -> Result<Object, Error> {
 fn globvar_object(name: &ApiString) -> Option<Object> {
     // The borrow ends with the conversion, which runs no user code.
     globvar_dict()
+        .read()
         .find(name.as_bytes())
         .map(|item| Object::from(&item.di_tv))
 }

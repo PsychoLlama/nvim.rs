@@ -68,7 +68,7 @@ fn find_some_match(args: &[TypVal], result: &mut TypVal, kind: SomeMatchType) {
     // placeholder seeded above comes back out.
     if kind == SOME_MATCH_STR_POS
         && list.is_none()
-        && let Some(seeded) = result.list_mut()
+        && let Some(mut seeded) = result.list_mut()
     {
         drop(seeded.take_range(1, 1));
     }
@@ -84,7 +84,7 @@ fn seed_answer(result: &mut TypVal, kind: SomeMatchType) {
         SOME_MATCH_STR_POS => {
             // Seeded with the "no match" answer, which the caller trims
             // back to three items for a String subject.
-            let seeded = tv_list_alloc_ret(result, 4);
+            let mut seeded = tv_list_alloc_ret(result, 4);
             seeded.push_bytes(Some(b""));
             seeded.push_number(-1);
             seeded.push_number(-1);
@@ -176,7 +176,7 @@ impl<'a> MatchWalk<'a> {
             return None;
         }
         if let Some(list) = list {
-            walk.idx = list_uidx(Some(list), number_as_int(start));
+            walk.idx = list_uidx(Some(&list.read()), number_as_int(start));
             walk.at = usize::try_from(walk.idx).ok()?;
         } else {
             let start = usize::try_from(start).unwrap_or(0);
@@ -212,8 +212,7 @@ impl<'a> MatchWalk<'a> {
     ) -> Option<RegMatch> {
         loop {
             let subject = if let Some(list) = self.list {
-                let item = list_items(Some(list)).get(self.at)?;
-                *echoed = encode_tv2echo(&item.li_tv);
+                *echoed = encode_tv2echo(&list.read().items().get(self.at)?.li_tv);
                 echoed.as_cstr()
             } else {
                 &self.whole[self.skipped..]
@@ -252,7 +251,8 @@ impl<'a> MatchWalk<'a> {
         match kind {
             SOME_MATCH_STR_POS => {
                 // The four items seeded, overwritten in place.
-                let seeded = list_items_mut(result.list_mut());
+                let mut seeded = result.list_mut();
+                let seeded = list_items_mut(seeded.as_deref_mut());
                 drop(seeded[0].li_tv.take_string());
                 let span = hit.group(0).unwrap_or(0..0);
                 seeded[0]
@@ -269,7 +269,7 @@ impl<'a> MatchWalk<'a> {
                 }
             }
             SOME_MATCH_LIST => {
-                let out = result.list_mut().expect("the list seeded");
+                let mut out = result.list_mut().expect("the list seeded");
                 for i in 0..NSUBEXP as usize {
                     out.push_bytes(hit.group_bytes(i, subject));
                 }
@@ -278,7 +278,7 @@ impl<'a> MatchWalk<'a> {
                 if let Some(list) = self.list {
                     // A List subject answers with the whole item, not with
                     // the part that matched.
-                    tv_copy(&list_items(Some(list))[self.at].li_tv, result);
+                    tv_copy(&list_items(Some(&list.read()))[self.at].li_tv, result);
                 } else {
                     let span = hit.group(0).unwrap_or(0..0);
                     result.write_string(Some(ThinCString::from_bytes(&subject[span])));
@@ -312,8 +312,8 @@ fn get_matches_in_str(
     let bytes = text.to_bytes();
     let mut startidx = 0;
     while let Some(hit) = prog.exec_nl(text, startidx, ignore_case) {
-        let mut held = tv_dict_alloc();
-        let found = &mut *held;
+        let held = tv_dict_alloc();
+        let mut found = held.edit();
         // A buffer's matches are keyed by line number, a List's by the
         // index of the item they came from.
         let key: &[u8] = if matchbuf { b"lnum" } else { b"idx" };
@@ -330,6 +330,7 @@ fn get_matches_in_str(
             }
             let _ = found.add_list(b"submatches", Some(groups));
         }
+        drop(found);
         out.push_dict(Some(held));
         // Resume past this match; stop at the end of the string, and
         // stop on a match that did not advance.
@@ -399,14 +400,14 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let Some((mut prog, ignore_case)) = compile(pat) else {
         return;
     };
-    let out = result.list_mut().expect("the list allocated above");
+    let mut out = result.list_mut().expect("the list allocated above");
     let mut lines = Lines::in_buffer(buf);
     while slnum <= elnum {
         let text = lines.line_cstr(slnum, 0);
         get_matches_in_str(
             text,
             (&mut prog, ignore_case),
-            out,
+            &mut out,
             slnum.get(),
             submatches,
             true,
@@ -422,7 +423,8 @@ fn want_submatches(args: &[TypVal], i: usize) -> Result<bool, Failed> {
     if args.len() <= i {
         return Ok(false);
     }
-    let Some(di) = dict_find(args[i].dict_ref(), b"submatches") else {
+    let held = args[i].dict_ref();
+    let Some(di) = dict_find(held.as_deref(), b"submatches") else {
         return Ok(false);
     };
     if di.di_tv.v_type() != VAR_BOOL {
@@ -484,13 +486,20 @@ pub fn f_matchstrlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     let Ok(submatches) = want_submatches(args, 2) else {
         return;
     };
-    let out = result.list_mut().expect("the list allocated above");
+    let mut out = result.list_mut().expect("the list allocated above");
     // Matching runs no user code, so the items can be walked in place.
     for (at, item) in list.items().iter().enumerate() {
         // A non-String item, and the null String, contribute nothing.
         if let Some(text) = item.li_tv.string_cstr() {
             let idx = index_of(at);
-            get_matches_in_str(text, (&mut prog, ignore_case), out, idx, submatches, false);
+            get_matches_in_str(
+                text,
+                (&mut prog, ignore_case),
+                &mut out,
+                idx,
+                submatches,
+                false,
+            );
         }
     }
 }
@@ -552,29 +561,34 @@ fn fuzzy_match_in_list(list: &ListRef, request: &Request) -> Vec<FuzzyItem> {
     let pattern = request.pattern;
     let mut found: Vec<FuzzyItem> = Vec::new();
     let mut matches = [0u32; FUZZY_MATCH_MAX_LEN];
-    let len = list.items().len();
+    let len = list.read().items().len();
     let mut at = 0;
-    while at < len.min(list.items().len()) {
+    while at < len.min(list.read().items().len()) {
         if request.limit > 0 && found.len() >= as_index(request.limit) {
             break;
         }
         let mut rettv = TypVal::Unknown;
-        let kind = list.items()[at].li_tv.v_type();
+        // A copy of the item, so that no borrow of the list spans the
+        // callback below.
+        let item = list.read().items()[at].li_tv.clone();
+        let kind = item.v_type();
+        let item_dict;
         let itemstr = if kind == VAR_STRING {
-            list.items()[at].li_tv.string_cstr()
+            item.string_cstr()
         } else if kind != VAR_DICT {
             None
         } else {
             match request.source {
                 Source::Item => None,
                 Source::Key(key) => {
-                    numbuf.dict_string(list.items()[at].li_tv.dict_ref(), key.to_bytes())
+                    item_dict = item.dict_ref();
+                    numbuf.dict_string(item_dict.as_deref(), key.to_bytes())
                 }
                 Source::Callback(cb) => {
                     // The callback is handed the dict, which it must not be
                     // able to free out from under this loop: the argument
                     // holds a reference of its own for the call.
-                    let argv = [TypVal::dict(list.items()[at].li_tv.dict_handle())];
+                    let argv = [TypVal::dict(item.dict_handle())];
                     let called = callback_call(cb, &argv, &mut rettv) == Ok(true);
                     drop(argv);
                     if called && rettv.v_type() == VAR_STRING {
@@ -670,7 +684,8 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
                 semsg!("E475: Invalid value for argument {}: {got}", "key");
                 return;
             }
-            key = Some(numbuf3.string(&di.di_tv));
+            // Copied out: the dictionary is not held across the search.
+            key = Some(ThinCString::from_cstr(numbuf3.string(&di.di_tv)));
         } else if let Err(refused) = dict_get_callback(args[2].dict_shared(), b"text_cb", &mut cb) {
             refused.report();
             semsg!("E475: Invalid value for argument {}", "text_cb");
@@ -684,12 +699,13 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
             limit = number_as_int(tv_get_number_chk(&di.di_tv).unwrap_or(-1));
         }
         matchseq = d.has_key(b"matchseq");
+        drop(d);
     }
 
     let request = Request {
         pattern: numbuf4.string(pat),
-        source: if let Some(key) = key {
-            Source::Key(key)
+        source: if let Some(key) = &key {
+            Source::Key(key.as_cstr())
         } else if cb.is_set() {
             Source::Callback(&cb)
         } else {
@@ -709,7 +725,7 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
     for item in &found {
         // A callback above may have shortened the list, in which case the
         // item it matched is simply gone.
-        if let Some(li) = list.items().get(item.at) {
+        if let Some(li) = list.read().items().get(item.at) {
             strings.edit().push_copy(&li.li_tv);
         }
     }
@@ -717,7 +733,7 @@ fn do_fuzzymatch(args: &[TypVal], result: &mut TypVal, retmatchpos: bool) {
         result.write_list(Some(strings));
         return;
     }
-    let out = tv_list_alloc_ret(result, 3);
+    let mut out = tv_list_alloc_ret(result, 3);
     let positions = tv_list_alloc(LIST_LEN_UNKNOWN as isize);
     let scores = tv_list_alloc(LIST_LEN_UNKNOWN as isize);
     for item in found {

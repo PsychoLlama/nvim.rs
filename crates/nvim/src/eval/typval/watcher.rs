@@ -105,16 +105,16 @@ pub fn dict_watcher_notify(
     newtv: Option<&TypVal>,
     oldtv: Option<&TypVal>,
 ) {
-    let mut event = tv_dict_alloc();
+    let event = tv_dict_alloc();
     // A `&[u8]` is upstream's `S_LEN(…)`: the key is copied at exactly the
     // length given, and the item appends the NUL itself.
     if let Some(newtv) = newtv {
-        let _ = event.add_tv(b"new", newtv);
+        let _ = event.edit().add_tv(b"new", newtv);
     }
     if let Some(oldtv) = oldtv
         && oldtv.v_type() != VAR_UNKNOWN
     {
-        let _ = event.add_tv(b"old", oldtv);
+        let _ = event.edit().add_tv(b"old", oldtv);
     }
 
     // Slot 0 is the reference the callbacks run under: one of them may drop
@@ -129,10 +129,14 @@ pub fn dict_watcher_notify(
     // a watcher a callback appends behind the last one is not visited by
     // this walk, and one appended while others are still ahead of it is.
     // The next watcher is held, not indexed, and found again afterwards.
-    let mut next = dict.watchers.first().cloned();
+    let mut next = dict.read().watchers.first().cloned();
     while let Some(watcher) = next.take() {
-        let at = dict.watchers.iter().position(|w| Rc::ptr_eq(w, &watcher));
-        next = at.and_then(|at| dict.watchers.get(at + 1)).cloned();
+        let at = dict
+            .read()
+            .watchers
+            .iter()
+            .position(|w| Rc::ptr_eq(w, &watcher));
+        next = at.and_then(|at| dict.read().watchers.get(at + 1).cloned());
         if watcher.busy.get() || !watcher.matches(key.to_bytes()) {
             continue;
         }
@@ -168,12 +172,17 @@ mod tests {
 
     /// The watchers of `d`, in registration order, as their patterns.
     fn patterns(d: &DictRef) -> Vec<Vec<u8>> {
-        d.watchers.iter().map(|w| w.key_pattern.clone()).collect()
+        d.read()
+            .watchers
+            .iter()
+            .map(|w| w.key_pattern.clone())
+            .collect()
     }
 
     /// The first watcher of `d` whose pattern is `pattern`.
     fn watcher_of(d: &DictRef, pattern: &[u8]) -> Rc<DictWatcher> {
-        d.watchers
+        d.read()
+            .watchers
             .iter()
             .find(|w| w.key_pattern == pattern)
             .cloned()
@@ -188,10 +197,10 @@ mod tests {
     #[test]
     fn removing_a_watcher_takes_only_the_exact_registration() {
         let _serial = editor_state_lock();
-        let mut d = tv_dict_alloc();
-        d.watcher_add(b"a*", never_called(c"NeverCalledA"));
-        d.watcher_add(b"abc", never_called(c"NeverCalledB"));
-        d.watcher_add(b"*", never_called(c"NeverCalledA"));
+        let d = tv_dict_alloc();
+        d.edit().watcher_add(b"a*", never_called(c"NeverCalledA"));
+        d.edit().watcher_add(b"abc", never_called(c"NeverCalledB"));
+        d.edit().watcher_add(b"*", never_called(c"NeverCalledA"));
         assert_eq!(
             patterns(&d),
             [b"a*".to_vec(), b"abc".to_vec(), b"*".to_vec()]
@@ -200,15 +209,18 @@ mod tests {
         let mut a = never_called(c"NeverCalledA");
         let mut b = never_called(c"NeverCalledB");
         // The pattern matches but the callback does not, and vice versa.
-        assert!(!d.watcher_remove(b"abc", &a));
-        assert!(!d.watcher_remove(b"zz", &a));
-        assert!(!d.watcher_remove(b"a", &a), "a prefix of the pattern");
+        assert!(!d.edit().watcher_remove(b"abc", &a));
+        assert!(!d.edit().watcher_remove(b"zz", &a));
+        assert!(
+            !d.edit().watcher_remove(b"a", &a),
+            "a prefix of the pattern"
+        );
         assert_eq!(patterns(&d).len(), 3);
 
-        assert!(d.watcher_remove(b"abc", &b));
+        assert!(d.edit().watcher_remove(b"abc", &b));
         assert_eq!(patterns(&d), [b"a*".to_vec(), b"*".to_vec()]);
-        assert!(!d.watcher_remove(b"abc", &b), "already gone");
-        assert!(d.watcher_remove(b"*", &a));
+        assert!(!d.edit().watcher_remove(b"abc", &b), "already gone");
+        assert!(d.edit().watcher_remove(b"*", &a));
         assert_eq!(patterns(&d), [b"a*".to_vec()]);
 
         // The probes stay the caller's.
@@ -221,9 +233,9 @@ mod tests {
     #[test]
     fn a_pattern_matches_exactly_or_by_its_prefix() {
         let _serial = editor_state_lock();
-        let mut d = tv_dict_alloc();
+        let d = tv_dict_alloc();
         for pattern in [&b"*"[..], b"a*", b"abc", b""] {
-            d.watcher_add(pattern, Callback::None);
+            d.edit().watcher_add(pattern, Callback::None);
         }
         assert!(matches(&d, b"*", c"anything"));
         assert!(matches(&d, b"*", c""));
@@ -236,7 +248,7 @@ mod tests {
         assert!(matches(&d, b"", c""));
         assert!(!matches(&d, b"", c"a"));
         // `Callback::None` equals itself, so it can be removed by pattern.
-        assert!(d.watcher_remove(b"", &Callback::None));
+        assert!(d.edit().watcher_remove(b"", &Callback::None));
         assert_eq!(patterns(&d).len(), 3);
     }
 
@@ -245,10 +257,10 @@ mod tests {
     #[test]
     fn freeing_a_watched_dict_frees_its_watchers() {
         let _serial = editor_state_lock();
-        let mut d = tv_dict_alloc();
-        d.watcher_add(b"*", never_called(c"NeverCalledA"));
-        d.watcher_add(b"k", never_called(c"NeverCalledB"));
-        d.add_number(b"k", 1).expect("a key used once");
+        let d = tv_dict_alloc();
+        d.edit().watcher_add(b"*", never_called(c"NeverCalledA"));
+        d.edit().watcher_add(b"k", never_called(c"NeverCalledB"));
+        d.edit().add_number(b"k", 1).expect("a key used once");
         drop(d);
     }
 
@@ -258,25 +270,25 @@ mod tests {
     #[test]
     fn removing_a_watcher_while_one_is_busy_defers_the_free() {
         let _serial = editor_state_lock();
-        let mut d = tv_dict_alloc();
-        d.watcher_add(b"x", never_called(c"NeverCalledA"));
-        d.watcher_add(b"y", never_called(c"NeverCalledB"));
+        let d = tv_dict_alloc();
+        d.edit().watcher_add(b"x", never_called(c"NeverCalledA"));
+        d.edit().watcher_add(b"y", never_called(c"NeverCalledB"));
         let busy = watcher_of(&d, b"x");
         busy.busy.set(true);
 
         let mut probe = never_called(c"NeverCalledB");
-        assert!(d.watcher_remove(b"y", &probe));
+        assert!(d.edit().watcher_remove(b"y", &probe));
         // Still registered, marked.
         assert_eq!(patterns(&d), [b"x".to_vec(), b"y".to_vec()]);
         assert!(watcher_of(&d, b"y").needs_free.get());
         // A second removal finds it again and marks it again.
-        assert!(d.watcher_remove(b"y", &probe));
+        assert!(d.edit().watcher_remove(b"y", &probe));
 
         // With nothing busy, a removal takes it out at once.
         busy.busy.set(false);
         drop(busy);
         let mut a = never_called(c"NeverCalledA");
-        assert!(d.watcher_remove(b"x", &a));
+        assert!(d.edit().watcher_remove(b"x", &a));
         assert_eq!(patterns(&d), [b"y".to_vec()]);
 
         probe.clear();
@@ -291,12 +303,12 @@ mod tests {
     #[test]
     fn a_notification_nothing_matches_leaves_the_queue_alone() {
         let _serial = editor_state_lock();
-        let mut d = tv_dict_alloc();
-        d.watcher_add(b"x", never_called(c"NeverCalledA"));
+        let d = tv_dict_alloc();
+        d.edit().watcher_add(b"x", never_called(c"NeverCalledA"));
         watcher_of(&d, b"x").needs_free.set(true);
-        let refs = d.dv_refcount.get();
+        let refs = d.read().dv_refcount.get();
         dict_watcher_notify(&d, c"other", Some(&TypVal::Number(1)), None);
-        assert_eq!(d.dv_refcount.get(), refs);
+        assert_eq!(d.read().dv_refcount.get(), refs);
         assert_eq!(patterns(&d), [b"x".to_vec()]);
         drop(d);
     }

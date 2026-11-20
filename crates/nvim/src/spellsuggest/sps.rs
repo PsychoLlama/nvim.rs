@@ -113,10 +113,10 @@ pub(super) fn spell_suggest_expr(su: &mut SugInfo, expr: &[u8]) {
     // The work is split up so that `SugInfo` need not be exported to
     // the evaluator.
     if let Some(list) = eval_spell_expr(su.badword(), expr) {
-        for li in list_iter(Some(&list)) {
+        for li in list_iter(Some(&list.read())) {
             if li.li_tv.v_type() == VAR_LIST {
                 // Each item is a [word, score] pair.
-                let Ok((word, score)) = get_spellword(li.li_tv.list_ref()) else {
+                let Ok((word, score)) = get_spellword(li.li_tv.list_ref().as_deref()) else {
                     continue;
                 };
                 if score >= 0 && score <= su.su_maxscore {

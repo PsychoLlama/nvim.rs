@@ -198,8 +198,8 @@ fn restart_server(excmd: &mut ExArg) {
     // The new server's environment is this one's, plus why it started:
     // set on the job, not here, where anything else this server starts
     // would see it too.
-    let mut env = create_environment(None, false, false, false, None);
-    let _ = env.add_str(ENV_STARTREASON.to_bytes(), Some(reason));
+    let env = create_environment(None, false, false, false, None);
+    let _ = env.edit().add_str(ENV_STARTREASON.to_bytes(), Some(reason));
     // `v:argv` names at least the program; an empty one starts nothing, as
     // a vector with no program cannot.
     let channel = (!words.is_empty())
@@ -310,10 +310,11 @@ fn restart_argv(no_ui: bool) -> (Vec<ThinCString>, Option<ThinCString>) {
     let argv_list = get_vim_var_list_handle(Vv::Argv);
 
     let mut words: Vec<ThinCString> =
-        Vec::with_capacity(as_index(list_len(argv_list.as_deref())) + 2);
+        Vec::with_capacity(as_index(list_len(argv_list.as_ref().map(|l| l.read()).as_deref())) + 2);
     let mut listen_arg: Option<ThinCString> = None;
 
-    let items = list_items(argv_list.as_deref());
+    let held = argv_list.as_ref().map(|l| l.read());
+    let items = list_items(held.as_deref());
     let mut at = 0;
     while at < items.len() {
         let arg = ThinCString::from_cstr(numbuf.string(&items[at].li_tv));

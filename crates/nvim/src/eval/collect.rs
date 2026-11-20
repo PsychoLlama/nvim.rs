@@ -274,7 +274,7 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
         let Some(dict) = registered_dict(idx) else {
             continue;
         };
-        if stale(dict.dv_copy_id, copy_id) {
+        if stale(dict.read().dv_copy_id, copy_id) {
             tv_dict_free_contents(&dict);
             did_free = true;
         }
@@ -285,7 +285,7 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
         let Some(list) = registered_list(idx) else {
             continue;
         };
-        if stale(list.copy_id(), copy_id) && !list_has_watchers(Some(&list)) {
+        if stale(list.read().copy_id(), copy_id) && !list_has_watchers(Some(&list.read())) {
             list_free_contents(&list);
             did_free = true;
         }
@@ -298,7 +298,7 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
         let Some(dict) = registered_dict(idx) else {
             continue;
         };
-        if stale(dict.dv_copy_id, copy_id) {
+        if stale(dict.read().dv_copy_id, copy_id) {
             free_registered_dict(dict);
         }
     }
@@ -306,7 +306,7 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
         let Some(list) = registered_list(idx) else {
             continue;
         };
-        if stale(list.lv_copy_id, copy_id) && !list_has_watchers(Some(&list)) {
+        if stale(list.read().lv_copy_id, copy_id) && !list_has_watchers(Some(&list.read())) {
             free_registered_list(list);
         }
     }
@@ -325,6 +325,16 @@ pub(crate) type ListStack = Vec<ListRef>;
 /// its own stack rather than recursing into them; nested lists go onto
 /// `list_stack` when there is one.
 ///
+/// A copy of `tv` for the marking walk to hold across a step that writes
+/// marks, or `None` for a value that holds nothing to mark (whose copy
+/// would only cost an allocation).
+fn markable(tv: &TypVal) -> Option<TypVal> {
+    match tv.v_type() {
+        VAR_LIST | VAR_DICT | VAR_PARTIAL | VAR_FUNC => Some(tv.clone()),
+        _ => None,
+    }
+}
+
 /// The dictionary itself is not marked: its holder does that.
 pub fn set_ref_in_dict_items(
     dict: &DictRef,
@@ -351,16 +361,16 @@ fn mark_dict_items(
     mut list_stack: Option<&mut ListStack>,
 ) -> bool {
     let mut slot = 0;
-    while slot < dict.dv_hashtab.slots().len() {
-        let item = dict.item_at(slot);
+    while slot < dict.read().dv_hashtab.slots().len() {
+        // What the item holds, by a reference of its own: marking writes
+        // the mark of every container it reaches, this one included.
+        let value = dict
+            .read()
+            .item_at(slot)
+            .and_then(|item| markable(&item.di_tv));
         slot += 1;
-        if let Some(item) = item
-            && set_ref_in_item(
-                &item.di_tv,
-                copy_id,
-                Some(ht_stack),
-                list_stack.as_deref_mut(),
-            )
+        if let Some(value) = value
+            && set_ref_in_item(&value, copy_id, Some(ht_stack), list_stack.as_deref_mut())
         {
             return true;
         }
@@ -393,14 +403,18 @@ fn mark_list_items(
     list_stack: &mut ListStack,
 ) -> bool {
     let mut at = 0;
-    while let Some(item) = list.items().get(at) {
+    while let Some(item) = {
+        list.read()
+            .items()
+            .get(at)
+            .map(|item| markable(&item.li_tv))
+    } {
         at += 1;
-        if set_ref_in_item(
-            &item.li_tv,
-            copy_id,
-            ht_stack.as_deref_mut(),
-            Some(list_stack),
-        ) {
+        // `markable`'s reason: marking writes the mark of this list too.
+        let Some(item) = item else {
+            continue;
+        };
+        if set_ref_in_item(&item, copy_id, ht_stack.as_deref_mut(), Some(list_stack)) {
             return true;
         }
     }
@@ -415,7 +429,7 @@ pub(crate) fn set_ref_in_item_dict(
     ht_stack: Option<&mut DictStack>,
     mut list_stack: Option<&mut ListStack>,
 ) -> bool {
-    if dd.dv_copy_id == copy_id {
+    if dd.read().dv_copy_id == copy_id {
         return false;
     }
     // Not seen yet.
@@ -429,7 +443,7 @@ pub(crate) fn set_ref_in_item_dict(
     // upstream's. A dictionary reached with no `ht_stack` — that is,
     // one recursed into directly — does not have them marked. A copy of the
     // list, so that no borrow of the dictionary spans the marking.
-    let watchers = dd.watchers.clone();
+    let watchers = dd.read().watchers.clone();
     for watcher in &watchers {
         set_ref_in_callback(
             &watcher.callback,
@@ -448,7 +462,7 @@ pub(crate) fn set_ref_in_item_list(
     ht_stack: Option<&mut DictStack>,
     list_stack: Option<&mut ListStack>,
 ) -> bool {
-    if ll.lv_copy_id == copy_id {
+    if ll.read().lv_copy_id == copy_id {
         return false;
     }
     ll.edit().lv_copy_id = copy_id;
@@ -569,8 +583,8 @@ pub(crate) fn var_item_copy(
             let copied = orig.and_then(|orig| {
                 // The copy it was given under this id, which gains this
                 // reference, or a fresh one.
-                orig.copy_under(copy_id)
-                    .or_else(|| list_copy(conv, orig, deep, copy_id))
+                // (The read ends before the copy, which marks `orig`.)
+                { orig.read().copy_under(copy_id) }.or_else(|| list_copy(conv, orig, deep, copy_id))
             });
             let failed = orig.is_some() && copied.is_none();
             to.write_list(copied);
@@ -583,8 +597,8 @@ pub(crate) fn var_item_copy(
             let copied = orig.and_then(|orig| {
                 // The copy it was given under this id, which gains this
                 // reference, or a fresh one.
-                orig.copy_under(copy_id)
-                    .or_else(|| dict_copy(conv, orig, deep, copy_id))
+                // (The read ends before the copy, which marks `orig`.)
+                { orig.read().copy_under(copy_id) }.or_else(|| dict_copy(conv, orig, deep, copy_id))
             });
             let failed = orig.is_some() && copied.is_none();
             to.write_dict(copied);

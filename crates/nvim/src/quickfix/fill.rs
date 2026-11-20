@@ -241,7 +241,7 @@ fn call_qftf_func(qfl: Qfl, qf_winid: c_int, start_idx: c_int, end_idx: c_int) -
     }
     RECURSIVE.set(true);
 
-    let mut dict = tv_dict_alloc_lock(VarLock::Fixed);
+    let dict = tv_dict_alloc_lock(VarLock::Fixed);
     let numbers = [
         (&b"quickfix"[..], VarNumber::from(qfl.kind == QFLT_QUICKFIX)),
         (b"winid", VarNumber::from(qf_winid)),
@@ -250,7 +250,7 @@ fn call_qftf_func(qfl: Qfl, qf_winid: c_int, start_idx: c_int, end_idx: c_int) -
         (b"end_idx", VarNumber::from(end_idx)),
     ];
     for (key, value) in numbers {
-        let _ = dict.add_number(key, value);
+        let _ = dict.edit().add_number(key, value);
     }
     let mut args = CallFrame::<1>::new();
     args.push_owned(TypVal::dict(Some(dict)));
@@ -407,11 +407,12 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
             // answer is ignored too.
             let mut text_func = None;
             let have_item = qftf_list
-                .as_deref()
-                .is_some_and(|list| list_items(Some(list)).get(qftf_at).is_some());
+                .as_ref()
+                .map(ListRef::read)
+                .is_some_and(|list| list_items(Some(&list)).get(qftf_at).is_some());
             if have_item && !invalid_val {
-                let list = qftf_list.as_deref();
-                let item = &list_items(list)[qftf_at];
+                let list = qftf_list.as_ref().map(ListRef::read);
+                let item = &list_items(list.as_deref())[qftf_at];
                 match cstr_of_chk(&item.li_tv, &mut numbuf) {
                     Some(text) => text_func = Some(text.to_bytes().to_vec()),
                     None => invalid_val = true,

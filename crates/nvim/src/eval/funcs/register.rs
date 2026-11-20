@@ -12,6 +12,7 @@
 use super::wrappers::{arg_number_chk, dict_alloc_ret};
 use crate::cstr;
 use crate::eval::funcs::builtin::EvalFuncData;
+use crate::eval::typval::Edit;
 use crate::eval::typval::{NumBuf, dict_get_number, dict_len, list_iter, tv_list_alloc};
 use crate::eval::vars::with_vim_var_str;
 use crate::getchar::state::{REG_EXECUTING, REG_RECORDED, REG_RECORDING};
@@ -135,7 +136,7 @@ pub fn f_getreginfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 
 /// The dictionary `getreginfo()` is filling in.
-fn dict(result: &mut TypVal) -> &mut Dict {
+fn dict(result: &mut TypVal) -> Edit<'_, Dict> {
     result.dict_mut().expect("just allocated")
 }
 
@@ -212,13 +213,13 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
     let mut yank_type: MotionType = MotionType::Unknown;
     let mut block_len: c_int = -1;
-    let regcontents: Option<&TypVal>;
+    let regcontents: Option<TypVal>;
     let mut pointreg: RegName = RegName::UNNAMED;
 
     if args[1].v_type() == VAR_DICT {
         let d_ref = args[1].dict_ref();
         // An empty dict clears the register outright.
-        if dict_len(d_ref) == 0 {
+        if dict_len(d_ref.as_deref()) == 0 {
             write_reg_contents_lst(
                 RegName::from_byte(regname),
                 &[],
@@ -231,9 +232,10 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // The value is copied out before the register writer runs, which
         // for `"*`/`"+` calls the provider.
         regcontents = d_ref
+            .as_ref()
             .and_then(|dict| dict.find(b"regcontents"))
-            .map(|item| &item.di_tv);
-        if let Some(stropt) = numbuf2.dict_string(d_ref, b"regtype") {
+            .map(|item| item.di_tv.clone());
+        if let Some(stropt) = numbuf2.dict_string(d_ref.as_deref(), b"regtype") {
             let text = stropt.to_bytes();
             let mut at = 0;
             // The type must be exactly one letter (plus a width), so
@@ -248,15 +250,15 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
         }
         if regname == b'"' {
-            if let Some(stropt) = numbuf3.dict_string(d_ref, b"points_to") {
+            if let Some(stropt) = numbuf3.dict_string(d_ref.as_deref(), b"points_to") {
                 pointreg = RegName::from_byte(cstr::byte_at(stropt.to_bytes(), 0));
                 regname = pointreg.byte();
             }
-        } else if dict_get_number(d_ref, b"isunnamed") != 0 {
+        } else if dict_get_number(d_ref.as_deref(), b"isunnamed") != 0 {
             pointreg = RegName::from_byte(regname);
         }
     } else {
-        regcontents = Some(&args[1]);
+        regcontents = Some(args[1].clone());
     }
 
     let mut append = false;
@@ -287,7 +289,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
 
-    if let Some(contents) = regcontents
+    if let Some(contents) = &regcontents
         && contents.v_type() == VAR_LIST
     {
         // An item that is not a String does not make the call fail: it
@@ -302,7 +304,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 block_len,
             );
         }
-    } else if let Some(contents) = regcontents {
+    } else if let Some(contents) = &regcontents {
         let Ok(strval) = numbuf5.string_chk(contents) else {
             return;
         };
@@ -328,7 +330,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// conversion's error -- at the first item that is not one.
 fn list_lines(contents: &TypVal) -> Option<Vec<ThinCString>> {
     let mut lines = Vec::new();
-    for item in list_iter(contents.list_ref()) {
+    for item in list_iter(contents.list_ref().as_deref()) {
         let mut buf = NumBuf::new();
         lines.push(ThinCString::from_cstr(buf.string_chk(&item.li_tv).ok()?));
     }

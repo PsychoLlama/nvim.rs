@@ -412,8 +412,8 @@ fn read_file_or_blob(args: &[TypVal], result: &mut TypVal, always_blob: bool) {
             let name = msg_cstr(fname);
             semsg!("E485: Can't read file {name}");
         }
-    } else if let Some(lines) = result.list_mut() {
-        read_lines(&mut fd, lines, binary, maxline);
+    } else if let Some(mut lines) = result.list_mut() {
+        read_lines(&mut fd, &mut lines, binary, maxline);
     }
 }
 

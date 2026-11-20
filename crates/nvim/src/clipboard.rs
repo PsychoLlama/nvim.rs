@@ -155,7 +155,8 @@ fn register_from_provider(result: &TypVal) -> Result<YankReg, bool> {
     if result.v_type() != VAR_LIST {
         return Err(not_a_list(result));
     }
-    let items = list_iter(result.list_ref()).as_slice();
+    let held = result.list_ref();
+    let items = list_iter(held.as_deref()).as_slice();
     let (lines, kind) = match items {
         [lines, regtype] if lines.li_tv.v_type() == VAR_LIST => {
             if regtype.li_tv.v_type() != VAR_STRING {
@@ -184,8 +185,8 @@ fn register_from_provider(result: &TypVal) -> Result<YankReg, bool> {
         timestamp: 0,
         extra: None,
     };
-    let mut text = Vec::with_capacity(list_iter(lines).len());
-    for li in list_iter(lines) {
+    let mut text = Vec::with_capacity(list_iter(lines.as_deref()).len());
+    for li in list_iter(lines.as_deref()) {
         if li.li_tv.v_type() != VAR_STRING {
             return Err(true);
         }

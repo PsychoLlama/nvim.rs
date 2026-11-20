@@ -278,15 +278,18 @@ pub(crate) fn eval_index_inner(
             // of the item before `result` -- which owns the Dict the item
             // lives in -- is cleared.
             let mut tmp = TV_INITIAL_VALUE;
-            match result.dict_ref().and_then(|d| d.find(key)) {
-                Some(item) if !tv_is_luafunc(&item.di_tv) => tv_copy(&item.di_tv, &mut tmp),
-                Some(_) => return Err(Failed),
-                None => {
-                    if verbose {
-                        let key = msg_bytes(key);
-                        semsg!("E716: Key not present in Dictionary: \"{key}\"");
+            {
+                let dict = result.dict_ref();
+                match dict.as_ref().and_then(|d| d.find(key)) {
+                    Some(item) if !tv_is_luafunc(&item.di_tv) => tv_copy(&item.di_tv, &mut tmp),
+                    Some(_) => return Err(Failed),
+                    None => {
+                        if verbose {
+                            let key = msg_bytes(key);
+                            semsg!("E716: Key not present in Dictionary: \"{key}\"");
+                        }
+                        return Err(Failed);
                     }
-                    return Err(Failed);
                 }
             }
             tv_clear(result);

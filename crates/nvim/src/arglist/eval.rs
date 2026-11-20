@@ -58,7 +58,7 @@ pub fn f_arglistid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// nothing in between runs user code.
 fn arglist_as_rettv(alist: Option<ArgListId>, result: &mut TypVal) {
     let len = alist.map_or(0, alist_count);
-    let list = tv_list_alloc_ret(result, ptrdiff_t::try_from(len).unwrap_or(0));
+    let mut list = tv_list_alloc_ret(result, ptrdiff_t::try_from(len).unwrap_or(0));
     if let Some(alist) = alist {
         with_arg_names(alist, |name| list.push_str(Some(name)));
     }

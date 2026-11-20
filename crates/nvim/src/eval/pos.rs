@@ -112,11 +112,11 @@ pub fn var2fpos(
     if tv.v_type() == VAR_LIST {
         let l = tv.list_ref()?;
         let mut error = false;
-        pos.lnum = number_as_lnum(list_find_nr(Some(l), 0, Some(&mut error)));
+        pos.lnum = number_as_lnum(list_find_nr(Some(&l), 0, Some(&mut error)));
         if error || pos.lnum <= LineNr::ZERO || pos.lnum > bp.line_count() {
             return None;
         }
-        pos.col = number_as_col(list_find_nr(Some(l), 1, Some(&mut error)));
+        pos.col = number_as_col(list_find_nr(Some(&l), 1, Some(&mut error)));
         if error {
             return None;
         }
@@ -137,7 +137,7 @@ pub fn var2fpos(
         }
         pos.col -= 1;
 
-        pos.coladd = number_as_int(list_find_nr(Some(l), 2, Some(&mut error)));
+        pos.coladd = number_as_int(list_find_nr(Some(&l), 2, Some(&mut error)));
         if error {
             pos.coladd = 0;
         }
@@ -237,7 +237,7 @@ pub fn list2fpos(
     };
     // Without a buffer number the List is 2..4 items, with one 3..5.
     let (least, most) = if fnum.is_none() { (2, 4) } else { (3, 5) };
-    let n_items = list_len(Some(l));
+    let n_items = list_len(Some(&l));
     if n_items < least || n_items > most {
         return Err(Failed);
     }
@@ -245,7 +245,7 @@ pub fn list2fpos(
     let mut i = 0;
     if let Some(fnum) = fnum.as_deref_mut() {
         // A null `error` means "do not report".
-        let mut n = number_as_int(list_find_nr(Some(l), i, None));
+        let mut n = number_as_int(list_find_nr(Some(&l), i, None));
         i += 1;
         if n < 0 {
             return Err(Failed);
@@ -256,14 +256,14 @@ pub fn list2fpos(
         *fnum = n;
     }
 
-    let n = number_as_int(list_find_nr(Some(l), i, None));
+    let n = number_as_int(list_find_nr(Some(&l), i, None));
     i += 1;
     if n < 0 {
         return Err(Failed);
     }
     pos.lnum = LineNr::new(n);
 
-    let mut n = number_as_int(list_find_nr(Some(l), i, None));
+    let mut n = number_as_int(list_find_nr(Some(&l), i, None));
     i += 1;
     if n < 0 {
         return Err(Failed);
@@ -284,11 +284,11 @@ pub fn list2fpos(
     pos.col = ColNr::new(n);
 
     // A missing or negative offset is no offset.
-    let off = number_as_int(list_find_nr(Some(l), i, None));
+    let off = number_as_int(list_find_nr(Some(&l), i, None));
     pos.coladd = if off < 0 { 0 } else { off as i32 };
 
     if let Some(curswant) = curswant {
-        *curswant = number_as_col(list_find_nr(Some(l), i + 1, None));
+        *curswant = number_as_col(list_find_nr(Some(&l), i + 1, None));
     }
     Ok(())
 }

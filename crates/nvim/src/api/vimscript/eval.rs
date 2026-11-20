@@ -174,7 +174,8 @@ fn call_in_dict(
     // A Dict argument was converted whole, so its function member is
     // already `fn_0`; a String argument named a dictionary to look in.
     if !fn_0.data().is_null() && !fn_0.is_empty() && !dict_given {
-        let Some(di) = self_dict.find(fn_0.as_bytes()) else {
+        let read = self_dict.read();
+        let Some(di) = read.find(fn_0.as_bytes()) else {
             let name = msg_cstr(fn_0.as_cstr());
             return Err(api_error!(ERROR_TYPE_VALIDATION, "Not found: {name}"));
         };
@@ -188,6 +189,7 @@ fn call_in_dict(
         }
         let name = di.di_tv.callable_name().map_or(&[][..], CStr::to_bytes);
         *fn_0 = ApiString::from_bytes(name);
+        drop(read);
     }
     if fn_0.data().is_null() || fn_0.is_empty() {
         return Err(Error::validation(c"Invalid function name: (empty)"));

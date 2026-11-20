@@ -165,13 +165,12 @@ fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> Option<(TypVal, T
     let got_keys: Vec<Vec<u8>> = got_dict.items().map(|item| item.key().to_vec()).collect();
     let mut exp_pruned = TypVal::dict(Some(tv_dict_alloc()));
     let mut got_pruned = TypVal::dict(Some(tv_dict_alloc()));
-    fn find<'a>(tv: &'a TypVal, key: &[u8]) -> Option<&'a TypVal> {
+    fn find(tv: &TypVal, key: &[u8]) -> Option<TypVal> {
         tv.dict_ref()
-            .and_then(|dict| dict.find(key))
-            .map(|item| &item.di_tv)
+            .and_then(|dict| dict.find(key).map(|item| item.di_tv.clone()))
     }
     let add = |pruned: &mut TypVal, key: &[u8], value: &TypVal| {
-        if let Some(dict) = pruned.dict_mut() {
+        if let Some(mut dict) = pruned.dict_mut() {
             let _ = dict.add_tv(key, value);
         }
     };
@@ -182,14 +181,14 @@ fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> Option<(TypVal, T
             continue;
         };
         let got = find(got_tv, key);
-        if got.is_some_and(|got| tv_equal(expected, got, false)) {
+        if got.is_some_and(|got| tv_equal(&expected, &got, false)) {
             omitted += 1;
             continue;
         }
         // Absent from the actual value, or present with a different one.
-        add(&mut exp_pruned, key, expected);
+        add(&mut exp_pruned, key, &expected);
         if let Some(got) = find(got_tv, key) {
-            add(&mut got_pruned, key, got);
+            add(&mut got_pruned, key, &got);
         }
     }
     // Entries only the actual value has.
@@ -197,7 +196,7 @@ fn prune_equal_dict_items(exp_tv: &TypVal, got_tv: &TypVal) -> Option<(TypVal, T
         if find(exp_tv, key).is_none()
             && let Some(got) = find(got_tv, key)
         {
-            add(&mut got_pruned, key, got);
+            add(&mut got_pruned, key, &got);
         }
     }
     Some((exp_pruned, got_pruned, omitted))

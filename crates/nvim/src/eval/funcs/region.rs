@@ -179,10 +179,14 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
     let opts =
         (args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT)).then(|| args[2].dict_ref());
     let exclusive_by_default = P_SEL.first_byte() == b'e';
-    let (is_select_exclusive, spec) = match opts {
+    let (is_select_exclusive, spec) = match &opts {
         Some(d) => (
-            dict_get_bool(d, b"exclusive", c_int::from(exclusive_by_default)) != 0,
-            numbuf.dict_string(d, b"type"),
+            dict_get_bool(
+                d.as_deref(),
+                b"exclusive",
+                c_int::from(exclusive_by_default),
+            ) != 0,
+            numbuf.dict_string(d.as_deref(), b"type"),
         ),
         None => (exclusive_by_default, None),
     };
@@ -375,7 +379,7 @@ pub fn f_getregion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             Some(bd) => block_def2str(&bd, line),
             None => ThinCString::from_bytes(line),
         };
-        let list = result.list_mut().expect("the list `resolve` allocated");
+        let mut list = result.list_mut().expect("the list `resolve` allocated");
         list.push(TypVal::string(Some(text)));
     }
 }
@@ -389,7 +393,7 @@ pub fn f_getregionpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     };
     // Whether a position may sit one past the end of its line.
     let allow_eol = args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT)
-        && dict_get_bool(args[2].dict_ref(), b"eol", 0) != 0;
+        && dict_get_bool(args[2].dict_ref().as_deref(), b"eol", 0) != 0;
 
     for lnum in r.p1.lnum.through(r.p2.lnum) {
         let (mut ret_p1, mut ret_p2) = line_corners(&r, lnum);
@@ -499,14 +503,15 @@ fn clamp_corners(p1: &mut Pos, p2: &mut Pos, line_len: ColNr, allow_eol: bool) {
 fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
     let pair = tv_list_alloc(2);
     for p in [p1, p2] {
-        let mut pos = tv_list_alloc(4);
-        let l = &mut *pos;
+        let pos = tv_list_alloc(4);
+        let mut l = pos.edit();
         l.push_number(VarNumber::from(Buf::current().handle.get()));
         l.push_number(i64::from(p.lnum));
         l.push_number(i64::from(p.col));
         l.push_number(VarNumber::from(p.coladd));
+        drop(l);
         pair.edit().push_list(Some(pos));
     }
-    let list = result.list_mut().expect("the list `resolve` allocated");
+    let mut list = result.list_mut().expect("the list `resolve` allocated");
     list.push_list(Some(pair));
 }

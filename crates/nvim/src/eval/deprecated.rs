@@ -65,7 +65,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The guard above leaves only a List, or nothing, here.
     let list = given.and_then(TypVal::list_ref);
     // Assert that all list items are strings.
-    for (i, arg) in list_iter(list).enumerate() {
+    for (i, arg) in list_iter(list.as_deref()).enumerate() {
         if arg.li_tv.v_type() != VAR_STRING {
             semsg!(
                 "E5010: List item {} of the second argument is not a string",
@@ -83,7 +83,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The program name, then its arguments: Strings, checked above, the null
     // String reading as the empty one.
     let mut argv: Vec<&CStr> = vec![prog.as_cstr()];
-    argv.extend(list_iter(list).map(|arg| arg.li_tv.string_cstr().unwrap_or(c"")));
+    argv.extend(list_iter(list.as_deref()).map(|arg| arg.li_tv.string_cstr().unwrap_or(c"")));
     // The channel id, or the reason the spawn failed.
     result.write_number(rpc_job_start(&argv));
 }

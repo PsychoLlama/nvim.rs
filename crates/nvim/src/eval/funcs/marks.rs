@@ -48,7 +48,7 @@ fn mark_dict(mark: Pos) -> DictRef {
 
 /// `getchangelist([{buf}])` — `[changes, index]`.
 pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let out = tv_list_alloc_ret(result, 2);
+    let mut out = tv_list_alloc_ret(result, 2);
     let buf = if args.is_empty() {
         Buf::current_or_none()
     } else {
@@ -92,7 +92,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 /// `getjumplist([{winnr} [, {tabnr}]])` — `[jumps, index]`.
 pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The jump list is compacted before it is read so no entry is stale.
-    let out = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
+    let mut out = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     let Some(wp) = find_tabwin(args.first(), args.get(1)) else {
         return;
     };
@@ -120,13 +120,13 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `getmarklist([{buf}])` — the global marks, or one buffer's local ones.
 pub fn f_getmarklist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let out = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
+    let mut out = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     if args.is_empty() {
-        get_global_marks(out);
+        get_global_marks(&mut out);
         return;
     }
     if let Some(buf) = tv_get_buf(&args[0], 0) {
-        get_buf_local_marks(buf, out);
+        get_buf_local_marks(buf, &mut out);
     }
 }
 
@@ -143,7 +143,7 @@ pub fn f_gettagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let Some(wp) = found else {
         return;
     };
-    get_tagstack(wp, result.dict_mut().expect("the dict just stored"));
+    get_tagstack(wp, &mut result.dict_mut().expect("the dict just stored"));
 }
 
 /// `settagstack({winnr}, {dict} [, {action}])`.
@@ -176,14 +176,14 @@ pub fn f_settagstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             }
         }
     }
-    if set_tagstack(wp, d, c_int::from(action)).is_ok() {
+    if set_tagstack(wp, &d, c_int::from(action)).is_ok() {
         result.write_number(0);
     }
 }
 
 /// `tagfiles()` — the tags files that would be searched, in order.
 pub fn f_tagfiles(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let out = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as isize);
+    let mut out = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as isize);
     let mut files = TagFiles::new();
     while let Some(name) = files.next() {
         out.push_str(Some(name.as_cstr()));
@@ -202,6 +202,6 @@ pub fn f_taglist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let fname = args.get(1).map(|fname| numbuf2.string(fname));
-    let list = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as isize);
-    get_tags(list, pattern, fname);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as isize);
+    get_tags(&mut list, pattern, fname);
 }

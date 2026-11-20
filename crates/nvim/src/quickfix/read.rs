@@ -254,7 +254,8 @@ impl Reader {
         let Source::List(list, at) = &mut self.source else {
             unreachable!("read_list reads only a Vimscript list source")
         };
-        let items = list_items(Some(list));
+        let held = list.read();
+        let items = list_items(Some(&held));
         while items
             .get(*at)
             .is_some_and(|li| li.li_tv.string_ref().is_none())
@@ -266,6 +267,7 @@ impl Reader {
         };
         let text = crate::eval::list::string_bytes(&item.li_tv).to_vec();
         *at += 1;
+        drop(held);
         self.set_line(&text);
         Status::Ok
     }

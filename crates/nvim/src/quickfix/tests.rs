@@ -113,28 +113,32 @@ const fn invalid(text: &'static str, lnum: VarNumber) -> Item {
 }
 
 fn items(entries: &[Item]) -> ListRef {
-    let mut list = tv_list_alloc(MAY_KNOW);
+    let list = tv_list_alloc(MAY_KNOW);
     for entry in entries {
-        let mut d = tv_dict_alloc();
-        d.add_tv(b"text", &string_tv(entry.text.as_bytes()))
+        let d = tv_dict_alloc();
+        d.edit()
+            .add_tv(b"text", &string_tv(entry.text.as_bytes()))
             .unwrap();
-        d.add_number(b"lnum", entry.lnum).unwrap();
+        d.edit().add_number(b"lnum", entry.lnum).unwrap();
         if let Some(valid) = entry.valid {
-            d.add_number(b"valid", VarNumber::from(valid)).unwrap();
+            d.edit()
+                .add_number(b"valid", VarNumber::from(valid))
+                .unwrap();
         }
-        list.push_dict(Some(d));
+        list.edit().push_dict(Some(d));
     }
     list
 }
 
 /// A `what` dictionary from number and string pairs.
 fn what(numbers: &[(&str, VarNumber)], strings: &[(&str, &str)]) -> DictRef {
-    let mut d = tv_dict_alloc();
+    let d = tv_dict_alloc();
     for (key, value) in numbers {
-        d.add_number(key.as_bytes(), *value).unwrap();
+        d.edit().add_number(key.as_bytes(), *value).unwrap();
     }
     for (key, value) in strings {
-        d.add_tv(key.as_bytes(), &string_tv(value.as_bytes()))
+        d.edit()
+            .add_tv(key.as_bytes(), &string_tv(value.as_bytes()))
             .unwrap();
     }
     d
@@ -153,7 +157,14 @@ fn set_list(entries: &[Item], action: u8, title: &str) {
 /// `setqflist(entries, action, what)`, answering whether it was done.
 fn set_what(entries: &[Item], action: u8, what: &DictRef) -> bool {
     let title = title_of(":setqflist()");
-    set_errorlist(None, Some(items(entries)), action, &title, Some(what)).is_ok()
+    set_errorlist(
+        None,
+        Some(items(entries)),
+        action,
+        &title,
+        Some(&what.read()),
+    )
+    .is_ok()
 }
 
 /// `setqflist([], 'f')`.
@@ -163,13 +174,13 @@ fn free_stack() {
 
 /// `getqflist(what)`.
 fn get(what: &DictRef) -> DictRef {
-    let mut answer = tv_dict_alloc();
-    let _ = qf_get_properties(None, what, &mut answer);
+    let answer = tv_dict_alloc();
+    let _ = qf_get_properties(None, &what.read(), &mut answer.edit());
     answer
 }
 
 fn number(d: &DictRef, key: &str) -> VarNumber {
-    dict_find(Some(d), key.as_bytes())
+    dict_find(Some(&d.read()), key.as_bytes())
         .unwrap_or_else(|| panic!("no {key} in the answer"))
         .di_tv
         .number_or_zero()
@@ -177,7 +188,7 @@ fn number(d: &DictRef, key: &str) -> VarNumber {
 
 fn string(d: &DictRef, key: &str) -> Vec<u8> {
     string_bytes(
-        &dict_find(Some(d), key.as_bytes())
+        &dict_find(Some(&d.read()), key.as_bytes())
             .unwrap_or_else(|| panic!("no {key} in the answer"))
             .di_tv,
     )
@@ -186,12 +197,13 @@ fn string(d: &DictRef, key: &str) -> Vec<u8> {
 
 /// The `text` of every item in the answer's `items`.
 fn texts(d: &DictRef) -> Vec<Vec<u8>> {
-    let items = dict_find(Some(d), b"items").expect("no items in the answer");
-    list_items(items.di_tv.list_ref())
+    let held = d.read();
+    let items = dict_find(Some(&held), b"items").expect("no items in the answer");
+    list_items(items.di_tv.list_ref().as_deref())
         .iter()
         .map(|li| {
             let entry = li.li_tv.dict_ref().expect("an item is a dictionary");
-            string_bytes(&dict_find(Some(entry), b"text").unwrap().di_tv).to_vec()
+            string_bytes(&dict_find(Some(&entry), b"text").unwrap().di_tv).to_vec()
         })
         .collect()
 }
@@ -278,12 +290,12 @@ fn setqflist_starts_at_the_first_entry_valid_or_not() {
 #[test]
 fn a_parsed_list_starts_at_its_first_valid_entry() {
     let _f = Fixture::new(10);
-    let mut lines = tv_list_alloc(MAY_KNOW);
+    let lines = tv_list_alloc(MAY_KNOW);
     for line in ["banner", "3:one", "4:two"] {
-        lines.push(string_tv(line.as_bytes()));
+        lines.edit().push(string_tv(line.as_bytes()));
     }
-    let mut w = what(&[], &[("efm", "%l:%m")]);
-    w.add_list(b"lines", Some(lines)).unwrap();
+    let w = what(&[], &[("efm", "%l:%m")]);
+    w.edit().add_list(b"lines", Some(lines)).unwrap();
     assert!(set_what(&[], b' ', &w));
     assert_eq!(current_idx(), 2);
 }
@@ -336,8 +348,9 @@ fn append_replace_and_items_keep_the_list() {
     assert_eq!(string(&after, "title"), b"replaced");
 
     // The `items` key replaces the entries and keeps the title.
-    let mut w = what(&[], &[]);
-    w.add_list(b"items", Some(items(&[item("d", 4), item("e", 5)])))
+    let w = what(&[], &[]);
+    w.edit()
+        .add_list(b"items", Some(items(&[item("d", 4), item("e", 5)])))
         .unwrap();
     assert!(set_what(&[], b'r', &w));
     let after = get(&what(&[("items", 0), ("title", 0), ("nr", 0)], &[]));
@@ -361,24 +374,23 @@ fn the_change_tick_moves_with_each_change() {
 #[test]
 fn context_and_user_data_come_back() {
     let _f = Fixture::new(10);
-    let mut list = tv_list_alloc(MAY_KNOW);
-    let mut d = tv_dict_alloc();
-    d.add_tv(b"text", &string_tv(b"e")).unwrap();
-    d.add_number(b"user_data", 42).unwrap();
-    list.push_dict(Some(d));
+    let list = tv_list_alloc(MAY_KNOW);
+    let d = tv_dict_alloc();
+    d.edit().add_tv(b"text", &string_tv(b"e")).unwrap();
+    d.edit().add_number(b"user_data", 42).unwrap();
+    list.edit().push_dict(Some(d));
     let done = set_errorlist(None, Some(list), b' ', &title_of("t"), None);
     assert!(done.is_ok());
     assert!(set_what(&[], b'a', &what(&[("context", 7)], &[])));
 
     let answer = get(&what(&[("context", 0), ("items", 0)], &[]));
     assert_eq!(number(&answer, "context"), 7);
-    let items = dict_find(Some(&answer), b"items").unwrap();
-    let entry = list_items(items.di_tv.list_ref())[0]
-        .li_tv
-        .dict_ref()
-        .unwrap();
+    let held = answer.read();
+    let items = dict_find(Some(&held), b"items").unwrap();
+    let held = items.di_tv.list_ref();
+    let entry = list_items(held.as_deref())[0].li_tv.dict_ref().unwrap();
     assert_eq!(
-        dict_find(Some(entry), b"user_data")
+        dict_find(Some(&entry), b"user_data")
             .unwrap()
             .di_tv
             .number_or_zero(),
@@ -400,20 +412,21 @@ fn freeing_the_stack_leaves_nothing() {
 fn lines_parse_into_a_throwaway_list() {
     let _f = Fixture::new(10);
     set_list(&[item("kept", 1)], b' ', "t");
-    let mut lines = tv_list_alloc(MAY_KNOW);
+    let lines = tv_list_alloc(MAY_KNOW);
     for line in ["10:2:first", "  more", "20:4:second"] {
-        lines.push(string_tv(line.as_bytes()));
+        lines.edit().push(string_tv(line.as_bytes()));
     }
-    let mut w = what(&[], &[("efm", "%l:%c:%m")]);
-    w.add_list(b"lines", Some(lines)).unwrap();
+    let w = what(&[], &[("efm", "%l:%c:%m")]);
+    w.edit().add_list(b"lines", Some(lines)).unwrap();
     let answer = get(&w);
-    let items = dict_find(Some(&answer), b"items").unwrap();
-    let got: Vec<(VarNumber, VarNumber, Vec<u8>)> = list_items(items.di_tv.list_ref())
+    let held = answer.read();
+    let items = dict_find(Some(&held), b"items").unwrap();
+    let got: Vec<(VarNumber, VarNumber, Vec<u8>)> = list_items(items.di_tv.list_ref().as_deref())
         .iter()
         .map(|li| {
             let d = li.li_tv.dict_ref().unwrap();
-            let n = |k: &[u8]| dict_find(Some(d), k).unwrap().di_tv.number_or_zero();
-            let text = string_bytes(&dict_find(Some(d), b"text").unwrap().di_tv).to_vec();
+            let n = |k: &[u8]| dict_find(Some(&d), k).unwrap().di_tv.number_or_zero();
+            let text = string_bytes(&dict_find(Some(&d), b"text").unwrap().di_tv).to_vec();
             (n(b"lnum"), n(b"col"), text)
         })
         .collect();
@@ -432,12 +445,12 @@ fn lines_parse_into_a_throwaway_list() {
 #[test]
 fn a_multiline_message_folds_into_one_entry() {
     let _f = Fixture::new(10);
-    let mut lines = tv_list_alloc(MAY_KNOW);
+    let lines = tv_list_alloc(MAY_KNOW);
     for line in ["E 10:first", "C second", "Z", "E 20:other", "Z"] {
-        lines.push(string_tv(line.as_bytes()));
+        lines.edit().push(string_tv(line.as_bytes()));
     }
-    let mut w = what(&[], &[("efm", "%EE %l:%m,%CC %m,%ZZ")]);
-    w.add_list(b"lines", Some(lines)).unwrap();
+    let w = what(&[], &[("efm", "%EE %l:%m,%CC %m,%ZZ")]);
+    w.edit().add_list(b"lines", Some(lines)).unwrap();
     let answer = get(&w);
     assert_eq!(texts(&answer), bytes(&["first\nsecond", "other"]));
 }
@@ -474,12 +487,12 @@ fn the_entry_walk_skips_invalid_entries() {
 #[test]
 fn a_list_of_nothing_valid_starts_at_its_first_entry() {
     let _f = Fixture::new(10);
-    let mut lines = tv_list_alloc(MAY_KNOW);
+    let lines = tv_list_alloc(MAY_KNOW);
     for line in ["no", "match", "here"] {
-        lines.push(string_tv(line.as_bytes()));
+        lines.edit().push(string_tv(line.as_bytes()));
     }
-    let mut w = what(&[], &[("efm", "%l:%m")]);
-    w.add_list(b"lines", Some(lines)).unwrap();
+    let w = what(&[], &[("efm", "%l:%m")]);
+    w.edit().add_list(b"lines", Some(lines)).unwrap();
     assert!(set_what(&[], b' ', &w));
     assert_eq!(current_idx(), 1);
     // Every entry is fair game when none is valid.

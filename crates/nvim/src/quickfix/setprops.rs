@@ -24,7 +24,7 @@
 use super::*;
 use crate::eval::list::{cstr_of, string_bytes};
 use crate::eval::typval::{ListRef, TV_INITIAL_VALUE};
-use crate::eval::typval::{NumBuf, dict_has_key, list_items};
+use crate::eval::typval::{NumBuf, dict_has_key};
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
 use crate::option::vars::P_EFM;
@@ -263,10 +263,16 @@ fn qf_add_entries(
         // entry is copied out of its dictionary before it is added, for the
         // same reason.
         let mut at = 0;
-        while let Some(item) = list_items(Some(&list)).get(at) {
-            let from = (item.li_tv.v_type() == VAR_DICT)
-                .then(|| item.li_tv.dict_ref().map(DictEntry::of))
-                .flatten();
+        loop {
+            let from = {
+                let read = list.read();
+                let Some(item) = read.items().get(at) else {
+                    break;
+                };
+                (item.li_tv.v_type() == VAR_DICT)
+                    .then(|| item.li_tv.dict_ref().as_deref().map(DictEntry::of))
+                    .flatten()
+            };
             if let Some(from) = from {
                 if qf_add_entry_from_dict(qfl, from, at == 0) {
                     valid_entry = true;
@@ -588,7 +594,11 @@ pub(crate) fn set_errorlist(
         return Ok(());
     }
 
-    if list.as_ref().is_some_and(|list| list_len(Some(list)) != 0) && what.is_some() {
+    if list
+        .as_ref()
+        .is_some_and(|list| list_len(Some(&list.read())) != 0)
+        && what.is_some()
+    {
         let arg0 =
             msg_bytes(gettext(c"cannot have both a list and a \"what\" argument").to_bytes());
         semsg!("E475: Invalid argument: {arg0}");

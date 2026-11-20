@@ -11,13 +11,14 @@
 //!
 //! 1. **The four handles** -- [`ListRef`], [`DictRef`], [`BlobRef`],
 //!    [`PartialRef`]: a `NonNull` plus the reference it owns. `Clone`
-//!    retains, `Drop` releases and frees with the last one, and
-//!    `Deref`/`DerefMut` (and `edit`, the same thing from a shared handle)
-//!    hand out a borrow **that must not span a call that can run user code**.
-//!    That promise is [`Live`](crate::winlayer::Live)'s, and the type system
-//!    cannot hold it: a second holder can always reach the same object.
-//!    Debug builds check the half two writers break ([`Edit`]); the count
-//!    is a `Cell`, so cloning and dropping need no writer at all. The raw
+//!    retains, `Drop` releases and frees with the last one. A List, Dict or
+//!    Blob is borrowed only through `read()` ([`Read`]) and `edit()`
+//!    ([`Edit`]), counted in the object's [`Lent`] word as a `RefCell` counts
+//!    its borrows: any number of reads or one edit, every build, so a clone's
+//!    edit under a live read (or a read under an edit) panics where it
+//!    happens instead of reallocating under it. A partial is fixed once
+//!    built: `Deref` only, and [`PartialRef::get_mut`] for its last holder.
+//!    The count is a `Cell`, so cloning and dropping touch no borrow. The raw
 //!    bridges (`owning`, `retained`) stay `unsafe fn`s for the callers
 //!    outside the container model that still hold a pointer.
 //! 2. **Allocation and release**: the four objects' allocations, the
@@ -50,6 +51,7 @@
     clippy::ptr_as_ptr
 )]
 
+use ::core::marker::PhantomData;
 use ::core::ptr::NonNull;
 
 use super::edit::{Lent, Read};
@@ -157,7 +159,7 @@ impl ListRef {
     /// because the count is a `Cell`: a holder reading the object meanwhile
     /// stays valid.
     #[inline(always)]
-    fn count(&self) -> &Refcount {
+    pub(super) fn count(&self) -> &Refcount {
         // SAFETY: the handle holds a reference, so the object is live;
         // the borrow covers the count alone.
         unsafe { &(*self.0.as_ptr()).lv_refcount }
@@ -197,27 +199,6 @@ fn free_list(list: &ListRef) {
     unsafe { list_free_list(list.as_ptr()) };
 }
 
-impl ::core::ops::Deref for ListRef {
-    type Target = List;
-
-    #[inline(always)]
-    fn deref(&self) -> &List {
-        // SAFETY: the handle holds a reference, so the object is
-        // live; the borrow lasts only as long as the access that
-        // asked for it.
-        unsafe { self.0.as_ref() }
-    }
-}
-
-impl ::core::ops::DerefMut for ListRef {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut List {
-        self.lv_lent.assert_not_lent::<List>();
-        // SAFETY: as `deref`.
-        unsafe { self.0.as_mut() }
-    }
-}
-
 /// The most [`tv_list_alloc`] reserves up front.
 ///
 /// A caller's length is a hint, and not every caller can prove it: a
@@ -247,9 +228,9 @@ pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
         });
     }
     // The reference just seeded is the one this handle owns.
-    let mut list = ListRef(at);
+    let list = ListRef(at);
     // The collector reaches every live list through its registry.
-    list.lv_root = root_list(at);
+    list.edit().lv_root = root_list(at);
     list
 }
 
@@ -377,7 +358,7 @@ impl DictRef {
 
     /// As [`ListRef::count`].
     #[inline(always)]
-    fn count(&self) -> &Refcount {
+    pub(super) fn count(&self) -> &Refcount {
         // SAFETY: the handle holds a reference, so the object is live;
         // the borrow covers the count alone.
         unsafe { &(*self.0.as_ptr()).dv_refcount }
@@ -412,25 +393,6 @@ fn free_dict(dict: &DictRef) {
     unsafe { tv_dict_free_dict(dict.as_ptr()) };
 }
 
-impl ::core::ops::Deref for DictRef {
-    type Target = Dict;
-
-    #[inline(always)]
-    fn deref(&self) -> &Dict {
-        // SAFETY: as `ListRef`'s.
-        unsafe { self.0.as_ref() }
-    }
-}
-
-impl ::core::ops::DerefMut for DictRef {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Dict {
-        self.dv_lent.assert_not_lent::<Dict>();
-        // SAFETY: as `ListRef`'s.
-        unsafe { self.0.as_mut() }
-    }
-}
-
 /// Allocate an empty dictionary, **owned by the handle it answers**; see
 /// [`tv_list_alloc`].
 pub fn tv_dict_alloc() -> DictRef {
@@ -454,9 +416,9 @@ pub fn tv_dict_alloc() -> DictRef {
         });
     }
     // The reference just seeded is the one this handle owns.
-    let mut dict = DictRef(at);
+    let dict = DictRef(at);
     // The collector reaches every live dictionary through its registry.
-    dict.dv_root = root_dict(at);
+    dict.edit().dv_root = root_dict(at);
     dict
 }
 
@@ -705,20 +667,22 @@ impl Claim {
     }
 }
 
-/// An [`Edit`]'s claim: the word raised to the edit's for its life.
+/// An [`Edit`]'s claim: the word raised to the edit's for its life. The
+/// lifetime is the handle's borrow, which the destructor keeps alive to
+/// the loan's end: a handle moved or dropped under it does not compile.
 #[derive(Debug)]
-pub(super) struct Loan(Claim);
+pub(super) struct Loan<'a>(Claim, PhantomData<&'a ()>);
 
-impl Loan {
+impl Loan<'_> {
     #[inline(always)]
-    fn new<T>(at: NonNull<T>, offset: usize) -> Loan {
+    fn new<T>(at: NonNull<T>, offset: usize) -> Self {
         let claim = Claim::new(at, offset);
         claim.word().lend::<T>();
-        Loan(claim)
+        Loan(claim, PhantomData)
     }
 }
 
-impl Drop for Loan {
+impl Drop for Loan<'_> {
     #[inline(always)]
     fn drop(&mut self) {
         self.0.word().give_back();
@@ -885,7 +849,7 @@ impl Dict {
 pub(crate) fn link_buf_changedtick(mut buffer: crate::winlayer::Buf) {
     let item = buffer.changedtick_item();
     let key = DictKey::new(b"changedtick");
-    let Some(dict) = buffer.b_bufvar.di_tv.dict_mut() else {
+    let Some(mut dict) = buffer.b_bufvar.di_tv.dict_mut() else {
         return;
     };
     // The buffer's own item, which outlives its stay in the table as above.
@@ -897,7 +861,7 @@ pub(crate) fn link_buf_changedtick(mut buffer: crate::winlayer::Buf) {
 /// Take `b:changedtick` out of `buffer`'s `b:` table, leaving the item --
 /// and the counter in it -- alone: clearing it would zero the counter.
 pub(crate) fn unlink_buf_changedtick(mut buffer: crate::winlayer::Buf) {
-    let Some(dict) = buffer.b_bufvar.di_tv.dict_mut() else {
+    let Some(mut dict) = buffer.b_bufvar.di_tv.dict_mut() else {
         return;
     };
     let slot = dict.slot_of(b"changedtick");
@@ -1012,11 +976,12 @@ mod tests {
         buffer.changedtick_di.di_tv.write_number(7);
         let vars = buffer.b_bufvar.di_tv.dict_handle().expect("a b: scope");
         let tick = vars
+            .read()
             .find(b"changedtick")
             .map(|item| item.di_tv.number_or_zero());
         assert_eq!(tick, Some(7));
         unlink_buf_changedtick(buffer);
-        assert!(vars.find(b"changedtick").is_none());
+        assert!(vars.read().find(b"changedtick").is_none());
         vars_clear(&vars);
         drop(vars);
         release_var_scope(&mut buffer.b_bufvar);
@@ -1030,9 +995,9 @@ mod tests {
     #[test]
     fn a_dict_released_mid_collection_waits_for_the_collector() {
         let _held = editor_state_lock();
-        let mut d = tv_dict_alloc();
-        d.add_number(b"a", 0).expect("a key used once");
-        d.add_number(b"b", 1).expect("a key used once");
+        let d = tv_dict_alloc();
+        d.edit().add_number(b"a", 0).expect("a key used once");
+        d.edit().add_number(b"b", 1).expect("a key used once");
         let dp = d.as_ptr();
         TV_IN_FREE_UNREF_ITEMS.set(true);
         drop(d);

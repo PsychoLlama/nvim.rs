@@ -71,8 +71,8 @@ pub(crate) fn filter_map_dict(
         {
             break;
         }
-        set_key_string(di.key());
-        let key = DictKey::new(di.key());
+        set_key_string(&di.key());
+        let key = DictKey::new(&di.key());
         let mut newtv = UNKNOWN_TV;
         let mut rem = false;
         di.set_val();

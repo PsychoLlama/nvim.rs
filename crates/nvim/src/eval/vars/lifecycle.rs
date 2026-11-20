@@ -183,9 +183,10 @@ pub fn del_menutrans_vars() {
     // The walk removes entries as it goes, so the table has to be locked
     // against the rehash that would otherwise move the slot array.
     dict.edit().lock_table();
-    let mut cursor = DictCursor::new(&dict);
-    while let Some(slot) = cursor.next(&dict) {
+    let mut cursor = DictCursor::new(&dict.read());
+    while let Some(slot) = { cursor.next(&dict.read()) } {
         let doomed = dict
+            .read()
             .item_at(slot)
             .is_some_and(|item| item.key().starts_with(b"menutrans_"));
         if doomed {
@@ -296,9 +297,9 @@ pub fn new_var_scope(scope: ScopeType) -> ScopeDictItem {
 /// A fresh `g:`, `v:` or `s:` scope: its dictionary is out of the
 /// collector's registry, which only marks its items.
 pub(crate) fn new_unrooted_var_scope(scope: ScopeType) -> ScopeDictItem {
-    let mut dict = tv_dict_alloc();
+    let dict = tv_dict_alloc();
     {
-        let d = &mut *dict;
+        let d = &mut dict.edit();
         unroot_dict(d.dv_root);
         d.dv_root = RootId::NONE;
     }
@@ -318,8 +319,8 @@ pub fn release_var_scope(entry: &mut ScopeDictItem) {
 /// empty table.
 pub fn vars_clear(dict: &DictRef) {
     dict.edit().lock_table();
-    let mut cursor = DictCursor::new(dict);
-    while let Some(slot) = cursor.next(dict) {
+    let mut cursor = DictCursor::new(&dict.read());
+    while let Some(slot) = { cursor.next(&dict.read()) } {
         // Released with the borrow of the dictionary over: a value can name
         // the dictionary it was in.
         let removed = dict.edit().remove_at(slot);
@@ -340,14 +341,15 @@ pub(crate) fn do_unlet(name: &[u8], forceit: bool) -> Result<(), Failed> {
         // in a scope a lambda closed over; and only a scope of its own is
         // watched.
         let lock_dict = &home.dict;
-        let watched = home.kind != ScopeKind::Compat && dict_is_watched(Some(lock_dict));
+        let watched = home.kind != ScopeKind::Compat && dict_is_watched(Some(&lock_dict.read()));
 
         let flags = dict
+            .read()
             .item_at(slot)
             .map_or(0, |item| c_int::from(item.di_flags));
         if var_check_fixed_named(flags, name)
             || var_check_ro_named(flags, name)
-            || value_check_lock(lock_dict.dv_lock, LockName::Bytes(name))
+            || value_check_lock({ lock_dict.read().dv_lock }, LockName::Bytes(name))
         {
             return Err(Failed);
         }
@@ -355,12 +357,12 @@ pub(crate) fn do_unlet(name: &[u8], forceit: bool) -> Result<(), Failed> {
         // answer the same way -- nothing above it changes `dv_lock` -- so
         // the repetition is dead; kept because deleting it is a change no
         // gate could confirm.
-        if value_check_lock(lock_dict.dv_lock, LockName::Bytes(name)) {
+        if value_check_lock({ lock_dict.read().dv_lock }, LockName::Bytes(name)) {
             return Err(Failed);
         }
 
         let old = watched
-            .then(|| dict.item_at(slot).map(|item| item.di_tv.clone()))
+            .then(|| dict.read().item_at(slot).map(|item| item.di_tv.clone()))
             .flatten();
         // Released with the borrow of the dictionary over: a value can name
         // the dictionary it was in.

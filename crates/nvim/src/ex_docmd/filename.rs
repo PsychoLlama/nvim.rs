@@ -573,6 +573,7 @@ fn alternate_name(
         }
         let oldfiles = get_vim_var_list_handle(Vv::Oldfiles);
         let mut numbuf = NumBuf::new();
+        let oldfiles = oldfiles.as_ref().map(|l| l.read());
         let name = list_find_str(oldfiles.as_deref(), i - 1, &mut numbuf)
             .map_err(|Failed| Expansion::Quiet)?;
         return Ok(Named::path(name.to_owned()));

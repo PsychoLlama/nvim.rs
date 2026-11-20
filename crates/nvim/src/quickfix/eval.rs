@@ -17,6 +17,7 @@
 use super::*;
 use crate::eval::list::cstr_of_chk;
 use crate::eval::typval::NumBuf;
+use crate::eval::typval::ReadScope;
 use crate::guard::Depth;
 use crate::memory::XString;
 use crate::message_fmt::msg_bytes;
@@ -115,10 +116,10 @@ fn get_qf_loc_list(
     let Some(what_arg) = what_arg else {
         tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
         if (is_qf || window.is_some())
-            && let Some(list) = result.list_mut()
+            && let Some(mut list) = result.list_mut()
         {
             // No list, or an empty one, is an empty answer, not an error.
-            let _ = get_errorlist_of(window, list);
+            let _ = get_errorlist_of(window, &mut list);
         }
         return;
     };
@@ -132,11 +133,11 @@ fn get_qf_loc_list(
         return;
     }
     if let Some(what) = what_arg.dict_ref()
-        && let Some(answer) = result.dict_mut()
+        && let Some(mut answer) = result.dict_mut()
     {
         // A request that names nothing readable answers the empty
         // dictionary that is already in `result`.
-        let _ = qf_get_properties(window, what, answer);
+        let _ = qf_get_properties(window, &what, &mut answer);
     }
 }
 
@@ -173,6 +174,7 @@ fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypVal) {
 
     let mut action = b' ';
     let mut title: Option<XString> = None;
+    let reads = ReadScope::new();
     let mut what: Option<&Dict> = None;
 
     if let Some(action_arg) = args.get(1) {
@@ -200,7 +202,7 @@ fn set_qf_ll_list(window: Option<Win>, args: &[TypVal], result: &mut TypVal) {
                 };
                 title = Some(XString::from_cstr(text));
             } else if what_arg.v_type() == VAR_DICT
-                && let Some(d) = what_arg.dict_ref()
+                && let Some(d) = what_arg.dict_in(&reads)
             {
                 what = Some(d);
             } else {

@@ -78,7 +78,7 @@ pub fn f_ctxpush(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let types = match args.first().map_or(VAR_UNKNOWN, TypVal::v_type) {
         VAR_LIST => {
             let mut types: c_int = 0;
-            for li in list_iter(args[0].list_ref()) {
+            for li in list_iter(args[0].list_ref().as_deref()) {
                 let tv = &li.li_tv;
                 // An unrecognised name is silently ignored, as is a
                 // non-String item.

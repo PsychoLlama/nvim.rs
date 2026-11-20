@@ -143,7 +143,7 @@ pub(crate) fn func_call(
 ) -> Result<(), Failed> {
     let mut argv = Argv::new();
     let bound = partial.map_or(0, |partial| index_of(partial.pt_argv.len()));
-    for (argc, item) in list_iter(args.list_ref()).enumerate() {
+    for (argc, item) in list_iter(args.list_ref().as_deref()).enumerate() {
         if argc == usize::try_from(MAX_FUNC_ARGS - bound).unwrap_or(0) {
             emsg(gettext(c"E699: Too many arguments"));
             return Ok(());

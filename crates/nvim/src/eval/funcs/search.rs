@@ -309,7 +309,7 @@ pub fn f_searchpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     let mut flags = 0;
     let n = search_cmn(args, Some(&mut match_pos), &mut flags).unwrap_or_else(ArgsRefused::report);
-    let list = tv_list_alloc_ret(result, 2 + isize::from(flags & SP_SUBPAT != 0));
+    let mut list = tv_list_alloc_ret(result, 2 + isize::from(flags & SP_SUBPAT != 0));
     let (lnum, col) = if n > 0 {
         (match_pos.lnum.get(), match_pos.col.get())
     } else {
@@ -431,7 +431,7 @@ pub fn f_searchpairpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         lnum = match_pos.lnum.get();
         col = match_pos.col.get();
     }
-    let list = tv_list_alloc_ret(result, 2);
+    let mut list = tv_list_alloc_ret(result, 2);
     list.push_number(VarNumber::from(lnum));
     list.push_number(VarNumber::from(col));
 }

@@ -96,7 +96,7 @@ fn complete(pattern: &str, kind: &str) -> Vec<String> {
     ];
     let mut result = TypVal::Number(0);
     f_getcompletion(&args, &mut result, EvalFuncData::None);
-    let answer = list_items(result.list_ref())
+    let answer = list_items(result.list_ref().as_deref())
         .iter()
         .map(|li| String::from_utf8_lossy(string_bytes(&li.li_tv)).into_owned())
         .collect();

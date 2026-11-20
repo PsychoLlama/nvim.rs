@@ -199,18 +199,20 @@ fn menu_get_recursive(menu: &VimMenu, modes: c_int) -> Option<DictRef> {
             let _ = mapping.add_number(b"noremap", VarNumber::from(noremap == Remap::No));
             let _ = mapping.add_number(b"sid", VarNumber::from(noremap == Remap::Script));
             // One byte of the mode letters, so `tl` files under `t`.
+            drop(mapping);
             let _ = commands.add_dict(&mode.to_bytes()[..1], Some(mapping_held));
         }
     } else {
-        let mut list = list_alloc();
+        let list = list_alloc();
         for child in &menu.children {
             let entry = menu_get_recursive(child, modes);
-            if entry.as_ref().is_some_and(|d| !d.is_empty()) {
-                list.push_dict(entry);
+            if entry.as_ref().is_some_and(|d| !d.read().is_empty()) {
+                list.edit().push_dict(entry);
             }
         }
         let _ = dict.add_list(b"submenus", Some(list));
     }
+    drop(dict);
     Some(dict_held)
 }
 
@@ -226,7 +228,7 @@ pub(crate) fn menu_get(path: &CStr, modes: c_int, list: &mut List) -> bool {
         };
         for node in nodes {
             let entry = menu_get_recursive(node, modes);
-            if entry.as_ref().is_some_and(|d| !d.is_empty()) {
+            if entry.as_ref().is_some_and(|d| !d.read().is_empty()) {
                 list.push_dict(entry);
             }
         }

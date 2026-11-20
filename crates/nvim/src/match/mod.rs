@@ -196,7 +196,8 @@ fn fill_pos_array(
         let mut skip = false;
 
         if tv.v_type() == VAR_LIST {
-            let sub = list_items(tv.list_ref());
+            let sub = tv.list_ref();
+            let sub = list_items(sub.as_deref());
             if sub.is_empty() {
                 return Err(MatchError::EmptyPosition(at));
             }

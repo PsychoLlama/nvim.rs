@@ -39,7 +39,8 @@ pub(crate) fn scope_vars(entry: &ScopeDictItem) -> DictRef {
 /// The value `key` has in `dict`, as an API object; an error when the key is
 /// absent.
 pub(crate) fn dict_get_value(dict: &DictRef, key: &ApiString) -> Result<Object, Error> {
-    let Some(di) = dict_find(Some(dict), key.as_bytes()) else {
+    let held = dict.read();
+    let Some(di) = dict_find(Some(&held), key.as_bytes()) else {
         let key = key.as_cstr().to_string_lossy();
         return Err(api_error!(ERROR_TYPE_VALIDATION, "Key not found: {key}"));
     };
@@ -53,7 +54,7 @@ pub(crate) fn dict_check_writable(
     key: &ApiString,
     del: bool,
 ) -> Result<bool, Error> {
-    match dict.find(key.as_bytes()) {
+    match dict.read().find(key.as_bytes()) {
         Some(item) => item_writable(item, key, del).map(|()| true),
         None => absent_writable(dict, key).map(|()| false),
     }
@@ -84,7 +85,7 @@ fn item_writable(item: &DictItem, key: &ApiString, del: bool) -> Result<(), Erro
 /// Why `key`, absent from `dict`, could not be added to it, if anything
 /// stops it.
 fn absent_writable(dict: &DictRef, key: &ApiString) -> Result<(), Error> {
-    let refused = if dict.dv_lock.is_locked() {
+    let refused = if dict.read().dv_lock.is_locked() {
         Some((ERROR_TYPE_EXCEPTION, c"Dict is locked"))
     } else if key.is_empty() {
         Some((ERROR_TYPE_VALIDATION, c"Key name is empty"))
@@ -119,9 +120,10 @@ pub(crate) fn dict_set_var(
     }
     let mut rv = Object::Nil;
     let exists = dict_check_writable(dict, key, del)?;
-    let watched = dict_is_watched(Some(dict));
+    let watched = dict_is_watched(Some(&dict.read()));
     let current = |dict: &DictRef| {
-        dict.find(key.as_bytes())
+        dict.read()
+            .find(key.as_bytes())
             .map(|item| Object::from(&item.di_tv))
     };
 
@@ -134,7 +136,7 @@ pub(crate) fn dict_set_var(
             // The watchers are shown a copy: they may do anything to the
             // item, a removal has no new value to show.
             let mut old = TV_INITIAL_VALUE;
-            if let Some(item) = dict.find(key.as_bytes()) {
+            if let Some(item) = dict.read().find(key.as_bytes()) {
                 tv_copy(&item.di_tv, &mut old);
             }
             dict_watcher_notify(dict, key.as_cstr(), None, Some(&old));
@@ -206,7 +208,7 @@ fn dict_assign(
     value: Object,
     retval: bool,
 ) -> Result<Object, Error> {
-    let watched = dict_is_watched(Some(dict));
+    let watched = dict_is_watched(Some(&dict.read()));
     let mut tv = TypVal::from(value);
     // Only filled in for a key that already existed; the watchers see an
     // unset value for a key that did not.

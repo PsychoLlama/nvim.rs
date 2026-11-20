@@ -128,12 +128,12 @@ fn proftime_from_halves(high: int32_t, low: int32_t) -> ProfTime {
 /// Read a `[high, low]` List back into a profile timestamp. `None` when the
 /// argument is not a two-element List of Numbers.
 fn list2proftime(arg: &TypVal) -> Option<ProfTime> {
-    if arg.v_type() != VAR_LIST || list_len(arg.list_ref()) != 2 {
+    if arg.v_type() != VAR_LIST || list_len(arg.list_ref().as_deref()) != 2 {
         return None;
     }
     let mut error = false;
-    let n1 = list_find_nr(arg.list_ref(), 0, Some(&mut error));
-    let n2 = list_find_nr(arg.list_ref(), 1, Some(&mut error));
+    let n1 = list_find_nr(arg.list_ref().as_deref(), 0, Some(&mut error));
+    let n2 = list_find_nr(arg.list_ref().as_deref(), 1, Some(&mut error));
     if error {
         return None;
     }
@@ -163,7 +163,7 @@ pub fn f_reltime(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         profile_sub(end, start)
     };
     let (high, low) = proftime_halves(res);
-    let list = tv_list_alloc_ret(result, 2);
+    let mut list = tv_list_alloc_ret(result, 2);
     list.push_number(VarNumber::from(high));
     list.push_number(VarNumber::from(low));
 }
@@ -226,7 +226,7 @@ pub fn f_timer_start(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         if tv_check_for_nonnull_dict_arg(args, 2).is_err() {
             return;
         }
-        if let Some(di) = dict_find(args[2].dict_ref(), b"repeat") {
+        if let Some(di) = dict_find(args[2].dict_ref().as_deref(), b"repeat") {
             repeat = number_as_int(tv_get_number(&di.di_tv));
             // A repeat of 0 means "once", the same as the default.
             if repeat == 0 {

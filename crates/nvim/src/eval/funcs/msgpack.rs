@@ -31,7 +31,7 @@ pub fn f_json_decode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut numbuf = NumBuf::new();
     let joined;
     let text: &[u8] = if args[0].v_type() == VAR_LIST {
-        let Some(bytes) = encode_vim_list_to_buf(args[0].list_ref()) else {
+        let Some(bytes) = encode_vim_list_to_buf(args[0].list_ref().as_deref()) else {
             semsg!("E474: Failed to convert list to string");
             return;
         };
@@ -73,7 +73,8 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     // The per-item label the encoder names in its own error messages.
     // One buffer, reused, as the C's 189-byte stack array was.
     let mut label = String::with_capacity(64);
-    let items = args[0].list_ref().map_or(&[][..], List::items);
+    let list = args[0].list_ref();
+    let items = list.as_deref().map_or(&[][..], List::items);
     // Everything packed up to the first value that refuses.
     let data = pack_to_bytes(|packer| {
         for (idx, item) in items.iter().enumerate() {
@@ -89,8 +90,8 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         // The Blob adopts the packed bytes as they are; nothing copies.
         blob_alloc_ret(result).bv_data = data;
     } else {
-        let mut lines = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
-        encode_list_write(&mut lines, &data);
+        let lines = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
+        encode_list_write(&mut lines.edit(), &data);
         result.write_list(Some(lines));
     }
 }
@@ -175,13 +176,13 @@ pub fn f_msgpackparse(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         semsg!("E899: Argument of {arg0} must be a List or Blob");
         return;
     }
-    let mut ret_list = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
+    let ret_list = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
     if args[0].v_type() == VAR_LIST {
         if let Some(list) = args[0].list_ref() {
-            msgpackparse_unpack_list(list, &mut ret_list);
+            msgpackparse_unpack_list(&list, &mut ret_list.edit());
         }
     } else {
-        msgpackparse_unpack_blob(&args[0].blob_bytes(), &mut ret_list);
+        msgpackparse_unpack_blob(&args[0].blob_bytes(), &mut ret_list.edit());
     }
     result.write_list(Some(ret_list));
 }
@@ -196,9 +197,9 @@ mod tests {
     use crate::global_cell::editor_state_lock;
 
     fn list(items: Vec<TypVal>) -> ListRef {
-        let mut l = tv_list_alloc(-1);
+        let l = tv_list_alloc(-1);
         for tv in items {
-            l.push(tv);
+            l.edit().push(tv);
         }
         l
     }
@@ -211,14 +212,17 @@ mod tests {
 
     /// A value with a container of every kind msgpack carries.
     fn sample() -> TypVal {
-        let mut d = tv_dict_alloc();
-        d.add_number(b"n", -300).expect("fresh key");
-        d.add_value(b"s", string_tv(b"a\nb")).expect("fresh key");
-        d.add_list(
-            b"l",
-            Some(list(vec![TypVal::Float(0.5), TypVal::Number(70_000)])),
-        )
-        .expect("fresh key");
+        let d = tv_dict_alloc();
+        d.edit().add_number(b"n", -300).expect("fresh key");
+        d.edit()
+            .add_value(b"s", string_tv(b"a\nb"))
+            .expect("fresh key");
+        d.edit()
+            .add_list(
+                b"l",
+                Some(list(vec![TypVal::Float(0.5), TypVal::Number(70_000)])),
+            )
+            .expect("fresh key");
         TypVal::list(Some(list(vec![
             TypVal::dict(Some(d)),
             TypVal::list(Some(list(vec![]))),
@@ -262,9 +266,11 @@ mod tests {
     #[test]
     fn a_truncated_object_is_incomplete_until_its_last_byte() {
         let _serial = editor_state_lock();
-        let mut d = tv_dict_alloc();
-        d.add_value(b"k", string_tv(b"value")).expect("fresh key");
-        d.add_number(b"n", 1 << 40).expect("fresh key");
+        let d = tv_dict_alloc();
+        d.edit()
+            .add_value(b"k", string_tv(b"value"))
+            .expect("fresh key");
+        d.edit().add_number(b"n", 1 << 40).expect("fresh key");
         let values = TypVal::list(Some(list(vec![TypVal::dict(Some(d))])));
         let bytes = bytes_of(&call(f_msgpackdump, vec![values, string_tv(b"B")]));
         for cut in 0..bytes.len() {

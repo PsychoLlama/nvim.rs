@@ -72,14 +72,15 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
 /// `getbufinfo([{buf}|{dict}])` — every buffer, one buffer, or the buffers a
 /// filter dictionary selects.
 pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     let mut argbuf: Option<Buf> = None;
     let mut filter = Filter::default();
     if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT) {
         let sel_d = args[0].dict_ref();
         if sel_d.is_some() {
             let flag = |key: &CStr| {
-                dict_find(sel_d, key.to_bytes()).is_some_and(|di| tv_get_number(&di.di_tv) != 0)
+                dict_find(sel_d.as_deref(), key.to_bytes())
+                    .is_some_and(|di| tv_get_number(&di.di_tv) != 0)
             };
             filter = Filter {
                 on: true,

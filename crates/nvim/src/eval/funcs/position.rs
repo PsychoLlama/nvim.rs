@@ -172,7 +172,7 @@ pub fn f_virtcol(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     }
     if args.len() > 1 && arg_bool(&args[1]) != 0 {
-        let l = tv_list_alloc_ret(result, 2);
+        let mut l = tv_list_alloc_ret(result, 2);
         l.push_number(i64::from(vcol_start));
         l.push_number(i64::from(vcol_end));
     } else {
@@ -255,7 +255,7 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
         fp
     };
 
-    let l = tv_list_alloc_ret(result, 4 + isize::from(getcurpos));
+    let mut l = tv_list_alloc_ret(result, 4 + isize::from(getcurpos));
     l.push_number(if fnum != -1 { VarNumber::from(fnum) } else { 0 });
     let (lnum, col, coladd) = fp.map_or((0, 0, 0), |fp| {
         // MAXCOL is passed through rather than made one-based.
@@ -274,7 +274,7 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
     l.push_number(col);
     l.push_number(coladd);
     if getcurpos {
-        append_curswant(l, wp);
+        append_curswant(&mut l, wp);
     }
 }
 
@@ -435,7 +435,7 @@ pub fn f_getcharsearch(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     let csearch = last_csearch();
     let text = csearch.split(|&byte| byte == 0).next().unwrap_or_default();
     tv_dict_alloc_ret(result);
-    let dict = result.dict_mut().expect("the dict just stored");
+    let mut dict = result.dict_mut().expect("the dict just stored");
     let _ = dict.add_str_len(b"char", Some(text));
     let _ = dict.add_number(b"forward", VarNumber::from(last_csearch_forward()));
     let _ = dict.add_number(b"until", VarNumber::from(last_csearch_until()));
@@ -451,7 +451,7 @@ pub fn f_setcharsearch(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
     let Some(d) = args[0].dict_ref() else {
         return;
     };
-    if let Some(csearch) = numbuf.dict_string(Some(d), b"char") {
+    if let Some(csearch) = numbuf.dict_string(Some(&d), b"char") {
         let text = csearch.to_bytes();
         set_last_csearch(char_at(text).get(), &text[..cluster_len(text)]);
     }

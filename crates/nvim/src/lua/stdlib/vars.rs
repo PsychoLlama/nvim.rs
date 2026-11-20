@@ -85,7 +85,7 @@ pub(crate) fn setvar(stack: &mut Stack) -> Result<c_int, Raise> {
         Err(e) => return Err(Raise::message(e.message_or_empty().to_bytes())),
     };
 
-    let watched = dict_is_watched(Some(&*dict));
+    let watched = dict_is_watched(Some(&dict.read()));
 
     if del {
         if !exists {
@@ -96,7 +96,7 @@ pub(crate) fn setvar(stack: &mut Stack) -> Result<c_int, Raise> {
             // The watchers are shown a copy: they run Vimscript, which may
             // do anything to the item.
             let mut old = TV_INITIAL_VALUE;
-            if let Some(item) = dict.find(key.as_bytes()) {
+            if let Some(item) = dict.read().find(key.as_bytes()) {
                 tv_copy(&item.di_tv, &mut old);
             }
             dict_watcher_notify(&dict, key.as_cstr(), None, Some(&old));
@@ -163,20 +163,15 @@ pub(crate) fn getvar(stack: &mut Stack) -> Result<c_int, Raise> {
     let is_globals = dict
         .as_ref()
         .is_some_and(|dict| dict.ptr_eq(&globvar_dict()));
-    let item = {
-        let name = stack.string(At::arg(3)).unwrap_or_default();
-        let mut item = dict_find(dict.as_deref(), name);
-        if item.is_none() && is_globals {
-            if !script_autoload_named(name, false) || aborting() {
-                return Ok(0); // nil
-            }
-            // The autoload ran arbitrary Vimscript, so the lookup starts
-            // again rather than reusing what it may have changed.
-            item = dict_find(dict.as_deref(), name);
-        }
-        item
-    };
-    let Some(item) = item else {
+    let name = stack.string(At::arg(3)).unwrap_or_default().to_vec();
+    let missing = dict_find(dict.as_ref().map(DictRef::read).as_deref(), &name).is_none();
+    if missing && is_globals && (!script_autoload_named(&name, false) || aborting()) {
+        return Ok(0); // nil
+    }
+    // The autoload ran arbitrary Vimscript, so the lookup starts again
+    // rather than reusing what it may have changed.
+    let read = dict.as_ref().map(DictRef::read);
+    let Some(item) = dict_find(read.as_deref(), &name) else {
         return Ok(0); // nil
     };
     let _ = push_typval(stack, &item.di_tv, false);

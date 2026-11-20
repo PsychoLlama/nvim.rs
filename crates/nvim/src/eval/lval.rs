@@ -215,10 +215,10 @@ fn slot_value<R>(
 ) -> Option<R> {
     match slot {
         Slot::Variable => with_var(name, no_autoload, |item| item_value(item, f)),
-        Slot::Item { list, index } => list_items_mut(Some(list))
+        Slot::Item { list, index } => list_items_mut(Some(&mut list.edit()))
             .get_mut(*index)
             .map(|item| f(&mut item.li_tv, &mut item.li_lock)),
-        Slot::Key { dict, key } => dict.find_mut(key).map(|item| item_value(item, f)),
+        Slot::Key { dict, key } => dict.edit().find_mut(key).map(|item| item_value(item, f)),
     }
 }
 
@@ -586,13 +586,14 @@ impl Walk<'_, '_> {
             }
         };
         let existing = dict
+            .read()
             .find(&key_bytes)
             .map(|item| (item.di_flags, tv_is_luafunc(&item.di_tv)));
 
         // Assigning into a scope dictionary: check that the name is a valid
         // variable name, and a valid *function* name too unless the scope is
         // `l:` or `g:`. Overwriting a builtin function is not allowed.
-        let scope = dict.dv_scope;
+        let scope = dict.read().dv_scope;
         if let Some(value) = self.value.as_deref()
             && scope != 0
         {
@@ -695,13 +696,22 @@ impl Walk<'_, '_> {
             index_of(tv_get_number(var1))
         };
         let quiet = self.quiet;
-        let at = list_check_range_index_one(list.as_deref(), &mut self.span.n1, quiet)
-            .ok_or_else(|| self.refused())?;
+        let at = list_check_range_index_one(
+            list.as_ref().map(ListRef::read).as_deref(),
+            &mut self.span.n1,
+            quiet,
+        )
+        .ok_or_else(|| self.refused())?;
         if self.span.range && !self.span.empty2 {
             self.span.n2 = index_of(tv_get_number(var2));
             let span = &mut self.span;
-            list_check_range_index_two(list.as_deref(), &mut span.n1, at, &mut span.n2)
-                .map_err(|bad| self.refuse_with(|| bad.report()))?;
+            list_check_range_index_two(
+                list.as_ref().map(ListRef::read).as_deref(),
+                &mut span.n1,
+                at,
+                &mut span.n2,
+            )
+            .map_err(|bad| self.refuse_with(|| bad.report()))?;
         }
         let list = list.expect("an index of the list was found");
         self.slot = Slot::Item { list, index: at };
@@ -898,20 +908,22 @@ mod tests {
     #[test]
     fn a_list_slot_is_found_again_after_its_items_move() {
         let _held = editor_state_lock();
-        let mut list = tv_list_alloc(2);
-        list.push_number(1);
-        list.push_number(2);
+        let list = tv_list_alloc(2);
+        list.edit().push_number(1);
+        list.edit().push_number(2);
         let mut slot = Slot::Item {
             list: list.clone(),
             index: 1,
         };
         for n in 0..100 {
-            list.push_number(n);
+            list.edit().push_number(n);
         }
         assert_eq!(read(&mut slot), Some(2));
         assert!(write(&mut slot, 20));
         assert_eq!(
-            list_items_mut(Some(&mut list))[1].li_tv.number_or_zero(),
+            list_items_mut(Some(&mut list.edit()))[1]
+                .li_tv
+                .number_or_zero(),
             20
         );
 
@@ -922,7 +934,7 @@ mod tests {
             "the index names the next item now"
         );
 
-        let last = list.len() - 1;
+        let last = list.read().len() - 1;
         list.remove_range(0, last);
         assert_eq!(read(&mut slot), None);
         assert!(!write(&mut slot, 5));
@@ -934,18 +946,20 @@ mod tests {
     #[test]
     fn a_dict_slot_outlives_its_item_and_the_other_references() {
         let _held = editor_state_lock();
-        let mut dict = tv_dict_alloc();
-        dict.add_number(b"a", 7).expect("a fresh key");
+        let dict = tv_dict_alloc();
+        dict.edit().add_number(b"a", 7).expect("a fresh key");
         let mut slot = Slot::Key {
             dict: dict.clone(),
             key: b"a".to_vec(),
         };
         assert_eq!(read(&mut slot), Some(7));
 
-        assert!(dict.remove_key(b"a").is_some());
+        assert!(dict.edit().remove_key(b"a").is_some());
         assert_eq!(read(&mut slot), None);
 
-        dict.add_number(b"a", 8).expect("the key is free again");
+        dict.edit()
+            .add_number(b"a", 8)
+            .expect("the key is free again");
         drop(dict);
         assert_eq!(read(&mut slot), Some(8));
         assert!(write(&mut slot, 9));

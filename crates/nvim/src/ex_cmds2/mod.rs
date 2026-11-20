@@ -176,11 +176,12 @@ fn script_host_execute(name: &CStr, excmd: &mut ExArg) {
     let Some(script) = script_get(excmd) else {
         return;
     };
-    let mut argv = tv_list_alloc(3 as ptrdiff_t);
-    let into = &mut *argv;
+    let argv = tv_list_alloc(3 as ptrdiff_t);
+    let mut into = argv.edit();
     into.push_str(Some(script.as_cstr()));
     into.push_number(VarNumber::from(excmd.line1.get()));
     into.push_number(VarNumber::from(excmd.line2.get()));
+    drop(into);
     eval_call_provider(name, c"execute", Some(argv), true);
 }
 
@@ -197,11 +198,12 @@ fn script_host_execute_file(name: &CStr, excmd: &mut ExArg) {
     .unwrap_or_else(|name| name);
     let full = std::ffi::CString::new(full).expect("a name stops at its NUL");
 
-    let mut argv = tv_list_alloc(3 as ptrdiff_t);
-    let into = &mut *argv;
+    let argv = tv_list_alloc(3 as ptrdiff_t);
+    let mut into = argv.edit();
     into.push_str(Some(&full));
     into.push_number(VarNumber::from(excmd.line1.get()));
     into.push_number(VarNumber::from(excmd.line2.get()));
+    drop(into);
     eval_call_provider(name, c"execute_file", Some(argv), true);
 }
 
@@ -210,11 +212,12 @@ fn script_host_do_range(name: &CStr, excmd: &mut ExArg) {
     if excmd.skip {
         return;
     }
-    let mut argv = tv_list_alloc(3 as ptrdiff_t);
-    let into = &mut *argv;
+    let argv = tv_list_alloc(3 as ptrdiff_t);
+    let mut into = argv.edit();
     into.push_number(VarNumber::from(excmd.line1.get()));
     into.push_number(VarNumber::from(excmd.line2.get()));
     into.push_str(Some(excmd.line.cstr_from(excmd.line.arg)));
+    drop(into);
     eval_call_provider(name, c"do_range", Some(argv), true);
 }
 

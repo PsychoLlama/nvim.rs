@@ -232,12 +232,13 @@ pub(crate) fn conv_error(refusal: Dump, path: &ConvPath<'_, '_>) -> Flow {
                 let pairs = matches!(frame, Frame::Pairs { .. });
                 let pair_key = cur.filter(|_| pairs).and_then(|at| {
                     let value = &items[at].li_tv;
-                    if value.v_type() != VAR_LIST && list_len(value.list_ref()) <= 0 {
+                    if value.v_type() != VAR_LIST && list_len(value.list_ref().as_deref()) <= 0 {
                         return None;
                     }
                     // A special map's item is a [key, value] pair, so the
                     // path can name the key rather than the index.
-                    let key_tv = &value.list_ref()?.items().first()?.li_tv;
+                    let held = value.list_ref()?;
+                    let key_tv = &held.items().first()?.li_tv;
                     Some(tv2echo_bytes(key_tv))
                 });
                 append(match pair_key {
@@ -537,8 +538,8 @@ pub fn encode_check_json_key(tv: &TypVal) -> bool {
         return false;
     }
     let (Some(type_di), Some(val_di)) = (
-        dict_find(Some(spdict), b"_TYPE"),
-        dict_find(Some(spdict), b"_VAL"),
+        dict_find(Some(&spdict), b"_TYPE"),
+        dict_find(Some(&spdict), b"_VAL"),
     ) else {
         return false;
     };
@@ -546,7 +547,7 @@ pub fn encode_check_json_key(tv: &TypVal) -> bool {
     if type_tv.v_type() != VAR_LIST
         || !type_tv
             .list_ref()
-            .is_some_and(|list| msgpack_type_list_is(MP_STRING, list))
+            .is_some_and(|list| msgpack_type_list_is(MP_STRING, &list))
     {
         return false;
     }
@@ -554,11 +555,11 @@ pub fn encode_check_json_key(tv: &TypVal) -> bool {
     if val_tv.v_type() != VAR_LIST {
         return false;
     }
-    val_tv
-        .list_ref()
-        .map_or(&[][..], List::items)
-        .iter()
-        .all(|li| li.li_tv.v_type() == VAR_STRING)
+    val_tv.list_ref().is_none_or(|list| {
+        list.items()
+            .iter()
+            .all(|li| li.li_tv.v_type() == VAR_STRING)
+    })
 }
 
 /// The string representation of `tv`, quoted so `eval()` can read it back.
@@ -652,9 +653,9 @@ mod tests {
     }
 
     fn list(items: Vec<TypVal>) -> ListRef {
-        let mut l = tv_list_alloc(-1);
+        let l = tv_list_alloc(-1);
         for tv in items {
-            l.push(tv);
+            l.edit().push(tv);
         }
         l
     }
@@ -673,8 +674,8 @@ mod tests {
         let _serial = ready();
         let blob = tv_blob_alloc();
         blob.edit().extend(&[1, 0xab]);
-        let mut d = tv_dict_alloc();
-        d.add_number(b"n", 1).expect("fresh key");
+        let d = tv_dict_alloc();
+        d.edit().add_number(b"n", 1).expect("fresh key");
         let tv = TypVal::list(Some(list(vec![
             TypVal::Number(-7),
             string_tv(b"it's"),
@@ -701,17 +702,17 @@ mod tests {
     #[test]
     fn a_container_that_reaches_itself_is_marked_not_followed() {
         let _serial = ready();
-        let mut l = list(vec![TypVal::Number(1)]);
+        let l = list(vec![TypVal::Number(1)]);
         let again = l.clone();
-        l.push(TypVal::list(Some(again)));
+        l.edit().push(TypVal::list(Some(again)));
         let tv = TypVal::list(Some(l.clone()));
         // `:echo`'s marker: `string()` and JSON say the same with an error
         // message, which wants a screen.
         assert_eq!(echo(&tv), "[1, [...@0]]");
 
-        let mut d = tv_dict_alloc();
+        let d = tv_dict_alloc();
         let inner = list(vec![TypVal::dict(Some(d.clone()))]);
-        d.add_list(b"l", Some(inner)).expect("fresh key");
+        d.edit().add_list(b"l", Some(inner)).expect("fresh key");
         let dtv = TypVal::dict(Some(d.clone()));
         assert_eq!(echo(&dtv), "{'l': [{...@0}]}");
 
@@ -746,8 +747,8 @@ mod tests {
     #[test]
     fn a_partial_prints_its_arguments_and_its_dictionary() {
         let _serial = ready();
-        let mut d = tv_dict_alloc();
-        d.add_number(b"n", 1).expect("fresh key");
+        let d = tv_dict_alloc();
+        d.edit().add_number(b"n", 1).expect("fresh key");
         let args = vec![
             TypVal::Number(1),
             TypVal::list(Some(list(vec![string_tv(b"x")]))),
@@ -756,7 +757,8 @@ mod tests {
         let tv = TypVal::partial(Some(pt.clone()));
         assert_eq!(text(&tv), "function('tr', [1, ['x']], {'n': 1})");
 
-        d.add_value(b"p", TypVal::partial(Some(pt)))
+        d.edit()
+            .add_value(b"p", TypVal::partial(Some(pt)))
             .expect("fresh key");
         // The marker counts frames from the bottom: the partial's own frame
         // is 0, its self dictionary's 1.

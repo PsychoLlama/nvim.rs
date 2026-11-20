@@ -141,7 +141,7 @@ impl<'a> Decoder<'a> {
         }
 
         if let OpenContainer::List(list) = &last.container {
-            if !list.items().is_empty() && !obj.didcomma {
+            if !list.read().items().is_empty() && !obj.didcomma {
                 tv_clear(&mut obj.val);
                 return Err(DecodeError::CommaBeforeItem(self.rest(val_location)));
             }
@@ -173,9 +173,9 @@ impl<'a> Decoder<'a> {
                         .unwrap_or_else(|_| unreachable!("a fresh key"));
                 }
                 (Some(special_val), _) => {
-                    let mut kv_pair = tv_list_alloc(2);
-                    kv_pair.push(key.val);
-                    kv_pair.push(obj.val);
+                    let kv_pair = tv_list_alloc(2);
+                    kv_pair.edit().push(key.val);
+                    kv_pair.edit().push(obj.val);
                     special_val.edit().push_list(Some(kv_pair));
                 }
                 (None, OpenContainer::List(_)) => unreachable!("a list was handled above"),
@@ -191,7 +191,7 @@ impl<'a> Decoder<'a> {
             (None, OpenContainer::Dict(dict)) => Some(dict),
             _ => None,
         };
-        if !obj.didcomma && plain.is_some_and(|dict| dict.dv_hashtab.ht_used != 0) {
+        if !obj.didcomma && plain.is_some_and(|dict| dict.read().dv_hashtab.ht_used != 0) {
             tv_clear(&mut obj.val);
             return Err(DecodeError::CommaBeforeKey(self.rest(val_location)));
         }
@@ -201,7 +201,7 @@ impl<'a> Decoder<'a> {
                 || obj
                     .val
                     .string_ref()
-                    .is_none_or(|key| dict_find(Some(dict), key.as_bytes()).is_some()))
+                    .is_none_or(|key| dict_find(Some(&dict.read()), key.as_bytes()).is_some()))
         {
             tv_clear(&mut obj.val);
             self.containers.pop();

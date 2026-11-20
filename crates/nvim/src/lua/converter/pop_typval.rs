@@ -118,10 +118,10 @@ impl OpenValue {
                 wanted,
                 table,
             } => {
-                if list.lv_items.len() >= *wanted {
+                if list.read().lv_items.len() >= *wanted {
                     return false;
                 }
-                stack.raw_get_index(*table, len_as_int(list.lv_items.len() + 1));
+                stack.raw_get_index(*table, len_as_int(list.read().lv_items.len() + 1));
                 true
             }
             OpenValue::Dict { table, .. } | OpenValue::Pairs { table, .. } => {
@@ -145,12 +145,12 @@ impl OpenValue {
     /// pending key is once again the top of it.
     fn deliver(&mut self, stack: &mut Stack, value: TypVal) {
         match self {
-            OpenValue::List { list, .. } => list.lv_items.push(ListItem::new(value)),
+            OpenValue::List { list, .. } => list.edit().lv_items.push(ListItem::new(value)),
             OpenValue::Dict { dict, table } => {
                 let key = stack.to_bytes(table.above(1)).unwrap_or_default();
                 let mut item = DictItem::boxed(key);
                 item.di_tv = value;
-                if dict.add_item(item).is_err() {
+                if dict.edit().add_item(item).is_err() {
                     // A Lua table cannot hand the same key back twice,
                     // so the only refusal left is the funcref-name
                     // check, which a key from a table never trips.
@@ -163,10 +163,13 @@ impl OpenValue {
                 // `[key, value]` lists, and the key is forced to a blob so
                 // that the NUL that put it here survives.
                 let key = decode_string(bytes, true);
-                let mut pair = tv_list_alloc(2);
-                pair.lv_items.push(ListItem::new(key));
-                pair.lv_items.push(ListItem::new(value));
-                pairs.lv_items.push(ListItem::new(TypVal::list(Some(pair))));
+                let pair = tv_list_alloc(2);
+                pair.edit().lv_items.push(ListItem::new(key));
+                pair.edit().lv_items.push(ListItem::new(value));
+                pairs
+                    .edit()
+                    .lv_items
+                    .push(ListItem::new(TypVal::list(Some(pair))));
             }
         }
     }
@@ -272,8 +275,8 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
     let table = stack.top();
     match table_props.type_0 {
         OBJECT_TYPE_ARRAY => {
-            let mut list = tv_list_alloc(table_props.maxidx.cast_signed());
-            list.lua_table_ref = table_ref;
+            let list = tv_list_alloc(table_props.maxidx.cast_signed());
+            list.edit().lua_table_ref = table_ref;
             if table_props.maxidx == 0 {
                 return Ok(Converted::Value(TypVal::list(Some(list))));
             }
@@ -286,25 +289,25 @@ fn convert_table(stack: &mut Stack, open: &mut Vec<OpenValue>) -> Result<Convert
         }
         OBJECT_TYPE_DICT => {
             if table_props.string_keys_num == 0 {
-                let mut dict = tv_dict_alloc();
-                dict.lua_table_ref = table_ref;
+                let dict = tv_dict_alloc();
+                dict.edit().lua_table_ref = table_ref;
                 return Ok(Converted::Value(TypVal::dict(Some(dict))));
             }
             if table_props.has_string_with_nul {
                 // A key with a NUL in it has no Vimscript dictionary image,
                 // so the whole table becomes the `{_TYPE = map, _VAL = [[k,
                 // v], …]}` special form and the walk descends into `_VAL`.
-                let (special, mut pairs) =
+                let (special, pairs) =
                     decode_create_map_special_dict(table_props.string_keys_num.cast_signed());
-                pairs.lua_table_ref = table_ref;
+                pairs.edit().lua_table_ref = table_ref;
                 open.push(OpenValue::Pairs {
                     special,
                     pairs,
                     table,
                 });
             } else {
-                let mut dict = tv_dict_alloc();
-                dict.lua_table_ref = table_ref;
+                let dict = tv_dict_alloc();
+                dict.edit().lua_table_ref = table_ref;
                 open.push(OpenValue::Dict { dict, table });
             }
             // Seed `lua_next`.

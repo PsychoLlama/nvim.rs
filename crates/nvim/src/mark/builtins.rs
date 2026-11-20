@@ -40,7 +40,7 @@ fn add_mark(
     if pos.lnum <= LineNr::ZERO {
         return Ok(());
     }
-    let mut d_held = tv_dict_alloc();
+    let d_held = tv_dict_alloc();
     l.push_dict(Some(d_held.clone()));
     let lpos = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     lpos.edit()
@@ -56,7 +56,7 @@ fn add_mark(
             ColNr::MAX
         }));
     lpos.edit().push_number(VarNumber::from(pos.coladd));
-    let d = &mut *d_held;
+    let d = &mut d_held.edit();
     if d.add_str(b"mark", Some(mname)).is_err()
         || d.add_list(b"pos", Some(lpos)).is_err()
         || fname.is_some_and(|fname| d.add_str(b"file", Some(fname)).is_err())

@@ -191,10 +191,10 @@ fn menuitem_getinfo(
 ) {
     if menu_name.is_empty() {
         // All the top-level menus, skipping PopUp[nvoci].
-        let mut list = list_alloc();
+        let list = list_alloc();
         for top in tree {
             if !is_hidden(top.dname.as_bytes()) {
-                list.push_str(Some(&top.dname));
+                list.edit().push_str(Some(&top.dname));
             }
         }
         let _ = dict.add_list(b"submenus", Some(list));
@@ -236,9 +236,9 @@ fn menuitem_getinfo(
     }
 
     // Otherwise all the submenu display names.
-    let mut list = list_alloc();
+    let list = list_alloc();
     for child in &menu.children {
-        list.push_str(Some(&child.dname));
+        list.edit().push_str(Some(&child.dname));
     }
     let _ = dict.add_list(b"submenus", Some(list));
 }
@@ -265,7 +265,7 @@ pub(crate) fn f_menu_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     };
 
     let modes = cmd_modes(which.to_bytes(), which.to_bytes().first() == Some(&b'!')).0;
-    let Some(dict) = result.dict_mut() else {
+    let Some(mut dict) = result.dict_mut() else {
         return;
     };
     let menu_name = menu_name.to_bytes();
@@ -273,7 +273,7 @@ pub(crate) fn f_menu_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         if let Some(menu) = find_by_name(tree, menu_name)
             && menu.modes & modes != 0
         {
-            menuitem_getinfo(menu_name, menu, tree, modes, dict);
+            menuitem_getinfo(menu_name, menu, tree, modes, &mut dict);
         }
     });
 }

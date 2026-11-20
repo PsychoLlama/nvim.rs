@@ -79,9 +79,10 @@ impl TypVal {
 
     /// What a partial binds: its dictionary and its arguments. Neither for a
     /// Funcref, a NULL partial or anything else.
-    pub(crate) fn partial_binding(&self) -> (Option<&Dict>, &[TypVal]) {
-        self.partial_ref()
-            .map_or((None, &[]), |pt| (pt.pt_dict.as_deref(), &pt.pt_argv))
+    pub(crate) fn partial_binding(&self) -> (Option<Read<'_, Dict>>, &[TypVal]) {
+        self.partial_ref().map_or((None, &[]), |pt| {
+            (pt.pt_dict.as_ref().map(DictRef::read), &pt.pt_argv)
+        })
     }
 }
 
@@ -169,10 +170,10 @@ mod tests {
         let _serial = editor_state_lock();
         let d = tv_dict_alloc();
         let inner = tv_list_alloc(1);
-        let (d_before, i_before) = (d.dv_refcount.get(), inner.lv_refcount.get());
-        let mut args = tv_list_alloc(2);
-        args.push_number(1);
-        args.push_list(Some(inner.clone()));
+        let (d_before, i_before) = (d.read().dv_refcount.get(), inner.read().lv_refcount.get());
+        let args = tv_list_alloc(2);
+        args.edit().push_number(1);
+        args.edit().push_list(Some(inner.clone()));
 
         let mut pt = function(Some(args), Some(d.clone()));
         let held = pt
@@ -188,14 +189,14 @@ mod tests {
             Some(&b"len"[..])
         );
         let (dict, argv) = pt.partial_binding();
-        assert!(dict.is_some_and(|bound| ::core::ptr::eq(bound, &*d)));
+        assert!(dict.is_some_and(|bound| ::core::ptr::eq(&*bound, &*d.read())));
         assert_eq!(argv[0].number_or_zero(), 1);
         assert!(
             argv[1].list_shared().is_some_and(|l| l.ptr_eq(&inner)),
             "an argument is shared, not copied"
         );
-        assert_eq!(d.dv_refcount.get(), d_before + 1);
-        assert_eq!(inner.lv_refcount.get(), i_before + 1);
+        assert_eq!(d.read().dv_refcount.get(), d_before + 1);
+        assert_eq!(inner.read().lv_refcount.get(), i_before + 1);
 
         let mut copy = TypVal::Unknown;
         tv_copy(&pt, &mut copy);
@@ -204,14 +205,14 @@ mod tests {
             "a copy shares the partial"
         );
         assert_eq!(held.pt_refcount.get(), 3);
-        assert_eq!(d.dv_refcount.get(), d_before + 1);
+        assert_eq!(d.read().dv_refcount.get(), d_before + 1);
 
         tv_clear(&mut pt);
         assert_eq!(held.pt_refcount.get(), 2);
         tv_clear(&mut copy);
         drop(held);
-        assert_eq!(d.dv_refcount.get(), d_before);
-        assert_eq!(inner.lv_refcount.get(), i_before);
+        assert_eq!(d.read().dv_refcount.get(), d_before);
+        assert_eq!(inner.read().lv_refcount.get(), i_before);
     }
 
     /// A partial lends `&mut` only to its one holder: a second handle (or
@@ -235,12 +236,12 @@ mod tests {
     fn rebinding_a_partial_appends_its_arguments() {
         let _serial = editor_state_lock();
         let d = tv_dict_alloc();
-        let mut first_args = tv_list_alloc(1);
-        first_args.push_number(1);
+        let first_args = tv_list_alloc(1);
+        first_args.edit().push_number(1);
         let mut first = function(Some(first_args), Some(d.clone()));
 
-        let mut more = tv_list_alloc(1);
-        more.push_number(2);
+        let more = tv_list_alloc(1);
+        more.edit().push_number(2);
         let mut argv = [TypVal::Unknown, TypVal::list(Some(more))];
         tv_copy(&first, &mut argv[0]);
         let mut second = TypVal::Number(0);
@@ -252,16 +253,16 @@ mod tests {
         let (a, b) = (first.partial_shared(), second.partial_shared());
         assert!(!a.zip(b).is_some_and(|(a, b)| a.ptr_eq(b)));
         let (dict, args) = second.partial_binding();
-        assert!(dict.is_some_and(|bound| ::core::ptr::eq(bound, &*d)));
+        assert!(dict.is_some_and(|bound| ::core::ptr::eq(&*bound, &*d.read())));
         let numbers: Vec<_> = args.iter().map(TypVal::number_or_zero).collect();
         assert_eq!(numbers, [1, 2]);
         assert_eq!(first.partial_binding().1.len(), 1);
         // The handle, and one per partial.
-        assert_eq!(d.dv_refcount.get(), 3);
+        assert_eq!(d.read().dv_refcount.get(), 3);
 
         tv_clear(&mut first);
         tv_clear(&mut second);
-        assert_eq!(d.dv_refcount.get(), 1);
+        assert_eq!(d.read().dv_refcount.get(), 1);
     }
 
     /// A partial whose bound dictionary holds the partial: neither count
@@ -278,17 +279,17 @@ mod tests {
         assert_eq!(held.pt_refcount.get(), 2);
         drop(held);
         // The handle and the partial.
-        assert_eq!(d.dv_refcount.get(), 2);
+        assert_eq!(d.read().dv_refcount.get(), 2);
         let view = ::core::mem::ManuallyDrop::new(d.clone());
         drop(d);
-        assert_eq!(view.dv_refcount.get(), 2, "the cycle keeps it alive");
+        assert_eq!(view.read().dv_refcount.get(), 2, "the cycle keeps it alive");
 
         TV_IN_FREE_UNREF_ITEMS.set(true);
         // Pass 1: the item goes, the partial goes with it, and the partial
         // gives back the dictionary's last reference -- which must not
         // free the dictionary under the walk.
         tv_dict_free_contents(&view);
-        assert_eq!(view.dv_refcount.get(), 1);
+        assert_eq!(view.read().dv_refcount.get(), 1);
         TV_IN_FREE_UNREF_ITEMS.set(false);
         // Pass 2: the view's own reference, the last.
         drop(::core::mem::ManuallyDrop::into_inner(view));

@@ -68,7 +68,7 @@ pub fn tv_to_argv(cmd_tv: &TypVal) -> Result<Argv, ArgvRefusal> {
     }
 
     let items = cmd_tv.list_ref();
-    let argc = list_len(items);
+    let argc = list_len(items.as_deref());
     if argc == 0 {
         emsg_static(E_INVARG);
         return Err(ArgvRefusal::Invalid);
@@ -77,7 +77,7 @@ pub fn tv_to_argv(cmd_tv: &TypVal) -> Result<Argv, ArgvRefusal> {
     // The first item has to resolve to something runnable, and the
     // resolved path is what actually goes in slot 0.
     let mut numbuf = NumBuf::new();
-    let first = &list_iter(items).next().expect("non-empty").li_tv;
+    let first = &list_iter(items.as_deref()).next().expect("non-empty").li_tv;
     let Ok(arg0) = numbuf.string_chk(first) else {
         return Err(ArgvRefusal::Invalid);
     };
@@ -95,7 +95,7 @@ pub fn tv_to_argv(cmd_tv: &TypVal) -> Result<Argv, ArgvRefusal> {
 
     let mut program = Some(ThinCString::from(program));
     let mut words = Vec::with_capacity(as_index(argc));
-    for arg in list_iter(items) {
+    for arg in list_iter(items.as_deref()) {
         let Ok(word) = numbuf.string_chk(&arg.li_tv) else {
             return Err(ArgvRefusal::Invalid);
         };
@@ -118,8 +118,8 @@ fn string_to_list(output: &[u8], keepempty: bool) -> ListRef {
         Some((&last, rest)) if !keepempty && last == NL => rest,
         _ => output,
     };
-    let mut list = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
-    encode_list_write(&mut list, output);
+    let list = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
+    encode_list_write(&mut list.edit(), output);
     list
 }
 
@@ -221,7 +221,7 @@ pub fn save_tv_as_string(tv: &TypVal, endnl: bool, crlf: bool) -> Result<Option<
     match tv.v_type() {
         VAR_UNKNOWN => Ok(None),
         VAR_NUMBER => buffer_as_string(tv),
-        VAR_LIST => Ok(list_as_string(tv.list_ref(), endnl, crlf)),
+        VAR_LIST => Ok(list_as_string(tv.list_ref().as_deref(), endnl, crlf)),
         _ => numbuf
             .bytes_chk(tv)
             .map(|text| Some(text.to_vec()))

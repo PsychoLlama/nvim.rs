@@ -98,9 +98,10 @@ pub fn common_job_callbacks(
         return false;
     }
 
-    let dict = options.map(|options| &**options);
-    on_stdout.buffered = dict_get_number(dict, b"stdout_buffered") != 0;
-    on_stderr.buffered = dict_get_number(dict, b"stderr_buffered") != 0;
+    let dict = options.map(|options| options.read());
+    on_stdout.buffered = dict_get_number(dict.as_deref(), b"stdout_buffered") != 0;
+    on_stderr.buffered = dict_get_number(dict.as_deref(), b"stderr_buffered") != 0;
+    drop(dict);
     // Buffered output with no callback is collected into the options
     // dictionary itself, which is why it becomes the reader's `self`, with
     // a reference of its own.

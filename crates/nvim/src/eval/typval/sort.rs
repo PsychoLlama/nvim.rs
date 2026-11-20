@@ -305,7 +305,7 @@ pub(crate) fn do_sort(list: &ListRef, info: &mut SortInfo<'_>) {
     drop(taken);
     // A cursor stands on an item, not on a place, so it goes where the item
     // went.  Only paid for when something is actually walking the list.
-    if list.is_watched() {
+    if list.read().is_watched() {
         let mut moved = vec![ListWatch::ENDED; len];
         for (dest, &from) in order.iter().enumerate() {
             moved[from] = index_of(dest);
@@ -328,21 +328,22 @@ pub(crate) fn do_uniq(list: &ListRef, info: &mut SortInfo<'_>) {
     let builtin = info.is_builtin();
 
     let mut at = 1;
-    while at < list.len() {
+    while at < list.read().len() {
         let res = if builtin {
+            let list = list.read();
             let items = list.items();
             compare_builtin(info, &items[at - 1].li_tv, &items[at].li_tv)
         } else if info.func_err {
             0
         } else {
             let argv = [
-                list.items()[at - 1].li_tv.clone(),
-                list.items()[at].li_tv.clone(),
+                list.read().items()[at - 1].li_tv.clone(),
+                list.read().items()[at].li_tv.clone(),
             ];
             compare_user(info, argv)
         };
         // A comparator may have cut the list short.
-        if res == 0 && at < list.len() {
+        if res == 0 && at < list.read().len() {
             list.remove_at(at);
         } else {
             at += 1;
@@ -456,14 +457,14 @@ pub(crate) fn do_sort_uniq(args: &[TypVal], result: &mut TypVal, sort: bool) {
         c"uniq() argument"
     };
     if !value_check_lock(
-        list_locked(first.list_ref()),
+        { list_locked(first.list_ref().as_deref()) },
         LockName::Translate(arg_errmsg),
     ) {
         // The answer is the argument's own list, with a reference of its
         // own.
         result.write_list(first.list_handle());
         if let Some(list) = first.list_shared()
-            && list.len() > 1
+            && list.read().len() > 1
             && parse_sort_uniq_args(args, &mut info, &mut how).is_ok()
         {
             if sort {
@@ -530,17 +531,17 @@ mod tests {
     }
 
     fn list_of(items: &[V]) -> ListRef {
-        let mut l = tv_list_alloc(ptrdiff_t::try_from(items.len()).expect("short"));
+        let l = tv_list_alloc(ptrdiff_t::try_from(items.len()).expect("short"));
         for v in items {
             let mut tv = v.tv();
-            l.push_copy(&tv);
+            l.edit().push_copy(&tv);
             tv_clear(&mut tv);
         }
         l
     }
 
     fn contents(l: &ListRef) -> Vec<V> {
-        l.items().iter().map(|li| V::of(&li.li_tv)).collect()
+        l.read().items().iter().map(|li| V::of(&li.li_tv)).collect()
     }
 
     /// `sort(l, how)` or `uniq(l, how)` in place, through the builtin.
@@ -603,20 +604,23 @@ mod tests {
     #[test]
     fn a_watcher_follows_its_item_through_a_sort() {
         let _serial = editor_state_lock();
-        let mut l = list_of(&[N(3), N(0), N(2), N(1)]);
-        let two = l.watch_add();
-        l.set_watch_index(two, 2);
-        let three = l.watch_add();
-        l.set_watch_index(three, 0);
+        let l = list_of(&[N(3), N(0), N(2), N(1)]);
+        let two = l.edit().watch_add();
+        l.edit().set_watch_index(two, 2);
+        let three = l.edit().watch_add();
+        l.edit().set_watch_index(three, 0);
         run(&l, Some(S("N")), true);
         assert_eq!(contents(&l), [N(0), N(1), N(2), N(3)]);
-        assert_eq!((l.watch_index(two), l.watch_index(three)), (2, 3));
+        assert_eq!(
+            (l.read().watch_index(two), l.read().watch_index(three)),
+            (2, 3)
+        );
         // An ended cursor stays ended.
-        l.set_watch_index(three, ListWatch::ENDED);
+        l.edit().set_watch_index(three, ListWatch::ENDED);
         run(&l, Some(S("N")), true);
-        assert_eq!(l.watch_index(three), ListWatch::ENDED);
-        l.watch_remove(two);
-        l.watch_remove(three);
+        assert_eq!(l.read().watch_index(three), ListWatch::ENDED);
+        l.edit().watch_remove(two);
+        l.edit().watch_remove(three);
     }
 
     #[test]
@@ -665,13 +669,13 @@ mod tests {
     #[test]
     fn a_watcher_on_a_duplicate_lands_on_what_followed_it() {
         let _serial = editor_state_lock();
-        let mut l = list_of(&[N(1), N(1), N(2), N(2), N(3)]);
-        let w = l.watch_add();
-        l.set_watch_index(w, 3);
+        let l = list_of(&[N(1), N(1), N(2), N(2), N(3)]);
+        let w = l.edit().watch_add();
+        l.edit().set_watch_index(w, 3);
         run(&l, Some(S("N")), false);
         assert_eq!(contents(&l), [N(1), N(2), N(3)]);
-        assert_eq!(l.watch_index(w), 2);
-        l.watch_remove(w);
+        assert_eq!(l.read().watch_index(w), 2);
+        l.edit().watch_remove(w);
     }
 
     /// A list of one, or none, is answered without parsing `{how}`: even a

@@ -289,9 +289,9 @@ pub(crate) fn call_replacement(expr: &TypVal) -> Option<Vec<u8>> {
     // `fill_submatch_list` fills the list in if the function takes an
     // argument at all. Like upstream's static list it is locked and out of
     // the collector's registry: this frame owns it.
-    let mut match_list = tv_list_alloc(ptrdiff_t::try_from(SL_SIZE).unwrap_or(0));
+    let match_list = tv_list_alloc(ptrdiff_t::try_from(SL_SIZE).unwrap_or(0));
     {
-        let l = &mut *match_list;
+        let l = &mut match_list.edit();
         unroot_list(l.lv_root);
         l.lv_root = RootId::NONE;
         l.lv_lock = VarLock::Fixed;

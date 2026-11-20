@@ -34,7 +34,7 @@ use super::{
     list_tab_vars, list_vim_vars, list_win_vars, tv_to_optval,
 };
 use crate::charset::skip;
-use crate::eval::typval::{NumBuf, TV_INITIAL_VALUE, list_len, tv_copy, tv_list_alloc};
+use crate::eval::typval::{NumBuf, TV_INITIAL_VALUE, list_len, tv_list_alloc};
 use crate::eval::{
     FNE_CHECK_START, FNE_INCL_BR, env_name_len, eval_isnamec1, eval0_in_cmd_until, get_lval,
     num_divide, num_modulus, option_var_end, set_var_lval,
@@ -211,7 +211,7 @@ pub(crate) fn ex_let_vars(
         emsg_static(E_LISTREQ);
         return Err(Failed);
     }
-    let len = list_len(tv.list_ref());
+    let len = list_len(tv.list_ref().as_deref());
     let semicolon = c_int::from(targets.semicolon);
     if semicolon == 0 && targets.count < len {
         emsg_static(c"E687: Less targets than List items");
@@ -234,12 +234,12 @@ pub(crate) fn ex_let_vars(
         // Skip the whitespace after the '[', ',' or ';'.
         let next = skip::white_from(text, pos + 1);
         let mut item = TV_INITIAL_VALUE;
-        let Some(source) = list.items().get(at) else {
+        let Some(source) = list.read().items().get(at).map(|li| li.li_tv.clone()) else {
             // The list lost items while an earlier target was resolved.
             emsg_static(c"E688: More targets than List items");
             return Err(Failed);
         };
-        tv_copy(&source.li_tv, &mut item);
+        item.overwrite(source);
         let end = ex_let_one(&text[next..], &mut item, false, is_const, Some(b",;]"), op);
         clear_local(&mut item);
         let end = end?;
@@ -250,11 +250,13 @@ pub(crate) fn ex_let_vars(
         if sep == b';' {
             // The rest of the list, which may be empty, goes to the
             // variable after the ';', as a list of its own.
-            let rest = list.items().get(at..).unwrap_or_default();
-            let mut rest_list = tv_list_alloc(rest.len().try_into().unwrap_or(0));
+            let read = list.read();
+            let rest = read.items().get(at..).unwrap_or_default();
+            let rest_list = tv_list_alloc(rest.len().try_into().unwrap_or(0));
             for item in rest {
-                rest_list.push_copy(&item.li_tv);
+                rest_list.edit().push_copy(&item.li_tv);
             }
+            drop(read);
             let mut ltv = TypVal::list(Some(rest_list));
             let rest_at = skip::white_from(text, pos + 1);
             let end = ex_let_one(&text[rest_at..], &mut ltv, false, is_const, Some(b"]"), op);

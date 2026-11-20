@@ -99,8 +99,8 @@ pub(crate) fn assign_range(
     varname: &[u8],
 ) -> Result<(), Failed> {
     let mut idx1 = idx1_arg;
-    let first = list_find_index(Some(dest), &mut idx1);
-    let srclen = src.map_or(0, |src| src.len());
+    let first = list_find_index(Some(&dest.read()), &mut idx1);
+    let srclen = src.map_or(0, |src| src.read().len());
 
     // Check whether any of the list items is locked before making any
     // changes.  The walk stops at the end of the range or at the end of the
@@ -110,14 +110,14 @@ pub(crate) fn assign_range(
     let mut at = first;
     for i in 0..srclen {
         let Some(dest_at) = at else { break };
-        let lock = dest.items()[dest_at].li_lock;
+        let lock = dest.read().items()[dest_at].li_lock;
         if value_check_lock_named(lock, varname) {
             return Err(Failed);
         }
         if i + 1 == srclen || (!empty_idx2 && idx2 == idx) {
             break;
         }
-        at = (dest_at + 1 < dest.len()).then_some(dest_at + 1);
+        at = (dest_at + 1 < dest.read().len()).then_some(dest_at + 1);
         idx += 1;
     }
 
@@ -129,17 +129,17 @@ pub(crate) fn assign_range(
     let mut at = first.unwrap_or(0);
     let mut i = 0;
     let op = op.filter(|&op| op != b'=');
-    while let Some(src) = src.filter(|_| i < srclen && at < dest.len()) {
+    while let Some(src) = src.filter(|_| i < srclen && at < dest.read().len()) {
         // Both slots are re-read on every step, and the source value is
         // copied out first: when `dest` *is* `src`, the two slots are one
         // list's, and either may have moved since the last step.
-        let from = src.items()[i].li_tv.clone();
+        let from = src.read().items()[i].li_tv.clone();
         let value = match op {
             Some(op) => {
                 // The operator works on a copy of the target's value too --
                 // which shares its List or Blob, so `+=` still extends the
                 // one in the slot -- and the result goes back.
-                let mut current = dest.items()[at].li_tv.clone();
+                let mut current = dest.read().items()[at].li_tv.clone();
                 if eexe_mod_op(&mut current, &from, op).is_ok() {
                     Some(current)
                 } else {
@@ -158,7 +158,7 @@ pub(crate) fn assign_range(
         if i == srclen || (!empty_idx2 && idx2 == idx) {
             break;
         }
-        if at + 1 == dest.len() {
+        if at + 1 == dest.read().len() {
             // Need to add an empty item.
             dest.edit().push_number(0);
         }
@@ -172,7 +172,7 @@ pub(crate) fn assign_range(
         return Err(Failed);
     }
     let short = if empty_idx2 {
-        at + 1 < dest.len()
+        at + 1 < dest.read().len()
     } else {
         idx != idx2
     };
@@ -198,13 +198,13 @@ pub fn list_flatten(list: &ListRef, first: usize, maxitems: int64_t, maxdepth: i
 
     let mut at = first;
     let mut done = 0;
-    while at < list.len() && done < maxitems {
+    while at < list.read().len() && done < maxitems {
         fast_breakcheck();
         if GOT_INT.get() {
             return;
         }
-        let step = if list.items()[at].li_tv.v_type() == VAR_LIST {
-            let before = list.len();
+        let step = if list.read().items()[at].li_tv.v_type() == VAR_LIST {
+            let before = list.read().len();
             // The item naming the nested list is taken out *without* being
             // released, and held until the splice is done: the nested list
             // may be the very list being flattened, or the item may hold its
@@ -216,13 +216,13 @@ pub fn list_flatten(list: &ListRef, first: usize, maxitems: int64_t, maxdepth: i
             list_extend(list, inner, Some(at));
 
             if maxdepth > 0 {
-                let inner_len = int64_t::from(list_len(inner.map(|inner| &**inner)));
+                let inner_len = int64_t::from(list_len(inner.map(ListRef::read).as_deref()));
                 list_flatten(list, at, inner_len, maxdepth - 1);
             }
             drop(held);
             // However many items now stand where the one item stood --
             // the recursion above may have spliced in more.
-            list.len() + 1 - before
+            list.read().len() + 1 - before
         } else {
             1
         };
@@ -235,11 +235,11 @@ pub fn list_flatten(list: &ListRef, first: usize, maxitems: int64_t, maxdepth: i
 /// A fresh list holding copies of `ol[n1..=n2]`, which the caller has
 /// already clamped to the list.
 pub(crate) fn list_slice(ol: Option<&List>, n1: VarNumber, n2: VarNumber) -> ListRef {
-    let mut l = tv_list_alloc(ptrdiff_t::try_from(n2 - n1 + 1).unwrap_or(0));
+    let l = tv_list_alloc(ptrdiff_t::try_from(n2 - n1 + 1).unwrap_or(0));
     let items = list_items(ol);
     for at in n1..=n2 {
         let at = usize::try_from(at).expect("clamped to the list");
-        l.push_copy(&items[at].li_tv);
+        l.edit().push_copy(&items[at].li_tv);
     }
     l
 }
@@ -260,7 +260,7 @@ pub fn list_slice_or_index(
     result: &mut TypVal,
     verbose: bool,
 ) -> Result<(), Failed> {
-    let len = list_len(result.list_ref());
+    let len = list_len(result.list_ref().as_deref());
     let mut n1 = n1_arg;
     let mut n2 = n2_arg;
 
@@ -291,7 +291,7 @@ pub fn list_slice_or_index(
         if n2 < 0 || n2 + 1 < n1 {
             n2 = -1;
         }
-        let l = list_slice(result.list_ref(), n1, n2);
+        let l = list_slice(result.list_ref().as_deref(), n1, n2);
         tv_clear(result);
         result.write_list(Some(l));
     } else {
@@ -299,7 +299,10 @@ pub fn list_slice_or_index(
         // invalid.
         let mut var1 = TV_INITIAL_VALUE;
         let at = usize::try_from(n1).expect("an index of the list");
-        tv_copy(&list_items(result.list_ref())[at].li_tv, &mut var1);
+        tv_copy(
+            &list_items(result.list_ref().as_deref())[at].li_tv,
+            &mut var1,
+        );
         tv_clear(result);
         *result = var1;
     }
@@ -361,7 +364,7 @@ pub fn f_join(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
 
     let mut text = XString::new();
-    let _ = list_join(&mut text, args[0].list_ref(), sep);
+    let _ = list_join(&mut text, args[0].list_ref().as_deref(), sep);
     result.write_string(Some(text.into()));
 }
 

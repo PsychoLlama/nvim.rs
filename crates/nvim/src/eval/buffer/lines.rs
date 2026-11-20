@@ -61,7 +61,7 @@ pub(crate) fn set_buffer_lines(
     // An empty List sets nothing; any other argument is converted to a
     // String up front, a List's items one at a time.
     let is_list = lines.v_type() == VAR_LIST;
-    if !is_list || list_len(list.as_deref()) != 0 {
+    if !is_list || list_len(list.as_ref().map(ListRef::read).as_deref()) != 0 {
         let line = (!is_list).then(|| typval_tostring(Some(lines), false));
         let into = LinesInto {
             buffer,
@@ -107,7 +107,8 @@ impl LinesInto {
         loop {
             if let Some(list) = list {
                 // Re-read the items every time, as upstream does.
-                let Some(item) = list.items().get(at) else {
+                let read = list.read();
+                let Some(item) = read.items().get(at) else {
                     break;
                 };
                 line = Some(typval_tostring(Some(&item.li_tv), false));
@@ -209,7 +210,7 @@ fn get_buffer_lines(
     }
     start = start.max(LineNr::ONE);
     end = end.min(buffer.line_count());
-    let list = tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t);
+    let mut list = tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t);
     for lnum in start.through(end) {
         list.push_bytes(Some(text.line(lnum)));
     }

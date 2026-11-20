@@ -583,11 +583,11 @@ fn writable_value(vartv: &TypVal) -> bool {
         // A NULL container holds nothing to loop on.
         VAR_DICT => vartv.dict_shared().is_none_or(|dict| {
             let copy_id = get_copy_id();
-            set_ref_in_dict_items(dict, copy_id, None) || copy_id != dict.dv_copy_id
+            set_ref_in_dict_items(dict, copy_id, None) || copy_id != dict.read().dv_copy_id
         }),
         VAR_LIST => vartv.list_shared().is_none_or(|list| {
             let copy_id = get_copy_id();
-            set_ref_in_list_items(list, copy_id, None) || copy_id != list.lv_copy_id
+            set_ref_in_list_items(list, copy_id, None) || copy_id != list.read().lv_copy_id
         }),
         _ => true,
     }

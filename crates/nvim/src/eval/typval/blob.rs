@@ -428,7 +428,7 @@ pub fn blob_remove(
 
 /// `blob2list()`: the blob's bytes as a list of numbers.
 pub fn f_blob2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     if tv_check_for_blob_arg(args, 0).is_err() {
         return;
     }
@@ -445,7 +445,7 @@ pub fn f_list2blob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if tv_check_for_list_arg(args, 0).is_err() {
         return;
     }
-    for li in list_iter(args[0].list_ref()) {
+    for li in list_iter(args[0].list_ref().as_deref()) {
         let read = tv_get_number_chk(&li.li_tv);
         let n = read.unwrap_or(0);
         if read.is_err() || !(0..=255).contains(&n) {

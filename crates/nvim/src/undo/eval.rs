@@ -89,27 +89,29 @@ pub fn ex_undolist(_excmd: &mut ExArg) {
 /// `newhead`/`curhead`/`save`/`alt` where they apply — which is the order
 /// upstream adds them in.
 fn eval_tree(buffer: Buf, first: UndoLink) -> ListRef {
-    let mut list = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
+    let list = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     let mut link = first;
     while let Some(uh) = buffer.header(link) {
         let (seq, time, save_nr, alt_next, prev) =
             (uh.seq, uh.time, uh.save_nr, uh.alt_next, uh.prev);
-        let mut dict = tv_dict_alloc();
-        let _ = dict.add_number(b"seq", VarNumber::from(seq));
-        let _ = dict.add_number(b"time", time);
+        let dict = tv_dict_alloc();
+        let _ = dict.edit().add_number(b"seq", VarNumber::from(seq));
+        let _ = dict.edit().add_number(b"time", time);
         if link == buffer.b_u_newhead {
-            let _ = dict.add_number(b"newhead", 1);
+            let _ = dict.edit().add_number(b"newhead", 1);
         }
         if link == buffer.b_u_curhead {
-            let _ = dict.add_number(b"curhead", 1);
+            let _ = dict.edit().add_number(b"curhead", 1);
         }
         if save_nr > 0 {
-            let _ = dict.add_number(b"save", VarNumber::from(save_nr));
+            let _ = dict.edit().add_number(b"save", VarNumber::from(save_nr));
         }
         if alt_next.is_some() {
-            let _ = dict.add_list(b"alt", Some(eval_tree(buffer, alt_next)));
+            let _ = dict
+                .edit()
+                .add_list(b"alt", Some(eval_tree(buffer, alt_next)));
         }
-        list.push_dict(Some(dict));
+        list.edit().push_dict(Some(dict));
         link = prev;
     }
     list
@@ -138,7 +140,7 @@ pub fn f_undotree(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     let Some(buf) = buf else { return };
     let entries = eval_tree(buf, buf.b_u_oldhead);
-    let Some(dict) = result.dict_mut() else {
+    let Some(mut dict) = result.dict_mut() else {
         return;
     };
     let _ = dict.add_number(b"synced", VarNumber::from(buf.b_u_synced));

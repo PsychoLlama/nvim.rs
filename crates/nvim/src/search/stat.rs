@@ -350,32 +350,33 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             return;
         }
         let dict = args[0].dict_ref();
-        let Some(t) = dict_number(dict, c"timeout", timeout) else {
+        let Some(t) = dict_number(dict.as_deref(), c"timeout", timeout) else {
             return;
         };
         timeout = t;
-        let Some(m) = dict_number(dict, c"maxcount", maxcount) else {
+        let Some(m) = dict_number(dict.as_deref(), c"maxcount", maxcount) else {
             return;
         };
         maxcount = m;
-        let Some(r) = dict_number(dict, c"recompute", c_int::from(recompute)) else {
+        let Some(r) = dict_number(dict.as_deref(), c"recompute", c_int::from(recompute)) else {
             return;
         };
         recompute = r != 0;
 
-        if let Some(di) = dict_find(dict, b"pattern") {
+        if let Some(di) = dict_find(dict.as_deref(), b"pattern") {
             let Ok(text) = numbuf.string_chk(&di.di_tv) else {
                 return;
             };
             pattern = Some(text.to_bytes().to_vec());
         }
 
-        if let Some(di) = dict_find(dict, b"pos") {
+        if let Some(di) = dict_find(dict.as_deref(), b"pos") {
             if di.di_tv.v_type() != VAR_LIST {
                 semsg!("E475: Invalid argument: {}", "pos");
                 return;
             }
-            let items = list_items(di.di_tv.list_ref());
+            let items = di.di_tv.list_ref();
+            let items = list_items(items.as_deref());
             if items.len() != 3 {
                 semsg!("E475: Invalid argument: List format should be [lnum, col, off]");
                 return;
@@ -435,7 +436,7 @@ fn count_into(
 
     let stat = update_search_stat(0, pos, pos, recompute, maxcount, timeout);
     // The dictionary `f_searchcount` itself allocated.
-    if let Some(dict) = result.dict_mut() {
+    if let Some(mut dict) = result.dict_mut() {
         let values = [
             (&b"current"[..], stat.cur),
             (b"total", stat.cnt),

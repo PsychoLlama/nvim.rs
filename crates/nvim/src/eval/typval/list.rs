@@ -254,14 +254,19 @@ impl TypVal {
     /// and for `v:_null_list`.
     ///
     /// The safe spelling of [`TypVal::list_or_null`], and the one the
-    /// `list_*` family reads its argument in: the borrow lasts as long as
-    /// the value does, which is what the pointer never said.
+    /// `list_*` family reads its argument in. The [`Read`] is counted on
+    /// the list: an `edit()` of it while the read lives panics, so a body
+    /// that runs user code holds [`TypVal::list_shared`] and reads per step.
     #[inline(always)]
-    pub(crate) fn list_ref(&self) -> Option<&List> {
-        match self {
-            TypVal::List(list) => list.as_deref(),
-            _ => None,
-        }
+    pub(crate) fn list_ref(&self) -> Option<Read<'_, List>> {
+        self.list_shared().map(ListRef::read)
+    }
+
+    /// The list this value holds, shared for the life of `scope`: see
+    /// [`ReadScope`].
+    #[inline]
+    pub(crate) fn list_in<'s>(&'s self, scope: &'s ReadScope) -> Option<&'s List> {
+        self.list_ref().map(|list| scope.hold(list))
     }
 
     /// The handle this value holds, borrowed -- what to keep across a call
@@ -274,17 +279,10 @@ impl TypVal {
         }
     }
 
-    /// The list this value holds, borrowed for writing.
-    ///
-    /// The exclusive borrow is the point: a caller holding one cannot also
-    /// be reading the list through the value, which the raw pointer let it
-    /// do.
+    /// The list this value holds, borrowed for writing: an [`Edit`].
     #[inline(always)]
-    pub(crate) fn list_mut(&mut self) -> Option<&mut List> {
-        match self {
-            TypVal::List(list) => list.as_deref_mut(),
-            _ => None,
-        }
+    pub(crate) fn list_mut(&mut self) -> Option<Edit<'_, List>> {
+        self.list_shared().map(ListRef::edit)
     }
 
     /// A list value over `list`, which the value takes over.
@@ -392,7 +390,7 @@ impl ListRef {
     /// -- or `None` when the removed item was the last one.
     pub fn remove_at(&self, at: usize) -> Option<usize> {
         self.remove_range(at, at);
-        (at < self.len()).then_some(at)
+        (at < self.read().len()).then_some(at)
     }
 }
 
@@ -400,7 +398,7 @@ impl ListRef {
 ///
 /// The answer is a **borrow** of the list `ret_tv` now owns, for the caller
 /// to fill in; it is live as long as the return slot holds the list.
-pub fn tv_list_alloc_ret(ret_tv: &mut TypVal, len: ptrdiff_t) -> &mut List {
+pub fn tv_list_alloc_ret(ret_tv: &mut TypVal, len: ptrdiff_t) -> Edit<'_, List> {
     ret_tv.write_list(Some(tv_list_alloc(len)));
     ret_tv.list_mut().expect("the list just stored")
 }
@@ -413,7 +411,7 @@ pub fn tv_list_alloc_ret(ret_tv: &mut TypVal, len: ptrdiff_t) -> &mut List {
 /// and a value naming this list reads it again.
 pub fn list_free_contents(list: &ListRef) {
     let items = ::core::mem::take(&mut list.edit().lv_items);
-    debug_assert!(!list.is_watched());
+    debug_assert!(!list.read().is_watched());
     // Dropping the array clears each value in turn, front to back.
     drop(items);
 }
@@ -447,9 +445,10 @@ mod tests {
 
         /// `[0, 1, ..., len - 1]`, the list every case below edits.
         pub(super) fn counted(len: usize) -> ListRef {
-            let mut list = tv_list_alloc(ptrdiff_t::try_from(len).expect("a short list"));
+            let list = tv_list_alloc(ptrdiff_t::try_from(len).expect("a short list"));
             for n in 0..len {
-                list.push_number(VarNumber::try_from(n).expect("a small number"));
+                list.edit()
+                    .push_number(VarNumber::try_from(n).expect("a small number"));
             }
             list
         }
@@ -506,9 +505,9 @@ mod tests {
 
         /// Unregister every watcher and let `l` go; the pair every case
         /// ends with.
-        pub(super) fn done(mut l: ListRef, ids: &[u32]) {
+        pub(super) fn done(l: ListRef, ids: &[u32]) {
             for &id in ids {
-                l.watch_remove(id);
+                l.edit().watch_remove(id);
             }
             drop(l);
         }
@@ -536,47 +535,47 @@ mod tests {
     #[test]
     fn removing_an_item_after_the_watcher_leaves_it_where_it_was() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(5);
-        let lw = l::watch(&mut list, 1);
+        let list = l::counted(5);
+        let lw = { l::watch(&mut list.edit(), 1) };
         list.remove_at(3);
-        assert_eq!(l::numbers(&list), [0, 1, 2, 4]);
-        assert_eq!(l::watching(&list, lw), Some(1));
+        assert_eq!(l::numbers(&list.read()), [0, 1, 2, 4]);
+        assert_eq!(l::watching(&list.read(), lw), Some(1));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn removing_an_item_before_the_watcher_keeps_it_on_the_same_item() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(5);
-        let lw = l::watch(&mut list, 3);
+        let list = l::counted(5);
+        let lw = { l::watch(&mut list.edit(), 3) };
         list.remove_at(1);
-        assert_eq!(l::numbers(&list), [0, 2, 3, 4]);
+        assert_eq!(l::numbers(&list.read()), [0, 2, 3, 4]);
         // The item it stands on is still the one holding 3 -- which has
         // moved down one place.
-        assert_eq!(l::watching(&list, lw), Some(2));
+        assert_eq!(l::watching(&list.read(), lw), Some(2));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn removing_the_watched_item_lands_the_watcher_on_the_next_one() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(5);
-        let lw = l::watch(&mut list, 2);
+        let list = l::counted(5);
+        let lw = { l::watch(&mut list.edit(), 2) };
         list.remove_at(2);
-        assert_eq!(l::numbers(&list), [0, 1, 3, 4]);
+        assert_eq!(l::numbers(&list.read()), [0, 1, 3, 4]);
         // Index 2 again, but the item that *followed* the removed one.
-        assert_eq!(l::watching(&list, lw), Some(2));
+        assert_eq!(l::watching(&list.read(), lw), Some(2));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn removing_the_watched_last_item_pushes_the_watcher_off_the_end() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(3);
-        let lw = l::watch(&mut list, 2);
+        let list = l::counted(3);
+        let lw = { l::watch(&mut list.edit(), 2) };
         list.remove_at(2);
-        assert_eq!(l::numbers(&list), [0, 1]);
-        assert_eq!(l::watching(&list, lw), None);
+        assert_eq!(l::numbers(&list.read()), [0, 1]);
+        assert_eq!(l::watching(&list.read(), lw), None);
         l::done(list, &[lw]);
     }
 
@@ -586,81 +585,82 @@ mod tests {
         // walking: the cursor is already past the end, and nothing puts it
         // back.
         let _serial = editor_state_lock();
-        let mut list = l::counted(2);
-        let lw = l::watch(&mut list, 1);
+        let list = l::counted(2);
+        let lw = { l::watch(&mut list.edit(), 1) };
         list.remove_at(1);
-        assert_eq!(l::watching(&list, lw), None);
-        list.push_number(9);
-        assert_eq!(l::watching(&list, lw), None);
+        assert_eq!(l::watching(&list.read(), lw), None);
+        list.edit().push_number(9);
+        assert_eq!(l::watching(&list.read(), lw), None);
         l::done(list, &[lw]);
     }
 
     #[test]
     fn removing_a_run_around_the_watcher_lands_it_after_the_run() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(7);
+        let list = l::counted(7);
         let lws = [
-            l::watch(&mut list, 0),
-            l::watch(&mut list, 3),
-            l::watch(&mut list, 6),
+            { l::watch(&mut list.edit(), 0) },
+            { l::watch(&mut list.edit(), 3) },
+            { l::watch(&mut list.edit(), 6) },
         ];
         list.remove_range(2, 4);
-        assert_eq!(l::numbers(&list), [0, 1, 5, 6]);
-        assert_eq!(l::watching(&list, lws[0]), Some(0));
+        assert_eq!(l::numbers(&list.read()), [0, 1, 5, 6]);
+        assert_eq!(l::watching(&list.read(), lws[0]), Some(0));
         // Was on 3, inside the run: now on what followed the run, 5.
-        assert_eq!(l::watching(&list, lws[1]), Some(2));
+        assert_eq!(l::watching(&list.read(), lws[1]), Some(2));
         // Was on 6, after the run: still on 6.
-        assert_eq!(l::watching(&list, lws[2]), Some(3));
+        assert_eq!(l::watching(&list.read(), lws[2]), Some(3));
         l::done(list, &lws);
     }
 
     #[test]
     fn inserting_before_the_watcher_keeps_it_on_the_same_item() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(4);
-        let lw = l::watch(&mut list, 2);
-        l::insert(&mut list, 90, 1);
-        assert_eq!(l::numbers(&list), [0, 90, 1, 2, 3]);
-        assert_eq!(l::watching(&list, lw), Some(3));
+        let list = l::counted(4);
+        let lw = { l::watch(&mut list.edit(), 2) };
+        l::insert(&mut list.edit(), 90, 1);
+        assert_eq!(l::numbers(&list.read()), [0, 90, 1, 2, 3]);
+        assert_eq!(l::watching(&list.read(), lw), Some(3));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn inserting_after_the_watcher_leaves_it_where_it_was() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(4);
-        let lw = l::watch(&mut list, 1);
-        l::insert(&mut list, 90, 3);
-        assert_eq!(l::numbers(&list), [0, 1, 2, 90, 3]);
-        assert_eq!(l::watching(&list, lw), Some(1));
+        let list = l::counted(4);
+        let lw = { l::watch(&mut list.edit(), 1) };
+        l::insert(&mut list.edit(), 90, 3);
+        assert_eq!(l::numbers(&list.read()), [0, 1, 2, 90, 3]);
+        assert_eq!(l::watching(&list.read(), lw), Some(1));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn inserting_at_the_watched_item_pushes_the_watcher_up() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(4);
-        let lw = l::watch(&mut list, 1);
-        l::insert(&mut list, 90, 1);
-        assert_eq!(l::numbers(&list), [0, 90, 1, 2, 3]);
+        let list = l::counted(4);
+        let lw = { l::watch(&mut list.edit(), 1) };
+        l::insert(&mut list.edit(), 90, 1);
+        assert_eq!(l::numbers(&list.read()), [0, 90, 1, 2, 3]);
         // Still on the item holding 1, now one place further along.
-        assert_eq!(l::watching(&list, lw), Some(2));
+        assert_eq!(l::watching(&list.read(), lw), Some(2));
         l::done(list, &[lw]);
     }
 
     #[test]
     fn moving_the_watched_run_to_another_list_lands_the_watcher_after_it() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(6);
-        let mut tgt = l::counted(0);
-        let lws = [l::watch(&mut list, 1), l::watch(&mut list, 4)];
-        list.move_range_to(1, 2, &mut tgt);
-        assert_eq!(l::numbers(&list), [0, 3, 4, 5]);
-        assert_eq!(l::numbers(&tgt), [1, 2]);
+        let list = l::counted(6);
+        let tgt = l::counted(0);
+        let lw0 = { l::watch(&mut list.edit(), 1) };
+        let lws = [lw0, { l::watch(&mut list.edit(), 4) }];
+        list.edit().move_range_to(1, 2, &mut tgt.edit());
+        assert_eq!(l::numbers(&list.read()), [0, 3, 4, 5]);
+        assert_eq!(l::numbers(&tgt.read()), [1, 2]);
         // A watcher follows the list it is registered with, not the items
         // that left it.
-        assert_eq!(l::watching(&list, lws[0]), Some(1));
-        assert_eq!(l::watching(&list, lws[1]), Some(2));
+        assert_eq!(l::watching(&list.read(), lws[0]), Some(1));
+        assert_eq!(l::watching(&list.read(), lws[1]), Some(2));
         l::done(list, &lws);
         l::done(tgt, &[]);
     }
@@ -670,20 +670,20 @@ mod tests {
     #[test]
     fn a_walk_that_removes_the_next_item_skips_it() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(5);
-        let lw = l::watch(&mut list, 0);
+        let list = l::counted(5);
+        let lw = { l::watch(&mut list.edit(), 0) };
         let mut seen = Vec::new();
-        while let Some(n) = l::step(&mut list, lw) {
+        while let Some(n) = { l::step(&mut list.edit(), lw) } {
             seen.push(n);
             if n == 1 {
                 // The cursor stands on 2; take it away.
-                assert_eq!(l::watching(&list, lw), Some(2));
+                assert_eq!(l::watching(&list.read(), lw), Some(2));
                 list.remove_at(2);
-                assert_eq!(l::watching(&list, lw), Some(2));
+                assert_eq!(l::watching(&list.read(), lw), Some(2));
             }
         }
         assert_eq!(seen, [0, 1, 3, 4]);
-        assert_eq!(l::numbers(&list), [0, 1, 3, 4]);
+        assert_eq!(l::numbers(&list.read()), [0, 1, 3, 4]);
         l::done(list, &[lw]);
     }
 
@@ -693,23 +693,23 @@ mod tests {
     #[test]
     fn a_walk_that_removes_its_current_item_misses_nothing() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(5);
-        let lw = l::watch(&mut list, 0);
+        let list = l::counted(5);
+        let lw = { l::watch(&mut list.edit(), 0) };
         let mut seen = Vec::new();
-        while let Some(n) = l::step(&mut list, lw) {
+        while let Some(n) = { l::step(&mut list.edit(), lw) } {
             seen.push(n);
             if n == 1 || n == 2 {
-                let at = l::numbers(&list)
+                let at = l::numbers(&list.read())
                     .iter()
                     .position(|&v| v == n)
                     .expect("the current item");
-                let before = l::watching(&list, lw).expect("not at the end");
+                let before = l::watching(&list.read(), lw).expect("not at the end");
                 list.remove_at(at);
-                assert_eq!(l::watching(&list, lw), Some(before - 1));
+                assert_eq!(l::watching(&list.read(), lw), Some(before - 1));
             }
         }
         assert_eq!(seen, [0, 1, 2, 3, 4]);
-        assert_eq!(l::numbers(&list), [0, 3, 4]);
+        assert_eq!(l::numbers(&list.read()), [0, 3, 4]);
         l::done(list, &[lw]);
     }
 
@@ -719,28 +719,28 @@ mod tests {
     #[test]
     fn a_walk_that_removes_a_run_around_its_cursor_resumes_after_it() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(8);
-        let lw = l::watch(&mut list, 0);
+        let list = l::counted(8);
+        let lw = { l::watch(&mut list.edit(), 0) };
         let mut seen = Vec::new();
-        while let Some(n) = l::step(&mut list, lw) {
+        while let Some(n) = { l::step(&mut list.edit(), lw) } {
             seen.push(n);
             match n {
                 1 => {
                     // The cursor is on 2; take 1..=3 away.
                     list.remove_range(1, 3);
-                    assert_eq!(l::numbers(&list), [0, 4, 5, 6, 7]);
-                    assert_eq!(l::watching(&list, lw), Some(1));
+                    assert_eq!(l::numbers(&list.read()), [0, 4, 5, 6, 7]);
+                    assert_eq!(l::watching(&list.read(), lw), Some(1));
                 }
                 5 => {
                     // The cursor is on 6; take it and everything after.
                     list.remove_range(3, 4);
-                    assert_eq!(l::watching(&list, lw), None);
+                    assert_eq!(l::watching(&list.read(), lw), None);
                 }
                 _ => {}
             }
         }
         assert_eq!(seen, [0, 1, 4, 5]);
-        assert_eq!(l::numbers(&list), [0, 4, 5]);
+        assert_eq!(l::numbers(&list.read()), [0, 4, 5]);
         l::done(list, &[lw]);
     }
 
@@ -749,18 +749,18 @@ mod tests {
     #[test]
     fn a_walk_that_inserts_before_its_item_does_not_visit_the_insert() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(4);
-        let lw = l::watch(&mut list, 0);
+        let list = l::counted(4);
+        let lw = { l::watch(&mut list.edit(), 0) };
         let mut seen = Vec::new();
-        while let Some(n) = l::step(&mut list, lw) {
+        while let Some(n) = { l::step(&mut list.edit(), lw) } {
             seen.push(n);
             if n == 2 {
-                l::insert(&mut list, 90, 2);
-                assert_eq!(l::watching(&list, lw), Some(4));
+                l::insert(&mut list.edit(), 90, 2);
+                assert_eq!(l::watching(&list.read(), lw), Some(4));
             }
         }
         assert_eq!(seen, [0, 1, 2, 3]);
-        assert_eq!(l::numbers(&list), [0, 1, 90, 2, 3]);
+        assert_eq!(l::numbers(&list.read()), [0, 1, 90, 2, 3]);
         l::done(list, &[lw]);
     }
 
@@ -769,25 +769,25 @@ mod tests {
     #[test]
     fn two_watchers_on_one_list_each_follow_their_item() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(6);
-        let outer = l::watch(&mut list, 2);
-        let inner = l::watch(&mut list, 4);
+        let list = l::counted(6);
+        let outer = { l::watch(&mut list.edit(), 2) };
+        let inner = { l::watch(&mut list.edit(), 4) };
         assert_ne!(outer, inner);
         list.remove_at(3);
-        assert_eq!(l::watching(&list, outer), Some(2));
-        assert_eq!(l::watching(&list, inner), Some(3));
+        assert_eq!(l::watching(&list.read(), outer), Some(2));
+        assert_eq!(l::watching(&list.read(), inner), Some(3));
         // Removing the outer cursor's item leaves the inner one alone.
         list.remove_at(2);
-        assert_eq!(l::numbers(&list), [0, 1, 4, 5]);
-        assert_eq!(l::watching(&list, outer), Some(2));
-        assert_eq!(l::watching(&list, inner), Some(2));
+        assert_eq!(l::numbers(&list.read()), [0, 1, 4, 5]);
+        assert_eq!(l::watching(&list.read(), outer), Some(2));
+        assert_eq!(l::watching(&list.read(), inner), Some(2));
         // Both land on the same item, and both end together.
         list.remove_range(2, 3);
-        assert_eq!(l::watching(&list, outer), None);
-        assert_eq!(l::watching(&list, inner), None);
+        assert_eq!(l::watching(&list.read(), outer), None);
+        assert_eq!(l::watching(&list.read(), inner), None);
         // Unregistering one leaves the other registered.
-        list.watch_remove(outer);
-        let ids: Vec<u32> = list.lv_watch.iter().map(|watch| watch.id).collect();
+        list.edit().watch_remove(outer);
+        let ids: Vec<u32> = list.read().lv_watch.iter().map(|watch| watch.id).collect();
         assert_eq!(ids, [inner]);
         l::done(list, &[inner]);
     }
@@ -796,14 +796,15 @@ mod tests {
     #[test]
     fn a_permutation_carries_every_watcher_with_its_item() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(4);
-        let lws = [l::watch(&mut list, 0), l::watch(&mut list, 3)];
+        let list = l::counted(4);
+        let lw0 = { l::watch(&mut list.edit(), 0) };
+        let lws = [lw0, { l::watch(&mut list.edit(), 3) }];
         // Reverse: index i goes to 3 - i.
-        list.lv_items.reverse();
-        watch_permute(&mut list, &[3, 2, 1, 0]);
-        assert_eq!(l::numbers(&list), [3, 2, 1, 0]);
-        assert_eq!(l::watching(&list, lws[0]), Some(3));
-        assert_eq!(l::watching(&list, lws[1]), Some(0));
+        list.edit().lv_items.reverse();
+        watch_permute(&mut list.edit(), &[3, 2, 1, 0]);
+        assert_eq!(l::numbers(&list.read()), [3, 2, 1, 0]);
+        assert_eq!(l::watching(&list.read(), lws[0]), Some(3));
+        assert_eq!(l::watching(&list.read(), lws[1]), Some(0));
         l::done(list, &lws);
     }
 
@@ -852,13 +853,13 @@ mod tests {
         let _serial = editor_state_lock();
         let list = l::counted(3);
         let held = view(&list);
-        assert_eq!(refs(&held), 1);
+        assert_eq!(refs(&held.read()), 1);
         {
             let _collecting = Collecting::start();
             drop(list);
             // Still allocated, still holding its items, at zero.
-            assert_eq!(refs(&held), 0);
-            assert_eq!(l::numbers(&held), [0, 1, 2]);
+            assert_eq!(refs(&held.read()), 0);
+            assert_eq!(l::numbers(&held.read()), [0, 1, 2]);
         }
         // What `free_unref_items` does with it: contents, then the list.
         list_free_contents(&held);
@@ -874,19 +875,19 @@ mod tests {
     #[test]
     fn a_self_cycle_is_freed_by_the_collectors_two_passes() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(1);
+        let list = l::counted(1);
         let itself = list.clone();
-        list.push_list(Some(itself));
-        assert_eq!(refs(&list), 2);
+        list.edit().push_list(Some(itself));
+        assert_eq!(refs(&list.read()), 2);
         let held = view(&list);
         drop(list);
-        assert_eq!(refs(&held), 1, "the cycle keeps it alive");
+        assert_eq!(refs(&held.read()), 1, "the cycle keeps it alive");
 
         let collecting = Collecting::start();
         // Pass 1: the contents.  The self-reference goes to zero, and the
         // flag keeps that from freeing the list under the walk.
         list_free_contents(&held);
-        assert_eq!(refs(&held), 0);
+        assert_eq!(refs(&held.read()), 0);
         drop(collecting);
         // Pass 2: the structure.
         free(held);
@@ -897,11 +898,11 @@ mod tests {
     #[test]
     fn a_deep_copy_of_a_self_cycle_points_at_the_copy() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(1);
+        let list = l::counted(1);
         let itself = list.clone();
-        list.push_list(Some(itself));
+        list.edit().push_list(Some(itself));
         let from = TypVal::list(Some(list.clone()));
-        let before = refs(&list);
+        let before = refs(&list.read());
 
         let mut to = TypVal::Unknown;
         let copy_id = crate::eval::get_copy_id();
@@ -909,14 +910,16 @@ mod tests {
         assert_eq!(copied, Ok(()));
         let copy = to.list_shared().expect("a list").clone();
         assert!(!copy.ptr_eq(&list));
-        assert_eq!(l::numbers(&copy)[0], 0);
-        let inner = copy.items()[1].li_tv.list_shared().expect("a list");
+        assert_eq!(l::numbers(&copy.read())[0], 0);
+        let held = copy.read();
+        let inner = held.items()[1].li_tv.list_shared().expect("a list");
         assert!(inner.ptr_eq(&copy), "the cycle followed the original");
-        assert_eq!(refs(&list), before);
+        assert_eq!(refs(&list.read()), before);
         // The value `to` holds, the copy's item, and `copy` here.
-        assert_eq!(refs(&copy), 3);
+        assert_eq!(refs(&copy.read()), 3);
 
         // Break both cycles, then let the values go.
+        drop(held);
         for l in [&copy, &list] {
             l.remove_at(1);
         }
@@ -935,13 +938,13 @@ mod tests {
     #[test]
     fn removing_an_item_that_names_its_own_list() {
         let _serial = editor_state_lock();
-        let mut list = l::counted(1);
+        let list = l::counted(1);
         let itself = list.clone();
-        list.push_list(Some(itself));
-        assert_eq!(refs(&list), 2);
+        list.edit().push_list(Some(itself));
+        assert_eq!(refs(&list.read()), 2);
         list.remove_at(1);
-        assert_eq!(refs(&list), 1);
-        assert_eq!(l::numbers(&list), [0]);
+        assert_eq!(refs(&list.read()), 1);
+        assert_eq!(l::numbers(&list.read()), [0]);
         l::done(list, &[]);
     }
 
@@ -952,9 +955,9 @@ mod tests {
     fn a_deep_copy_keeps_sharing_only_under_a_copy_id() {
         let _serial = editor_state_lock();
         let shared = l::counted(2);
-        let mut outer = l::counted(0);
+        let outer = l::counted(0);
         for _ in 0..2 {
-            outer.push_list(Some(shared.clone()));
+            outer.edit().push_list(Some(shared.clone()));
         }
         let from = TypVal::list(Some(outer.clone()));
         let item = |l: &List, at: usize| l.items()[at].li_tv.list_or_null();
@@ -964,13 +967,15 @@ mod tests {
             let copied = var_item_copy(None, &from, &mut to, true, copy_id);
             assert_eq!(copied, Ok(()));
             let copy = to.list_ref().expect("a list");
-            assert_ne!(item(copy, 0), shared.as_ptr());
-            assert_eq!(item(copy, 0) == item(copy, 1), shares);
+            assert_ne!(item(&copy, 0), shared.as_ptr());
+            assert_eq!(item(&copy, 0) == item(&copy, 1), shares);
             let second = copy.items()[1].li_tv.list_ref().expect("a list");
-            assert_eq!(l::numbers(second), [0, 1]);
+            assert_eq!(l::numbers(&second), [0, 1]);
+            drop(second);
+            drop(copy);
             tv_clear(&mut to);
         }
-        assert_eq!(refs(&shared), 3);
+        assert_eq!(refs(&shared.read()), 3);
 
         let mut from = from;
         tv_clear(&mut from);

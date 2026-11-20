@@ -197,7 +197,7 @@ fn clear_buf_vars(buffer: Buf) {
 /// script that is still holding a reference to it.
 fn rescue_changedtick(mut buffer: Buf) {
     let copy = tv_dict_item_copy(&buffer.changedtick_di);
-    if let Some(dict) = buffer.b_bufvar.di_tv.dict_mut() {
+    if let Some(mut dict) = buffer.b_bufvar.di_tv.dict_mut() {
         let _ = dict.add_item(copy);
     }
 }

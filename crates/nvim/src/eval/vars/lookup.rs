@@ -74,7 +74,7 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     let step = |done: &GlobalCell<size_t>, dict: Option<DictRef>| -> Option<CString> {
         let dict = dict?;
         let n = done.get();
-        if n >= dict.dv_hashtab.ht_used {
+        if n >= dict.read().dv_hashtab.ht_used {
             return None;
         }
         done.set(n + 1);
@@ -82,7 +82,7 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
         // The table holds `ht_used > n` live items, so a kept slot is still
         // ahead of the cursor.
         let key = loop {
-            if let Some(item) = dict.item_at(at) {
+            if let Some(item) = dict.read().item_at(at) {
                 break item.key().to_vec();
             }
             at += 1;
@@ -142,7 +142,7 @@ pub(crate) fn eval_variable(
         // between finding the variable and reading it.
         match found {
             Located::Item { dict, slot } => {
-                if let Some(item) = dict.item_at(slot) {
+                if let Some(item) = dict.read().item_at(slot) {
                     tv_copy(&item.di_tv, result);
                 }
             }
@@ -287,7 +287,7 @@ pub(crate) fn locate(name: &[u8], no_autoload: bool) -> Option<Located> {
     if varname.is_empty() {
         return Some(Located::Entry(home.kind));
     }
-    if let Some(slot) = home.dict.slot_of(varname) {
+    if let Some(slot) = { home.dict.read().slot_of(varname) } {
         return Some(Located::Item {
             dict: home.dict,
             slot,
@@ -303,7 +303,7 @@ pub(crate) fn locate_in(home: &VarHome, name: &[u8], no_autoload: bool) -> Optio
         // Something like "s:": the scope itself.
         return Some(Located::Entry(home.kind));
     }
-    if let Some(slot) = home.dict.slot_of(varname) {
+    if let Some(slot) = { home.dict.read().slot_of(varname) } {
         return Some(Located::Item {
             dict: home.dict.clone(),
             slot,
@@ -322,7 +322,7 @@ pub(crate) fn locate_missed(home: &VarHome, name: &[u8], no_autoload: bool) -> O
         && !no_autoload
         && script_autoload_named(varname, false)
         && !aborting()
-        && let Some(slot) = home.dict.slot_of(varname)
+        && let Some(slot) = home.dict.read().slot_of(varname)
     {
         return Some(Located::Item {
             dict: home.dict.clone(),
@@ -346,7 +346,7 @@ fn locate_scoped(name: &[u8], no_autoload: bool) -> Option<Located> {
         if varname.is_empty() {
             return None;
         }
-        if let Some(slot) = home.dict.slot_of(varname) {
+        if let Some(slot) = { home.dict.read().slot_of(varname) } {
             return Some(Located::Item {
                 dict: home.dict,
                 slot,
@@ -357,7 +357,7 @@ fn locate_scoped(name: &[u8], no_autoload: bool) -> Option<Located> {
             && script_autoload_named(varname, false)
             && !aborting()
         {
-            let slot = home.dict.slot_of(varname)?;
+            let slot = home.dict.read().slot_of(varname)?;
             return Some(Located::Item {
                 dict: home.dict,
                 slot,

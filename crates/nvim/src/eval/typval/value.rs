@@ -265,11 +265,11 @@ fn lock_slot(
             .map(|b| Held::Blob(b.clone())),
         TypVal::List(list) => list
             .as_ref()
-            .filter(|l| !skip(&l.lv_refcount))
+            .filter(|l| !skip(&l.read().lv_refcount))
             .map(|l| Held::List(l.clone())),
         TypVal::Dict(dict) => dict
             .as_ref()
-            .filter(|d| !skip(&d.dv_refcount))
+            .filter(|d| !skip(&d.read().dv_refcount))
             .map(|d| Held::Dict(d.clone())),
         TypVal::Unknown => ::std::process::abort(),
         _ => None,
@@ -286,22 +286,22 @@ impl Held {
                 blob.edit().bv_lock = changed;
             }
             Held::List(list) => {
-                let changed = list.lv_lock.changed(lock);
+                let changed = list.read().lv_lock.changed(lock);
                 list.edit().lv_lock = changed;
                 // Recursive: lock/unlock the items the List contains.
-                for at in 0..if descend { list.len() } else { 0 } {
+                for at in { 0..if descend { list.read().len() } else { 0 } } {
                     tv_list_item_lock(&list, at, deep - 1, lock, check_refcount);
                 }
             }
             Held::Dict(dict) => {
-                let changed = dict.dv_lock.changed(lock);
+                let changed = dict.read().dv_lock.changed(lock);
                 dict.edit().dv_lock = changed;
                 if !descend {
                     return;
                 }
                 // Recursive: lock/unlock the items the Dict contains.
-                let mut cursor = DictCursor::new(&dict);
-                while let Some(slot) = cursor.next(&dict) {
+                let mut cursor = DictCursor::new(&dict.read());
+                while let Some(slot) = { cursor.next(&dict.read()) } {
                     // The edit ends before the descent, which can reach this
                     // dictionary again.
                     let descent = {
@@ -324,7 +324,7 @@ impl Held {
 pub fn tv_islocked(slot_lock: VarLock, tv: &TypVal) -> bool {
     let val = tv;
     let container_lock = match val.v_type() {
-        VAR_LIST => list_locked((*tv).list_ref()),
+        VAR_LIST => list_locked((*tv).list_ref().as_deref()),
         VAR_DICT => tv.dict_ref().map_or(VarLock::Unlocked, |d| d.dv_lock),
         _ => VarLock::Unlocked,
     };
@@ -351,8 +351,12 @@ impl TypVal {
             TypVal::Blob(blob) => blob
                 .as_ref()
                 .map_or(VarLock::Unlocked, |b| b.read().bv_lock),
-            TypVal::List(list) => list.as_ref().map_or(VarLock::Unlocked, |l| l.lv_lock),
-            TypVal::Dict(dict) => dict.as_ref().map_or(VarLock::Unlocked, |d| d.dv_lock),
+            TypVal::List(list) => list
+                .as_ref()
+                .map_or(VarLock::Unlocked, |l| l.read().lv_lock),
+            TypVal::Dict(dict) => dict
+                .as_ref()
+                .map_or(VarLock::Unlocked, |d| d.read().dv_lock),
             _ => VarLock::Unlocked,
         }
     }
@@ -441,11 +445,11 @@ pub fn tv_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
     match a.v_type() {
         VAR_LIST => {
             let _recursing = Depth::of(&RECURSIVE_CNT);
-            list_equal((*tv1).list_ref(), (*tv2).list_ref(), ic)
+            list_equal(tv1.list_ref().as_deref(), tv2.list_ref().as_deref(), ic)
         }
         VAR_DICT => {
             let _recursing = Depth::of(&RECURSIVE_CNT);
-            dict_equal((*tv1).dict_ref(), (*tv2).dict_ref(), ic)
+            dict_equal(tv1.dict_ref().as_deref(), tv2.dict_ref().as_deref(), ic)
         }
         VAR_PARTIAL | VAR_FUNC => {
             if matches!(a, TypVal::Partial(pt) if pt.is_none())
@@ -489,9 +493,9 @@ mod tests {
     use crate::types::Partial;
 
     fn list(items: Vec<TypVal>) -> ListRef {
-        let mut l = tv_list_alloc(-1);
+        let l = tv_list_alloc(-1);
         for tv in items {
-            l.push(tv);
+            l.edit().push(tv);
         }
         l
     }
@@ -527,27 +531,28 @@ mod tests {
     fn a_shared_container_loses_one_reference_and_keeps_its_items() {
         let _serial = editor_state_lock();
         let inner = list(vec![string_tv(b"kept")]);
-        let mut d = tv_dict_alloc();
-        d.add_list(b"inner", Some(inner.clone()))
+        let d = tv_dict_alloc();
+        d.edit()
+            .add_list(b"inner", Some(inner.clone()))
             .expect("fresh key");
         let outer = list(vec![
             TypVal::dict(Some(d)),
             TypVal::list(Some(inner.clone())),
         ]);
-        assert_eq!(inner.lv_refcount.get(), 3);
+        assert_eq!(inner.read().lv_refcount.get(), 3);
 
         let mut held = TypVal::list(Some(outer.clone()));
         tv_clear(&mut held);
         // `outer` is still ours, so nothing below it went.
-        assert_eq!(outer.lv_refcount.get(), 1);
-        assert_eq!(inner.lv_refcount.get(), 3);
+        assert_eq!(outer.read().lv_refcount.get(), 1);
+        assert_eq!(inner.read().lv_refcount.get(), 3);
 
         // Now the last reference: the dictionary goes, and both references
         // it and the list held on `inner` with it.
         let mut last = TypVal::list(Some(outer));
         tv_clear(&mut last);
-        assert_eq!(inner.lv_refcount.get(), 1);
-        assert_eq!(inner.items()[0].li_tv.string_bytes(), b"kept");
+        assert_eq!(inner.read().lv_refcount.get(), 1);
+        assert_eq!(inner.read().items()[0].li_tv.string_bytes(), b"kept");
     }
 
     /// Ten thousand levels deep, which a recursive free would not survive.
@@ -564,14 +569,14 @@ mod tests {
             tv = if depth % 2 == 0 {
                 TypVal::list(Some(list(vec![tv])))
             } else {
-                let mut d = tv_dict_alloc();
-                d.add_value(b"k", tv).expect("fresh key");
+                let d = tv_dict_alloc();
+                d.edit().add_value(b"k", tv).expect("fresh key");
                 TypVal::dict(Some(d))
             };
         }
-        assert_eq!(bottom.lv_refcount.get(), 2);
+        assert_eq!(bottom.read().lv_refcount.get(), 2);
         drop(tv);
-        assert_eq!(bottom.lv_refcount.get(), 1);
+        assert_eq!(bottom.read().lv_refcount.get(), 1);
     }
 
     /// A list that holds itself is a cycle: clearing the variable gives up
@@ -579,17 +584,17 @@ mod tests {
     #[test]
     fn a_self_referencing_list_is_left_for_the_collector() {
         let _serial = editor_state_lock();
-        let mut l = list(vec![TypVal::Number(1)]);
+        let l = list(vec![TypVal::Number(1)]);
         let again = l.clone();
-        l.push(TypVal::list(Some(again)));
+        l.edit().push(TypVal::list(Some(again)));
         let mut held = TypVal::list(Some(l.clone()));
-        assert_eq!(l.lv_refcount.get(), 3);
+        assert_eq!(l.read().lv_refcount.get(), 3);
         tv_clear(&mut held);
-        assert_eq!(l.lv_refcount.get(), 2);
-        assert_eq!(l.items().len(), 2);
+        assert_eq!(l.read().lv_refcount.get(), 2);
+        assert_eq!(l.read().items().len(), 2);
         // Break the cycle, which is what the collector would do.
         l.remove_range(1, 1);
-        assert_eq!(l.lv_refcount.get(), 1);
+        assert_eq!(l.read().lv_refcount.get(), 1);
     }
 
     /// A partial's arguments and self dictionary are released with its last
@@ -598,8 +603,8 @@ mod tests {
     fn a_partial_releases_its_arguments_and_dictionary() {
         let _serial = editor_state_lock();
         let arg = list(vec![]);
-        let mut d = tv_dict_alloc();
-        d.add_number(b"n", 1).expect("fresh key");
+        let d = tv_dict_alloc();
+        d.edit().add_number(b"n", 1).expect("fresh key");
         let pt = PartialRef::new(Partial {
             pt_name: Some(ThinCString::from_bytes(b"tr")),
             pt_argv: vec![TypVal::list(Some(arg.clone())), string_tv(b"s")],
@@ -607,21 +612,28 @@ mod tests {
             ..Partial::empty()
         });
         let mut held = TypVal::partial(Some(pt));
-        assert_eq!((arg.lv_refcount.get(), d.dv_refcount.get()), (2, 2));
+        assert_eq!(
+            (arg.read().lv_refcount.get(), d.read().dv_refcount.get()),
+            (2, 2)
+        );
         tv_clear(&mut held);
-        assert_eq!((arg.lv_refcount.get(), d.dv_refcount.get()), (1, 1));
+        assert_eq!(
+            (arg.read().lv_refcount.get(), d.read().dv_refcount.get()),
+            (1, 1)
+        );
 
         let pt = PartialRef::new(Partial {
             pt_name: Some(ThinCString::from_bytes(b"tr")),
             pt_dict: Some(d.clone()),
             ..Partial::empty()
         });
-        d.add_value(b"p", TypVal::partial(Some(pt.clone())))
+        d.edit()
+            .add_value(b"p", TypVal::partial(Some(pt.clone())))
             .expect("fresh key");
         let mut held = TypVal::partial(Some(pt));
         tv_clear(&mut held);
-        assert_eq!(d.dv_refcount.get(), 2);
+        assert_eq!(d.read().dv_refcount.get(), 2);
         drop(d.edit().remove_key(b"p"));
-        assert_eq!(d.dv_refcount.get(), 1);
+        assert_eq!(d.read().dv_refcount.get(), 1);
     }
 }

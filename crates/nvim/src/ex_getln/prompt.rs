@@ -18,6 +18,7 @@ use super::*;
 use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::eval::typval::NumBuf;
+use crate::eval::typval::ReadScope;
 use crate::memory::ThinCString;
 use crate::types::{ExArgt, VAR_DICT};
 
@@ -46,7 +47,7 @@ pub fn script_get(excmd: &mut ExArg) -> Option<XString> {
     }
     let mut numbuf = NumBuf::new();
     let mut text = Vec::<u8>::new();
-    for li in held.items() {
+    for li in held.read().items() {
         text.extend_from_slice(numbuf.bytes(&li.li_tv));
         text.push(b'\n');
     }
@@ -54,10 +55,9 @@ pub fn script_get(excmd: &mut ExArg) -> Option<XString> {
 }
 
 /// The `cancelreturn` entry of an `{opts}` dictionary, if it has one.
-fn opts_cancelreturn(opts: &TypVal) -> Option<&TypVal> {
+fn opts_cancelreturn(opts: &TypVal) -> Option<TypVal> {
     opts.dict_ref()
-        .and_then(|dict| dict.find(b"cancelreturn"))
-        .map(|item| &item.di_tv)
+        .and_then(|dict| dict.find(b"cancelreturn").map(|item| item.di_tv.clone()))
 }
 
 /// Drive one `input()`-family prompt and leave its answer in `result`.
@@ -83,6 +83,8 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
     // or remove the entry.
     let mut cancelreturn_in_opts = false;
     let mut xp_name: Option<&::core::ffi::CStr> = None;
+    // The options' strings are borrowed for the whole prompt.
+    let reads = ReadScope::new();
     let mut input_callback = Callback::None;
     let mut prompt_buf = NumBuf::new();
     let mut defstr_buf = NumBuf::new();
@@ -94,7 +96,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
             emsg(gettext(c"E5050: {opts} must be the only argument"));
             return;
         }
-        let dict = args[0].dict_ref();
+        let dict = args[0].dict_in(&reads);
 
         let Some(text) = dict_get_string_buf_chk(dict, b"prompt", &mut prompt_buf, Some(c""))
         else {
@@ -198,7 +200,7 @@ pub fn get_user_input(args: &[TypVal], result: &mut TypVal, inputdialog: bool, s
         if let Some(value) = &cancelreturn {
             tv_copy(value, result);
         } else if cancelreturn_in_opts && let Some(value) = opts_cancelreturn(&args[0]) {
-            tv_copy(value, result);
+            result.overwrite(value);
         }
     }
 

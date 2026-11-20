@@ -122,7 +122,10 @@ pub(crate) fn shada_read(source: &mut Source, flags: u32) {
     // `v:oldfiles` is only filled in while it is still empty, so that a
     // second file does not append to the first one's answer.
     let get_old_files = flags & (read_flags::OLDFILES | read_flags::FORCE) != 0
-        && (force || oldfiles_list.as_ref().is_none_or(|list| list.is_empty()));
+        && (force
+            || oldfiles_list
+                .as_ref()
+                .is_none_or(|list| list.read().is_empty()));
     let want_marks = flags & read_flags::MARKS != 0;
 
     let kinds = wanted_kinds(flags, want_marks, get_old_files);
@@ -329,7 +332,7 @@ impl Reading {
         if self.get_old_files && !self.oldfiles_set.contains(fname) {
             self.oldfiles_set.insert(fname.into());
             if let Some(list) = &mut self.oldfiles_list {
-                list.push(TypVal::string(Some(ThinCString::from_cstr(
+                list.edit().push(TypVal::string(Some(ThinCString::from_cstr(
                     mark.fname.as_cstr(),
                 ))));
             }

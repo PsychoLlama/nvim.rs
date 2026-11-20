@@ -172,7 +172,7 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         options,
         WildMode::AllKeep,
     );
-    let retlist = tv_list_alloc_ret(result, xpc.match_count() as ptrdiff_t);
+    let mut retlist = tv_list_alloc_ret(result, xpc.match_count() as ptrdiff_t);
     for name in xpc.matches() {
         retlist.push(string_tv(name.as_cstr().to_bytes()));
     }
@@ -213,7 +213,7 @@ pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     let Some((selected, matches)) = state else {
         return;
     };
-    let Some(retdict) = result.dict_mut() else {
+    let Some(mut retdict) = result.dict_mut() else {
         return;
     };
 
@@ -231,9 +231,9 @@ pub fn f_cmdcomplete_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         ret = retdict.add_number(b"selected", VarNumber::from(selected));
     }
     if ret.is_ok() {
-        let mut li = tv_list_alloc(as_count(matches.len()) as ptrdiff_t);
+        let li = tv_list_alloc(as_count(matches.len()) as ptrdiff_t);
         for name in &matches {
-            li.push(string_tv(name.as_cstr().to_bytes()));
+            li.edit().push(string_tv(name.as_cstr().to_bytes()));
         }
         let _ = retdict.add_list(b"matches", Some(li));
     }

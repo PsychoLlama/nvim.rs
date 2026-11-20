@@ -261,7 +261,7 @@ fn nth_numbered_win(tabpage: TabPage, winnr: c_int) -> Option<Win> {
 pub fn f_win_id2tabwin(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let id: Handle = Handle::new(number_as_int(arg_number(args, 0)));
     let (tabnr, winnr) = win_get_tabwin(id);
-    let list = tv_list_alloc_ret(result, 2);
+    let mut list = tv_list_alloc_ret(result, 2);
     (*list).push_number(VarNumber::from(tabnr));
     (*list).push_number(VarNumber::from(winnr));
 }
@@ -288,7 +288,7 @@ pub fn f_win_id2win(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `win_findbuf({bufnr})` — the ids of every window showing that buffer.
 pub fn f_win_findbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     let bufnr = number_as_int(arg_number(args, 0));
     for wp in tab_windows().filter(|wp| wp.buffer().handle == Handle::new(bufnr)) {
         (*list).push_number(VarNumber::from(wp.handle));

@@ -209,7 +209,7 @@ pub(crate) fn heredoc_get(
         .map(<[u8]>::to_vec);
 
     let mut eval_failed = false;
-    let mut list = tv_list_alloc(0);
+    let list = tv_list_alloc(0);
     loop {
         let theline = match line_arg {
             Some(next) => {
@@ -288,9 +288,9 @@ pub(crate) fn heredoc_get(
                 eval_failed = true;
                 continue;
             };
-            list.push(owned_string(&evaluated));
+            list.edit().push(owned_string(&evaluated));
         } else {
-            list.push(owned_string(line));
+            list.edit().push(owned_string(line));
         }
     }
 

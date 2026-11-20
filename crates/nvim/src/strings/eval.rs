@@ -46,7 +46,7 @@ use crate::types::{LIST_LEN_UNKNOWN, TypVal, VarNumber};
 /// "str2list()" function: the string as a list of code points.
 pub fn f_str2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let list = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as ptrdiff_t);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as ptrdiff_t);
     let bytes = numbuf.bytes(&args[0]);
     let mut at = 0;
     while at < bytes.len() {

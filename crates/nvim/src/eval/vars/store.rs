@@ -81,11 +81,11 @@ pub(crate) fn set_var_const(name: &[u8], tv: &mut TypVal, copy: bool, is_const: 
     };
     let varname = &name[home.name_at..];
     // A compat name has no dictionary of its own to watch.
-    let watched = home.kind != ScopeKind::Compat && dict_is_watched(Some(&home.dict));
+    let watched = home.kind != ScopeKind::Compat && dict_is_watched(Some(&home.dict.read()));
 
     // In the home scope itself (the common case, which takes no reference)
     // or in a scope a lambda closed over.
-    let find = || match home.dict.slot_of(varname) {
+    let find = || match home.dict.read().slot_of(varname) {
         Some(slot) => (Some(slot), None),
         None => (None, located_item(locate_missed(&home, name, true))),
     };
@@ -117,6 +117,7 @@ pub(crate) fn set_var_const(name: &[u8], tv: &mut TypVal, copy: bool, is_const: 
         // compatibility: read-only first, then the value's lock, then
         // the variable's.
         let Some((flags, lock)) = dict
+            .read()
             .item_at(slot)
             .map(|item| (c_int::from(item.di_flags), item.di_lock))
         else {

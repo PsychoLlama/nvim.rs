@@ -23,7 +23,7 @@ use super::{
 };
 use crate::eval::encode::encode_vim_list_to_buf;
 use crate::eval::partial_name;
-use crate::eval::typval::{dict_find, list_len};
+use crate::eval::typval::{ReadScope, dict_find, list_len};
 use crate::eval::vars::msgpack_type_of;
 use crate::message::internal_error;
 use crate::types::{
@@ -118,6 +118,7 @@ fn list_count(list: &List) -> c_int {
 fn convert_one_value<'a, S: TypvalSink>(
     sink: &mut S,
     stack: &mut ConvStack<'a>,
+    reads: &'a ReadScope,
     tv: &'a TypVal,
     objname: &CStr,
 ) -> Result<(), Refused> {
@@ -162,7 +163,7 @@ fn convert_one_value<'a, S: TypvalSink>(
                 partial,
             });
         }
-        VAR_LIST => match tv.list_ref().filter(|list| !list.items().is_empty()) {
+        VAR_LIST => match tv.list_in(reads).filter(|list| !list.items().is_empty()) {
             None => sink.conv_empty_list(),
             Some(list) => {
                 let seen = Container::List(list);
@@ -190,11 +191,14 @@ fn convert_one_value<'a, S: TypvalSink>(
                 sink.conv_nil();
             }
         }
-        VAR_DICT => match tv.dict_ref().filter(|dict| dict.dv_hashtab.ht_used != 0) {
+        VAR_DICT => match tv
+            .dict_in(reads)
+            .filter(|dict| dict.dv_hashtab.ht_used != 0)
+        {
             None => sink.conv_empty_dict(),
             Some(dict) => {
                 if S::ALLOW_SPECIALS
-                    && let Some(flow) = convert_special_dict(sink, stack, dict, objname)?
+                    && let Some(flow) = convert_special_dict(sink, stack, reads, dict, objname)?
                 {
                     item_hook!(flow);
                     return Ok(());
@@ -234,6 +238,7 @@ fn convert_one_value<'a, S: TypvalSink>(
 fn convert_special_dict<'a, S: TypvalSink>(
     sink: &mut S,
     stack: &mut ConvStack<'a>,
+    reads: &'a ReadScope,
     dict: &'a Dict,
     objname: &CStr,
 ) -> Result<Option<Flow>, Refused> {
@@ -249,7 +254,7 @@ fn convert_special_dict<'a, S: TypvalSink>(
     let Some(val_di) = dict_find(Some(dict), b"_VAL") else {
         return Ok(None);
     };
-    let found = type_di.di_tv.list_ref().and_then(msgpack_type_of);
+    let found = type_di.di_tv.list_in(reads).and_then(msgpack_type_of);
     // Upstream runs the check a second time here, before it knows whether
     // this is a special dictionary at all.
     sink.check_before();
@@ -271,7 +276,7 @@ fn convert_special_dict<'a, S: TypvalSink>(
             // number in three unsigned pieces, most significant first.
             // How many bits each piece really carries is not checked.
             let Some(parts) = val
-                .list_ref()
+                .list_in(reads)
                 .filter(|_| val.v_type() == VAR_LIST)
                 .map(List::items)
                 .filter(|parts| parts.len() == 4)
@@ -312,7 +317,7 @@ fn convert_special_dict<'a, S: TypvalSink>(
             if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
-            let Some(bytes) = encode_vim_list_to_buf(val.list_ref()) else {
+            let Some(bytes) = encode_vim_list_to_buf(val.list_in(reads)) else {
                 return Ok(None);
             };
             return Ok(Some(sink.conv_str_string(&bytes)));
@@ -321,7 +326,7 @@ fn convert_special_dict<'a, S: TypvalSink>(
             if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
-            let Some(val_list) = val.list_ref() else {
+            let Some(val_list) = val.list_in(reads) else {
                 // `v:_null_list`: an empty array. Upstream reads the copyID
                 // of the NULL list here and crashes; an empty list is what
                 // every other reader makes of it.
@@ -351,14 +356,14 @@ fn convert_special_dict<'a, S: TypvalSink>(
             if val.v_type() != VAR_LIST {
                 return Ok(None);
             }
-            let Some(val_list) = val.list_ref().filter(|l| !l.items().is_empty()) else {
+            let Some(val_list) = val.list_in(reads).filter(|l| !l.items().is_empty()) else {
                 sink.conv_empty_dict();
                 return Ok(Some(Flow::Go));
             };
             // Every item has to be a two-element list, or this is not a
             // map after all.
             for li in val_list.items() {
-                if li.li_tv.v_type() != VAR_LIST || list_len(li.li_tv.list_ref()) != 2 {
+                if li.li_tv.v_type() != VAR_LIST || list_len(li.li_tv.list_in(reads)) != 2 {
                     return Ok(None);
                 }
             }
@@ -378,7 +383,7 @@ fn convert_special_dict<'a, S: TypvalSink>(
         }
         SpecialKind::Ext => {
             let Some([first, last]) = val
-                .list_ref()
+                .list_in(reads)
                 .filter(|_| val.v_type() == VAR_LIST)
                 .and_then(|l| <&[_; 2]>::try_from(l.items()).ok())
             else {
@@ -391,7 +396,7 @@ fn convert_special_dict<'a, S: TypvalSink>(
             if first.li_tv.v_type() != VAR_NUMBER || last.li_tv.v_type() != VAR_LIST {
                 return Ok(None);
             }
-            let Some(bytes) = encode_vim_list_to_buf(last.li_tv.list_ref()) else {
+            let Some(bytes) = encode_vim_list_to_buf(last.li_tv.list_in(reads)) else {
                 return Ok(None);
             };
             return Ok(Some(sink.conv_ext_string(&bytes, ext_type)));
@@ -405,17 +410,21 @@ fn convert_special_dict<'a, S: TypvalSink>(
 /// Returns whether the encode ran to completion; a sink that refuses a value
 /// has already reported why.
 pub(crate) fn encode_typval<S: TypvalSink>(sink: &mut S, top: &TypVal, objname: &CStr) -> bool {
+    // Every container the walk opens stays read until it ends: the sinks
+    // run no user code, and the frames borrow each container's items.
+    let reads = ReadScope::new();
     let mut stack = ConvStack::new();
-    walk(sink, &mut stack, top, objname).is_ok()
+    walk(sink, &mut stack, &reads, top, objname).is_ok()
 }
 
 fn walk<'a, S: TypvalSink>(
     sink: &mut S,
     stack: &mut ConvStack<'a>,
+    reads: &'a ReadScope,
     top: &'a TypVal,
     objname: &CStr,
 ) -> Result<(), Refused> {
-    convert_one_value(sink, stack, top, objname)?;
+    convert_one_value(sink, stack, reads, top, objname)?;
 
     while let Some(idx) = stack.len().checked_sub(1) {
         // Upstream keeps a `MPConvStackVal *` into the stack across the
@@ -476,7 +485,7 @@ fn walk<'a, S: TypvalSink>(
                     sink.conv_dict_between_items();
                 }
                 // A `[key, value]` pair, checked when the frame was pushed.
-                let pair = item.li_tv.list_ref().map_or(&[][..], List::items);
+                let pair = item.li_tv.list_in(reads).map_or(&[][..], List::items);
                 let (Some(key), Some(value)) = (pair.first(), pair.get(1)) else {
                     unreachable!("a special map's items are checked to be pairs");
                 };
@@ -486,7 +495,7 @@ fn walk<'a, S: TypvalSink>(
                 // the time it returns, which is why the advance below is
                 // by index.  It also stays *un*advanced across the key, so
                 // that an error raised there names this pair's index.
-                convert_one_value(sink, stack, &key.li_tv, objname)?;
+                convert_one_value(sink, stack, reads, &key.li_tv, objname)?;
                 sink.conv_dict_after_key();
                 *stack.get_mut(idx) = Frame::Pairs { list, at: at + 1 };
                 &value.li_tv
@@ -511,7 +520,10 @@ fn walk<'a, S: TypvalSink>(
                             stage: PartialStage::End,
                             partial,
                         };
-                        let Some(dict) = partial.and_then(|pt| pt.pt_dict.as_deref()) else {
+                        let Some(dict) = partial
+                            .and_then(|pt| pt.pt_dict.as_ref())
+                            .map(|d| reads.hold(d.read()))
+                        else {
                             sink.conv_func_before_self(None);
                             continue;
                         };
@@ -556,7 +568,7 @@ fn walk<'a, S: TypvalSink>(
                 arg
             }
         };
-        convert_one_value(sink, stack, tv, objname)?;
+        convert_one_value(sink, stack, reads, tv, objname)?;
     }
     Ok(())
 }

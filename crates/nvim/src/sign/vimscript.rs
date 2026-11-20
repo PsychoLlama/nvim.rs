@@ -16,6 +16,7 @@
 )]
 
 use super::*;
+use crate::eval::typval::Read;
 use crate::eval::typval::{DictRef, ListRef, NumBuf, list_items};
 use crate::narrow::number_as_int;
 use crate::types::Handle;
@@ -45,7 +46,7 @@ fn key<'a>(d: Option<&'a Dict>, key: &str) -> Option<&'a TypVal> {
 /// Argument `i` as a dictionary, or `None` when it was not supplied (or is
 /// `v:_null_dict`). Whether a supplied one *is* a dictionary is the
 /// caller's check -- `tv_check_for_*_dict_arg` is what does that.
-fn dict_arg(args: &[TypVal], i: usize) -> Option<&Dict> {
+fn dict_arg(args: &[TypVal], i: usize) -> Option<Read<'_, Dict>> {
     args.get(i).and_then(TypVal::dict_ref)
 }
 
@@ -75,7 +76,7 @@ fn each_dict(
 ) {
     for item in list_items(l) {
         let retval = if item.li_tv.v_type() == VAR_DICT {
-            one(item.li_tv.dict_ref())
+            one(item.li_tv.dict_ref().as_deref())
         } else {
             Err(SignError::DictionaryRequired)
         };
@@ -93,50 +94,54 @@ fn each_dict_arg(
     result: &mut TypVal,
     one: impl FnMut(Option<&Dict>) -> Result<c_int, SignError>,
 ) {
-    let retlist = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
+    let mut retlist = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     match args.first() {
-        Some(arg) if arg.v_type() == VAR_LIST => each_dict(retlist, arg.list_ref(), one),
+        Some(arg) if arg.v_type() == VAR_LIST => {
+            each_dict(&mut retlist, arg.list_ref().as_deref(), one);
+        }
         _ => SignError::ListRequired.report(),
     }
 }
 
 /// `sign_getdefined()`'s dictionary for one defined sign.
 pub(crate) fn sign_get_info_dict(sign: &Sign) -> DictRef {
-    let mut held = tv_dict_alloc();
-    let d = &mut *held;
-    put_str(d, "name", sign.name.as_bytes());
+    let held = tv_dict_alloc();
+    let mut d = held.edit();
+    put_str(&mut d, "name", sign.name.as_bytes());
     if let Some(icon) = &sign.icon {
-        put_str(d, "icon", icon);
+        put_str(&mut d, "icon", icon);
     }
     if sign.text[0] != 0 {
-        put_str(d, "text", &sign_text_bytes(&sign.text));
+        put_str(&mut d, "text", &sign_text_bytes(&sign.text));
     }
     if sign.priority > 0 {
-        put_nr(d, "priority", VarNumber::from(sign.priority));
+        put_nr(&mut d, "priority", VarNumber::from(sign.priority));
     }
     let ids = [sign.line_hl, sign.text_hl, sign.cul_hl, sign.num_hl];
     for (key, id) in HL_KEYS.iter().zip(ids) {
         if id > 0 {
-            put_str(d, key, hl_name(id).to_bytes());
+            put_str(&mut d, key, hl_name(id).to_bytes());
         }
     }
+    drop(d);
     held
 }
 
 /// `sign_getplaced()`'s dictionary for one placed sign.
 pub(crate) fn sign_get_placed_info_dict(mark: MTKey) -> DictRef {
-    let mut held = tv_dict_alloc();
-    let d = &mut *held;
+    let held = tv_dict_alloc();
+    let mut d = held.edit();
     let sh = sign_of(mark);
-    put_str(d, "name", placed_sign_name(&sh));
-    put_nr(d, "id", VarNumber::from(mark.id.cast_signed()));
+    put_str(&mut d, "name", placed_sign_name(&sh));
+    put_nr(&mut d, "id", VarNumber::from(mark.id.cast_signed()));
     put_str(
-        d,
+        &mut d,
         "group",
         &describe_ns(Handle::new(mark.ns.cast_signed()), b""),
     );
-    put_nr(d, "lnum", VarNumber::from(mark.pos.row + 1));
-    put_nr(d, "priority", VarNumber::from(sh.priority));
+    put_nr(&mut d, "lnum", VarNumber::from(mark.pos.row + 1));
+    put_nr(&mut d, "priority", VarNumber::from(sh.priority));
+    drop(d);
     held
 }
 
@@ -261,8 +266,8 @@ fn sign_define_from_dict(name: Option<&[u8]>, dict: Option<&Dict>) -> Result<c_i
 /// `sign_define()`.
 pub(crate) fn f_sign_define(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if args[0].v_type() == VAR_LIST && args.len() <= 1 {
-        let retlist = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
-        each_dict(retlist, args[0].list_ref(), |d| {
+        let mut retlist = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
+        each_dict(&mut retlist, args[0].list_ref().as_deref(), |d| {
             sign_define_from_dict(None, d)
         });
         return;
@@ -280,14 +285,14 @@ pub(crate) fn f_sign_define(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
     if tv_check_for_opt_dict_arg(args, 1).is_err() {
         return;
     }
-    let defined = sign_define_from_dict(Some(&name), dict_arg(args, 1));
+    let defined = sign_define_from_dict(Some(&name), dict_arg(args, 1).as_deref());
     result.write_number(VarNumber::from(answer_or_report(defined)));
 }
 
 /// `sign_getdefined()`.
 pub(crate) fn f_sign_getdefined(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let l = tv_list_alloc_ret(result, 0);
+    let mut l = tv_list_alloc_ret(result, 0);
     let defs = match args.first() {
         Some(name) => sign_find(numbuf.string(name).to_bytes())
             .into_iter()
@@ -306,7 +311,7 @@ pub(crate) fn f_sign_getplaced(args: &[TypVal], result: &mut TypVal, _fptr: Eval
     let mut sign_id = 0;
     let mut group = None;
 
-    let l = tv_list_alloc_ret(result, 0);
+    let mut l = tv_list_alloc_ret(result, 0);
 
     if let Some(arg) = args.first() {
         buf = get_buf_arg(arg);
@@ -319,19 +324,19 @@ pub(crate) fn f_sign_getplaced(args: &[TypVal], result: &mut TypVal, _fptr: Eval
             }
             let dict = args[1].dict_ref();
 
-            if let Some(tv) = key(dict, "lnum") {
+            if let Some(tv) = key(dict.as_deref(), "lnum") {
                 lnum = tv_get_lnum(tv);
                 if lnum <= LineNr::ZERO {
                     return;
                 }
             }
-            if let Some(tv) = key(dict, "id") {
+            if let Some(tv) = key(dict.as_deref(), "id") {
                 let Ok(given) = tv_get_number_chk(tv) else {
                     return;
                 };
                 sign_id = number_as_int(given);
             }
-            if let Some(tv) = key(dict, "group") {
+            if let Some(tv) = key(dict.as_deref(), "group") {
                 let mut numbuf = NumBuf::new();
                 let Ok(given) = numbuf.string_chk(tv) else {
                     return;
@@ -344,7 +349,7 @@ pub(crate) fn f_sign_getplaced(args: &[TypVal], result: &mut TypVal, _fptr: Eval
         }
     }
 
-    sign_get_placed(buf, lnum, sign_id, group.as_deref(), l);
+    sign_get_placed(buf, lnum, sign_id, group.as_deref(), &mut l);
 }
 
 /// `sign_jump()`.
@@ -446,7 +451,7 @@ pub(crate) fn f_sign_place(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
         name: Some(&args[2]),
         buffer: Some(&args[3]),
     };
-    let id = sign_place_from_dict(given, dict);
+    let id = sign_place_from_dict(given, dict.as_deref());
     result.write_number(VarNumber::from(answer_or_report(id)));
 }
 
@@ -461,8 +466,8 @@ pub(crate) fn f_sign_placelist(args: &[TypVal], result: &mut TypVal, _fptr: Eval
 pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) && args.len() <= 1 {
-        let retlist = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
-        for item in list_items(args[0].list_ref()) {
+        let mut retlist = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
+        for item in list_items(args[0].list_ref().as_deref()) {
             let undefined = match numbuf.string_chk(&item.li_tv).ok() {
                 Some(name) => sign_undefine_by_name(name.to_bytes()).map(|()| 0),
                 None => Err(SignError::Reported(Failed)),
@@ -523,7 +528,7 @@ pub(crate) fn f_sign_unplace(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     if tv_check_for_string_arg(args, 0).is_err() || tv_check_for_opt_dict_arg(args, 1).is_err() {
         return;
     }
-    let unplaced = sign_unplace_from_dict(Some(&args[0]), dict_arg(args, 1));
+    let unplaced = sign_unplace_from_dict(Some(&args[0]), dict_arg(args, 1).as_deref());
     result.write_number(VarNumber::from(answer_or_report(unplaced)));
 }
 

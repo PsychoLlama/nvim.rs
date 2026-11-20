@@ -261,7 +261,7 @@ pub fn f_maplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // A copy: the walk below hands each mapping to a closure.
     let cpo = P_CPO.get();
     let abbr = args.first().is_some_and(|tv| tv_get_bool(tv) != 0);
-    let list = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as ptrdiff_t);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as ptrdiff_t);
     let cur = Buf::current();
 
     // Do it twice: once for global maps and once for local maps.

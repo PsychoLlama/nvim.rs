@@ -295,7 +295,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
 
     say::start();
     MSG_SCROLL.set(1);
-    list_oldfiles(&list);
+    list_oldfiles(&list.read());
     GOT_INT.set(false);
     if !cmdmod_has(CmdModFlags::BROWSE) {
         return;
@@ -304,12 +304,13 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     QUIT_MORE.set(false);
     let nr = prompt_for_input(None, 0, None);
     say::starthere();
-    if nr <= 0 || nr > list_len(Some(&list)) {
+    if nr <= 0 || nr > list_len(Some(&list.read())) {
         return;
     }
     let mut numbuf = NumBuf::new();
     // `nr` is inside the list.
-    let Ok(picked) = list_find_str(Some(&list), nr - 1, &mut numbuf) else {
+    let held = list.read();
+    let Ok(picked) = list_find_str(Some(&held), nr - 1, &mut numbuf) else {
         return;
     };
     let expanded = expand_env(picked, false);

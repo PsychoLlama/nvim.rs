@@ -82,7 +82,7 @@ pub(crate) fn set_var_lval(
     // A locked container refuses the write; the lock to test is the
     // Dict's own when a key is being added to it.
     let lock = match &lval.target {
-        Target::NewKey { dict, .. } => Some(dict.dv_lock),
+        Target::NewKey { dict, .. } => Some(dict.read().dv_lock),
         _ => lval.with_slot(|_, lock| *lock),
     };
     // The slot was found a moment ago and nothing has run since.
@@ -142,7 +142,7 @@ pub(crate) fn set_var_lval(
                 return;
             }
             // Only a watched dictionary needs them after the write.
-            dict_is_watched(Some(dict)).then(|| (dict.clone(), key.clone()))
+            dict_is_watched(Some(&dict.read())).then(|| (dict.clone(), key.clone()))
         }
         _ => None,
     };
@@ -194,16 +194,16 @@ fn add_key(dict: &DictRef, key: &[u8], value: &mut TypVal, copy: bool, op: Optio
         semsg!("E716: Key not present in Dictionary: \"{key}\"");
         return;
     }
-    let mut target = dict.clone();
+    let target = dict.clone();
     // The builtin-name check upstream runs here is the add's own; a
     // refusal leaves the dictionary alone.
-    if target.add_value(key, stored(value, copy)).is_err() {
+    if target.edit().add_value(key, stored(value, copy)).is_err() {
         return;
     }
-    if dict_is_watched(Some(dict)) {
+    if dict_is_watched(Some(&dict.read())) {
         // Nothing was saved, so this is the new-key case.
         let mut newtv = TV_INITIAL_VALUE;
-        if let Some(item) = target.find(key) {
+        if let Some(item) = target.read().find(key) {
             tv_copy(&item.di_tv, &mut newtv);
         }
         cstr::with_terminated(key, |key| {
@@ -270,7 +270,7 @@ fn set_blob_var(lval: &LValue<'_>, blob: &BlobRef, span: Span, value: &TypVal, o
         semsg!("E734: Wrong variable type for {op}=");
         return;
     }
-    if value_check_lock_named(blob.read().bv_lock, lval.name()) {
+    if value_check_lock_named({ blob.read().bv_lock }, lval.name()) {
         return;
     }
 

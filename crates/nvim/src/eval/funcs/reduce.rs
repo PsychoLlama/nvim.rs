@@ -15,8 +15,8 @@ use crate::eval::VARNUMBER_MIN;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::CallFrame;
 use crate::eval::typval::{
-    NumBuf, dict_len, list_items, list_iter, list_len, tv_check_for_number_arg,
-    tv_check_for_string_arg, tv_copy, tv_get_number_chk,
+    NumBuf, dict_len, list_iter, list_len, tv_check_for_number_arg, tv_check_for_string_arg,
+    tv_copy, tv_get_number_chk,
 };
 use crate::eval::{eval_expr_typval, partial_name};
 use crate::mbyte::cluster_len;
@@ -47,10 +47,10 @@ fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
     let better = |i: VarNumber, n: VarNumber| if domax { i > n } else { i < n };
     match tv.v_type() {
         VAR_LIST => {
-            if list_len(tv.list_ref()) == 0 {
+            if list_len(tv.list_ref().as_deref()) == 0 {
                 return;
             }
-            for li in list_iter(tv.list_ref()) {
+            for li in list_iter(tv.list_ref().as_deref()) {
                 let Ok(i) = tv_get_number_chk(&li.li_tv) else {
                     return;
                 };
@@ -60,10 +60,11 @@ fn max_min(tv: &TypVal, result: &mut TypVal, domax: bool) {
             }
         }
         VAR_DICT => {
-            if dict_len(tv.dict_ref()) == 0 {
+            if dict_len(tv.dict_ref().as_deref()) == 0 {
                 return;
             }
-            for item in tv.dict_ref().map(|d| d.items()).into_iter().flatten() {
+            let dict = tv.dict_ref();
+            for item in dict.iter().flat_map(|d| d.items()) {
                 let Ok(i) = tv_get_number_chk(&item.di_tv) else {
                     return;
                 };
@@ -170,11 +171,14 @@ fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
         tv_copy(&args[2], result);
         0
     } else {
-        let Some(first) = list_items(args[0].list_ref()).first() else {
+        let Some(first) = args[0]
+            .list_ref()
+            .and_then(|l| l.items().first().map(|li| li.li_tv.clone()))
+        else {
             semsg!("E998: Reduce of an empty {} with no initial value", "List");
             return;
         };
-        tv_copy(&first.li_tv, result);
+        result.overwrite(first);
         1
     };
     // A null List is `v:_null_list`: nothing to fold, and nothing to
@@ -182,12 +186,12 @@ fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     let Some(list) = list else {
         return;
     };
-    let prev_locked = list.lock();
+    let prev_locked = list.read().lock();
     list.edit().set_lock(VarLock::Fixed);
     // By index, through the handle, and with the item copied out: `expr`
     // is the user's function, and the lock above stops it editing the list
     // but not a `:for` on the same list from doing so.
-    while let Some(item) = list.items().get(at).map(|li| li.li_tv.clone()) {
+    while let Some(item) = { list.read().items().get(at).map(|li| li.li_tv.clone()) } {
         if !fold_step(expr, result, &item, LIST_CLEANUP, called_emsg_start) {
             break;
         }

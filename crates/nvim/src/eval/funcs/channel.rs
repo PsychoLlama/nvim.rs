@@ -296,7 +296,7 @@ pub fn f_serverlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     if args.first().is_some_and(|arg| arg.v_type() == VAR_DICT)
-        && dict_get_bool(args[0].dict_ref(), b"peer", 0) != 0
+        && dict_get_bool(args[0].dict_ref().as_deref(), b"peer", 0) != 0
     {
         let lua_args = Array::from(vec![Object::array(addrs_arr)]);
         const PEERS: &CStr = c"return require('vim._core.server').serverlist(...)";
@@ -422,13 +422,13 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let mut on_data = CallbackReader::none();
     if args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) {
         let opts = args[2].dict_ref();
-        rpc = dict_get_number(opts, b"rpc") != 0;
+        rpc = dict_get_number(opts.as_deref(), b"rpc") != 0;
         if let Err(refused) = dict_get_callback(args[2].dict_shared(), b"on_data", &mut on_data.cb)
         {
             refused.report();
             return;
         }
-        on_data.buffered = dict_get_number(args[2].dict_ref(), b"data_buffered") != 0;
+        on_data.buffered = dict_get_number(args[2].dict_ref().as_deref(), b"data_buffered") != 0;
         // Buffered with no callback means "collect it on the Dict", so
         // the Dict has to be reachable from the reader.
         if on_data.buffered && !on_data.cb.is_set() {
@@ -452,7 +452,7 @@ pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let mut on_stdin = CallbackReader::none();
-    let rpc = dict_get_number(args[0].dict_ref(), b"rpc") != 0;
+    let rpc = dict_get_number(args[0].dict_ref().as_deref(), b"rpc") != 0;
     if let Err(refused) = dict_get_callback(args[0].dict_shared(), b"on_stdin", &mut on_stdin.cb) {
         refused.report();
         return;
@@ -463,7 +463,7 @@ pub fn f_stdioopen(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         refused.report();
         return;
     }
-    on_stdin.buffered = dict_get_number(args[0].dict_ref(), b"stdin_buffered") != 0;
+    on_stdin.buffered = dict_get_number(args[0].dict_ref().as_deref(), b"stdin_buffered") != 0;
     if on_stdin.buffered && !on_stdin.cb.is_set() {
         on_stdin.self_dict = args[0].dict_shared().cloned();
     }

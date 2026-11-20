@@ -35,7 +35,7 @@ use ::core::cell::Cell;
 #[derive(Debug)]
 pub struct Edit<'a, T> {
     pub(super) target: &'a mut T,
-    pub(super) loan: Loan,
+    pub(super) loan: Loan<'a>,
 }
 
 impl<'a, T> Edit<'a, T> {
@@ -92,16 +92,52 @@ impl<'a, T: ?Sized> Read<'a, T> {
 
     /// A borrow of part of the object, under the same share.
     #[inline(always)]
-    pub fn map<U: ?Sized>(self, part: impl FnOnce(&'a T) -> &'a U) -> Read<'a, U> {
-        let Read { target, share } = self;
+    pub fn map<U: ?Sized>(mut self, part: impl FnOnce(&'a T) -> &'a U) -> Read<'a, U> {
         Read {
-            target: part(target),
-            share,
+            target: part(self.target),
+            share: self.share.take(),
         }
     }
 }
 
+/// Empty, and there to be there: a `Read` with a destructor keeps the
+/// borrow of its source alive until the share it holds goes, so the
+/// compiler refuses a `&mut` of the holder (`tv_clear(tv)`) under it
+/// rather than the count refusing it at run time.
+impl<T: ?Sized> Drop for Read<'_, T> {
+    #[inline(always)]
+    fn drop(&mut self) {}
+}
+
 deref_to_field!(impl['a, T: ?Sized] Read<'a, T> => T, target);
+
+/// Shares kept for as long as the scope lives, so that a borrow taken under
+/// one can be a plain reference of the scope's lifetime: what a walk over a
+/// tree of containers holds, each container's items borrowed from its
+/// parent's (the encoders' explicit stack).
+///
+/// [`ReadScope::hold`] answers `&'s T` from a [`Read`] whose share it keeps
+/// until the scope is dropped -- which the borrow `'s` of the scope rules
+/// out while the reference lives. Every object read under it refuses an
+/// edit until then, so a scope never spans a call that runs user code.
+#[derive(Debug, Default)]
+pub(crate) struct ReadScope(::core::cell::RefCell<Vec<Share>>);
+
+impl ReadScope {
+    pub(crate) fn new() -> ReadScope {
+        ReadScope::default()
+    }
+
+    /// The object `read` borrows, for the life of the scope.
+    #[inline]
+    pub(crate) fn hold<'s, T: ?Sized>(&'s self, read: Read<'s, T>) -> &'s T {
+        let mut read = read;
+        if let Some(share) = read.share.take() {
+            self.0.borrow_mut().push(share);
+        }
+        read.target
+    }
+}
 
 /// How a value object (list, dictionary, blob) is borrowed through its
 /// handles right now: free, lent writable to one [`Edit`], or shared by a
@@ -160,17 +196,6 @@ impl Lent {
     pub(super) fn unshare(&self) {
         self.0.set(self.0.get() - 1);
     }
-
-    /// An owning handle's `DerefMut` while an [`Edit`] or a [`Read`] of the
-    /// same object lives is the same aliasing.
-    #[inline(always)]
-    #[track_caller]
-    pub(super) fn assert_not_lent<T>(&self) {
-        let state = self.0.get();
-        if state != 0 {
-            refused::<T>("written through its handle", state, self);
-        }
-    }
 }
 
 /// A refused borrow's panic, out of every borrow's line: `what` was asked
@@ -202,18 +227,6 @@ mod tests {
         let other = list.clone();
         let _first = list.edit();
         let _second = other.edit();
-    }
-
-    /// An owning handle's `DerefMut` while an edit lends the object is the
-    /// same aliasing.
-    #[test]
-    #[should_panic(expected = "written through its handle while edit() lends it")]
-    fn a_deref_mut_under_an_edit_panics() {
-        let _held = editor_state_lock();
-        let mut dict = tv_dict_alloc();
-        let other = dict.clone();
-        let _edit = other.edit();
-        dict.dv_lock = VarLock::Locked;
     }
 
     /// An edit of an object a read holds, through another handle, is the
@@ -265,8 +278,8 @@ mod tests {
     #[test]
     fn edits_in_sequence_do_not_overlap() {
         let _held = editor_state_lock();
-        let mut list = tv_list_alloc(0);
-        list.push_number(1);
+        let list = tv_list_alloc(0);
+        list.edit().push_number(1);
         let other = list.clone();
         list.edit().lv_lock = VarLock::Locked;
         other.edit().lv_lock = VarLock::Unlocked;

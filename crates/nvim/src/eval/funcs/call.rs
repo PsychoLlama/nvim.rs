@@ -16,6 +16,7 @@ use crate::env::expand_env;
 use crate::eval::AUTOLOAD_CHAR;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::gc::{GARBAGE_COLLECT_AT_EXIT, WANT_GARBAGE_COLLECT};
+use crate::eval::typval::ReadScope;
 use crate::eval::typval::{
     ListRef, NumBuf, PartialRef, list_iter, list_len, tv_check_for_dict_arg, tv_check_for_list_arg,
 };
@@ -157,7 +158,7 @@ pub(crate) struct ListLines {
 /// The next line of an `execute([...])` walk: one line per List item, and
 /// `None` when the List runs out or an item is no String.
 pub(crate) fn get_list_line(walk: &mut ListLines) -> Option<XString> {
-    let item = walk.list.items().get(walk.at)?.li_tv.clone();
+    let item = walk.list.read().items().get(walk.at)?.li_tv.clone();
     walk.at += 1;
     let mut buf = NumBuf::new();
     buf.string_chk(&item).ok().map(XString::from_cstr)
@@ -367,6 +368,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     // a third settles it.
     let mut dict_idx = 0;
     let mut arg_idx = 0;
+    let reads = ReadScope::new();
     let mut list: Option<&List> = None;
     if args.len() > 1 {
         if args.len() > 2 {
@@ -392,7 +394,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
                 emsg(gettext(msg));
                 return;
             }
-            list = args[arg_idx].list_ref();
+            list = args[arg_idx].list_in(&reads);
             if list_len(list) == 0 {
                 arg_idx = 0;
             } else if list_len(list) > MAX_FUNC_ARGS {

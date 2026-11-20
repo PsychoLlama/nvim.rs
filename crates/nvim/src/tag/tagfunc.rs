@@ -179,11 +179,11 @@ pub(crate) fn find_tagfunc_tags(
     };
 
     let mut tags = Vec::new();
-    for li in list.items() {
+    for li in list.read().items() {
         let parsed = (li.li_tv.v_type() == VAR_DICT)
             .then(|| li.li_tv.dict_handle())
             .flatten()
-            .and_then(|d| tag_of(&d, flags));
+            .and_then(|d| tag_of(&d.read(), flags));
         let Some(found) = parsed else {
             tag_emsg(E_INVALID_RETURN);
             break;

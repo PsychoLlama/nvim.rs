@@ -204,7 +204,7 @@ fn writable(args: &[TypVal]) -> Result<(), Failed> {
     // (#39328): it assigns VAR_BLOB when it finds a NUL in the Lua string,
     // and VAR_STRING when it does not.
     if args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
-        return list_items(args[0].list_ref())
+        return list_items(args[0].list_ref().as_deref())
             .iter()
             .try_for_each(|item| tv_check_str_or_nr(&item.li_tv));
     }
@@ -316,7 +316,7 @@ pub fn f_writefile(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             &mut out,
             args[0].string_ref().map_or(&[], ThinCString::as_bytes),
         ),
-        _ => write_list(&mut out, args[0].list_ref(), flags.binary),
+        _ => write_list(&mut out, args[0].list_ref().as_deref(), flags.binary),
     };
     if written.is_ok() {
         result.write_number(0 as VarNumber);

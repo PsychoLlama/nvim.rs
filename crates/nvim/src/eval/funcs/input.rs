@@ -183,8 +183,8 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The List is held by the argument for the whole call, and printing it
     // runs no user code.
     let list = args[0].list_ref();
-    let len = as_index(list_len(list));
-    for (at, li) in list_iter(list).enumerate() {
+    let len = as_index(list_len(list.as_deref()));
+    for (at, li) in list_iter(list.as_deref()).enumerate() {
         msg_str(numbuf.string(&li.li_tv));
         // A UI that owns the message area keeps the items in one message,
         // bar the last separator.
@@ -198,7 +198,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // A click names a line rather than an item, so count back from the
     // bottom of the list.
     if mouse_used {
-        selected = list_len(args[0].list_ref()) - (CMDLINE_ROW.get() - MOUSE_ROW.get());
+        selected = list_len(args[0].list_ref().as_deref()) - (CMDLINE_ROW.get() - MOUSE_ROW.get());
     }
     result.write_number(VarNumber::from(selected));
 }

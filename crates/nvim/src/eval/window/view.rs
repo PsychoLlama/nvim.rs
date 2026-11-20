@@ -20,7 +20,7 @@ use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 /// `getwinpos([{timeout}])` — the GUI's window position, which a terminal
 /// never has.
 pub fn f_getwinpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc_ret(result, 2);
+    let mut list = tv_list_alloc_ret(result, 2);
     (*list).push_number(-1);
     (*list).push_number(-1);
 }
@@ -79,7 +79,7 @@ pub fn f_win_move_statusline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
 /// `win_screenpos({nr})` — the window's top-left cell, one-based; `[0, 0]` for
 /// a window that does not exist.
 pub fn f_win_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc_ret(result, 2);
+    let mut list = tv_list_alloc_ret(result, 2);
     let wp = arg_win(args, 0);
     let (row, col) = wp.map_or((0, 0), |wp| (wp.w_winrow + 1, wp.w_wincol + 1));
     (*list).push_number(VarNumber::from(row));
@@ -91,14 +91,14 @@ pub fn f_win_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 fn splitmove_options(opts: &TypVal) -> (c_int, c_int) {
     let d = (*opts).dict_ref();
     let mut flags = 0;
-    if dict_get_number(d, b"vertical") != 0 {
+    if dict_get_number(d.as_deref(), b"vertical") != 0 {
         flags |= WSP_VERT;
     }
-    if let Some(di) = dict_find(d, b"rightbelow") {
+    if let Some(di) = dict_find(d.as_deref(), b"rightbelow") {
         let below = tv_get_number(&di.di_tv);
         flags |= if below != 0 { WSP_BELOW } else { WSP_ABOVE };
     }
-    (flags, number_as_int(dict_get_number(d, b"size")))
+    (flags, number_as_int(dict_get_number(d.as_deref(), b"size")))
 }
 
 /// `win_splitmove({nr}, {target} [, {options}])` — 0 when the window moved.
@@ -202,7 +202,8 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
     }
     let dict = args[0].dict_ref();
     let mut win = Win::current();
-    let entry = |key: &CStr| dict_find(dict, key.to_bytes()).map(|di| tv_get_number(&di.di_tv));
+    let entry =
+        |key: &CStr| dict_find(dict.as_deref(), key.to_bytes()).map(|di| tv_get_number(&di.di_tv));
 
     if let Some(v) = entry(c"lnum") {
         win.w_cursor.lnum = number_as_lnum(v);
@@ -265,7 +266,7 @@ fn restored_topline(topline: LineNr, line_count: LineNr) -> LineNr {
 /// `winsaveview()` — everything `winrestview()` puts back.
 pub fn f_winsaveview(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     tv_dict_alloc_ret(result);
-    let dict = result.dict_mut().expect("just allocated");
+    let mut dict = result.dict_mut().expect("just allocated");
     let win = Win::current();
     let mut nr = |key: &CStr, value: VarNumber| {
         let _ = dict.add_number(key.to_bytes(), value);

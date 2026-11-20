@@ -274,14 +274,14 @@ impl Colouring {
         let mut numbuf = NumBuf::new();
         let len = VarNumber::from(colored_ccline.len());
         let mut prev_end: VarNumber = 0;
-        for (i, li) in list_iter(Some(chunks)).enumerate() {
+        for (i, li) in list_iter(Some(&chunks)).enumerate() {
             let i = index_of(i);
             if li.li_tv.v_type() != VAR_LIST {
                 print_errmsg!(self.printed_errmsg, "E5401: List item {i} is not a List");
                 return Err(Stop::Error);
             }
-            if list_len(li.li_tv.list_ref()) != 3 {
-                let len = list_len(li.li_tv.list_ref());
+            if list_len(li.li_tv.list_ref().as_deref()) != 3 {
+                let len = list_len(li.li_tv.list_ref().as_deref());
                 print_errmsg!(
                     self.printed_errmsg,
                     "E5402: List item {i} has incorrect length: {len} /= 3"
@@ -290,7 +290,8 @@ impl Colouring {
             }
 
             // The item's own list, just checked to hold three items.
-            let chunk = list_items(li.li_tv.list_ref());
+            let chunk = li.li_tv.list_ref();
+            let chunk = list_items(chunk.as_deref());
             let start = tv_get_number_chk(&chunk[0].li_tv).map_err(|_| Stop::Error)?;
             if !(prev_end <= start && start < len) {
                 print_errmsg!(

@@ -353,7 +353,7 @@ pub fn f_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let (row, scol, ccol, ecol) = textpos2screenpos(wp, &mut pos, false);
-    let dict = result.dict_mut().expect("just allocated");
+    let mut dict = result.dict_mut().expect("just allocated");
     for (name, value) in [
         (c"row", row),
         (c"col", scol),

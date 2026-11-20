@@ -591,7 +591,7 @@ fn a_match_reads_back_as_a_completed_item() {
     );
     assert_eq!(add("fob"), Added::Linked);
     let item = completed_item(nth(1));
-    let get = |key: &[u8]| member(&item, key);
+    let get = |key: &[u8]| member(&item.read(), key);
     assert_eq!(get(b"word").as_deref(), Some("foo"));
     assert_eq!(get(b"abbr").as_deref(), Some("FOO"));
     assert_eq!(get(b"kind").as_deref(), Some("<null>"));
@@ -601,8 +601,8 @@ fn a_match_reads_back_as_a_completed_item() {
     assert_eq!(get(b"match"), None);
     // No user data reads back as an empty string.
     let plain = completed_item(nth(2));
-    assert_eq!(member(&plain, b"user_data").as_deref(), Some(""));
-    assert_eq!(member(&plain, b"abbr").as_deref(), Some("<null>"));
+    assert_eq!(member(&plain.read(), b"user_data").as_deref(), Some(""));
+    assert_eq!(member(&plain.read(), b"abbr").as_deref(), Some("<null>"));
 }
 
 #[test]

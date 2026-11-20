@@ -72,7 +72,7 @@ impl Node {
     /// Whether every child this node announced has arrived.
     fn is_complete(&self) -> bool {
         match self {
-            Node::Array { list, len } => list.items().len() >= *len as usize,
+            Node::Array { list, len } => list.read().items().len() >= *len as usize,
             Node::Map { pairs, len, .. } => pairs.len() >= 2 * (*len as usize),
             Node::Bytes { bytes, len, .. } => bytes.len() >= *len as usize,
         }
@@ -92,11 +92,11 @@ impl Node {
                 // `{_TYPE: ext, _VAL: [type, [bytes…]]}`.  The payload goes
                 // into a list of strings rather than a blob, as upstream's
                 // TODO notes.
-                let mut list = tv_list_alloc(2);
-                list.push_number(VarNumber::from(ext_type));
-                let mut payload = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
-                encode_list_write(&mut payload, &bytes);
-                list.push_list(Some(payload));
+                let list = tv_list_alloc(2);
+                list.edit().push_number(VarNumber::from(ext_type));
+                let payload = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
+                encode_list_write(&mut payload.edit(), &bytes);
+                list.edit().push_list(Some(payload));
                 create_special_dict(MP_EXT, TypVal::list(Some(list)))
             }
             Node::Bytes { bytes, .. } => decode_owned_string(bytes),
@@ -114,14 +114,15 @@ fn positive_integer_to_special_typval(val: u64) -> TypVal {
     if let Ok(number) = VarNumber::try_from(val) {
         return TypVal::Number(number);
     }
-    let mut list = tv_list_alloc(4);
+    let list = tv_list_alloc(4);
     for piece in [
         1,
         (val >> 62) & 0x3,
         (val >> 31) & 0x7fff_ffff,
         val & 0x7fff_ffff,
     ] {
-        list.push_number(VarNumber::try_from(piece).expect("at most 31 bits"));
+        list.edit()
+            .push_number(VarNumber::try_from(piece).expect("at most 31 bits"));
     }
     create_special_dict(MP_INTEGER, TypVal::list(Some(list)))
 }
@@ -134,12 +135,13 @@ fn map_value(mut pairs: Vec<TypVal>) -> TypVal {
         .step_by(2)
         .all(|key| key.string_ref().is_some_and(|key| !key.is_empty()))
     {
-        let mut dict = tv_dict_alloc();
+        let dict = tv_dict_alloc();
         let mut added = 0;
         while added < pairs.len() {
             let mut item = DictItem::boxed(pairs[added].string_bytes());
             item.di_tv = pairs[added + 1].take();
-            if let Err(mut refused) = dict.add_item(item) {
+            // (The edit ends before the arm, which edits again.)
+            if let Err(mut refused) = { dict.edit().add_item(item) } {
                 // A duplicate key.  Hand every value already added back to
                 // the pair it came from, for the special map below.
                 pairs[added + 1] = refused.di_tv.take();
@@ -156,13 +158,13 @@ fn map_value(mut pairs: Vec<TypVal>) -> TypVal {
         }
     }
     let count = pairs.len() / 2;
-    let (special, mut list) = decode_create_map_special_dict(count.cast_signed());
+    let (special, list) = decode_create_map_special_dict(count.cast_signed());
     let mut pairs = pairs.into_iter();
     while let (Some(key), Some(value)) = (pairs.next(), pairs.next()) {
-        let mut kv_pair = tv_list_alloc(2);
-        kv_pair.push(key);
-        kv_pair.push(value);
-        list.push_list(Some(kv_pair));
+        let kv_pair = tv_list_alloc(2);
+        kv_pair.edit().push(key);
+        kv_pair.edit().push(value);
+        list.edit().push_list(Some(kv_pair));
     }
     special
 }
@@ -191,7 +193,7 @@ impl MsgpackDecoder {
             match self.stack.last_mut() {
                 None => return Some(value),
                 Some(Node::Array { list, .. }) => {
-                    list.push(value);
+                    list.edit().push(value);
                 }
                 Some(Node::Map {
                     pairs, key_visited, ..

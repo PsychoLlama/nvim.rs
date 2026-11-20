@@ -110,7 +110,7 @@ pub fn f_screenchar(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// combining ones `screenchar()` drops.
 pub fn f_screenchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let cell = Cell::at(args);
-    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     if !cell.on_grid() {
         return;
     }
@@ -320,7 +320,7 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         }
     }
 
-    let list = tv_list_alloc_ret(result, 3);
+    let mut list = tv_list_alloc_ret(result, 3);
     let concealed = VarNumber::from(c_int::from(syntax_flags.has(SynFlags::CONCEAL)));
     list.push_number(concealed);
     list.push_bytes(Some(&text));
@@ -342,7 +342,7 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         && col >= ColNr::ZERO
         && col <= ml_get_len(lnum)
     {
-        let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
+        let mut list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
         // Run the syntax engine, keeping the stack this time.
         Win::current().syntax_id(lnum, col, false, None, true);
         for i in 0.. {

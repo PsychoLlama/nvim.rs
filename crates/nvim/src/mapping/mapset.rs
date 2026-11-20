@@ -16,6 +16,7 @@
 use super::*;
 use crate::api_error;
 use crate::eval::typval::NumBuf;
+use crate::eval::typval::ReadScope;
 use crate::eval::userfunc::FuncFlags;
 use crate::getchar::Remap;
 use crate::lua::executor::release_luaref;
@@ -51,6 +52,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     let mut buf = NumBuf::new();
     let which: &CStr;
     let is_abbr: bool;
+    let reads = ReadScope::new();
     let d: Option<&Dict>;
 
     // If the first argument is a dict, then that is the only one allowed.
@@ -58,7 +60,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
     // argument vector running to a `VAR_UNKNOWN`, so every slot tested here is
     // there, and `buf` is the scratch `tv_get_string_buf_chk` may answer with.
     if args[0].v_type() == VAR_DICT as _ {
-        d = args[0].dict_ref();
+        d = args[0].dict_in(&reads);
         let mode = numbuf.dict_string(d, b"mode");
         let abbr = dict_get_bool(d, b"abbr", -1);
         let Some(mode) = mode.filter(|_| abbr >= 0) else {
@@ -78,7 +80,7 @@ pub fn f_mapset(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
         if tv_check_for_dict_arg(args, 2).is_err() {
             return;
         }
-        d = args[2].dict_ref();
+        d = args[2].dict_in(&reads);
     }
 
     let mode = get_map_mode_string(which.to_bytes(), is_abbr);

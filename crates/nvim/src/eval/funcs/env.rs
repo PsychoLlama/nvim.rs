@@ -60,8 +60,8 @@ pub fn f_environ(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         };
         debug_assert!(len > 0);
         let (key, value) = (&entry[..len], &entry[len + 1..]);
-        if !dict_has_key(result.dict_ref(), key) {
-            let dict = result.dict_mut().expect("just allocated");
+        if !dict_has_key(result.dict_ref().as_deref(), key) {
+            let mut dict = result.dict_mut().expect("just allocated");
             let _ = dict.add_str_len(key, Some(value));
         }
     }
@@ -107,7 +107,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             emsg(msg);
         }
         if result.v_type() == VAR_LIST {
-            let list = tv_list_alloc_ret(result, isize::from(expanded.is_some()));
+            let mut list = tv_list_alloc_ret(result, isize::from(expanded.is_some()));
             if let Some(expanded) = expanded {
                 list.push(TypVal::string(Some(expanded)));
             }
@@ -140,7 +140,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         result.write_string(all.map(ThinCString::from));
     } else {
         expand_one(&mut xpc, Some(pat), None, options, WildMode::AllKeep);
-        let list = tv_list_alloc_ret(result, xpc.match_count() as isize);
+        let mut list = tv_list_alloc_ret(result, xpc.match_count() as isize);
         for name in xpc.matches() {
             list.push_str(Some(name.as_cstr()));
         }
@@ -156,7 +156,11 @@ pub fn f_expandcmd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // {'errmsg': v:true} asks for the expansion's own error instead of
     // silence.
     let errmsg = args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT)
-        && dict_get_bool(args[1].dict_ref(), b"errmsg", BOOL_VAR_FALSE.cast_signed()) != 0;
+        && dict_get_bool(
+            args[1].dict_ref().as_deref(),
+            b"errmsg",
+            BOOL_VAR_FALSE.cast_signed(),
+        ) != 0;
     let quiet = !errmsg;
     let line = numbuf.bytes(&args[0]).to_vec();
     let mut eap = ExArg {
@@ -222,7 +226,7 @@ pub fn f_setfperm(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// path, each with the application name appended.
 fn get_xdg_var_list(xdg: XdgVar, result: &mut TypVal) {
     let appname = get_appname(false);
-    let list = tv_list_alloc_ret(result, LIST_LEN_SHOULD_KNOW as isize);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_SHOULD_KNOW as isize);
     let Some(dirs) = xdg_var(xdg) else {
         return;
     };
@@ -263,7 +267,10 @@ pub fn f_stdpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `swapfilelist()` — every swap file in 'directory'.
 pub fn f_swapfilelist(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    list_swap_files(Some(tv_list_alloc_ret(result, LIST_LEN_UNKNOWN as isize)));
+    list_swap_files(Some(&mut tv_list_alloc_ret(
+        result,
+        LIST_LEN_UNKNOWN as isize,
+    )));
 }
 
 /// `swapinfo({fname})` — what a swap file says about its buffer.
@@ -273,7 +280,7 @@ pub fn f_swapinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // has somewhere to write.
     dict_alloc_ret(result);
     let fname = numbuf.string(&args[0]);
-    swapfile_dict(fname, result.dict_mut().expect("just allocated"));
+    swapfile_dict(fname, &mut result.dict_mut().expect("just allocated"));
 }
 
 /// `swapname({buf})` — the swap file a buffer is using, if any.

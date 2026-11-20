@@ -42,9 +42,10 @@ fn matchadd_dict_arg(tv: &TypVal, win: &mut Win) -> Result<Option<CString>, Fail
     let dict = tv.dict_ref();
 
     let mut numbuf = NumBuf::new();
-    let conceal = dict_find(dict, b"conceal").map(|di| numbuf.string(&di.di_tv).to_owned());
+    let conceal =
+        dict_find(dict.as_deref(), b"conceal").map(|di| numbuf.string(&di.di_tv).to_owned());
 
-    let Some(di) = dict_find(dict, b"window") else {
+    let Some(di) = dict_find(dict.as_deref(), b"window") else {
         return Ok(conceal);
     };
     let Some(found) = find_win_by_nr_or_id(&di.di_tv) else {
@@ -64,8 +65,8 @@ pub(crate) fn f_clearmatches(args: &[TypVal], _result: &mut TypVal, _fptr: EvalF
 
 /// One match as `getmatches()` describes it.
 fn match_dict(item: &MatchItem) -> DictRef {
-    let mut dict_held = tv_dict_alloc();
-    let dict = &mut *dict_held;
+    let dict_held = tv_dict_alloc();
+    let mut dict = dict_held.edit();
     if item.mit_match.regprog.is_none() {
         // Added with matchaddpos(): one `posN` key per position.
         for (i, llpos) in item.mit_pos_array.iter().enumerate() {
@@ -74,14 +75,15 @@ fn match_dict(item: &MatchItem) -> DictRef {
             }
             // A column of zero means the whole line, and is reported
             // as a one-element list.
-            let mut held = tv_list_alloc(1 + if llpos.col > ColNr::ZERO { 2 } else { 0 });
-            let sub = &mut *held;
+            let held = tv_list_alloc(1 + if llpos.col > ColNr::ZERO { 2 } else { 0 });
+            let mut sub = held.edit();
             sub.push_number(VarNumber::from(llpos.lnum));
             if llpos.col > ColNr::ZERO {
                 sub.push_number(VarNumber::from(llpos.col));
                 sub.push_number(VarNumber::from(llpos.len));
             }
             let key = format!("pos{}", i + 1);
+            drop(sub);
             let _ = dict.add_list(key.as_bytes(), Some(held));
         }
     } else {
@@ -97,13 +99,14 @@ fn match_dict(item: &MatchItem) -> DictRef {
         let len = encode_char(Codepoint::new(item.mit_conceal_char), &mut buf);
         let _ = dict.add_str_len(b"conceal", Some(&buf[..len]));
     }
+    drop(dict);
     dict_held
 }
 
 /// `getmatches([win])`.
 pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let win = get_optional_window(args, 0);
-    let l = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
+    let mut l = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     let Some(win) = win else {
         return;
     };
@@ -134,7 +137,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     let l = args[0].list_ref();
 
     // To some extent make sure this really came from getmatches().
-    for (li_idx, li) in list_iter(l).enumerate() {
+    for (li_idx, li) in list_iter(l.as_deref()).enumerate() {
         let tv = &li.li_tv;
         let Some(d) = tv.dict_ref().filter(|_| tv.v_type() == VAR_DICT) else {
             semsg!(
@@ -143,7 +146,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
             );
             return;
         };
-        let has = |key: &[u8]| dict_find(Some(d), key).is_some();
+        let has = |key: &[u8]| dict_find(Some(&d), key).is_some();
         let ok =
             has(b"group") && (has(b"pattern") || has(b"pos1")) && has(b"priority") && has(b"id");
         if !ok {
@@ -160,17 +163,17 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     // By index: `match_add` runs no user code, but the dictionary lookups
     // below do reach the evaluator, and the list is the caller's own.
     let mut at = 0;
-    while at < list_items(l).len() {
-        let d = list_items(l)[at].li_tv.dict_ref();
+    while at < list_items(l.as_deref()).len() {
+        let d = list_items(l.as_deref())[at].li_tv.dict_ref();
 
         // A match with no `pattern` is a position match: collect
         // pos1..pos8 into the list `match_add` wants.
         let mut held = None;
-        if dict_find(d, b"pattern").is_none() {
+        if dict_find(d.as_deref(), b"pattern").is_none() {
             let positions = tv_list_alloc(MAX_SAVED_POS as ptrdiff_t + 1);
             for i in 1..MAX_SAVED_POS + 1 {
                 let key = format!("pos{i}");
-                let Some(pos_di) = dict_find(d, key.as_bytes()) else {
+                let Some(pos_di) = dict_find(d.as_deref(), key.as_bytes()) else {
                     break;
                 };
                 if pos_di.di_tv.v_type() != VAR_LIST {
@@ -188,14 +191,14 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
 
         // Three scratches are in play here — this one and the two the
         // frame lends below — and none may be reused before its value is.
-        let group = group_buf.dict_string(d, b"group").unwrap_or(c"");
-        let priority = number_as_int(dict_get_number(d, b"priority"));
-        let id = number_as_int(dict_get_number(d, b"id"));
-        let conceal = dict_find(d, b"conceal").map(|di| numbuf.string(&di.di_tv));
+        let group = group_buf.dict_string(d.as_deref(), b"group").unwrap_or(c"");
+        let priority = number_as_int(dict_get_number(d.as_deref(), b"priority"));
+        let id = number_as_int(dict_get_number(d.as_deref(), b"id"));
+        let conceal = dict_find(d.as_deref(), b"conceal").map(|di| numbuf.string(&di.di_tv));
 
         let added = match &held {
             None => {
-                let pattern = numbuf2.dict_string(d, b"pattern");
+                let pattern = numbuf2.dict_string(d.as_deref(), b"pattern");
                 win.add_match(group, pattern, priority, id, None, conceal)
             }
             Some(positions) => {
@@ -303,7 +306,7 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
         return;
     }
     let l = args[1].list_ref();
-    if list_len(l) == 0 {
+    if list_len(l.as_deref()) == 0 {
         return;
     }
 
@@ -317,7 +320,7 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
     }
 
     let conceal = conceal_char.as_deref();
-    let added = win.add_match(group, None, prio, id, l, conceal);
+    let added = win.add_match(group, None, prio, id, l.as_deref(), conceal);
     result.write_number(VarNumber::from(answer_or_report(added)));
 }
 
@@ -327,7 +330,7 @@ pub(crate) fn f_matcharg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     let id = number_as_int(tv_get_number(&args[0]));
     let is_excmd = (1..=3).contains(&id);
     // Any other id answers an empty list, not an error.
-    let l = tv_list_alloc_ret(result, if is_excmd { 2 } else { 0 });
+    let mut l = tv_list_alloc_ret(result, if is_excmd { 2 } else { 0 });
     if !is_excmd {
         return;
     }

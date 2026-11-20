@@ -78,14 +78,14 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         }
     }
     if DID_EMSG.get() == did_emsg_before {
-        let split = did_concat && list_len(list.as_deref()) > 1;
+        let split = did_concat && list_len(list.as_ref().map(|l| l.read()).as_deref()) > 1;
         if let (true, Some(list)) = (split, &list) {
             // The joined first item replaces the prompt line; the rest is
             // appended after it, but only once the replacement worked. The
             // first item is copied out: the replacement runs autocommands,
             // which may edit the list.
             let mut first = TypVal::Number(0);
-            tv_copy(&list.items()[0].li_tv, &mut first);
+            tv_copy(&list.read().items()[0].li_tv, &mut first);
             set_buffer_lines(Some(buf), lnum, false, &first, result);
             drop(first);
             if result.number_or_zero() == 0 {
@@ -100,7 +100,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     if result.number_or_zero() == 0 {
         let mut buf = buf;
         buf.b_prompt_append_new_line = if lines.v_type() == VAR_LIST {
-            match list_items(lines.list_ref()).last() {
+            match list_items(lines.list_ref().as_deref()).last() {
                 Some(last) => ends_in_newline(numbuf3.bytes(&last.li_tv)),
                 None => false,
             }

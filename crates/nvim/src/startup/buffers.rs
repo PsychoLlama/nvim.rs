@@ -84,13 +84,13 @@ fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
 
 /// Set `v:argf` to the full paths of the file arguments.
 pub(crate) fn set_argf_var() {
-    let mut list = tv_list_alloc(LIST_LEN_MAY_KNOW as c_int as ptrdiff_t);
+    let list = tv_list_alloc(LIST_LEN_MAY_KNOW as c_int as ptrdiff_t);
     // Inside the list's borrow: resolving a name runs no user code.
     with_arg_names(ArgListId::GLOBAL, |fname| {
         let full = vim_full_name(fname, MAXPATHL as usize, false).unwrap_or_else(|name| name);
-        list.push_str(Some(&cstr::owned(&full)));
+        list.edit().push_str(Some(&cstr::owned(&full)));
     });
-    list_set_lock(Some(&mut list), VarLock::Fixed);
+    list_set_lock(Some(&mut list.edit()), VarLock::Fixed);
     set_vim_var_list(Vv::Argf, Some(list));
 }
 

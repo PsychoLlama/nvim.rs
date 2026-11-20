@@ -170,7 +170,7 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
     let mut found = walk.start(fname.to_bytes(), quiet, path, find_what, rel, sua.as_cstr());
     loop {
         if let Some(name) = &found
-            && let Some(list) = result.list_mut()
+            && let Some(mut list) = result.list_mut()
         {
             list.push_str(Some(name.as_cstr()));
         }
@@ -246,7 +246,7 @@ pub fn f_glob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     xpc.one(pat, options, WildMode::AllKeep);
-    let list = tv_list_alloc_ret(result, xpc.count() as ptrdiff_t);
+    let mut list = tv_list_alloc_ret(result, xpc.count() as ptrdiff_t);
     for name in xpc.files() {
         list.push_str(Some(name.as_cstr()));
     }
@@ -296,7 +296,7 @@ pub fn f_globpath(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         result.write_string(Some(joined.into()));
         return;
     }
-    let list = tv_list_alloc_ret(result, ptrdiff_t::try_from(found.len()).unwrap_or(0));
+    let mut list = tv_list_alloc_ret(result, ptrdiff_t::try_from(found.len()).unwrap_or(0));
     for name in &found {
         list.push_str(Some(name.as_cstr()));
     }
@@ -345,7 +345,7 @@ pub fn f_readdir(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             .map(|filter| filter as &mut dyn FnMut(&CStr) -> VarNumber),
     );
     if let Ok(found) = found
-        && let Some(list) = result.list_mut()
+        && let Some(mut list) = result.list_mut()
     {
         for name in &found {
             list.push_str(Some(name));

@@ -85,7 +85,7 @@ pub fn f_gettabinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         1
     };
-    let list = tv_list_alloc_ret(result, hint);
+    let mut list = tv_list_alloc_ret(result, hint);
     let wanted = if one {
         let n = number_as_int(arg_number_chk(args, 0));
         match find_tabpage(n) {
@@ -114,7 +114,7 @@ pub fn f_gettabinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `tabnr` wraps negative while `tabpagenr()`, an `int`, stays right. Reaching
 /// that takes 33,000 `:tabnew`s, so no test can see either answer.
 pub fn f_getwininfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     let wanted = if !args.is_empty() {
         match win_by_id(number_as_int(arg_number(args, 0))) {
             Some(wp) => Some(wp),
@@ -173,7 +173,7 @@ impl FrameRef {
 
 /// `winlayout([{tabnr}])` — the tab page's window layout tree.
 pub fn f_winlayout(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let list = tv_list_alloc_ret(result, 2);
+    let mut list = tv_list_alloc_ret(result, 2);
     let tp = if args.is_empty() {
         TabPage::current()
     } else {
@@ -183,7 +183,7 @@ pub fn f_winlayout(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             None => return,
         }
     };
-    tp.topframe().write_layout(list);
+    tp.topframe().write_layout(&mut list);
 }
 
 /// `win_gettype([{nr}])` — the empty string for an ordinary window.

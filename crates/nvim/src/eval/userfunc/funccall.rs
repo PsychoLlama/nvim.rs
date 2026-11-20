@@ -78,9 +78,9 @@ const LIST_HOLDERS: c_int = 1;
 
 /// A scope dictionary and the entry that names it.
 fn scope_dict(scope: ScopeType) -> (DictRef, RefCell<ScopeDictItem>) {
-    let mut dict = tv_dict_alloc();
+    let dict = tv_dict_alloc();
     {
-        let d = &mut *dict;
+        let d = &mut dict.edit();
         // Out of the collector's registry: the funccall marks it.
         unroot_dict(d.dv_root);
         d.dv_root = RootId::NONE;
@@ -100,9 +100,9 @@ impl FrameScopes {
     fn new() -> FrameScopes {
         let (l_vars, l_vars_var) = scope_dict(VAR_DEF_SCOPE);
         let (a_vars, a_vars_var) = scope_dict(VAR_SCOPE);
-        let mut a_list = tv_list_alloc(-1);
+        let a_list = tv_list_alloc(-1);
         {
-            let l = &mut *a_list;
+            let l = &mut a_list.edit();
             unroot_list(l.lv_root);
             l.lv_root = RootId::NONE;
         }
@@ -151,22 +151,22 @@ impl FrameScopes {
 
     /// Whether anything besides the funccall holds one of the three.
     fn referenced(&self) -> bool {
-        self.a_list.lv_refcount != Refcount::new(DO_NOT_FREE_CNT)
-            || self.l_vars.dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
-            || self.a_vars.dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
+        self.a_list.read().lv_refcount != Refcount::new(DO_NOT_FREE_CNT)
+            || self.l_vars.read().dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
+            || self.a_vars.read().dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
     }
 
     /// Whether these can start another call: nothing else holds them, and
     /// no Lua table mirrors them.
     fn reusable(&self) -> bool {
-        self.l_vars.dv_refcount == Refcount::new(DICT_HOLDERS)
-            && self.a_vars.dv_refcount == Refcount::new(DICT_HOLDERS)
-            && self.a_list.lv_refcount == Refcount::new(LIST_HOLDERS)
-            && self.l_vars.lua_table_ref == LUA_NOREF
-            && self.a_vars.lua_table_ref == LUA_NOREF
-            && self.a_list.lua_table_ref == LUA_NOREF
-            && self.l_vars.watchers.is_empty()
-            && self.a_vars.watchers.is_empty()
+        self.l_vars.read().dv_refcount == Refcount::new(DICT_HOLDERS)
+            && self.a_vars.read().dv_refcount == Refcount::new(DICT_HOLDERS)
+            && self.a_list.read().lv_refcount == Refcount::new(LIST_HOLDERS)
+            && self.l_vars.read().lua_table_ref == LUA_NOREF
+            && self.a_vars.read().lua_table_ref == LUA_NOREF
+            && self.a_list.read().lua_table_ref == LUA_NOREF
+            && self.l_vars.read().watchers.is_empty()
+            && self.a_vars.read().watchers.is_empty()
     }
 
     /// An entry for one of the scopes: read-only, holding `value` under
@@ -209,13 +209,13 @@ impl Drop for FrameScopes {
 /// `spare` for the next call's entries.
 #[allow(clippy::vec_box)] // the boxes a dictionary hands back, kept
 fn clear_scope(dict: &DictRef, release_values: bool, spare: &RefCell<Vec<Box<DictItem>>>) {
-    if dict.dv_hashtab.ht_used == 0 {
+    if dict.read().dv_hashtab.ht_used == 0 {
         return;
     }
     dict.edit().lock_table();
     let mut slot = 0;
-    while dict.dv_hashtab.ht_used > 0 && slot < dict.dv_hashtab.size() {
-        if dict.dv_hashtab.slots()[slot].is_kept() {
+    while dict.read().dv_hashtab.ht_used > 0 && slot < dict.read().dv_hashtab.size() {
+        if dict.read().dv_hashtab.slots()[slot].is_kept() {
             let removed = dict.edit().remove_at(slot);
             // Released with the borrow of the dictionary over: a value can
             // name the dictionary it was in.
@@ -302,7 +302,7 @@ pub(crate) fn cleanup_function_call(frame: Rc<FuncCall>) {
 
     let mut free_fc = true;
     // Free all l: variables if not referred to.
-    if may_free_fc && scopes.l_vars.dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
+    if may_free_fc && scopes.l_vars.read().dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
         clear_scope(&scopes.l_vars, true, &scopes.spare);
     } else {
         free_fc = false;
@@ -310,7 +310,7 @@ pub(crate) fn cleanup_function_call(frame: Rc<FuncCall>) {
 
     // If the a:000 list and the l: and a: dicts are not referenced and no
     // closure is using them, the funccall and what is in it can go.
-    if may_free_fc && scopes.a_vars.dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
+    if may_free_fc && scopes.a_vars.read().dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
         clear_scope(&scopes.a_vars, false, &scopes.spare);
     } else {
         free_fc = false;
@@ -322,7 +322,7 @@ pub(crate) fn cleanup_function_call(frame: Rc<FuncCall>) {
         }
     }
 
-    if may_free_fc && scopes.a_list.lv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
+    if may_free_fc && scopes.a_list.read().lv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
         disown_list(&scopes.a_list);
     } else {
         free_fc = false;
@@ -533,9 +533,9 @@ fn fc_referenced(frame: &FuncCall) -> bool {
 /// Whether nothing in `frame` carries `copy_id`, i.e. nothing in use reaches
 /// it.
 fn can_free_funccal(frame: &FuncCall, copy_id: c_int) -> bool {
-    frame.scopes.a_list.lv_copy_id != copy_id
-        && frame.scopes.l_vars.dv_copy_id != copy_id
-        && frame.scopes.a_vars.dv_copy_id != copy_id
+    frame.scopes.a_list.read().lv_copy_id != copy_id
+        && frame.scopes.l_vars.read().dv_copy_id != copy_id
+        && frame.scopes.a_vars.read().dv_copy_id != copy_id
         && frame.copy_id.get() != copy_id
 }
 

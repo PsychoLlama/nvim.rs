@@ -130,7 +130,7 @@ pub fn f_setcellwidths(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncDat
         emsg(gettext(E_LISTREQ));
         return;
     };
-    let table = match parse_cell_widths(list) {
+    let table = match parse_cell_widths(&list) {
         Ok(table) => table,
         Err(error) => {
             emsg_text(error.to_string());
@@ -179,7 +179,7 @@ fn parse_cell_widths(list: &List) -> Result<Vec<CellWidthRange>, CellWidthError>
     for (item, li) in list_iter(Some(list)).enumerate() {
         let item = index_of(item);
         let row = li.li_tv.list_ref().ok_or(CellWidthError::NotAList(item))?;
-        rows.push(parse_cell_width_row(row, item)?);
+        rows.push(parse_cell_width_row(&row, item)?);
     }
 
     // Upstream sorts with qsort, which is unstable; two rows sharing a
@@ -234,13 +234,14 @@ fn parse_cell_width_row(row: &List, item: c_int) -> Result<CellWidthRange, CellW
 /// `[first, last, width]`.
 pub fn f_getcellwidths(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let rows = CELL_WIDTHS.with(|t| t.clone());
-    let list = tv_list_alloc_ret(result, isize::try_from(rows.len()).expect("a short table"));
+    let mut list = tv_list_alloc_ret(result, isize::try_from(rows.len()).expect("a short table"));
     for row in &rows {
-        let mut entry = tv_list_alloc(3);
-        let into = &mut *entry;
+        let entry = tv_list_alloc(3);
+        let mut into = entry.edit();
         into.push_number(row.first);
         into.push_number(row.last);
         into.push_number(VarNumber::from(row.width));
+        drop(into);
         list.push_list(Some(entry));
     }
 }

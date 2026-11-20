@@ -475,7 +475,7 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
         isize::try_from(tables::DEFAULT_DIGRAPHS.len() + user_len).expect("a short table");
     // SAFETY: `result` is a valid return slot, so the list it is given owns
     // itself from here on.
-    let list = tv_list_alloc_ret(result, capacity);
+    let mut list = tv_list_alloc_ret(result, capacity);
     if list_all {
         for dp in tables::DEFAULT_DIGRAPHS.iter() {
             if GOT_INT.get() {
@@ -483,7 +483,7 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
             }
             let result = get_exact_digraph(Key::byte(dp.char1), Key::byte(dp.char2), false);
             if !result.is_nul() && result != Key::byte(dp.char2) {
-                getlist_append_pair(&Digraph { result, ..*dp }, list);
+                getlist_append_pair(&Digraph { result, ..*dp }, &mut list);
             }
         }
     }
@@ -492,7 +492,7 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
         if GOT_INT.get() {
             break;
         }
-        getlist_append_pair(dp, list);
+        getlist_append_pair(dp, &mut list);
     }
 }
 
@@ -611,12 +611,13 @@ fn digraph_setlist_common(arg: &TypVal) -> Result<(), DigraphError> {
         return Ok(());
     };
     // `digraph_set_common` does not touch the list it is reading from.
-    for pli in list_iter(Some(pl)) {
-        if pli.li_tv.list_ref().is_none() || list_len(pli.li_tv.list_ref()) != 2 {
+    for pli in list_iter(Some(&pl)) {
+        if pli.li_tv.list_ref().is_none() || list_len(pli.li_tv.list_ref().as_deref()) != 2 {
             return Err(DigraphError::NotAListOfPairs);
         }
         // SAFETY: a live list of exactly two items.
-        let pair = list_items(pli.li_tv.list_ref());
+        let pair = pli.li_tv.list_ref();
+        let pair = list_items(pair.as_deref());
         digraph_set_common(&pair[0].li_tv, &pair[1].li_tv)?;
     }
     Ok(())

@@ -223,7 +223,7 @@ fn array_to_string(array: Array) -> Result<ApiString, Error> {
         list_tv.v_type() as ::core::ffi::c_uint == VAR_LIST as ::core::ffi::c_uint,
         "list_tv.v_type() == VAR_LIST"
     );
-    match encode_vim_list_to_buf(list_tv.list_ref()) {
+    match encode_vim_list_to_buf(list_tv.list_ref().as_deref()) {
         // An empty list is the NULL string, as upstream's buffer was.
         Some(bytes) if bytes.is_empty() => Ok(ApiString::NULL),
         Some(bytes) => Ok(ApiString::from_bytes(&bytes)),

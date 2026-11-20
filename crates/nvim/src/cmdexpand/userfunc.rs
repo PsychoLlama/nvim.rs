@@ -256,7 +256,7 @@ pub(crate) fn expand_user_defined(
 
 /// The strings of a `customlist,` answer, the rest skipped.
 fn user_list_strings(list: &TypVal) -> Vec<XString> {
-    list_iter(list.list_ref())
+    list_iter(list.list_ref().as_deref())
         .filter_map(|li| li.li_tv.string_cstr())
         .map(XString::from_cstr)
         .collect()

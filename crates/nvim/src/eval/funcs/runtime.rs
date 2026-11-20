@@ -333,7 +333,7 @@ pub fn f_hostname(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_menu_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     // A non-String second argument is not an error: it just leaves the
     // mode set at "all".
     let modes = if args.get(1).is_some_and(|arg| arg.v_type() == VAR_STRING) {
@@ -341,7 +341,7 @@ pub fn f_menu_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     } else {
         MENU_ALL_MODES
     };
-    menu_get(numbuf2.string(&args[0]), modes, list);
+    menu_get(numbuf2.string(&args[0]), modes, &mut list);
 }
 
 /// `mode([{expr}])` — one character, or the full mode string when `{expr}`
@@ -439,7 +439,7 @@ fn is_blank(line: &[u8]) -> bool {
 /// `pum_getpos()` — where the popup menu is, or an empty dict.
 pub fn f_pum_getpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     tv_dict_alloc_ret(result);
-    pum_set_event_info(result.dict_mut().expect("the dict just stored"));
+    pum_set_event_info(&mut result.dict_mut().expect("the dict just stored"));
 }
 
 /// `pumvisible()`
@@ -484,7 +484,7 @@ pub fn f_tabpagebuflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
     let Some(tab) = tab else {
         return;
     };
-    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     // `windows_in_tab` knows that the current tab's window list lives in
     // `FIRSTWIN` rather than in the tab page record, which is only
     // updated on the way out.
@@ -531,5 +531,5 @@ fn c_chars_until_nul(chars: &[c_char]) -> ThinCString {
 /// `wordcount()`
 pub fn f_wordcount(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     tv_dict_alloc_ret(result);
-    cursor_pos_info(result.dict_mut());
+    cursor_pos_info(result.dict_mut().as_deref_mut());
 }

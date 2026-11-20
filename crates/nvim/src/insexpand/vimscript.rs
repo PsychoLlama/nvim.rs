@@ -21,8 +21,8 @@
 )]
 
 use super::*;
-use crate::eval::typval::ListRef;
 use crate::eval::typval::{DictRef, NumBuf, dict_get_string_buf, list_iter};
+use crate::eval::typval::{ListRef, ReadScope};
 use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Allow;
 use crate::keycodes::SpecialKey;
@@ -61,8 +61,8 @@ pub(crate) fn do_autocmd_completedone(c: Key, mode: CtrlXMode, word: Option<&CSt
 pub(crate) fn ins_compl_dict_alloc(m: MatchId) -> DictRef {
     // { word, abbr, menu, kind, info, user_data } — the same keys and the
     // same order `complete_info()` fills in, minus its "match" flag.
-    let mut dict = tv_dict_alloc_lock(VarLock::Fixed);
-    fill_complete_info_dict(&mut dict, m, false);
+    let dict = tv_dict_alloc_lock(VarLock::Fixed);
+    fill_complete_info_dict(&mut dict.edit(), m, false);
     dict
 }
 
@@ -74,6 +74,7 @@ pub(crate) fn ins_compl_dict_alloc(m: MatchId) -> DictRef {
 pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Option<Direction>, fast: bool) -> Added {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
+    let reads = ReadScope::new();
     let word: Option<&CStr>;
     let mut dup = false;
     let mut empty = false;
@@ -87,7 +88,7 @@ pub(crate) fn ins_compl_add_tv(tv: &TypVal, dir: Option<Direction>, fast: bool) 
         // here on; the two highlight names and `word` are borrowed, so
         // each borrowing answer renders into a scratch of its own —
         // `word` outlives all of them.
-        let d = (*tv).dict_ref();
+        let d = (*tv).dict_in(&reads);
         let get_nr = |key: &CStr| dict_get_number(d, key.to_bytes());
         let owned = |key: &[u8]| {
             let mut scratch = NumBuf::new();
@@ -137,7 +138,7 @@ pub(crate) fn ins_compl_add_list(list: &ListRef) {
     // code (an autocommand, a `'completefunc'`), which may edit the very
     // list it is reading. The handle keeps the list itself alive.
     let mut at = 0;
-    while let Some(tv) = list.items().get(at).map(|item| item.li_tv.clone()) {
+    while let Some(tv) = { list.read().items().get(at).map(|item| item.li_tv.clone()) } {
         if ins_compl_add_tv(&tv, Some(dir), true) == Added::Linked {
             // If dir was BACKWARD then honour it just once.
             dir = FORWARD;
@@ -151,7 +152,8 @@ pub(crate) fn ins_compl_add_list(list: &ListRef) {
 /// Add the matches a `'completefunc'`-style dict answers, and note its
 /// optional `refresh` item.
 pub(crate) fn ins_compl_add_dict(dict: &DictRef) {
-    let find = |key: &[u8]| dict_find(Some(dict), key);
+    let read = dict.read();
+    let find = |key: &[u8]| dict_find(Some(&read), key);
 
     // Check for the optional "refresh" item.
     COMPL_OPT_REFRESH_ALWAYS.set(false);
@@ -168,6 +170,7 @@ pub(crate) fn ins_compl_add_dict(dict: &DictRef) {
     let words = find(b"words")
         .filter(|di| di.di_tv.v_type() == VAR_LIST)
         .and_then(|di| di.di_tv.list_handle());
+    drop(read);
     if let Some(list) = words {
         ins_compl_add_list(&list);
     }
@@ -438,11 +441,11 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
             }
             let in_array = match_0.in_match_array();
             if has_items || (has_matches && in_array) {
-                let mut di_held = tv_dict_alloc();
-                fill_complete_info_dict(&mut di_held, match_0, has_matches && has_items);
+                let di_held = tv_dict_alloc();
+                fill_complete_info_dict(&mut di_held.edit(), match_0, has_matches && has_items);
                 // The list just made, which `retdict` holds.
                 if let Some(li) = &mut li {
-                    li.push_dict(Some(di_held));
+                    li.edit().push_dict(Some(di_held));
                 }
             }
             if curr_match()
@@ -467,9 +470,9 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
         }
     }
     if ret.is_ok() && selected_idx != -1 && has_completed {
-        let mut di_held = tv_dict_alloc();
+        let di_held = tv_dict_alloc();
         let curr = curr_match().expect("a selected item is the current match");
-        fill_complete_info_dict(&mut di_held, curr, false);
+        fill_complete_info_dict(&mut di_held.edit(), curr, false);
         let _ = retdict.add_dict(b"completed", Some(di_held));
     }
 }
@@ -478,15 +481,16 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
 pub fn f_complete_info(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     tv_dict_alloc_ret(result);
 
+    let reads = ReadScope::new();
     let mut what_list: Option<&List> = None;
     if !args.is_empty() {
         if !args.first().is_some_and(|arg| arg.v_type() == VAR_LIST) {
             emsg(gettext(E_LISTREQ));
             return;
         }
-        what_list = args[0].list_ref();
+        what_list = args[0].list_in(&reads);
     }
-    if let Some(mut retdict) = result.dict_handle() {
-        get_complete_info(what_list, &mut retdict);
+    if let Some(retdict) = result.dict_handle() {
+        get_complete_info(what_list, &mut retdict.edit());
     }
 }

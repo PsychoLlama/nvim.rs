@@ -180,8 +180,8 @@ impl Dict {
 /// walk, because the walk removes as it goes.
 pub fn dict_clear(dict: &DictRef) {
     dict.edit().lock_table();
-    let mut cursor = DictCursor::new(dict);
-    while let Some(slot) = cursor.next(dict) {
+    let mut cursor = DictCursor::new(&dict.read());
+    while let Some(slot) = { cursor.next(&dict.read()) } {
         let removed = dict.edit().remove_at(slot);
         drop(removed);
     }
@@ -226,7 +226,7 @@ impl Dict {
 /// is copied out first. `"move"` empties `d2`, so it must not be the same
 /// dictionary as `d1` and must not be locked against a walk.
 pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
-    let watched = dict_is_watched(Some(d1));
+    let watched = dict_is_watched(Some(&d1.read()));
     let arg_errmsg = gettext(c"extend() argument").to_bytes();
 
     if action == b'm' {
@@ -234,24 +234,27 @@ pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
         d2.edit().lock_table();
     }
 
-    let mut cursor = DictCursor::new(d2);
-    while let Some(slot2) = cursor.next(d2) {
-        let Some(item2) = d2.item_at(slot2) else {
+    let mut cursor = DictCursor::new(&d2.read());
+    while let Some(slot2) = { cursor.next(&d2.read()) } {
+        // Read until the first edit or user code below, which let it go.
+        let read2 = d2.read();
+        let Some(item2) = read2.item_at(slot2) else {
             continue;
         };
-        let slot1 = d1.slot_of(item2.key());
+        let slot1 = d1.read().slot_of(item2.key());
         // Check the key to be valid when adding to any scope.
-        if d1.dv_scope != VAR_NO_SCOPE && valid_varname_named(item2.key()).is_err() {
+        if d1.read().dv_scope != VAR_NO_SCOPE && valid_varname_named(item2.key()).is_err() {
             break;
         }
         let Some(slot1) = slot1 else {
             if action == b'm' {
                 // Cheap way to move a dict item from "d2" to "d1". If the
                 // add would fail, "d2" keeps it.
-                if dict_wrong_func_name(d1, item2) {
+                if dict_wrong_func_name(&d1.read(), item2) {
                     continue;
                 }
                 let key = ThinCString::from_bytes(item2.key());
+                drop(read2);
                 let moved = match d2.edit().remove_at(slot2) {
                     RemovedItem::Allocated(item) => item,
                     // An item embedded in its owner cannot change tables;
@@ -271,6 +274,7 @@ pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
                 dict_watcher_notify(d1, key.as_cstr(), Some(&new), None);
             } else {
                 let new_item = tv_dict_item_copy(item2);
+                drop(read2);
                 let note = watched.then(|| {
                     (
                         ThinCString::from_bytes(new_item.key()),
@@ -294,7 +298,8 @@ pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
         if action != b'f' || d1.ptr_eq(d2) {
             continue;
         }
-        let Some(item1) = d1.item_at(slot1) else {
+        let read1 = d1.read();
+        let Some(item1) = read1.item_at(slot1) else {
             continue;
         };
         if value_check_lock_named(item1.di_lock, arg_errmsg)
@@ -303,7 +308,7 @@ pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
             break;
         }
         // Disallow replacing a builtin function.
-        if dict_wrong_func_name(d1, item2) {
+        if dict_wrong_func_name(&read1, item2) {
             break;
         }
 
@@ -312,15 +317,20 @@ pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
         } else {
             TypVal::Unknown
         };
+        drop((read1, read2));
         // Upstream's order: the old value goes, then the new one is copied
         // in. The old one is released once the borrow of `d1` has ended.
         let cleared = d1.edit().item_at_mut(slot1).map(|item1| item1.di_tv.take());
         drop(cleared);
-        let Some(item2) = d2.item_at(slot2) else {
-            continue;
+        let (new, note) = {
+            let read2 = d2.read();
+            let Some(item2) = read2.item_at(slot2) else {
+                continue;
+            };
+            let new = item2.di_tv.clone();
+            let note = watched.then(|| (ThinCString::from_bytes(item2.key()), new.clone()));
+            (new, note)
         };
-        let new = item2.di_tv.clone();
-        let note = watched.then(|| (ThinCString::from_bytes(item2.key()), new.clone()));
         if let Some(item1) = d1.edit().item_at_mut(slot1) {
             item1.di_tv = new;
         }
@@ -385,17 +395,21 @@ pub fn dict_copy(
     deep: bool,
     copy_id: ::core::ffi::c_int,
 ) -> Option<DictRef> {
-    let mut copy = tv_dict_alloc();
+    let copy = tv_dict_alloc();
     if copy_id != 0 {
         orig.remember_copy(copy_id, &copy);
     }
     let conv = conv.filter(|conv| conv.vc_type != CONV_NONE);
-    let mut cursor = DictCursor::new(orig);
-    while let Some(slot) = cursor.next(orig) {
+    let mut cursor = DictCursor::new(&orig.read());
+    while let Some(slot) = { cursor.next(&orig.read()) } {
         if GOT_INT.get() {
             break;
         }
-        let Some(item) = orig.item_at(slot) else {
+        // Held across the deep copy below: the mark written above is the
+        // only edit a copy makes to the dictionaries it walks, made before
+        // each is first read, so a cycle back here only reads.
+        let read = orig.read();
+        let Some(item) = read.item_at(slot) else {
             continue;
         };
         let key = item.key();
@@ -415,7 +429,7 @@ pub fn dict_copy(
         } else {
             tv_copy(&item.di_tv, &mut new_item.di_tv);
         }
-        if let Err(refused) = copy.add_item(new_item) {
+        if let Err(refused) = copy.edit().add_item(new_item) {
             drop(refused);
             break;
         }
@@ -434,8 +448,8 @@ pub fn dict_copy(
 /// The handle owns the one reference the dictionary arrives with; see
 /// [`tv_dict_alloc`].
 pub fn tv_dict_alloc_lock(lock: VarLock) -> DictRef {
-    let mut d = tv_dict_alloc();
-    d.dv_lock = lock;
+    let d = tv_dict_alloc();
+    d.edit().dv_lock = lock;
     d
 }
 
@@ -462,18 +476,19 @@ pub fn tv_dict_remove(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static
     let Some(dict) = &**dict else {
         return;
     };
-    if value_check_lock(dict.dv_lock, LockName::Translate(arg_errmsg)) {
+    if value_check_lock({ dict.read().dv_lock }, LockName::Translate(arg_errmsg)) {
         return;
     }
     let Ok(key) = numbuf.string_chk(&args[1]) else {
         return;
     };
-    let Some(slot) = dict.slot_of(key.to_bytes()) else {
+    let Some(slot) = dict.read().slot_of(key.to_bytes()) else {
         let key = msg_cstr(key);
         semsg!("E716: Key not present in Dictionary: \"{key}\"");
         return;
     };
     let flags = dict
+        .read()
         .item_at(slot)
         .map_or(0, |item| ::core::ffi::c_int::from(item.di_flags));
     if flags & ::core::ffi::c_int::from(DI_FLAGS_FIX | DI_FLAGS_RO | DI_FLAGS_RO_SBX) != 0 && {
@@ -488,7 +503,7 @@ pub fn tv_dict_remove(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static
     let mut removed = dict.edit().remove_at(slot);
     *result = removed.value_mut().take();
     drop(removed);
-    if dict_is_watched(Some(dict)) {
+    if dict_is_watched(Some(&dict.read())) {
         dict_watcher_notify(dict, key, None, Some(result));
     }
 }
@@ -573,10 +588,12 @@ mod tests {
 
     /// A dictionary holding `keys`, each under its own position as a number.
     fn dict_of(keys: &[&str]) -> DictRef {
-        let mut d = tv_dict_alloc();
+        let d = tv_dict_alloc();
         for (n, key) in keys.iter().enumerate() {
             let nr = VarNumber::try_from(n).expect("a short dict");
-            d.add_number(key.as_bytes(), nr).expect("a key used once");
+            d.edit()
+                .add_number(key.as_bytes(), nr)
+                .expect("a key used once");
         }
         d
     }
@@ -621,7 +638,7 @@ mod tests {
         ];
         let d = dict_of(&KEYS);
         assert_eq!(
-            slot_order(&d),
+            slot_order(&d.read()),
             [
                 "dddd",
                 "a",
@@ -639,7 +656,7 @@ mod tests {
                 "_",
             ]
         );
-        assert_eq!(d.len(), KEYS.len());
+        assert_eq!(d.read().len(), KEYS.len());
     }
 
     /// A rehash moves *slots*, not items: an item is its own allocation, so
@@ -652,20 +669,24 @@ mod tests {
     #[test]
     fn an_item_outlives_the_rehash_that_moves_its_slot() {
         let _held = editor_state_lock();
-        let mut d = dict_of(&["first"]);
+        let d = dict_of(&["first"]);
         let at = |d: &Dict| d.find(b"first").map(::core::ptr::from_ref);
-        let before = at(&d);
-        let slots_before = d.dv_hashtab.size();
+        let before = at(&d.read());
+        let slots_before = d.read().dv_hashtab.size();
         for n in 0..40 {
             let key = format!("k{n}");
-            d.add_number(key.as_bytes(), VarNumber::from(n))
+            d.edit()
+                .add_number(key.as_bytes(), VarNumber::from(n))
                 .expect("a key used once");
         }
-        assert!(d.dv_hashtab.size() > slots_before, "the table never grew");
-        assert_eq!(before, at(&d));
-        assert_eq!(number_at(&d, b"first"), Some(0));
-        assert_eq!(number_at(&d, b"k39"), Some(39));
-        assert_eq!(number_at(&d, b"absent"), None);
+        assert!(
+            d.read().dv_hashtab.size() > slots_before,
+            "the table never grew"
+        );
+        assert_eq!(before, at(&d.read()));
+        assert_eq!(number_at(&d.read(), b"first"), Some(0));
+        assert_eq!(number_at(&d.read(), b"k39"), Some(39));
+        assert_eq!(number_at(&d.read(), b"absent"), None);
     }
 
     /// The empty string is a key like any other: `{'': 1}` holds one entry.
@@ -677,11 +698,11 @@ mod tests {
     fn the_empty_key_is_a_key() {
         let _held = editor_state_lock();
         let d = dict_of(&["", "a"]);
-        assert_eq!(d.len(), 2);
-        assert_eq!(number_at(&d, b""), Some(0));
-        assert_eq!(number_at(&d, b"a"), Some(1));
-        assert!(d.has_key(b""));
-        assert!(!d.has_key(b"b"));
+        assert_eq!(d.read().len(), 2);
+        assert_eq!(number_at(&d.read(), b""), Some(0));
+        assert_eq!(number_at(&d.read(), b"a"), Some(1));
+        assert!(d.read().has_key(b""));
+        assert!(!d.read().has_key(b"b"));
     }
 
     /// `extend(d, d)` walks the dictionary it is adding to. Every key it
@@ -689,12 +710,12 @@ mod tests {
     #[test]
     fn extending_a_dictionary_with_itself_is_the_identity() {
         let _held = editor_state_lock();
-        let mut d = dict_of(&["a", "b", "c"]);
-        let order = slot_order(&d);
-        d.extend_from_self(b'f');
-        assert_eq!(slot_order(&d), order);
-        assert_eq!(number_at(&d, b"a"), Some(0));
-        assert_eq!(number_at(&d, b"c"), Some(2));
+        let d = dict_of(&["a", "b", "c"]);
+        let order = slot_order(&d.read());
+        d.edit().extend_from_self(b'f');
+        assert_eq!(slot_order(&d.read()), order);
+        assert_eq!(number_at(&d.read(), b"a"), Some(0));
+        assert_eq!(number_at(&d.read(), b"c"), Some(2));
     }
 
     /// And the handle form reaches both cases: the two arguments may be one
@@ -705,11 +726,11 @@ mod tests {
         let into = dict_of(&["a"]);
         let from = dict_of(&["b", "c"]);
         dict_extend(&into, &from, b'f');
-        assert_eq!(into.len(), 3);
-        assert_eq!(number_at(&into, b"b"), Some(0));
+        assert_eq!(into.read().len(), 3);
+        assert_eq!(number_at(&into.read(), b"b"), Some(0));
         dict_extend(&into, &into, b'f');
-        assert_eq!(into.len(), 3);
-        assert_eq!(number_at(&into, b"a"), Some(0));
+        assert_eq!(into.read().len(), 3);
+        assert_eq!(number_at(&into.read(), b"a"), Some(0));
     }
 
     /// A dictionary equals itself without walking into the comparison, and
@@ -719,16 +740,17 @@ mod tests {
     fn equality_is_by_key_not_by_slot() {
         let _held = editor_state_lock();
         let d1 = dict_of(&["a", "b"]);
-        assert!(dict_equal(Some(&d1), Some(&d1), false));
-        let mut d2 = tv_dict_alloc();
+        assert!(dict_equal(Some(&d1.read()), Some(&d1.read()), false));
+        let d2 = tv_dict_alloc();
         for (n, key) in [(1, b"b"), (0, b"a")] {
-            d2.add_number(key, VarNumber::from(n))
+            d2.edit()
+                .add_number(key, VarNumber::from(n))
                 .expect("a key used once");
         }
-        assert!(dict_equal(Some(&d1), Some(&d2), false));
+        assert!(dict_equal(Some(&d1.read()), Some(&d2.read()), false));
         // `v:_null_dict` is not a two-entry dictionary, but it is an empty
         // one.
-        assert!(!dict_equal(Some(&d1), None, false));
+        assert!(!dict_equal(Some(&d1.read()), None, false));
         assert!(dict_equal(None, None, false));
     }
 
@@ -738,17 +760,20 @@ mod tests {
     #[test]
     fn a_deep_copy_of_a_cycle_points_at_the_copy() {
         let _held = editor_state_lock();
-        let mut d = dict_of(&["n"]);
+        let d = dict_of(&["n"]);
         // The value is a second reference to the dictionary itself.
         let held = d.clone();
-        d.add_dict(b"self", Some(held)).expect("a key used once");
+        d.edit()
+            .add_dict(b"self", Some(held))
+            .expect("a key used once");
 
         let copy_id = crate::eval::get_copy_id();
         // No conversion, and a fresh copy id.
         let copy = dict_copy(None, &d, true, copy_id).expect("the copy was not interrupted");
-        assert_eq!(copy.len(), 2);
-        assert_eq!(number_at(&copy, b"n"), Some(0));
-        let inner = copy.find(b"self").expect("the copy kept the key");
+        assert_eq!(copy.read().len(), 2);
+        assert_eq!(number_at(&copy.read(), b"n"), Some(0));
+        let held = copy.read();
+        let inner = held.find(b"self").expect("the copy kept the key");
         assert_eq!(
             inner.di_tv.dict_or_null(),
             copy.as_ptr(),
@@ -758,6 +783,7 @@ mod tests {
         // Break the cycles so both dictionaries actually go away. A cycle
         // is exactly why this takes a handle: releasing the value reads the
         // dictionary it names, which is this one.
+        drop(held);
         dict_clear(&d);
         dict_clear(&copy);
     }
@@ -769,17 +795,19 @@ mod tests {
     #[test]
     fn a_walk_may_copy_out_the_dict_it_walks() {
         let _held = editor_state_lock();
-        let mut d = dict_of(&["n"]);
+        let d = dict_of(&["n"]);
         let held = d.clone();
-        d.add_dict(b"self", Some(held)).expect("a key used once");
+        d.edit()
+            .add_dict(b"self", Some(held))
+            .expect("a key used once");
 
-        let copies: Vec<TypVal> = d.items().map(|di| di.di_tv.clone()).collect();
+        let copies: Vec<TypVal> = d.read().items().map(|di| di.di_tv.clone()).collect();
         assert_eq!(copies.len(), 2);
-        assert_eq!(refs(&d), 3, "the handle, the entry and the copy");
+        assert_eq!(refs(&d.read()), 3, "the handle, the entry and the copy");
         drop(copies);
         // A release mid-walk is the same touch the other way.
-        d.items().for_each(|di| drop(di.di_tv.clone()));
-        assert_eq!(refs(&d), 2);
+        d.read().items().for_each(|di| drop(di.di_tv.clone()));
+        assert_eq!(refs(&d.read()), 2);
 
         dict_clear(&d);
     }
@@ -792,9 +820,10 @@ mod tests {
         let _held = editor_state_lock();
         let d = dict_of(&["a", "b", "c", "d"]);
         d.edit().lock_table();
-        let mut cursor = DictCursor::new(&d);
-        while let Some(slot) = cursor.next(&d) {
+        let mut cursor = DictCursor::new(&d.read());
+        while let Some(slot) = { cursor.next(&d.read()) } {
             let even = d
+                .read()
                 .item_at(slot)
                 .is_some_and(|di| di.di_tv.number_or_zero() % 2 == 0);
             if even {
@@ -803,9 +832,9 @@ mod tests {
             }
         }
         d.edit().unlock_table();
-        assert_eq!(slot_order(&d), ["b", "d"]);
-        assert_eq!(number_at(&d, b"a"), None);
-        assert_eq!(number_at(&d, b"d"), Some(3));
+        assert_eq!(slot_order(&d.read()), ["b", "d"]);
+        assert_eq!(number_at(&d.read(), b"a"), None);
+        assert_eq!(number_at(&d.read(), b"d"), Some(3));
     }
 
     /// [`dict_clear`] empties a dictionary without freeing it, and the
@@ -813,17 +842,17 @@ mod tests {
     #[test]
     fn clearing_leaves_a_usable_table() {
         let _held = editor_state_lock();
-        let mut d = dict_of(&["a", "b", "c"]);
+        let d = dict_of(&["a", "b", "c"]);
         dict_clear(&d);
-        assert_eq!(d.len(), 0);
-        assert!(d.is_empty());
-        assert_eq!(number_at(&d, b"a"), None);
+        assert_eq!(d.read().len(), 0);
+        assert!(d.read().is_empty());
+        assert_eq!(number_at(&d.read(), b"a"), None);
         let refilled = dict_of(&["x", "y"]);
         for (n, key) in [b"x", b"y"].iter().enumerate() {
             let nr = VarNumber::try_from(n).expect("a short dict");
-            d.add_number(*key, nr).expect("a key used once");
+            d.edit().add_number(*key, nr).expect("a key used once");
         }
-        assert_eq!(slot_order(&d), slot_order(&refilled));
+        assert_eq!(slot_order(&d.read()), slot_order(&refilled.read()));
     }
 
     /// The reference count of `d`.
@@ -853,11 +882,13 @@ mod tests {
     #[test]
     fn a_deep_copy_of_a_list_dict_cycle_stays_inside_the_copy() {
         let _held = editor_state_lock();
-        let mut d = dict_of(&["n"]);
-        let mut l = tv_list_alloc(1);
-        l.push_dict(Some(d.clone()));
-        d.add_list(b"l", Some(l.clone())).expect("a key used once");
-        assert_eq!((l.lv_refcount.get(), refs(&d)), (2, 2));
+        let d = dict_of(&["n"]);
+        let l = tv_list_alloc(1);
+        l.edit().push_dict(Some(d.clone()));
+        d.edit()
+            .add_list(b"l", Some(l.clone()))
+            .expect("a key used once");
+        assert_eq!((l.read().lv_refcount.get(), refs(&d.read())), (2, 2));
 
         let from = TypVal::list(Some(l.clone()));
         let mut to = TypVal::Unknown;
@@ -866,21 +897,22 @@ mod tests {
         let copied = var_item_copy(None, &from, &mut to, true, copy_id);
         assert_eq!(copied, Ok(()));
         let cl = to.list_handle().expect("the copy is a list");
-        let cd = list_items(Some(&cl))[0]
+        let cd = list_items(Some(&cl.read()))[0]
             .li_tv
             .dict_handle()
             .expect("the copied list holds a dictionary");
         assert!(!cl.ptr_eq(&l));
         assert!(!cd.ptr_eq(&d));
         let back = cd
+            .read()
             .find(b"l")
             .expect("the copy kept the key")
             .di_tv
             .list_or_null();
         assert_eq!(back, cl.as_ptr(), "the cycle followed the original");
-        assert_eq!(number_at(&cd, b"n"), Some(0));
+        assert_eq!(number_at(&cd.read(), b"n"), Some(0));
         // The extra reference of the value `from` holds is the list's.
-        assert_eq!((l.lv_refcount.get(), refs(&d)), (3, 2));
+        assert_eq!((l.read().lv_refcount.get(), refs(&d.read())), (3, 2));
 
         // Break both cycles at the dictionary, then let everything go.
         dict_clear(&d);
@@ -899,16 +931,18 @@ mod tests {
     #[test]
     fn a_dict_cycle_is_emptied_without_being_freed_by_the_collectors_first_pass() {
         let _held = editor_state_lock();
-        let mut d = dict_of(&["n"]);
+        let d = dict_of(&["n"]);
         let held = d.clone();
-        d.add_dict(b"self", Some(held)).expect("a key used once");
-        assert_eq!(refs(&d), 2, "the handle and the cycle");
+        d.edit()
+            .add_dict(b"self", Some(held))
+            .expect("a key used once");
+        assert_eq!(refs(&d.read()), 2, "the handle and the cycle");
 
         let collecting = Collecting::start();
         tv_dict_free_contents(&d);
         // Released by its own item, and still allocated.
-        assert_eq!(refs(&d), 1);
-        assert_eq!(d.len(), 0);
+        assert_eq!(refs(&d.read()), 1);
+        assert_eq!(d.read().len(), 0);
         drop(collecting);
         drop(d);
     }

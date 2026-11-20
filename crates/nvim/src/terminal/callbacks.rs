@@ -215,12 +215,13 @@ fn term_clipboard_set(mask: VTermSelectionMask, payload: &[u8]) {
     for line in payload.split(|&byte| byte == b'\n') {
         lines.edit().push_bytes(Some(line));
     }
-    let mut held = tv_list_alloc(3 as ptrdiff_t);
-    let args = &mut *held;
+    let held = tv_list_alloc(3 as ptrdiff_t);
+    let mut args = held.edit();
     args.push_list(Some(lines));
     args.push_bytes(Some(b"v"));
     args.push_bytes(Some(&[regname]));
     // The provider is Vimscript, which is why this runs on the main loop.
+    drop(args);
     eval_call_provider(c"clipboard", c"set", Some(held), true);
 }
 

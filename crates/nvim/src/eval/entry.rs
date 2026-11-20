@@ -241,8 +241,8 @@ pub(crate) fn typval2string(tv: &TypVal, join_list: bool) -> XString {
     if join_list && tv.v_type() == VAR_LIST {
         let mut text = XString::new();
         let l = tv.list_ref();
-        let _ = list_join(&mut text, l, c"\n");
-        if list_len(l) > 0 {
+        let _ = list_join(&mut text, l.as_deref(), c"\n");
+        if list_len(l.as_deref()) > 0 {
             text.push_byte(b'\n');
         }
         return text;
@@ -484,14 +484,14 @@ pub fn eval_foldtext(window: Win) -> Object {
 
 /// Fill `v:argv` from the process arguments. Every item is locked.
 pub(crate) fn set_argv_var(args: &[&CStr]) {
-    let mut list = tv_list_alloc(args.len().cast_signed());
+    let list = tv_list_alloc(args.len().cast_signed());
     for arg in args {
-        list.push(TypVal::string_from(arg.to_bytes()));
+        list.edit().push(TypVal::string_from(arg.to_bytes()));
     }
-    for item in list_items_mut(Some(&mut list)) {
+    for item in list_items_mut(Some(&mut list.edit())) {
         item.li_lock = VarLock::Fixed;
     }
-    list_set_lock(Some(&mut list), VarLock::Fixed);
+    list_set_lock(Some(&mut list.edit()), VarLock::Fixed);
     set_vim_var_list(Vv::Argv, Some(list));
 }
 

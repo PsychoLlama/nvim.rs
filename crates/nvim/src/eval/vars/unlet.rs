@@ -159,7 +159,7 @@ fn do_unlet_var(mut lval: LValue<'_>, forceit: bool) -> Result<(), Failed> {
             span,
         } => {
             let (list, index, span) = (list.clone(), *index, *span);
-            if value_check_lock_named(list_locked(Some(&list)), lval.name()) {
+            if value_check_lock_named({ list_locked(Some(&list.read())) }, lval.name()) {
                 return Err(Failed);
             }
             if span.range {
@@ -173,16 +173,16 @@ fn do_unlet_var(mut lval: LValue<'_>, forceit: bool) -> Result<(), Failed> {
             slot: Slot::Key { dict, key },
             ..
         } => {
-            let (mut dict, key) = (dict.clone(), key.clone());
-            if value_check_lock_named(dict.dv_lock, lval.name()) {
+            let (dict, key) = (dict.clone(), key.clone());
+            if value_check_lock_named({ dict.read().dv_lock }, lval.name()) {
                 return Err(Failed);
             }
-            let watched = dict_is_watched(Some(&dict));
+            let watched = dict_is_watched(Some(&dict.read()));
             let mut oldtv = TV_INITIAL_VALUE;
             if watched {
                 lval.with_slot(|tv, _| tv_copy(tv, &mut oldtv));
             }
-            dict.remove_key(&key);
+            dict.edit().remove_key(&key);
             if watched {
                 cstr::with_terminated(&key, |key| {
                     dict_watcher_notify(&dict, key, None, Some(&oldtv))
@@ -207,7 +207,7 @@ fn unlet_range(list: &ListRef, first: usize, span: Span) {
     // The run ends at `n2` when there is one, and at the last item either
     // way.  An empty list has no run at all; `get_lval` refuses the index
     // that would name one, so this only guards the arithmetic.
-    let Some(end) = list.len().checked_sub(1) else {
+    let Some(end) = list.read().len().checked_sub(1) else {
         return;
     };
     let last = if span.empty2 {
@@ -282,7 +282,7 @@ fn do_lock_var(mut lval: LValue<'_>, lock: bool, deep: c_int) -> Result<(), Fail
                 usize::try_from(span.n2 - span.n1 + 1).unwrap_or(0)
             };
             let (list, index) = (list.clone(), *index);
-            let end = index.saturating_add(count).min(list.len());
+            let end = index.saturating_add(count).min(list.read().len());
             for at in index..end {
                 tv_list_item_lock(&list, at, deep, lock, false);
             }

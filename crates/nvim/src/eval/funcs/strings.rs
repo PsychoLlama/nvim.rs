@@ -150,7 +150,7 @@ fn repeat_list(args: &[TypVal], result: &mut TypVal, n: VarNumber) {
     // nothing rather than a negative capacity.
     let hint = VarNumber::from(n > 0)
         .saturating_mul(n)
-        .saturating_mul(VarNumber::from(list_len(args[0].list_ref())));
+        .saturating_mul(VarNumber::from(list_len(args[0].list_ref().as_deref())));
     tv_list_alloc_ret(result, isize::try_from(hint).unwrap_or(isize::MAX));
     let Some(out) = result.list_shared() else {
         return;
@@ -316,7 +316,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     if !reported {
         return;
     }
-    let list = tv_list_alloc_ret(result, 2);
+    let mut list = tv_list_alloc_ret(result, 2);
     list.push_bytes(Some(&word));
     let reason: Option<&CStr> = match attr {
         HLF_SPB => Some(c"bad"),
@@ -360,7 +360,7 @@ pub fn f_spellsuggest(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     if !reported {
         return;
     }
-    let list = tv_list_alloc_ret(result, found.len().cast_signed());
+    let mut list = tv_list_alloc_ret(result, found.len().cast_signed());
     for word in found {
         list.push(TypVal::string(Some(word.into())));
     }
@@ -388,9 +388,9 @@ pub fn f_split(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
     // An absent or empty pattern splits on runs of whitespace.
     let pat = pat.filter(|pat| !pat.is_empty()).unwrap_or(c"[\\x01- ]\\+");
-    let list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
+    let mut list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as isize);
     if !typeerr && let Some(mut prog) = OwnedProg::compile(pat, RE_MAGIC + RE_STRING) {
-        split_into(list, str, &mut prog, keepempty);
+        split_into(&mut list, str, &mut prog, keepempty);
     }
 }
 

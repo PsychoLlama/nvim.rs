@@ -89,22 +89,23 @@ impl TypVal {
     /// The safe spelling of [`TypVal::dict_or_null`], and the one the
     /// `dict_*` family reads its argument in; see [`TypVal::list_ref`].
     #[inline(always)]
-    pub(crate) fn dict_ref(&self) -> Option<&Dict> {
-        match self {
-            TypVal::Dict(dict) => dict.as_deref(),
-            _ => None,
-        }
+    pub(crate) fn dict_ref(&self) -> Option<Read<'_, Dict>> {
+        self.dict_shared().map(DictRef::read)
+    }
+
+    /// The dictionary this value holds, shared for the life of `scope`: see
+    /// [`ReadScope`].
+    #[inline]
+    pub(crate) fn dict_in<'s>(&'s self, scope: &'s ReadScope) -> Option<&'s Dict> {
+        self.dict_ref().map(|dict| scope.hold(dict))
     }
 
     /// The dictionary this value holds, borrowed for writing.
     ///
     /// See [`TypVal::list_mut`]: the exclusive borrow is the point.
     #[inline(always)]
-    pub(crate) fn dict_mut(&mut self) -> Option<&mut Dict> {
-        match self {
-            TypVal::Dict(dict) => dict.as_deref_mut(),
-            _ => None,
-        }
+    pub(crate) fn dict_mut(&mut self) -> Option<Edit<'_, Dict>> {
+        self.dict_shared().map(DictRef::edit)
     }
 
     /// A dictionary value over `dict`, which the value takes over.

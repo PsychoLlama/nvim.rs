@@ -580,7 +580,7 @@ pub(crate) fn setmouse() {
 /// the editor knows.
 pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     tv_dict_alloc_ret(result);
-    let d = result.dict_mut().expect("just allocated");
+    let mut d = result.dict_mut().expect("just allocated");
     let mut add = |key: &CStr, value: VarNumber| {
         let _ = d.add_number(key.to_bytes(), value);
     };

@@ -229,11 +229,12 @@ impl Iterator for VarWalk {
 
     fn next(&mut self) -> Option<(XString, TypVal)> {
         let globals = globvar_dict();
-        let count = globals.dv_hashtab.size();
+        let count = globals.read().dv_hashtab.size();
         while self.next < count {
             let idx = self.next;
             self.next += 1;
-            let Some(item) = globals.item_at(idx) else {
+            let read = globals.read();
+            let Some(item) = read.item_at(idx) else {
                 continue;
             };
             if var_flavour(item.di_key.bytes()) & self.flavour == 0 {

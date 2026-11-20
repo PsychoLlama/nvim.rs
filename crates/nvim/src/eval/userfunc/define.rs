@@ -222,6 +222,7 @@ impl Definition<'_, '_> {
             !fudi.new_key
                 && fudi
                     .dict
+                    .read()
                     .find(&fudi.key)
                     .is_some_and(|item| item.di_tv.is_func())
         });
@@ -236,7 +237,7 @@ impl Definition<'_, '_> {
         if self
             .fudi
             .as_ref()
-            .is_some_and(|fudi| fudi.dict.dv_scope == VAR_DEF_SCOPE)
+            .is_some_and(|fudi| fudi.dict.read().dv_scope == VAR_DEF_SCOPE)
         {
             emsg(gettext(c"E862: Cannot use g: here"));
             return Err(Failed);
@@ -425,9 +426,9 @@ impl Definition<'_, '_> {
         // Can't add a function to a locked dictionary, and can't change an
         // existing function if it is locked. The entry is found again: the
         // body that was just read may have run code that removed it.
-        let lock = match fudi.dict.find(&fudi.key) {
+        let lock = match fudi.dict.read().find(&fudi.key) {
             Some(item) if !fudi.new_key => item.di_lock,
-            _ => fudi.dict.dv_lock,
+            _ => fudi.dict.read().dv_lock,
         };
         if value_check_lock_named(lock, self.excmd.line.arg()) {
             return Err(Refusal::Unwind);
@@ -499,11 +500,12 @@ impl Definition<'_, '_> {
         let (dict, key) = (&mut fudi.dict, &fudi.key[..]);
         // The entry an existing key named is found again, and one that has
         // gone since is added back.
-        let existing = !fudi.new_key && dict.find(key).is_some();
-        if !existing && dict.add_value(key, TV_INITIAL_VALUE).is_err() {
+        let existing = !fudi.new_key && dict.read().find(key).is_some();
+        if !existing && dict.edit().add_value(key, TV_INITIAL_VALUE).is_err() {
             return Err(Refusal::Unwind);
         }
-        let item = dict.find_mut(key).expect("the entry just found or added");
+        let mut held = dict.edit();
+        let item = held.find_mut(key).expect("the entry just found or added");
         // Overwrite the existing dict entry.
         tv_clear(&mut item.di_tv);
         item.di_tv

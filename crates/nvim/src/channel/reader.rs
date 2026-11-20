@@ -172,7 +172,7 @@ fn deliver_buffered(id: uint64_t, stderr: bool) {
             None => Into::Callback,
             Some(dict) => {
                 let name = reader.stream_name;
-                if dict_find(Some(dict), name.to_bytes()).is_none() {
+                if dict_find(Some(&dict.read()), name.to_bytes()).is_none() {
                     let lines = reader_lines(reader);
                     let _ = dict.edit().add_list(name.to_bytes(), Some(lines));
                     Into::Dict
@@ -249,8 +249,8 @@ fn channel_callback_call(id: uint64_t, reader: Option<bool>) {
 /// The list always starts with one empty string, so a chunk that does not
 /// end in a newline leaves a partial last line the next chunk continues.
 pub fn reader_lines(reader: &CallbackReader) -> ListRef {
-    let mut l = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
-    l.push_bytes(Some(b""));
-    encode_list_write(&mut l, &reader.buffer);
+    let l = tv_list_alloc(LIST_LEN_MAY_KNOW as isize);
+    l.edit().push_bytes(Some(b""));
+    encode_list_write(&mut l.edit(), &reader.buffer);
     l
 }

@@ -129,7 +129,7 @@ pub fn list_copy(
     deep: bool,
     copy_id: ::core::ffi::c_int,
 ) -> Option<ListRef> {
-    let mut copy = tv_list_alloc(ptrdiff_t::try_from(orig.len()).unwrap_or(-1));
+    let copy = tv_list_alloc(ptrdiff_t::try_from(orig.read().len()).unwrap_or(-1));
     if copy_id != 0 {
         // Do this before adding the items, because one of the items may
         // refer back to this list.
@@ -137,13 +137,16 @@ pub fn list_copy(
     }
     // The count is taken once, as upstream's walk over the original links
     // effectively did.
-    let len = orig.len();
+    let len = orig.read().len();
     for at in 0..len {
         if GOT_INT.get() {
             break;
         }
         let mut value = TV_INITIAL_VALUE;
-        let from = &orig.items()[at].li_tv;
+        // Held across the deep copy: the mark above is the only edit a copy
+        // makes to the lists it walks, made before each is first read.
+        let read = orig.read();
+        let from = &read.items()[at].li_tv;
         if deep {
             if var_item_copy(conv, from, &mut value, deep, copy_id).is_err() {
                 // `tv_list_copy_error`: the partial copy goes with the
@@ -153,7 +156,7 @@ pub fn list_copy(
         } else {
             tv_copy(from, &mut value);
         }
-        copy.push(value);
+        copy.edit().push(value);
     }
     Some(copy)
 }
@@ -175,8 +178,8 @@ pub fn list_extend(dest: &ListRef, src: Option<&ListRef>, bef: InsertAt) {
         return;
     };
     if dest.ptr_eq(src) {
-        let copies: Vec<TypVal> = (0..src.len())
-            .map(|at| src.items()[at].li_tv.clone())
+        let copies: Vec<TypVal> = (0..src.read().len())
+            .map(|at| src.read().items()[at].li_tv.clone())
             .collect();
         dest.edit().lv_items.reserve(copies.len());
         for (i, copy) in copies.into_iter().enumerate() {
@@ -184,11 +187,11 @@ pub fn list_extend(dest: &ListRef, src: Option<&ListRef>, bef: InsertAt) {
                 .insert_item(ListItem::new(copy), bef.map(|at| at + i));
         }
     } else {
-        let count = src.len();
+        let count = src.read().len();
         dest.edit().lv_items.reserve(count);
         for i in 0..count {
             // The insertion point walks along with the items already put in.
-            let copy = src.items()[i].li_tv.clone();
+            let copy = src.read().items()[i].li_tv.clone();
             dest.edit()
                 .insert_item(ListItem::new(copy), bef.map(|at| at + i));
         }
@@ -281,9 +284,9 @@ pub fn list_remove(
         return;
     }
     let cnt = last - first + 1;
-    let tgt = tv_list_alloc_ret(result, ptrdiff_t::try_from(cnt).unwrap_or(-1));
+    let mut tgt = tv_list_alloc_ret(result, ptrdiff_t::try_from(cnt).unwrap_or(-1));
     // The target is a list of this call's own, so it is never `list`.
-    list.move_range_to(first, last, tgt);
+    list.move_range_to(first, last, &mut tgt);
 }
 
 /// Whether `l1` and `l2` hold equal items in the same order.  An empty list and

@@ -338,22 +338,23 @@ fn object_to_vim(value: Object, take_luaref: bool) -> TypVal {
         }
         OBJECT_TYPE_ARRAY => {
             let array = value.into_array().expect("the tag says Array");
-            let mut list = tv_list_alloc(array.len().cast_signed());
+            let list = tv_list_alloc(array.len().cast_signed());
             for item in array {
-                list.lv_items
+                list.edit()
+                    .lv_items
                     .push(ListItem::new(object_to_vim(item, take_luaref)));
             }
             TypVal::list(Some(list))
         }
         OBJECT_TYPE_DICT => {
             let pairs = value.into_dict().expect("the tag says Dict");
-            let mut dict = tv_dict_alloc();
+            let dict = tv_dict_alloc();
             for KeyValuePair { key, value } in pairs {
                 let item_tv = object_to_vim(value, take_luaref);
                 // The key up to its NUL, as the C's `strlen` read it.
                 let mut item = DictItem::boxed(key.as_c_str().to_bytes());
                 item.di_tv = item_tv;
-                let _ = dict.add_item(item);
+                let _ = dict.edit().add_item(item);
             }
             TypVal::dict(Some(dict))
         }

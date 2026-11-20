@@ -309,7 +309,7 @@
     "crates/nvim/src/eval/typval/dictitem.rs": {"pub_items": 25},
     "crates/nvim/src/eval/typval/edit.rs": {"pub_items": 3},
     "crates/nvim/src/eval/typval/get.rs": {"pub_items": 10},
-    "crates/nvim/src/eval/typval/handle.rs": {"pub_items": 10, "unsafe_stmts": 48},
+    "crates/nvim/src/eval/typval/handle.rs": {"pub_items": 10, "unsafe_stmts": 44},
     "crates/nvim/src/eval/typval/list.rs": {"pub_items": 2},
     "crates/nvim/src/eval/typval/listops.rs": {"pub_items": 11},
     "crates/nvim/src/eval/typval/listrange.rs": {"pub_items": 6},

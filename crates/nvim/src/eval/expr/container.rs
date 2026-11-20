@@ -37,7 +37,7 @@ pub(crate) fn eval_list(
         let mut tv = TV_INITIAL_VALUE;
         eval1(cursor, &mut tv, evaluate)?;
         if let Some(list) = held.as_mut() {
-            list.push(tv);
+            list.edit().push(tv);
         }
         Ok(())
     })?;
@@ -123,14 +123,14 @@ pub(crate) fn eval_dict(
             return Err(Failed);
         }
         if let Some(dict) = held.as_mut() {
-            if dict_find(Some(dict), key).is_some() {
+            if dict_find(Some(&dict.read()), key).is_some() {
                 let key = msg_bytes(key);
                 semsg!("E721: Duplicate key in Dictionary: \"{key}\"");
                 tv_clear(&mut tvkey);
                 tv_clear(&mut tv);
                 return Err(Failed);
             }
-            let _ = dict.add_value(key, tv.take());
+            let _ = dict.edit().add_value(key, tv.take());
         }
         tv_clear(&mut tvkey);
         Ok(())

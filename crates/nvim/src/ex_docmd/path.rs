@@ -127,11 +127,11 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
 /// it answers, the rest skipped.
 pub(crate) fn expand_findfunc_matches(pat: &CStr) -> Option<Vec<XString>> {
     let held = call_findfunc(pat.to_bytes(), BOOL_VAR_TRUE)?;
-    if list_len(Some(&held)) == 0 {
+    if list_len(Some(&held.read())) == 0 {
         return None;
     }
     Some(
-        list_iter(Some(&held))
+        list_iter(Some(&held.read()))
             .filter_map(|li| li.li_tv.string_cstr())
             .map(XString::from_cstr)
             .collect(),
@@ -147,15 +147,15 @@ pub(crate) fn expand_findfunc_matches(pat: &CStr) -> Option<Vec<XString>> {
 /// whole dance.
 pub(crate) fn findfunc_find_file(findarg: &[u8], count: c_int) -> Option<ThinCString> {
     let findarg = cstr::owned(findarg);
-    let mut held = call_findfunc(findarg.to_bytes(), BOOL_VAR_FALSE);
-    let fname_count = list_len(held.as_deref());
+    let held = call_findfunc(findarg.to_bytes(), BOOL_VAR_FALSE);
+    let fname_count = list_len(held.as_ref().map(ListRef::read).as_deref());
     if fname_count == 0 {
         let findarg = msg_cstr(&findarg);
         semsg!("E345: Can't find file \"{findarg}\" in path");
     } else if count > fname_count {
         let findarg = msg_cstr(&findarg);
         semsg!("E347: No more file \"{findarg}\" found in path");
-    } else if let Some(li) = list_find(held.as_deref_mut(), count - 1)
+    } else if let Some(li) = list_find(held.as_ref().map(ListRef::edit).as_deref_mut(), count - 1)
         && li.li_tv.v_type() as c_uint == VAR_STRING as c_uint
     {
         // The null string, which upstream's `xstrdup` crashed on, reads

@@ -49,16 +49,16 @@ pub(crate) const MP_EXT: MessagePackType = 7;
 /// copy of it.
 #[inline]
 pub(crate) fn create_special_dict(type_: MessagePackType, val: TypVal) -> TypVal {
-    let mut dict_held = tv_dict_alloc();
+    let dict_held = tv_dict_alloc();
 
     let mut type_item = DictItem::boxed(b"_TYPE");
     type_item.di_lock = VarLock::Unlocked;
     type_item.di_tv.write_list(msgpack_type_list_ref(type_));
-    let _ = dict_held.add_item(type_item);
+    let _ = dict_held.edit().add_item(type_item);
 
     let mut val_item = DictItem::boxed(b"_VAL");
     val_item.di_tv.overwrite(val);
-    let _ = dict_held.add_item(val_item);
+    let _ = dict_held.edit().add_item(val_item);
 
     TypVal::dict(Some(dict_held))
 }

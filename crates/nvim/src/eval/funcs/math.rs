@@ -276,7 +276,8 @@ pub fn f_rand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// not a four-element List of Numbers.
 fn seed_list(tv: &TypVal) -> Option<(&ListRef, [u32; 4])> {
     let list = tv.list_shared()?;
-    let items = list.items();
+    let held = list.read();
+    let items = held.items();
     if items.len() != 4 {
         return None;
     }
@@ -291,7 +292,7 @@ fn seed_list(tv: &TypVal) -> Option<(&ListRef, [u32; 4])> {
 /// `srand([{expr}])` — a four-Number seed list, from the OS or from the
 /// Number handed in.
 pub fn f_srand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let seeds = tv_list_alloc_ret(result, 4);
+    let mut seeds = tv_list_alloc_ret(result, 4);
     let mut x = if !args.is_empty() {
         let mut error = false;
         let n = arg_number_chk(&args[0], Some(&mut error));
@@ -349,7 +350,7 @@ pub fn f_range(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // The length is upstream's estimate and only preallocates.
     let hint = end.wrapping_sub(start) / stride;
     let hint = isize::try_from(hint).unwrap_or(isize::MAX);
-    let list = tv_list_alloc_ret(result, hint);
+    let mut list = tv_list_alloc_ret(result, hint);
     while if stride > 0 {
         start <= end
     } else {

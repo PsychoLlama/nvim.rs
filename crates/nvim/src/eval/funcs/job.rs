@@ -24,6 +24,7 @@ use crate::channel::{
 use crate::cstr;
 use crate::env::home_to_tilde;
 use crate::eval::funcs::builtin::EvalFuncData;
+use crate::eval::typval::ReadScope;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{
     DictRef, NumBuf, dict_extend, dict_find, dict_get_number, list_iter, tv_dict_alloc,
@@ -174,7 +175,7 @@ pub fn f_jobwait(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // One slot per item: the job, with a reference held for the wait, or
     // `None` for an item that is not a running job (reported as -3).
     let mut jobs: Vec<Option<ChannelRef>> = Vec::new();
-    for arg in list_iter(args[0].list_ref()) {
+    for arg in list_iter(args[0].list_ref().as_deref()) {
         let job = if arg.li_tv.v_type() == VAR_NUMBER {
             let id = arg.li_tv.number_or_zero().cast_unsigned();
             with_job(id, |job| {
@@ -297,7 +298,7 @@ pub(crate) fn create_environment(
     set_nvim_addr: bool,
     pty_term_name: Option<&CStr>,
 ) -> DictRef {
-    let mut env = tv_dict_alloc();
+    let env = tv_dict_alloc();
 
     if !clear_env {
         // Start from our own environment. `f_environ` is the builtin,
@@ -313,19 +314,19 @@ pub(crate) fn create_environment(
 
         if pty {
             for name in PTY_IGNORED_ENV {
-                drop(env.remove_key(name.to_bytes()));
+                drop(env.edit().remove_key(name.to_bytes()));
             }
             // COLORTERM was just removed; put ours back when we know
             // the child can use it.
             if p_tgc() {
-                let _ = env.add_str(b"COLORTERM", Some(c"truecolor"));
+                let _ = env.edit().add_str(b"COLORTERM", Some(c"truecolor"));
             }
         }
     }
 
     if pty {
-        drop(env.remove_key(b"TERM"));
-        let _ = env.add_str(b"TERM", pty_term_name);
+        drop(env.edit().remove_key(b"TERM"));
+        let _ = env.edit().add_str(b"TERM", pty_term_name);
     }
 
     // $NVIM points the child at this instance's server address, when
@@ -333,8 +334,10 @@ pub(crate) fn create_environment(
     if set_nvim_addr {
         let nvim_addr = vim_var_bytes(Vv::Servername);
         if !nvim_addr.is_empty() {
-            drop(env.remove_key(ENV_NVIM.to_bytes()));
-            let _ = env.add_str_len(ENV_NVIM.to_bytes(), Some(&nvim_addr));
+            drop(env.edit().remove_key(ENV_NVIM.to_bytes()));
+            let _ = env
+                .edit()
+                .add_str_len(ENV_NVIM.to_bytes(), Some(&nvim_addr));
         }
     }
 
@@ -345,11 +348,11 @@ pub(crate) fn create_environment(
 
     if pty {
         for name in REQUIRED_ENV {
-            if env.has_key(name.to_bytes()) {
+            if env.read().has_key(name.to_bytes()) {
                 continue;
             }
             if let Some(value) = getenv_owned(name) {
-                let _ = env.add_str(name.to_bytes(), Some(value.as_cstr()));
+                let _ = env.edit().add_str(name.to_bytes(), Some(value.as_cstr()));
             }
         }
     }
@@ -396,6 +399,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
 
+    let reads = ReadScope::new();
     let mut job_opts: Option<&Dict> = None;
     let mut detach = false;
     let mut rpc = false;
@@ -414,7 +418,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut job_env: Option<DictRef> = None;
 
     if args.get(1).is_some_and(|arg| arg.v_type() == VAR_DICT) {
-        job_opts = args[1].dict_ref();
+        job_opts = args[1].dict_in(&reads);
         detach = dict_get_number(job_opts, b"detach") != 0;
         rpc = dict_get_number(job_opts, b"rpc") != 0;
         term = dict_get_number(job_opts, b"term") != 0;
@@ -472,7 +476,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         // The call above took a reference to the options dictionary, which
         // is a write through it: the borrow taken before that is spent, so
         // the reads after it start from the argument again.
-        job_opts = args[1].dict_ref();
+        job_opts = args[1].dict_in(&reads);
     }
 
     // `dict_get_number` accepts a null dict, so these two are read

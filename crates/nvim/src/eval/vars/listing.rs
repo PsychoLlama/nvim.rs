@@ -38,13 +38,14 @@ use crate::message::msg_put_ascii;
 /// anything is printed: a message can `:redir` into a variable, which is a
 /// write to a dictionary -- possibly this one.
 pub(crate) fn list_dict_vars(dict: &DictRef, prefix: &CStr, empty: bool, first: &mut bool) {
-    let mut cursor = DictCursor::new(dict);
+    let mut cursor = DictCursor::new(&dict.read());
     // Upstream re-reads `GOT_INT` in the loop condition, so a `:let`
     // listing stops at the interrupt rather than at the end.
     while !GOT_INT.get()
-        && let Some(slot) = cursor.next(dict)
+        && let Some(slot) = cursor.next(&dict.read())
     {
         let Some((key, value)) = dict
+            .read()
             .item_at(slot)
             .map(|item| (item.key().to_vec(), item.di_tv.clone()))
         else {

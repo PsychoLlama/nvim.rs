@@ -119,13 +119,14 @@ pub fn tv_dict_item_remove(dict: &DictRef, key: &[u8]) {
 pub(crate) fn tv_blob2items(args: &[TypVal], result: &mut TypVal) {
     let bytes = args[0].blob_bytes();
     tv_list_alloc_ret(result, ptrdiff_t::try_from(bytes.len()).unwrap_or(-1));
-    let Some(list) = result.list_mut() else {
+    let Some(mut list) = result.list_mut() else {
         return;
     };
     for (at, &byte) in bytes.iter().enumerate() {
-        let mut pair = tv_list_alloc(2);
-        pair.push_number(VarNumber::try_from(at).expect("a short blob"));
-        pair.push_number(VarNumber::from(byte));
+        let pair = tv_list_alloc(2);
+        pair.edit()
+            .push_number(VarNumber::try_from(at).expect("a short blob"));
+        pair.edit().push_number(VarNumber::from(byte));
         list.push_list(Some(pair));
     }
 }
@@ -140,18 +141,19 @@ pub(crate) fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
     let source = args[0].list_ref();
     tv_list_alloc_ret(
         result,
-        ptrdiff_t::try_from(list_len(source)).unwrap_or(ptrdiff_t::MAX),
+        ptrdiff_t::try_from(list_len(source.as_deref())).unwrap_or(ptrdiff_t::MAX),
     );
     if source.is_none() {
         return;
     }
-    let Some(list) = result.list_mut() else {
+    let Some(mut list) = result.list_mut() else {
         return;
     };
-    for (idx, item) in list_iter(source).enumerate() {
-        let mut pair = tv_list_alloc(2);
-        pair.push_number(VarNumber::try_from(idx).expect("a short list"));
-        pair.push_copy(&item.li_tv);
+    for (idx, item) in list_iter(source.as_deref()).enumerate() {
+        let pair = tv_list_alloc(2);
+        pair.edit()
+            .push_number(VarNumber::try_from(idx).expect("a short list"));
+        pair.edit().push_copy(&item.li_tv);
         list.push_list(Some(pair));
     }
 }
@@ -159,7 +161,7 @@ pub(crate) fn tv_list2items(args: &[TypVal], result: &mut TypVal) {
 /// `items()` over a string: a list of `[index, character]` pairs.
 pub(crate) fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
     tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
-    let Some(list) = result.list_mut() else {
+    let Some(mut list) = result.list_mut() else {
         return;
     };
     // A null string behaves like an empty one.
@@ -169,9 +171,10 @@ pub(crate) fn tv_string2items(args: &[TypVal], result: &mut TypVal) {
     let mut offset = 0;
     while offset < text.len() {
         let len = cluster_len(&text[offset..]);
-        let mut pair = tv_list_alloc(2);
-        pair.push_number(idx);
-        pair.push(TypVal::string_from(&text[offset..offset + len]));
+        let pair = tv_list_alloc(2);
+        pair.edit().push_number(idx);
+        pair.edit()
+            .push(TypVal::string_from(&text[offset..offset + len]));
         list.push_list(Some(pair));
         offset += len;
         idx += 1;
@@ -334,7 +337,7 @@ pub fn dict_get_callback(
     // A NULL dictionary has no such key, which is the missing-key answer.
     let Some(d) = d else { return Ok(()) };
     let mut tv = TV_INITIAL_VALUE;
-    match d.find(key) {
+    match d.read().find(key) {
         None => return Ok(()),
         Some(di) if !di.di_tv.is_func() && di.di_tv.v_type() != VAR_STRING => {
             return Err(CallbackRefused::NotAFunction);
@@ -383,11 +386,11 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
     let d = args[0].dict_ref();
     tv_list_alloc_ret(
         result,
-        ptrdiff_t::try_from(dict_len(d)).unwrap_or(ptrdiff_t::MAX),
+        ptrdiff_t::try_from(dict_len(d.as_deref())).unwrap_or(ptrdiff_t::MAX),
     );
     // NULL dict behaves like an empty dict
     let Some(d) = d else { return };
-    let Some(list) = result.list_mut() else {
+    let Some(mut list) = result.list_mut() else {
         return;
     };
 
@@ -403,9 +406,10 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
             }
             DICT2_LIST_ITEMS => {
                 // items()
-                let mut pair = tv_list_alloc(2);
-                pair.push(TypVal::string(Some(ThinCString::from_bytes(di.key()))));
-                pair.push_copy(&di.di_tv);
+                let pair = tv_list_alloc(2);
+                pair.edit()
+                    .push(TypVal::string(Some(ThinCString::from_bytes(di.key()))));
+                pair.edit().push_copy(&di.di_tv);
                 tv_item.write_list(Some(pair));
             }
             _ => {}
@@ -447,7 +451,7 @@ pub fn f_has_key(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     if tv_check_for_dict_arg(args, 0).is_err() {
         return;
     }
-    let found = dict_has_key(args[0].dict_ref(), numbuf.bytes(&args[1]));
+    let found = dict_has_key(args[0].dict_ref().as_deref(), numbuf.bytes(&args[1]));
     result.write_number(VarNumber::from(found));
 }
 

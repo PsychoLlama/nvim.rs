@@ -20,7 +20,7 @@
 )]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use crate::eval::typval::{BlobRef, ListRef, blob_copy, index_of, tv_copy};
+use crate::eval::typval::{BlobRef, ListRef, blob_copy, index_of};
 use crate::eval::vars::{VarList, ex_let_vars, skip_var_list};
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::{E_STRING_LIST_OR_BLOB_REQUIRED, eval0_in_cmd};
@@ -166,15 +166,18 @@ pub(crate) fn next_for_item(info: &mut ForInfo, arg: &[u8]) -> bool {
             // at every insert and removal so that it keeps naming the same
             // item. `ENDED` is upstream's NULL `lw_item`, and is sticky: a
             // loop whose body appends to the list it is walking still ends.
-            let Ok(at) = usize::try_from(list.watch_index(*watch)) else {
-                return false;
-            };
-            let len = list.len();
-            let Some(item) = list.items().get(at) else {
+            let Ok(at) = usize::try_from(list.read().watch_index(*watch)) else {
                 return false;
             };
             // The item is copied out: assigning it may edit the List.
-            tv_copy(&item.li_tv, &mut value);
+            let (len, item) = {
+                let read = list.read();
+                let Some(item) = read.items().get(at) else {
+                    return false;
+                };
+                (read.len(), item.li_tv.clone())
+            };
+            value.overwrite(item);
             let following = if at + 1 >= len {
                 ListWatch::ENDED
             } else {

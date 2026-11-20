@@ -290,7 +290,8 @@ fn script_query(args: &[TypVal]) -> ScriptQuery {
         return ScriptQuery::All;
     };
     // The tag was tested above, so this is the argument's own dictionary.
-    let dict = arg.dict_shared().map(|dict| &**dict);
+    let dict = arg.dict_ref();
+    let dict = dict.as_deref();
 
     if let Some(sid_di) = dict_find(dict, b"sid") {
         let Ok(sid) = tv_get_number_chk(&sid_di.di_tv) else {
@@ -331,9 +332,9 @@ fn report_scripts(list: &ListRef, query: &mut ScriptQuery) {
             continue;
         }
 
-        let mut d = tv_dict_alloc();
+        let d = tv_dict_alloc();
         {
-            let dict = &mut *d;
+            let dict = &mut d.edit();
             let _ = dict.add_str(b"name", Some(name.as_cstr()));
             let _ = dict.add_number(b"sid", VarNumber::from(sid));
             let _ = dict.add_number(b"version", 1);

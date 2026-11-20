@@ -65,33 +65,34 @@ fn get_qfline_items(entry: &QfEntry, list: &mut List) {
         bufnum = None;
     }
 
-    let mut dict = tv_dict_alloc();
+    let dict = tv_dict_alloc();
     // The type is one character, or nothing for "none".
     let kind = [entry.kind.cast_unsigned()];
     let kind: &[u8] = if entry.kind == 0 { b"" } else { &kind };
 
-    let d = &mut *dict;
-    let added = add_nr(d, "bufnr", VarNumber::from(Handle::number_of(bufnum)))
-        .and_then(|()| add_nr(d, "lnum", VarNumber::from(entry.lnum)))
-        .and_then(|()| add_nr(d, "end_lnum", VarNumber::from(entry.end_lnum)))
-        .and_then(|()| add_nr(d, "col", VarNumber::from(entry.col)))
-        .and_then(|()| add_nr(d, "end_col", VarNumber::from(entry.end_col)))
-        .and_then(|()| add_nr(d, "vcol", VarNumber::from(entry.viscol)))
-        .and_then(|()| add_nr(d, "nr", VarNumber::from(entry.nr)))
-        .and_then(|()| add_str(d, "module", entry.module.as_deref()))
-        .and_then(|()| add_str(d, "pattern", entry.pattern.as_deref()))
-        .and_then(|()| add_str(d, "text", Some(&entry.text)))
-        .and_then(|()| add_str(d, "type", Some(kind)))
+    let mut d = dict.edit();
+    let added = add_nr(&mut d, "bufnr", VarNumber::from(Handle::number_of(bufnum)))
+        .and_then(|()| add_nr(&mut d, "lnum", VarNumber::from(entry.lnum)))
+        .and_then(|()| add_nr(&mut d, "end_lnum", VarNumber::from(entry.end_lnum)))
+        .and_then(|()| add_nr(&mut d, "col", VarNumber::from(entry.col)))
+        .and_then(|()| add_nr(&mut d, "end_col", VarNumber::from(entry.end_col)))
+        .and_then(|()| add_nr(&mut d, "vcol", VarNumber::from(entry.viscol)))
+        .and_then(|()| add_nr(&mut d, "nr", VarNumber::from(entry.nr)))
+        .and_then(|()| add_str(&mut d, "module", entry.module.as_deref()))
+        .and_then(|()| add_str(&mut d, "pattern", entry.pattern.as_deref()))
+        .and_then(|()| add_str(&mut d, "text", Some(&entry.text)))
+        .and_then(|()| add_str(&mut d, "type", Some(kind)))
         .and_then(|()| {
             if entry.user_data.v_type() == VAR_UNKNOWN {
                 Ok(())
             } else {
-                add_tv(d, "user_data", &entry.user_data)
+                add_tv(&mut d, "user_data", &entry.user_data)
             }
         })
-        .and_then(|()| add_nr(d, "valid", VarNumber::from(entry.valid)));
+        .and_then(|()| add_nr(&mut d, "valid", VarNumber::from(entry.valid)));
     // Only a NULL dict_item would cause this, which cannot happen.
     added.expect("a fresh dictionary takes every key");
+    drop(d);
     list.push_dict(Some(dict));
 }
 
@@ -151,7 +152,7 @@ fn qf_get_list_from_lines(what: &Dict, lines: &TypVal, retdict: &mut Dict) -> Re
     };
 
     // Only a List value is supported.
-    let mut l = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
+    let l = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     let id = new_location_stack(QFLT_INTERNAL, 1);
     let qi = id.stack();
     // A copy of the value: parsing can run autocommands, which could change
@@ -173,7 +174,7 @@ fn qf_get_list_from_lines(what: &Dict, lines: &TypVal, retdict: &mut Dict) -> Re
     if parsed {
         // Whether the throwaway list had entries is not this answer:
         // parsing nothing out of the lines is still a successful read.
-        let _ = get_errorlist(qi, 0, 0, &mut l);
+        let _ = get_errorlist(qi, 0, 0, &mut l.edit());
     }
     free_unreferenced_stack(id);
 
@@ -347,8 +348,8 @@ fn qf_getprop_filewinid(window: Option<Win>, id: QfId, retdict: &mut Dict) -> Re
 /// An empty list is a perfectly good answer, so neither the walk's refusal
 /// nor the write's is passed on — upstream discarded both here too.
 fn qf_getprop_items(qi: Qi, qf_idx: c_int, eidx: c_int, retdict: &mut Dict) {
-    let mut l = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
-    let _ = get_errorlist(qi, qf_idx, eidx, &mut l);
+    let l = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
+    let _ = get_errorlist(qi, qf_idx, eidx, &mut l.edit());
     let _ = add_list(retdict, "items", Some(l));
 }
 

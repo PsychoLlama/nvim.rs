@@ -41,8 +41,8 @@
 )]
 
 use crate::eval::typval::CallFrame;
-use crate::eval::typval::Edit;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{Edit, Read};
 use crate::strings::reversed_text;
 use core::ffi::{CStr, c_int};
 
@@ -155,7 +155,7 @@ impl<'a> ListArg<'a> {
     /// The lock status; a NULL list reads as `VarLock::Fixed`.
     #[inline(always)]
     pub(crate) fn locked(self) -> VarLock {
-        self.0.map_or(VarLock::Fixed, |l| l.lv_lock)
+        self.0.map_or(VarLock::Fixed, |l| l.read().lv_lock)
     }
 
     /// Set the lock status.  A NULL list already reads as `VarLock::Fixed`.
@@ -175,7 +175,7 @@ impl<'a> ListArg<'a> {
     /// How many items, as the array's own count.
     #[inline(always)]
     fn count(self) -> usize {
-        self.0.map_or(0, |l| l.lv_items.len())
+        self.0.map_or(0, |l| l.read().lv_items.len())
     }
 
     #[inline(always)]
@@ -192,7 +192,7 @@ impl<'a> ListArg<'a> {
     /// The item at `n`, which may count back from the end.
     #[inline(always)]
     pub(crate) fn find(self, n: c_int) -> Option<Item<'a>> {
-        let at = list_index(self.0.map(|l| &**l), n)?;
+        let at = list_index(self.0.map(ListRef::read).as_deref(), n)?;
         Some(Item { list: self, at })
     }
 
@@ -354,7 +354,7 @@ impl<'a> Item<'a> {
     #[inline(always)]
     pub(crate) fn equals(self, needle: &TypVal, ic: bool) -> bool {
         let list = self.list.0.expect("an item of a live list");
-        equal(&list.items()[self.at].li_tv, needle, ic)
+        equal(&list.read().items()[self.at].li_tv, needle, ic)
     }
 }
 
@@ -390,7 +390,10 @@ impl<'a> ItemMark<'a> {
     /// it -- `Err` with whatever followed it.
     pub(crate) fn settle(&self) -> Result<Item<'a>, Option<Item<'a>>> {
         let list = self.list.0.expect("a marked list is live");
-        let (cur, next) = (list.watch_index(self.cur), list.watch_index(self.next));
+        let (cur, next) = (
+            list.read().watch_index(self.cur),
+            list.read().watch_index(self.next),
+        );
         match usize::try_from(cur) {
             // An edit that did not shift the cursors leaves them anywhere;
             // one past the end has nothing to stand on.
@@ -438,7 +441,7 @@ impl<'a> DictArg<'a> {
 
     #[inline(always)]
     pub(crate) fn lock(self) -> VarLock {
-        self.0.map_or(VarLock::Fixed, |d| d.dv_lock)
+        self.0.map_or(VarLock::Fixed, |d| d.read().dv_lock)
     }
 
     #[inline(always)]
@@ -468,10 +471,10 @@ impl<'a> DictArg<'a> {
     /// a removal only leaves a tombstone in a slot already passed.
     #[inline(always)]
     pub(crate) fn items(self) -> impl Iterator<Item = DictItemRef<'a>> {
-        let mut cursor = self.0.map(|dict| DictCursor::new(dict));
+        let mut cursor = self.0.map(|dict| DictCursor::new(&dict.read()));
         core::iter::from_fn(move || {
             let dict = self.0?;
-            let slot = cursor.as_mut()?.next(dict)?;
+            let slot = cursor.as_mut()?.next(&dict.read())?;
             Some(DictItemRef(dict, slot))
         })
     }
@@ -485,7 +488,7 @@ impl<'a> DictArg<'a> {
     #[inline(always)]
     pub(crate) fn remove_item(self, item: DictItemRef<'_>) {
         // The key is copied out of the item the removal frees.
-        let key = crate::eval::typval::DictKey::new(item.key());
+        let key = crate::eval::typval::DictKey::new(&item.key());
         tv_dict_item_remove(self.0.expect("a live dict"), key.bytes());
     }
 
@@ -538,9 +541,10 @@ impl<'a> DictItemRef<'a> {
 
     /// The entry, read-only.
     #[inline(always)]
-    fn read(self) -> &'a DictItem {
-        let dict: &'a Dict = self.0;
-        dict.item_at(self.1).expect("an entry of the walk's dict")
+    fn read(self) -> Read<'a, DictItem> {
+        self.0
+            .read()
+            .map(|dict| dict.item_at(self.1).expect("an entry of the walk's dict"))
     }
 
     /// Whether the entry still stands in its slot under `key`, once a
@@ -549,14 +553,14 @@ impl<'a> DictItemRef<'a> {
     /// can then reuse its slot (upstream wrote into the freed entry).
     #[inline(always)]
     pub(crate) fn still_holds(self, key: &[u8]) -> bool {
-        let dict: &Dict = self.0;
+        let dict: &Dict = &self.0.read();
         dict.item_at(self.1).is_some_and(|item| item.key() == key)
     }
 
     /// The key: the item's own bytes, without the terminator.
     #[inline(always)]
-    pub(crate) fn key(self) -> &'a [u8] {
-        self.read().key()
+    pub(crate) fn key(self) -> Read<'a, [u8]> {
+        self.read().map(DictItem::key)
     }
 
     /// Copy the value into `v:val`; see [`Item::set_val`].
@@ -975,16 +979,17 @@ mod tests {
         let arg = ListArg::of(tv.list_shared());
         arg.append_tv(&tv);
         arg.insert_tv(&tv, arg.first());
-        assert_eq!(list.len(), 2);
+        assert_eq!(list.read().len(), 2);
         // The handle, the value, and the two items.
-        assert_eq!(list.lv_refcount.get(), 4);
+        assert_eq!(list.read().lv_refcount.get(), 4);
         assert!(
-            list.items()
+            list.read()
+                .items()
                 .iter()
                 .all(|item| { item.li_tv.list_shared().is_some_and(|l| l.ptr_eq(&list)) })
         );
         // Break the cycle so that the last handle frees it.
         list.remove_range(0, 1);
-        assert_eq!(list.lv_refcount.get(), 2);
+        assert_eq!(list.read().lv_refcount.get(), 2);
     }
 }

@@ -33,8 +33,8 @@ use crate::narrow::{len_as_integer, number_as_int};
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    BOOL_VAR_TRUE, BoolVarValue, List, SPECIAL_VAR_NULL, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT,
-    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB,
+    BOOL_VAR_TRUE, BoolVarValue, SPECIAL_VAR_NULL, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT,
+    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB,
     VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER,
     VAR_TYPE_SPECIAL, VAR_TYPE_STRING, VAR_UNKNOWN, VarNumber, Vv,
 };
@@ -71,8 +71,8 @@ pub fn f_empty(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         VAR_PARTIAL => false,
         VAR_NUMBER => (tv.number_or_zero()) == 0,
         VAR_FLOAT => (tv.float_or_zero()) == 0.0,
-        VAR_LIST => tv.list_ref().is_none_or(List::is_empty),
-        VAR_DICT => (dict_len(tv.dict_ref())) == 0,
+        VAR_LIST => tv.list_ref().is_none_or(|list| list.is_empty()),
+        VAR_DICT => (dict_len(tv.dict_ref().as_deref())) == 0,
         VAR_BLOB => tv.blob_len() == 0,
         VAR_SPECIAL => tv.as_special() == Some(SPECIAL_VAR_NULL),
         // A Bool other than the two named values leaves the answer at its
@@ -138,12 +138,15 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
         if !found {
             return;
         }
-    } else if value_check_lock(list.lock(), LockName::Translate(c"flatten() argument")) {
+    } else if value_check_lock(
+        { list.read().lock() },
+        LockName::Translate(c"flatten() argument"),
+    ) {
         return;
     }
     // The answer holds the list to flatten: the argument's own, or its copy.
     if let Some(list) = result.list_shared() {
-        let len = i64::from(list_len(Some(list)));
+        let len = i64::from(list_len(Some(&list.read())));
         list_flatten(list, 0, len, i64::from(maxdepth));
     }
 }
@@ -152,7 +155,7 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
 /// Funcref or Partial.
 pub fn f_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let found: Option<&TypVal> = match args[0].v_type() {
+    let found: Option<TypVal> = match args[0].v_type() {
         VAR_BLOB => {
             // The byte, when there is one, is already the answer.
             if get_from_blob(args, result) {
@@ -177,7 +180,7 @@ pub fn f_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         }
     };
     if let Some(found) = found {
-        tv_copy(found, result);
+        result.overwrite(found);
     } else if args.len() > 2 {
         arg_copy(&args[2], result);
     }
@@ -208,19 +211,19 @@ fn get_from_blob(args: &[TypVal], result: &mut TypVal) -> bool {
 }
 
 /// `get()` over a List. The caller has checked the tag.
-fn get_from_list(args: &[TypVal]) -> Option<&TypVal> {
-    let list = args[0].list_ref()?;
+fn get_from_list(args: &[TypVal]) -> Option<TypVal> {
     let mut error = false;
     let idx = number_as_int(arg_number_chk(&args[1], Some(&mut error)));
-    let at = list_index(Some(list), idx).filter(|_| !error)?;
-    Some(&list.items()[at].li_tv)
+    let list = args[0].list_ref()?;
+    let at = list_index(Some(&list), idx).filter(|_| !error)?;
+    Some(list.items()[at].li_tv.clone())
 }
 
 /// `get()` over a Dictionary. The caller has checked the tag.
-fn get_from_dict<'a>(args: &'a [TypVal], numbuf: &mut NumBuf) -> Option<&'a TypVal> {
-    let dict = args[0].dict_ref()?;
+fn get_from_dict(args: &[TypVal], numbuf: &mut NumBuf) -> Option<TypVal> {
     let key = numbuf.bytes(&args[1]);
-    dict.find(key).map(|item| &item.di_tv)
+    let dict = args[0].dict_ref()?;
+    dict.find(key).map(|item| item.di_tv.clone())
 }
 
 /// Answer `get()` for a Funcref or Partial. Returns whether the caller
@@ -281,9 +284,9 @@ fn get_from_func(args: &[TypVal], result: &mut TypVal) -> bool {
             return true;
         }
         b"args" => {
-            let mut list = tv_list_alloc(index_of(bound.len()) as isize);
+            let list = tv_list_alloc(index_of(bound.len()) as isize);
             for arg in bound {
-                list.push_copy(arg);
+                list.edit().push_copy(arg);
             }
             result.write_list(Some(list));
         }
@@ -314,10 +317,16 @@ fn func_arity(name: &CStr, bound: usize, result: &mut TypVal) {
     } else {
         required -= bound;
     }
-    let mut dict = tv_dict_alloc();
-    let _ = dict.add_number(b"required", VarNumber::from(required));
-    let _ = dict.add_number(b"optional", VarNumber::from(optional));
-    let _ = dict.add_bool(b"varargs", BoolVarValue::from(varargs));
+    let dict = tv_dict_alloc();
+    let _ = dict
+        .edit()
+        .add_number(b"required", VarNumber::from(required));
+    let _ = dict
+        .edit()
+        .add_number(b"optional", VarNumber::from(optional));
+    let _ = dict
+        .edit()
+        .add_bool(b"varargs", BoolVarValue::from(varargs));
     result.write_dict(Some(dict));
 }
 
@@ -377,7 +386,7 @@ fn index_list(args: &[TypVal], result: &mut TypVal) {
     if args.len() > 2 {
         let mut error = false;
         idx = list_uidx(
-            Some(list),
+            Some(&list),
             number_as_int(arg_number_chk(&args[2], Some(&mut error))),
         );
         start = if error {
@@ -428,7 +437,7 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         return;
     }
     let startidx = if args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) {
-        dict_get_number_def(args[2].dict_ref(), b"startidx", 0)
+        dict_get_number_def(args[2].dict_ref().as_deref(), b"startidx", 0)
     } else {
         0
     };
@@ -491,7 +500,8 @@ fn indexof_blob(b: Option<&BlobRef>, startidx: VarNumber, expr: &TypVal) -> VarN
     while idx < VarNumber::from(b.read().len_int()) {
         set_vim_var_nr(Vv::Key, idx);
         let at = c_int::try_from(idx).expect("a byte of the blob");
-        set_vim_var_nr(Vv::Val, VarNumber::from(b.read().byte(at)));
+        let byte = b.read().byte(at);
+        set_vim_var_nr(Vv::Val, VarNumber::from(byte));
         if indexof_matches(expr) {
             return idx;
         }
@@ -515,7 +525,7 @@ fn indexof_list(list: Option<&ListRef>, startidx: VarNumber, expr: &TypVal) -> V
     let start = if startidx == 0 {
         Some(0usize)
     } else {
-        idx = VarNumber::from(list_uidx(Some(list), number_as_int(startidx)));
+        idx = VarNumber::from(list_uidx(Some(&list.read()), number_as_int(startidx)));
         usize::try_from(idx).ok()
     };
     let Some(start) = start else { return -1 };
@@ -524,9 +534,9 @@ fn indexof_list(list: Option<&ListRef>, startidx: VarNumber, expr: &TypVal) -> V
     // By index, through the handle: `expr` is the user's, and may edit the
     // list it is testing.
     let mut at = start;
-    while at < list.items().len() {
+    while at < list.read().items().len() {
         set_vim_var_nr(Vv::Key, idx);
-        with_vim_var_mut(Vv::Val, |val| tv_copy(&list.items()[at].li_tv, val));
+        with_vim_var_mut(Vv::Val, |val| tv_copy(&list.read().items()[at].li_tv, val));
         let found = indexof_matches(expr);
         clear_vimvar(Vv::Val);
         if found {
@@ -550,8 +560,8 @@ pub fn f_len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_number(match tv.v_type() {
         VAR_STRING | VAR_NUMBER => len_as_integer(numbuf.bytes(&args[0]).len()),
         VAR_BLOB => VarNumber::from(tv.blob_len()),
-        VAR_LIST => VarNumber::from(list_len(tv.list_ref())),
-        VAR_DICT => dict_len(tv.dict_ref()) as VarNumber,
+        VAR_LIST => VarNumber::from(list_len(tv.list_ref().as_deref())),
+        VAR_DICT => dict_len(tv.dict_ref().as_deref()) as VarNumber,
         // The remaining tags are Unknown, Funcref, Partial, Float,
         // Bool and Special; `VarType` has no twelfth value.
         _ => {

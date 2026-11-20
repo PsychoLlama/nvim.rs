@@ -154,15 +154,16 @@ impl TagStack {
         // list: nothing here should hold into a user container across the
         // writes to the stack.
         let mut at = 0;
-        while at < items.len() {
-            let item = items.items()[at].li_tv.dict_handle();
+        while at < items.read().len() {
+            let item = items.read().items()[at].li_tv.dict_handle();
             at += 1;
 
             // Skip anything that is not a dict describing a jump.
             let Some(item) = item else {
                 continue;
             };
-            let Some(from) = dict_find(Some(&*item), b"from") else {
+            let item = item.read();
+            let Some(from) = dict_find(Some(&item), b"from") else {
                 continue;
             };
             let mut mark = Pos::default();
@@ -170,7 +171,7 @@ impl TagStack {
             if list2fpos(&from.di_tv, &mut mark, Some(&mut fnum), None, false).is_err() {
                 continue;
             }
-            let Some(tagname) = dict_get_string_alloc(Some(&*item), b"tagname") else {
+            let Some(tagname) = dict_get_string_alloc(Some(&item), b"tagname") else {
                 continue;
             };
             // The dict counts columns from one, the mark from zero.
@@ -183,7 +184,7 @@ impl TagStack {
                 cur_match: number(&item, b"matchnr") - 1,
                 mark,
                 fnum: Handle::from_number(fnum),
-                user_data: dict_get_string_alloc(Some(&*item), b"user_data"),
+                user_data: dict_get_string_alloc(Some(&item), b"user_data"),
             });
         }
     }

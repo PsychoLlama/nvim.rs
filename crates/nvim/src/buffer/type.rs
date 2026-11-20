@@ -235,7 +235,7 @@ pub fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
     let old_val = TypVal::Number(b.changedtick_di.di_tv.number_or_zero());
     check_changedtick_item(b);
     b.changedtick_di.di_tv.write_number(changedtick);
-    if dict_is_watched(b.b_bufvar.di_tv.dict_ref())
+    if dict_is_watched(b.b_bufvar.di_tv.dict_ref().as_deref())
         && let Some(vars) = b.b_bufvar.di_tv.dict_handle()
     {
         b.b_locked += 1;
@@ -255,7 +255,8 @@ fn check_changedtick_item(buffer: Buf) {
     }
     let key = c"changedtick";
     let vars = buffer.b_bufvar.di_tv.dict_ref();
-    let item = dict_find(vars, key.to_bytes()).expect("every buffer's b: dict holds changedtick");
+    let item = dict_find(vars.as_deref(), key.to_bytes())
+        .expect("every buffer's b: dict holds changedtick");
     assert!(
         item.di_tv.v_type() == VAR_NUMBER as _,
         "changedtick_di->di_tv.v_type() == VAR_NUMBER"

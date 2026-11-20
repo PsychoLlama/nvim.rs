@@ -75,7 +75,9 @@ fn allocating_into_a_return_value_leaves_an_empty_container() {
     // SAFETY: both values are this case's own and are cleared.
     unsafe {
         let mut rettv = TypVal::Unknown;
-        let l = &raw mut *tv_list_alloc_ret(&mut rettv, 0);
+        let mut edit = tv_list_alloc_ret(&mut rettv, 0);
+        let l = &raw mut *edit;
+        drop(edit);
         assert_eq!(tv::read(&raw const rettv), Tv::List(vec![]));
         assert_eq!(rettv.list(), l);
         tv_clear(&mut rettv);
@@ -489,7 +491,7 @@ fn locking_a_partial_leaves_its_dict_alone() {
         let mut p = Slot::new(p_tv);
         p.item_lock(-1, true, false);
         let bound = (*p.tv.partial()).pt_dict.as_ref().expect("a bound dict");
-        assert_eq!(bound.dv_lock, VarLock::Unlocked);
+        assert_eq!(bound.read().dv_lock, VarLock::Unlocked);
         tv_clear(&mut p.tv);
     }
 }

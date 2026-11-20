@@ -149,7 +149,7 @@ fn with_vimvar_item<R>(idx: Vv, f: impl FnOnce(&mut DictItem) -> R) -> R {
 #[cold]
 fn with_vimvar_found<R>(idx: Vv, f: impl FnOnce(&mut DictItem) -> R) -> R {
     let dict = vimvar_dict();
-    match vimvar_slot(&dict, idx) {
+    match { vimvar_slot(&dict.read(), idx) } {
         Some(slot) => f(dict.edit().item_at_mut(slot).expect("a kept slot")),
         None => OUTSIDE_VIMVARS.with_mut(|outside| {
             f(outside[outside_index(idx)]
@@ -483,7 +483,7 @@ pub(crate) fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
 /// what it holds now.
 fn notify_vvar_watchers(key: &[u8], old: &TypVal) {
     let dict = vimvar_dict();
-    let new = dict.find(key).map(|item| item.di_tv.clone());
+    let new = dict.read().find(key).map(|item| item.di_tv.clone());
     cstr::with_terminated(key, |key| {
         dict_watcher_notify(&dict, key, new.as_ref(), Some(old));
     });
@@ -514,7 +514,8 @@ pub(crate) enum VvarStore {
 pub(crate) fn before_set_vvar(key: &[u8], tv: &mut TypVal, copy: bool, watched: bool) -> VvarStore {
     let dict = vimvar_dict();
     let current = |dict: &DictRef| {
-        dict.find(key)
+        dict.read()
+            .find(key)
             .map_or(VAR_UNKNOWN, |item| item.di_tv.v_type())
     };
     let stored_type = current(&dict);
@@ -556,7 +557,7 @@ pub(crate) fn before_set_vvar(key: &[u8], tv: &mut TypVal, copy: bool, watched: 
         return VvarStore::Done;
     } else if stored_type == VAR_NUMBER {
         let old = watched
-            .then(|| dict.find(key).map(|item| item.di_tv.clone()))
+            .then(|| dict.read().find(key).map(|item| item.di_tv.clone()))
             .flatten();
         let n = tv_get_number(tv);
         if let Some(item) = dict.edit().find_mut(key) {
@@ -603,10 +604,10 @@ pub(crate) fn before_set_vvar(key: &[u8], tv: &mut TypVal, copy: bool, watched: 
 /// Number rather than replacing one.
 pub(crate) fn set_vvar_key(key: &[u8], tv: &mut TypVal, copy: bool, op: Option<u8>) {
     let dict = vimvar_dict();
-    if dict.find(key).is_none() {
+    if dict.read().find(key).is_none() {
         return;
     }
-    let watched = dict_is_watched(Some(&dict));
+    let watched = dict_is_watched(Some(&dict.read()));
 
     // `+=` and friends act on the current value, so evaluate them into a
     // temporary first and enforce the type on the *result*.
@@ -614,7 +615,7 @@ pub(crate) fn set_vvar_key(key: &[u8], tv: &mut TypVal, copy: bool, op: Option<u
     let mut tmp = TV_INITIAL_VALUE;
     let val: &mut TypVal = match op.filter(|_| compound) {
         Some(op) => {
-            if let Some(item) = dict.find(key) {
+            if let Some(item) = dict.read().find(key) {
                 tmp = item.di_tv.clone();
             }
             if eexe_mod_op(&mut tmp, tv, op).is_err() {
@@ -690,16 +691,17 @@ pub fn vim_var_bytes(idx: Vv) -> Vec<u8> {
 /// [`restore_v_event`] with the same `sve`.
 pub(crate) fn get_v_event(sve: &mut SaveVEvent) -> DictRef {
     let v_event = get_vim_var_dict_handle(Vv::Event).expect("v:event is always a Dict");
-    let live = &mut v_event.edit().dv_hashtab;
-    let did_save = live.ht_used > 0;
+    let mut edit = v_event.edit();
+    let did_save = edit.dv_hashtab.ht_used > 0;
     sve.sve_did_save = did_save;
     if did_save {
         // A plain move: the table owns its slots, so what the surrounding
         // autocommand put in `v:event` travels to `sve` intact and
         // `v:event` starts the inner one empty. `restore_v_event` moves it
         // back.
-        sve.sve_hashtab = mem::replace(live, HashTab::init());
+        sve.sve_hashtab = mem::replace(&mut edit.dv_hashtab, HashTab::init());
     }
+    drop(edit);
     v_event
 }
 

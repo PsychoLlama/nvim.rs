@@ -92,7 +92,7 @@ pub(crate) fn func_equal(tv1: &TypVal, tv2: &TypVal, ic: bool) -> bool {
     let ((d1, args1), (d2, args2)) = (tv1.partial_binding(), tv2.partial_binding());
     let same_dict = match (d1, d2) {
         (None, None) => true,
-        (Some(_), Some(_)) => dict_equal(d1, d2, ic),
+        (Some(d1), Some(d2)) => dict_equal(Some(&d1), Some(&d2), ic),
         _ => false,
     };
     same_dict
@@ -171,12 +171,15 @@ pub(crate) fn typval_compare(
     } else if t1 == VAR_BLOB || t2 == VAR_BLOB {
         // SAFETY: `same_type` has held before either closure runs, so the
         // union member each reads is the one the tag names.
-        let (b1, b2) = (typ1.blob_ref(), typ2.blob_ref());
-        let (b1, b2) = (b1.as_deref(), b2.as_deref());
-        let same = || b1.map(::core::ptr::from_ref) == b2.map(::core::ptr::from_ref);
-        let eq = || blob_equal(b1, b2);
-        let wrong_type = c"E977: Can only compare Blob with Blob";
-        let cmp = compare_container(op, same_type, same, eq, wrong_type, E_INVALBLOB);
+        // The reads end before `typ1` is cleared.
+        let cmp = {
+            let (b1, b2) = (typ1.blob_ref(), typ2.blob_ref());
+            let (b1, b2) = (b1.as_deref(), b2.as_deref());
+            let same = || b1.map(::core::ptr::from_ref) == b2.map(::core::ptr::from_ref);
+            let eq = || blob_equal(b1, b2);
+            let wrong_type = c"E977: Can only compare Blob with Blob";
+            compare_container(op, same_type, same, eq, wrong_type, E_INVALBLOB)
+        };
         match cmp {
             Ok(n) => n,
             Err(failed) => {
@@ -186,12 +189,15 @@ pub(crate) fn typval_compare(
         }
     } else if t1 == VAR_LIST || t2 == VAR_LIST {
         // SAFETY: as the Blob arm.
-        let (l1, l2) = (typ1.list_ref(), typ2.list_ref());
-        let same = || l1.map(::core::ptr::from_ref) == l2.map(::core::ptr::from_ref);
-        let eq = || list_equal(l1, l2, ic);
-        let wrong_type = c"E691: Can only compare List with List";
-        let wrong_op = c"E692: Invalid operation for List";
-        let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);
+        let cmp = {
+            let (l1, l2) = (typ1.list_ref(), typ2.list_ref());
+            let (l1, l2) = (l1.as_deref(), l2.as_deref());
+            let same = || l1.map(::core::ptr::from_ref) == l2.map(::core::ptr::from_ref);
+            let eq = || list_equal(l1, l2, ic);
+            let wrong_type = c"E691: Can only compare List with List";
+            let wrong_op = c"E692: Invalid operation for List";
+            compare_container(op, same_type, same, eq, wrong_type, wrong_op)
+        };
         match cmp {
             Ok(n) => n,
             Err(failed) => {
@@ -202,7 +208,7 @@ pub(crate) fn typval_compare(
     } else if t1 == VAR_DICT || t2 == VAR_DICT {
         // As the Blob arm.
         let same = || typ1.dict_or_null() == typ2.dict_or_null();
-        let eq = || dict_equal(typ1.dict_ref(), typ2.dict_ref(), ic);
+        let eq = || dict_equal(typ1.dict_ref().as_deref(), typ2.dict_ref().as_deref(), ic);
         let wrong_type = c"E735: Can only compare Dictionary with Dictionary";
         let wrong_op = c"E736: Invalid operation for Dictionary";
         let cmp = compare_container(op, same_type, same, eq, wrong_type, wrong_op);

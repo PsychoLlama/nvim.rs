@@ -31,7 +31,7 @@ use super::{clear_local, emsg_static, get_vim_var_list_handle, set_vim_var_list}
 /// Append `message` to `v:errors`, which the `assert_*` builtins report
 /// through.
 pub fn assert_error(message: &[u8]) {
-    let mut errors = match get_vim_var_list_handle(Vv::Errors) {
+    let errors = match get_vim_var_list_handle(Vv::Errors) {
         Some(errors) => errors,
         None => {
             // Something replaced it; make sure `v:errors` is a List again.
@@ -43,7 +43,7 @@ pub fn assert_error(message: &[u8]) {
     // A message that was never appended to used to be a null `ga_data`,
     // which appends `v:null`'s string; an empty one is an empty string.
     let text = (!message.is_empty()).then(|| ThinCString::from_bytes(message));
-    errors.push(TypVal::string(text));
+    errors.edit().push(TypVal::string(text));
 }
 
 /// The name of the variable a running `:redir =>` captures into, `None`

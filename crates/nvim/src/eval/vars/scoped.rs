@@ -108,7 +108,8 @@ fn get_var_from(
                     Scope::Window => w.w_winvar.di_tv.dict_handle(),
                     Scope::Tab => tp.tp_winvar.di_tv.dict_handle(),
                 };
-                if let Some(item) = dict.as_ref().and_then(|dict| dict.find(varname)) {
+                let read = dict.as_ref().map(|dict| dict.read());
+                if let Some(item) = read.as_ref().and_then(|dict| dict.find(varname)) {
                     tv_copy(&item.di_tv, result);
                     done = true;
                 }

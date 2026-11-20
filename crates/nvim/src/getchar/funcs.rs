@@ -73,15 +73,15 @@ fn getchar_opts(args: &[TypVal], allow_number: bool) -> Option<GetcharOpts> {
         let d = args[1].dict_ref();
 
         if opts.allow_number {
-            opts.allow_number = dict_get_bool(d, b"number", 1) != 0;
-        } else if dict_has_key(d, b"number") {
+            opts.allow_number = dict_get_bool(d.as_deref(), b"number", 1) != 0;
+        } else if dict_has_key(d.as_deref(), b"number") {
             // getcharstr() never answers a number, so asking is an error.
             semsg!("E475: Invalid argument: {}", "number");
         }
 
-        opts.simplify = dict_get_bool(d, b"simplify", 1) != 0;
+        opts.simplify = dict_get_bool(d.as_deref(), b"simplify", 1) != 0;
 
-        if let Some(cursor) = numbuf.dict_string(d, b"cursor") {
+        if let Some(cursor) = numbuf.dict_string(d.as_deref(), b"cursor") {
             opts.cursor = match cursor.to_bytes() {
                 b"hide" => CursorFlag::Hide,
                 b"keep" => CursorFlag::Keep,

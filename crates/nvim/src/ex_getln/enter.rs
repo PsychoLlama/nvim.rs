@@ -425,7 +425,7 @@ fn fire_cmdline_leave(s: &mut CommandLineState) -> Error {
         cmdline_autocmd(AutoEvent::CmdlineLeave, cstr::in_bytes(&firstcbuf));
         err.absorb(try_leave(&tstate));
 
-        if dict_get_number(Some(&dict), b"abort") != 0 {
+        if dict_get_number(Some(&dict.read()), b"abort") != 0 {
             s.gotesc = true;
         }
         restore_v_event(dict, &mut save_v_event);

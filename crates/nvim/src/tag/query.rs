@@ -128,8 +128,8 @@ fn describe_match(list: &mut List, found: &TagMatch) -> bool {
         return true;
     }
 
-    let mut held = tv_dict_alloc();
-    let dict = &mut *held;
+    let held = tv_dict_alloc();
+    let mut dict = held.edit();
 
     // Short-circuiting is upstream's: once one field fails, the rest
     // of these are not tried.
@@ -139,15 +139,21 @@ fn describe_match(list: &mut List, found: &TagMatch) -> bool {
         Some(end) => &line[tp.command..end],
         None => trim_eol(&text[tp.command..]),
     };
-    let mut ok = add_tag_field(dict, b"name", Some(tp.tagname.of(line))).is_ok()
-        && add_tag_field(dict, b"filename", Some(trim_eol(&full_fname))).is_ok()
-        && add_tag_field(dict, b"cmd", Some(command)).is_ok()
-        && add_tag_field(dict, b"kind", tp.tagkind.as_ref().map(|kind| kind.of(line))).is_ok()
+    let mut ok = add_tag_field(&mut dict, b"name", Some(tp.tagname.of(line))).is_ok()
+        && add_tag_field(&mut dict, b"filename", Some(trim_eol(&full_fname))).is_ok()
+        && add_tag_field(&mut dict, b"cmd", Some(command)).is_ok()
+        && add_tag_field(
+            &mut dict,
+            b"kind",
+            tp.tagkind.as_ref().map(|kind| kind.of(line)),
+        )
+        .is_ok()
         && dict
             .add_number(b"static", VarNumber::from(is_static))
             .is_ok();
 
-    ok &= add_extra_fields(dict, line, &tp);
+    ok &= add_extra_fields(&mut dict, line, &tp);
+    drop(dict);
     list.push_dict(Some(held));
     ok
 }
