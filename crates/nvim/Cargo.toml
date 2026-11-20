@@ -138,6 +138,9 @@ level = "warn"
 check-cfg = ['cfg(randomized_layout)', 'cfg(soundness_checks)']
 
 [lints.clippy]
+# Starting a thread or installing a panic hook: the paths off the main thread
+# that `GlobalCell`'s soundness rests on keeping audited (clippy.toml).
+disallowed_methods = "deny"
 # `tui/tui.rs`, `vterm/vterm.rs`, `tui/termkey/termkey.rs`,
 # `viml/parser/parser.rs` and `types/types.rs` are ports of upstream's
 # `tui/tui.c`, `vterm/vterm.c`, `tui/termkey/termkey.c`, `viml/parser/parser.c`

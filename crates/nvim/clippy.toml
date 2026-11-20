@@ -1,0 +1,14 @@
+# Code that runs off the main thread must not touch a `GlobalCell`: the
+# cells are `Sync` only because nothing reaches them from another thread,
+# and that holds by keeping the ways onto another thread few and audited
+# (docs/safe-surface.md, S2). Starting a thread or installing a panic hook
+# (which runs on whichever thread panics) is one of them, so each site
+# carries an `#[expect(clippy::disallowed_methods, reason = "...")]` saying
+# what the new thread touches.
+disallowed-methods = [
+  { path = "std::thread::spawn", reason = "off the main thread: see docs/safe-surface.md S2" },
+  { path = "std::thread::scope", reason = "off the main thread: see docs/safe-surface.md S2" },
+  { path = "std::thread::Builder::spawn", reason = "off the main thread: see docs/safe-surface.md S2" },
+  { path = "std::thread::Builder::spawn_scoped", reason = "off the main thread: see docs/safe-surface.md S2" },
+  { path = "std::panic::set_hook", reason = "a panic hook runs on the panicking thread: see docs/safe-surface.md S2" },
+]

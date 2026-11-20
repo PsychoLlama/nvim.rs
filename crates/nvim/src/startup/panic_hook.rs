@@ -66,6 +66,11 @@ const CLEANUP_GRACE: Duration = Duration::from_secs(10);
 
 /// Make every panic end the process through [`on_panic`]. Called first
 /// thing in `main`, on the main thread.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "`on_panic` touches editor state only on the main thread; \
+              another thread's panic hands the cleanup to it"
+)]
 pub(super) fn install_panic_hook() {
     MAIN_THREAD.get_or_init(|| thread::current().id());
     // The standard hook still writes the panic to stderr in its usual shape

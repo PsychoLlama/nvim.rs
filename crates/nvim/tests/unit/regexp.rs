@@ -146,6 +146,10 @@ fn golden_ic(rows: &[(&str, &str, &str, bool)]) {
 /// "never" into "reported", not to measure anything. **Arm it after taking
 /// the editor lock, never before** — every case here queues behind that one
 /// mutex, and a deadline armed in the queue measures the queue.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the watchdog reads an atomic and aborts; no editor state"
+)]
 fn deadline<R>(what: &str, seconds: u64, f: impl FnOnce() -> R) -> R {
     let done = Arc::new(AtomicBool::new(false));
     let watch = Arc::clone(&done);

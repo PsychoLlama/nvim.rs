@@ -334,6 +334,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "the thread only records an allocation event, thread-local state"
+    )]
     fn another_thread_records_into_its_own_log() {
         let recorder = Recorder::start();
         record(malloc(8, 1));

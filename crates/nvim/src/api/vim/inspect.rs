@@ -207,6 +207,10 @@ pub fn nvim__unpack(str: ApiString) -> Result<Object, Error> {
 /// when the hook hands it the cleanup. Nothing else calls it.
 // `nvim__panic` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "the thread only panics; the panic hook hands the cleanup to the main thread"
+)]
 pub fn nvim__panic(message: ApiString, thread: Boolean) {
     let message = String::from_utf8_lossy(message.as_bytes()).into_owned();
     if thread {
