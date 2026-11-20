@@ -113,7 +113,9 @@ fn next_value(owned: &mut Owned) -> Option<TypVal> {
         }
         // The arguments, then the self dictionary.
         Owned::Partial { partial, arg } => {
-            let mut partial = partial.edit();
+            // Taken because nothing else held it, and the walk shares it
+            // with nobody: still the only holder.
+            let partial = partial.get_mut()?;
             if let Some(tv) = partial.pt_argv.get_mut(*arg) {
                 *arg += 1;
                 return Some(tv.take());

@@ -278,7 +278,6 @@ pub fn make_partial(selfdict: &DictRef, result: &mut TypVal) {
     let mut part = Partial {
         pt_dict: Some(selfdict.clone()),
         pt_auto: true,
-        pt_lent: crate::eval::typval::Lent::new(),
         ..Partial::empty()
     };
     if result.v_type() == VAR_FUNC || result.v_type() == VAR_STRING {

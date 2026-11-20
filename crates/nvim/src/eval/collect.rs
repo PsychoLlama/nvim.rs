@@ -467,10 +467,9 @@ pub(crate) fn set_ref_in_item_partial(
     mut ht_stack: Option<&mut DictStack>,
     mut list_stack: Option<&mut ListStack>,
 ) -> bool {
-    if pt.pt_copy_id == copy_id {
+    if pt.pt_copy_id.replace(copy_id) == copy_id {
         return false;
     }
-    pt.edit().pt_copy_id = copy_id;
 
     let name = pt.pt_name.as_ref().map(|name| name.as_bytes());
     let mut abort = set_ref_in_func(name, pt.pt_func.as_ref(), copy_id);

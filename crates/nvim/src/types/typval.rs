@@ -556,17 +556,20 @@ impl ListWatch {
 /// It owns its name, its arguments and its dictionary reference; the last
 /// [`PartialRef`] going is what releases them (`partial_free`, in upstream's
 /// order). Built in place with [`PartialRef::new`].
+///
+/// **Fixed once built.** A handle lends only shared borrows of it, so any
+/// number of holders may read it across user code; the collector's mark is a
+/// `Cell`, and the free's walk takes the contents out through the last
+/// handle ([`PartialRef::get_mut`]).
 #[derive(Debug)]
 pub struct Partial {
     pub pt_refcount: Refcount,
-    pub pt_copy_id: ::core::ffi::c_int,
+    pub pt_copy_id: ::core::cell::Cell<::core::ffi::c_int>,
     /// The function's name, holding a reference to it by name. `None` when
     /// `pt_func` is the function instead.
     pub pt_name: Option<ThinCString>,
     pub pt_func: Option<::std::rc::Rc<UserFunc>>,
     pub pt_auto: bool,
-    /// Whether an [`Edit`](crate::eval::typval::Edit) holds it.
-    pub pt_lent: Lent,
     pub pt_argv: Vec<TypVal>,
     pub pt_dict: Option<DictRef>,
 }

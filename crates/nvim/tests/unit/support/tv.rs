@@ -28,8 +28,8 @@ use std::ptr;
 
 use neovim::eval::typval::DictItem;
 use neovim::eval::typval::{
-    BlobRef, DictRef, Lent, ListRef, PartialRef, list_find, list_len, tv_blob_alloc, tv_clear,
-    tv_copy, tv_dict_alloc, tv_list_alloc,
+    BlobRef, DictRef, ListRef, PartialRef, list_find, list_len, tv_blob_alloc, tv_clear, tv_copy,
+    tv_dict_alloc, tv_list_alloc,
 };
 use neovim::memory::ThinCString;
 use neovim::types::{
@@ -212,11 +212,10 @@ impl Pt {
             });
         PartialRef::new(Partial {
             pt_refcount: Refcount::zero(),
-            pt_copy_id: 0,
+            pt_copy_id: ::core::cell::Cell::new(0),
             pt_name: Some(ThinCString::from_bytes(&self.value)),
             pt_func: None,
             pt_auto: self.auto,
-            pt_lent: Lent::new(),
             pt_argv,
             pt_dict,
         })

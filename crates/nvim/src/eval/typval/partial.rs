@@ -91,11 +91,10 @@ impl Partial {
     pub(crate) const fn empty() -> Partial {
         Partial {
             pt_refcount: Refcount::zero(),
-            pt_copy_id: 0,
+            pt_copy_id: ::core::cell::Cell::new(0),
             pt_name: None,
             pt_func: None,
             pt_auto: false,
-            pt_lent: Lent::new(),
             pt_argv: Vec::new(),
             pt_dict: None,
         }
@@ -213,6 +212,20 @@ mod tests {
         drop(held);
         assert_eq!(d.dv_refcount.get(), d_before);
         assert_eq!(inner.lv_refcount.get(), i_before);
+    }
+
+    /// A partial lends `&mut` only to its one holder: a second handle (or
+    /// a value holding it) takes the answer away.
+    #[test]
+    fn only_the_last_holder_gets_a_partial_writable() {
+        let _serial = editor_state_lock();
+        let mut pt = function(None, Some(tv_dict_alloc()));
+        let mut held = pt.partial_shared().expect("a partial").clone();
+        assert!(held.get_mut().is_none(), "the value still holds it");
+        tv_clear(&mut pt);
+        let partial = held.get_mut().expect("the last holder");
+        partial.pt_argv.push(TypVal::Number(1));
+        assert_eq!(held.pt_argv.len(), 1);
     }
 
     /// `function(P, [x])` builds a second partial: the bound arguments are

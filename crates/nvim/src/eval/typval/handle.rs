@@ -622,9 +622,17 @@ impl PartialRef {
         self.0 == other.0
     }
 
+    /// The partial, writable, while this handle is its only holder:
+    /// `Rc::get_mut`'s answer, and the only `&mut` a partial ever lends
+    /// (it is fixed once built, so every other borrow is shared).
     #[inline(always)]
-    pub fn edit(&self) -> Edit<'_, Partial> {
-        lend(&self.0, ::core::mem::offset_of!(Partial, pt_lent))
+    pub fn get_mut(&mut self) -> Option<&mut Partial> {
+        if self.count().get() != 1 {
+            return None;
+        }
+        // SAFETY: a count of one is this handle, and the exclusive borrow
+        // of it rules out a shared borrow lent through it.
+        Some(unsafe { self.0.as_mut() })
     }
 
     /// As [`ListRef::count`].
@@ -661,15 +669,6 @@ impl ::core::ops::Deref for PartialRef {
     fn deref(&self) -> &Partial {
         // SAFETY: as `ListRef`'s.
         unsafe { self.0.as_ref() }
-    }
-}
-
-impl ::core::ops::DerefMut for PartialRef {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Partial {
-        self.pt_lent.assert_not_lent::<Partial>();
-        // SAFETY: as `ListRef`'s.
-        unsafe { self.0.as_mut() }
     }
 }
 
