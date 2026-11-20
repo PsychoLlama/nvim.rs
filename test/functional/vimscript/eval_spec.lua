@@ -291,3 +291,23 @@ describe(':lockvar! over a self-referencing container', function()
     assert_alive()
   end)
 end)
+
+describe('a Funcref added to a scope dictionary by key', function()
+  before_each(clear)
+  -- The name check looks variables up in the very dictionary being added to.
+  it('is checked against the function names', function()
+    command("let g:['A'] = function('len')")
+    t.matches('E704:', pcall_err(command, "let g:['lower'] = function('len')"))
+    t.matches('E704:', pcall_err(command, "call extend(g:, {'fy': function('len')})"))
+    exec([[
+      func! T()
+        let l:['F'] = function('len')
+        silent! let l:['h'] = function('len')
+        return [l:F, exists('l:h')]
+      endfunc
+    ]])
+    eq({ 'len', 0 }, eval("map(T(), {_, v -> type(v) == v:t_func ? get(v, 'name') : v})"))
+    eq(0, eval("exists('g:lower')"))
+    assert_alive()
+  end)
+end)

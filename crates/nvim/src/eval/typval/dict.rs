@@ -37,11 +37,26 @@ use crate::message_fmt::msg_cstr;
 use ::core::ffi::CStr;
 
 use super::*;
+use crate::eval::vars::var_wrong_func_name_named;
 use crate::hashtab::{HashValue, hash_bytes};
 use crate::mbyte::CONV_NONE;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::types::Failed;
+
+/// [`Dict::add_item`] through the handle: the check for a Funcref that
+/// would shadow a function looks variables up -- in this very dictionary
+/// when it is `g:` or `l:` -- so it runs before the edit is taken.
+pub(crate) fn dict_add_item(dict: &DictRef, item: Box<DictItem>) -> Result<(), Box<DictItem>> {
+    let scope = item.di_tv.is_func() && {
+        let d = dict.read();
+        is_globvar_dict(&d) || is_funccal_local_dict(&d)
+    };
+    if scope && var_wrong_func_name_named(item.key(), true) {
+        return Err(item);
+    }
+    dict.edit().insert(item)
+}
 
 impl Dict {
     /// Add `item`, which the dictionary takes over.  `Err` hands it back
@@ -281,7 +296,7 @@ pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
                         new_item.di_tv.clone(),
                     )
                 });
-                let added = d1.edit().add_item(new_item);
+                let added = dict_add_item(d1, new_item);
                 if added.is_err() {
                     drop(added);
                 } else if let Some((key, new)) = note {

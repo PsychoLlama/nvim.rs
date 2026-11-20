@@ -26,6 +26,7 @@
 
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
+use crate::eval::typval::{DictItem, dict_add_item};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 
@@ -197,7 +198,9 @@ fn add_key(dict: &DictRef, key: &[u8], value: &mut TypVal, copy: bool, op: Optio
     let target = dict.clone();
     // The builtin-name check upstream runs here is the add's own; a
     // refusal leaves the dictionary alone.
-    if target.edit().add_value(key, stored(value, copy)).is_err() {
+    let mut item = DictItem::boxed(key);
+    item.di_tv.overwrite(stored(value, copy));
+    if dict_add_item(&target, item).is_err() {
         return;
     }
     if dict_is_watched(Some(&dict.read())) {
