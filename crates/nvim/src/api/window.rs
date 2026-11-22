@@ -203,7 +203,7 @@ pub fn nvim_win_get_tabpage(win: WindowHandle) -> Result<TabpageHandle, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Handle::NONE);
     };
-    let handle = tab_of(w).handle;
+    let handle = tab_of(w).handle();
     Ok(handle as TabpageHandle)
 }
 

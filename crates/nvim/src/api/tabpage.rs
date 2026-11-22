@@ -53,7 +53,8 @@ pub fn nvim_tabpage_get_var(tabpage: TabpageHandle, name: ApiString) -> Result<O
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
-    dict_get_value(&scope_vars(&tab.tp_winvar), &name)
+    let vars = scope_vars(&tab.read().tp_winvar);
+    dict_get_value(&vars, &name)
 }
 
 /// Set the tab-scoped variable `name`.
@@ -65,7 +66,7 @@ pub fn nvim_tabpage_set_var(
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(());
     };
-    let vars = scope_vars(&tab.tp_winvar);
+    let vars = scope_vars(&tab.read().tp_winvar);
     dict_set_var(&vars, &name, value, false, false).map(|_| ())
 }
 
@@ -74,7 +75,7 @@ pub fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: ApiString) -> Result<(
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(());
     };
-    let vars = scope_vars(&tab.tp_winvar);
+    let vars = scope_vars(&tab.read().tp_winvar);
     dict_set_var(&vars, &name, Object::Nil, true, false).map(|_| ())
 }
 
@@ -105,7 +106,7 @@ pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result
         return Ok(());
     };
     if !tabpage_win_valid(tp, wp.id()) {
-        let handle = tp.handle;
+        let handle = tp.handle();
         return Err(api_error!(
             ERROR_TYPE_EXCEPTION,
             "Window does not belong to tabpage {handle}"
@@ -113,10 +114,9 @@ pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result
     }
     if tp.is_current() {
         api_try(|| win_goto(wp))?;
-    } else if tp.tp_curwin != Some(wp.id()) {
-        let mut tp = tp;
-        tp.tp_prevwin = tp.tp_curwin;
-        tp.tp_curwin = Some(wp.id());
+    } else if tp.tp_curwin() != Some(wp.id()) {
+        tp.set_tp_prevwin(tp.tp_curwin());
+        tp.set_tp_curwin(Some(wp.id()));
     }
     Ok(())
 }
@@ -175,7 +175,7 @@ pub fn nvim_open_tabpage(
         }
         set?;
     }
-    Ok(tp.handle as TabpageHandle)
+    Ok(tp.handle() as TabpageHandle)
 }
 
 /// "The tab page went away", which `nvim_open_tabpage` reports at both points

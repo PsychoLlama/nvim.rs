@@ -205,8 +205,10 @@ fn quoted_span(
 
 /// Swap the cursor and the Visual anchor, so the anchor is the earlier end.
 fn swap_cursor_and_anchor() {
-    let cursor = core::mem::replace(&mut *Win::current().cursor(), visual_anchor());
-    set_visual_anchor(cursor);
+    let cursor = Win::current().cursor();
+    let was = cursor.get();
+    cursor.set(visual_anchor());
+    set_visual_anchor(was);
 }
 
 /// `i"` / `a'` / ... : the text inside the quoted string under the cursor,

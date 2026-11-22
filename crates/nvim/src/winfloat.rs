@@ -347,7 +347,7 @@ fn unfloat_to_float(win: Win) -> Result<Win, Error> {
     let win_tp = win_tp.expect("a window is always in a tab page");
     let first_in_tab = match win_tp.is_current() {
         true => first_window(),
-        false => win_tp.tp_firstwin.and_then(WinId::get),
+        false => win_tp.tp_firstwin().and_then(WinId::get),
     };
     if first_in_tab == Some(win) && last_nofloat(win_tp.into_other()) == win {
         return Err(make_error(c"Cannot change last window into float"));
@@ -675,9 +675,9 @@ pub(crate) fn win_float_find_altwin(win: Win, tabpage: Option<TabPage>) -> Optio
     };
 
     debug_assert!(!tp.is_current(), "tp != curtab");
-    let wp = windows_in_tab(tp).find(|wp| tp.tp_prevwin == Some(wp.id()));
+    let wp = windows_in_tab(tp).find(|wp| tp.tp_prevwin() == Some(wp.id()));
     let first = tp
-        .tp_firstwin
+        .tp_firstwin()
         .and_then(WinId::get)
         .expect("a window list has a head");
     let wp = wp.unwrap_or(first);

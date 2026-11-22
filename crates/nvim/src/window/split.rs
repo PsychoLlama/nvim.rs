@@ -284,16 +284,16 @@ fn split_room_vertical(
     }
     let top = current_topframe();
     let (minwidth, available) = if toplevel {
-        (top.min_width(NextCurwin::NoWin), top.fr_width)
+        (top.min_width(NextCurwin::NoWin), top.fr_width())
     } else if p_ea() {
         // With 'equalalways' the room is the whole screen's, so every frame in
         // every row above `oldwin` counts towards the minimum.
         let mut min = oldwin.frame().min_width(NextCurwin::NoWin);
         min += oldwin.frame().siblings_min_width();
-        (min, top.fr_width)
+        (min, top.fr_width())
     } else {
         let frame = oldwin.frame();
-        (frame.min_width(NextCurwin::NoWin), frame.fr_width)
+        (frame.min_width(NextCurwin::NoWin), frame.fr_width())
     };
     needed += minwidth;
     if available < needed {
@@ -352,17 +352,17 @@ fn split_room_horizontal(
     let (minheight, available) = if toplevel {
         (
             top.min_height(NextCurwin::NoWin) + need_status,
-            top.fr_height,
+            top.fr_height(),
         )
     } else if p_ea() {
         let mut min = oldwin.frame().min_height(NextCurwin::NoWin) + need_status;
         min += oldwin.frame().siblings_min_height();
-        (min, top.fr_height)
+        (min, top.fr_height())
     } else {
         let frame = oldwin.frame();
         (
             frame.min_height(NextCurwin::NoWin) + need_status,
-            frame.fr_height,
+            frame.fr_height(),
         )
     };
     needed += minheight;
@@ -437,7 +437,7 @@ impl FrameRef {
         let mut total = 0;
         let mut prev = self;
         for frp in self.ancestors() {
-            if c_int::from(frp.fr_layout) == FR_ROW {
+            if c_int::from(frp.fr_layout()) == FR_ROW {
                 for frp2 in frp.children().filter(|frp2| *frp2 != prev) {
                     total += frp2.min_width(NextCurwin::NoWin);
                 }
@@ -452,7 +452,7 @@ impl FrameRef {
         let mut total = 0;
         let mut prev = self;
         for frp in self.ancestors() {
-            if c_int::from(frp.fr_layout) == FR_COL {
+            if c_int::from(frp.fr_layout()) == FR_COL {
                 for frp2 in frp.children().filter(|frp2| *frp2 != prev) {
                     total += frp2.min_height(NextCurwin::NoWin);
                 }
@@ -471,17 +471,17 @@ impl FrameRef {
     /// the rest, exactly as the struct assignment copied them, and the caller
     /// rewires them straight afterwards.
     fn new_like(self) -> FrameRef {
-        let mut copy = new_frame();
-        copy.fr_layout = self.fr_layout;
-        copy.fr_width = self.fr_width;
-        copy.fr_newwidth = self.fr_newwidth;
-        copy.fr_height = self.fr_height;
-        copy.fr_newheight = self.fr_newheight;
-        copy.fr_parent = self.fr_parent;
-        copy.fr_next = self.fr_next;
-        copy.fr_prev = self.fr_prev;
-        copy.fr_child = self.fr_child;
-        copy.fr_win = self.fr_win;
+        let copy = new_frame();
+        copy.set_fr_layout(self.fr_layout());
+        copy.set_fr_width(self.fr_width());
+        copy.set_fr_newwidth(self.fr_newwidth());
+        copy.set_fr_height(self.fr_height());
+        copy.set_fr_newheight(self.fr_newheight());
+        copy.set_fr_parent(self.fr_parent());
+        copy.set_fr_next(self.fr_next());
+        copy.set_fr_prev(self.fr_prev());
+        copy.set_fr_child(self.fr_child());
+        copy.set_fr_win(self.fr_win());
         copy
     }
 }
@@ -517,9 +517,9 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
     // External windows are independent of tab pages, and may have been the
     // `curwin` of others.
     if wp.w_config.external {
-        for mut tp in tabs().filter(|tp| !tp.is_current()) {
-            if tp.tp_curwin == Some(wp.id()) {
-                tp.tp_curwin = tp.tp_firstwin;
+        for tp in tabs().filter(|tp| !tp.is_current()) {
+            if tp.tp_curwin() == Some(wp.id()) {
+                tp.set_tp_curwin(tp.tp_firstwin());
             }
         }
     }
@@ -548,8 +548,8 @@ fn split_frame(
 ) -> (FrameRef, FrameRef, bool) {
     let top = current_topframe();
     let (mut curfrp, before) = if toplevel {
-        let same_axis = (c_int::from(top.fr_layout) == FR_COL && !vertical)
-            || (c_int::from(top.fr_layout) == FR_ROW && vertical);
+        let same_axis = (c_int::from(top.fr_layout()) == FR_COL && !vertical)
+            || (c_int::from(top.fr_layout()) == FR_ROW && vertical);
         let frp = if same_axis {
             let first = top.child().expect("a row or column has a child");
             if flags & WSP_BOT != 0 {
@@ -578,16 +578,16 @@ fn split_frame(
     // it and move the old contents down a level.
     if curfrp
         .parent()
-        .is_none_or(|p| c_int::from(p.fr_layout) != layout)
+        .is_none_or(|p| c_int::from(p.fr_layout()) != layout)
     {
-        let mut inner = curfrp.new_like();
-        let mut outer = curfrp;
-        outer.fr_layout = c_char::try_from(layout).expect("FR_ROW or FR_COL");
-        inner.fr_parent = Some(outer.id());
-        inner.fr_next = None;
-        inner.fr_prev = None;
-        outer.fr_child = Some(inner.id());
-        outer.fr_win = None;
+        let inner = curfrp.new_like();
+        let outer = curfrp;
+        outer.set_fr_layout(c_char::try_from(layout).expect("FR_ROW or FR_COL"));
+        inner.set_fr_parent(Some(outer.id()));
+        inner.set_fr_next(None);
+        inner.set_fr_prev(None);
+        outer.set_fr_child(Some(inner.id()));
+        outer.set_fr_win(None);
         curfrp = inner;
         match inner.win() {
             // `oldwin`'s frame moved: it now lives one level down.
@@ -596,15 +596,15 @@ fn split_frame(
                 oldwin.w_frame = Some(inner.id());
             }
             None => {
-                for mut child in inner.children() {
-                    child.fr_parent = Some(curfrp.id());
+                for child in inner.children() {
+                    child.set_fr_parent(Some(curfrp.id()));
                 }
             }
         }
     }
 
-    let mut frp = window.frame();
-    frp.fr_parent = curfrp.fr_parent;
+    let frp = window.frame();
+    frp.set_fr_parent(curfrp.fr_parent());
     if before {
         curfrp.prepend_sibling(frp);
     } else {
@@ -626,7 +626,7 @@ fn size_vertical(
     toplevel: bool,
     need_status: c_int,
 ) {
-    let (mut wp, mut oldwin, mut frp) = (window, oldwin, frp);
+    let (mut wp, mut oldwin, frp) = (window, oldwin, frp);
     // 'scroll' is not inherited by a horizontal split, but is by a vertical
     // one.
     wp.w_onebuf_opt.wo_scr = Win::current().w_onebuf_opt.wo_scr;
@@ -637,7 +637,7 @@ fn size_vertical(
     if toplevel {
         wp.w_winrow = tabline_rows();
         let stl = c_int::from(p_ls() == 1 as OptInt || p_ls() == 2 as OptInt);
-        new_win_height(wp, curfrp.fr_height - stl);
+        new_win_height(wp, curfrp.fr_height() - stl);
         wp.w_status_height = stl;
         wp.w_hsep_height = 0;
     } else {
@@ -646,7 +646,7 @@ fn size_vertical(
         wp.w_status_height = oldwin.w_status_height;
         wp.w_hsep_height = oldwin.w_hsep_height;
     }
-    frp.fr_height = curfrp.fr_height;
+    frp.set_fr_height(curfrp.fr_height());
 
     // "new_size" of the current window goes to the new window, use one column
     // for the vertical separator.
@@ -664,7 +664,7 @@ fn size_vertical(
         let sep = c_int::from(flags & WSP_TOP != 0);
         new_width(
             curfrp,
-            curfrp.fr_width - (room.new_size + sep),
+            curfrp.fr_width() - (room.new_size + sep),
             flags & WSP_TOP != 0,
             false,
         );
@@ -693,7 +693,7 @@ fn size_horizontal(
     before: bool,
     toplevel: bool,
 ) {
-    let (mut wp, mut oldwin, mut frp) = (window, oldwin, frp);
+    let (mut wp, mut oldwin, frp) = (window, oldwin, frp);
     let is_stl_global = global_stl_rows() > 0;
     if toplevel {
         wp.w_wincol = 0;
@@ -704,7 +704,7 @@ fn size_horizontal(
         new_win_width(wp, oldwin.w_width);
         wp.w_vsep_width = oldwin.w_vsep_width;
     }
-    frp.fr_width = curfrp.fr_width;
+    frp.set_fr_width(curfrp.fr_width());
 
     // "new_size" of the current window goes to the new window, use one line
     // for the status line.
@@ -717,7 +717,7 @@ fn size_horizontal(
         oldwin.w_hsep_height = c_int::from(is_stl_global);
     }
     if toplevel {
-        let mut new_fr_height = curfrp.fr_height - room.new_size;
+        let mut new_fr_height = curfrp.fr_height() - room.new_size;
         if is_stl_global {
             if flags & WSP_BOT != 0 {
                 curfrp.add_hsep();

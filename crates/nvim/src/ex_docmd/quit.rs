@@ -407,7 +407,7 @@ pub(crate) fn ex_tabonly(excmd: &mut ExArg) {
     let mut done = 0;
     while done < 1000 {
         for tp in tabs() {
-            if tp.tp_topframe != TOPFRAME.get() {
+            if tp.tp_topframe() != TOPFRAME.get() {
                 tabpage_close_other(tp, c_int::from(excmd.forceit));
                 if valid_tabpage(tp.id()) {
                     done = 1000;
@@ -432,7 +432,7 @@ pub fn tabpage_close(forceit: c_int) {
     // The flag stops the per-window closes triggering TabClosedPre
     // again; it is cleared only if this is still the tab page it was
     // set on.
-    TabPage::current().tp_did_tabclosedpre = true;
+    TabPage::current().set_tp_did_tabclosedpre(true);
     let save_curtab = TabPage::current_raw();
 
     // A float that refuses to close (a changed buffer without `!`, the
@@ -443,7 +443,7 @@ pub fn tabpage_close(forceit: c_int) {
         ex_win_close(forceit, float, None);
         if float.is_live() && float.is_current() {
             if TabPage::current_raw() == save_curtab {
-                TabPage::current().tp_did_tabclosedpre = false;
+                TabPage::current().set_tp_did_tabclosedpre(false);
             }
             return;
         }
@@ -455,7 +455,7 @@ pub fn tabpage_close(forceit: c_int) {
         ex_win_close(forceit, Win::current(), None);
     }
     if TabPage::current_raw() == save_curtab {
-        TabPage::current().tp_did_tabclosedpre = false;
+        TabPage::current().set_tp_did_tabclosedpre(false);
     }
 }
 
@@ -463,12 +463,12 @@ pub fn tabpage_close(forceit: c_int) {
 ///
 /// Its windows are closed from the last backwards; the loop stops as soon
 /// as one refuses, which is what `tp_lastwin` not changing means.
-pub fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
+pub fn tabpage_close_other(tabpage: TabPage, forceit: c_int) {
     if window_layout_locked(CmdIdx::SIZE) {
         return;
     }
     trigger_tabclosedpre(tabpage);
-    tabpage.tp_did_tabclosedpre = true;
+    tabpage.set_tp_did_tabclosedpre(true);
 
     let mut done = 0;
     loop {
@@ -476,21 +476,21 @@ pub fn tabpage_close_other(mut tabpage: TabPage, forceit: c_int) {
         if done >= 1000 {
             break;
         }
-        let wp = tabpage.tp_lastwin;
+        let wp = tabpage.tp_lastwin();
         if let Some(last) = wp.and_then(WinId::get) {
             ex_win_close(forceit, last, Some(tabpage));
         }
         if !valid_tabpage(tabpage.id()) {
             break;
         }
-        if tabpage.tp_lastwin == wp {
+        if tabpage.tp_lastwin() == wp {
             // Nothing closed: give up.
             done = 1000;
             break;
         }
     }
     if done >= 1000 {
-        tabpage.tp_did_tabclosedpre = false;
+        tabpage.set_tp_did_tabclosedpre(false);
     }
 }
 

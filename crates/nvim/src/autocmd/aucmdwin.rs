@@ -151,7 +151,7 @@ pub fn aucmd_prepbuf(aco: &mut AcoSave, mut buffer: Buf) {
         // `w_localdir`, `tp_localdir` and `globaldir` all have to be
         // unset, or `win_enter_ext` chdir()s.
         auc.w_localdir = None;
-        aco.tp_localdir = TabPage::current().tp_localdir.take();
+        aco.tp_localdir = TabPage::current().edit().tp_localdir.take();
         aco.globaldir = GLOBALDIR.take();
 
         block_autocmds();
@@ -264,7 +264,7 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
         if aw.w_localdir.is_some() {
             win_fix_current_dir();
         }
-        TabPage::current().tp_localdir = aco.tp_localdir.take();
+        TabPage::current().edit().tp_localdir = aco.tp_localdir.take();
         GLOBALDIR.set(aco.globaldir.take());
 
         // The buffer's contents may have changed under the cursor.

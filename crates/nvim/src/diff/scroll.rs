@@ -142,7 +142,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
     if fromidx == DB_COUNT {
         return;
     }
-    if tp.tp_diff_invalid != 0 {
+    if tp.tp_diff_invalid() != 0 {
         diff_update(None);
     }
     let fromidx = slot_index(fromidx);
@@ -152,7 +152,8 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
 
     let lnum = fromwin.w_topline;
     towin.w_topfill = 0;
-    let blocks = &tp.tp_diff;
+    let tpr = tp.read();
+    let blocks = &tpr.tp_diff;
     match blocks.iter().find(|dp| lnum <= dp.end(fromidx)) {
         // Below every block: the two buffers' tails line up by counting
         // back from the end.
@@ -170,7 +171,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
                 let from_topfill = fromwin.w_topfill;
                 let (topfill, topline) = calculate_topfill_and_topline(
                     blocks,
-                    &tp.tp_diffbuf,
+                    &tp.tp_diffbuf(),
                     fromidx,
                     toidx,
                     lnum,
@@ -208,13 +209,14 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     let tp = TabPage::current();
     let mut lnum = Win::current().w_cursor.lnum;
     let idx = tp.diff_index(Buf::current());
-    if idx == DB_COUNT || tp.tp_diff.is_empty() {
+    if idx == DB_COUNT || tp.diff_len() == 0 {
         return Err(Failed);
     }
-    if tp.tp_diff_invalid != 0 {
+    if tp.tp_diff_invalid() != 0 {
         diff_update(None);
     }
-    let blocks = &tp.tp_diff;
+    let tpr = tp.read();
+    let blocks = &tpr.tp_diff;
     let Some(first) = blocks.first() else {
         return Err(Failed);
     };
@@ -241,6 +243,7 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
         }
     }
 
+    drop(tpr);
     lnum = lnum.min(Buf::current().b_ml.ml_line_count);
     if lnum == Win::current().w_cursor.lnum {
         return Err(Failed);
@@ -259,20 +262,20 @@ fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
     let tp = TabPage::current();
     let idx1 = tp.diff_index(buf1);
     let idx2 = tp.diff_index(Buf::current());
-    if idx1 == DB_COUNT || idx2 == DB_COUNT || tp.tp_diff.is_empty() {
+    if idx1 == DB_COUNT || idx2 == DB_COUNT || tp.diff_len() == 0 {
         return lnum1;
     }
-    if tp.tp_diff_invalid != 0 {
+    if tp.tp_diff_invalid() != 0 {
         diff_update(None);
     }
-    if tp.tp_diff.is_empty() {
+    if tp.diff_len() == 0 {
         return lnum1;
     }
     let (idx1, idx2) = (slot_index(idx1), slot_index(idx2));
     let cursor = Win::current().w_cursor.lnum;
 
     let mut baseline = 0;
-    for dp in &tp.tp_diff {
+    for dp in &tp.read().tp_diff {
         if dp.df_lnum[idx1] > lnum1 {
             return lnum1 - baseline;
         }
@@ -316,13 +319,14 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     if idx == DB_COUNT {
         return LineNr::ZERO;
     }
-    if tp.tp_diff_invalid != 0 {
+    if tp.tp_diff_invalid() != 0 {
         diff_update(None);
     }
     let idx = slot_index(idx);
 
     let buf = window.buffer();
-    let Some(dp) = tp.tp_diff.iter().find(|dp| lnum <= dp.end(idx)) else {
+    let tpr = tp.read();
+    let Some(dp) = tpr.tp_diff.iter().find(|dp| lnum <= dp.end(idx)) else {
         return buf.b_ml.ml_line_count - (Buf::current().b_ml.ml_line_count - lnum);
     };
     let i = tp.diff_index(buf);

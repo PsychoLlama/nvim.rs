@@ -115,7 +115,7 @@ fn neighbour_frame(window: Win, layout: c_int, before: bool) -> Option<FrameRef>
     let mut fr = window.frame();
     while let Some(parent) = fr.parent() {
         let sibling = if before { fr.prev() } else { fr.next() };
-        if c_int::from(parent.fr_layout) == layout
+        if c_int::from(parent.fr_layout()) == layout
             && let Some(sibling) = sibling
         {
             return Some(sibling);
@@ -146,13 +146,13 @@ pub(crate) fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
     // left, the frame that touches it is the LAST child of every row frame
     // on the way down; otherwise it is the first child whose bottom edge
     // reaches the row.
-    while c_int::from(fr.fr_layout) != FR_LEAF {
+    while c_int::from(fr.fr_layout()) != FR_LEAF {
         fr = fr.child().expect("a frame that is not a leaf has a child");
         let rowwise = fr
             .parent()
-            .is_some_and(|parent| c_int::from(parent.fr_layout) == FR_ROW);
+            .is_some_and(|parent| c_int::from(parent.fr_layout()) == FR_ROW);
         while let Some(next) = fr.next() {
-            if !(rowwise && before) && fr.first_window().w_winrow + fr.fr_height >= sep_row {
+            if !(rowwise && before) && fr.first_window().w_winrow + fr.fr_height() >= sep_row {
                 break;
             }
             fr = next;
@@ -177,13 +177,13 @@ pub(crate) fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
         return false;
     };
 
-    while c_int::from(fr.fr_layout) != FR_LEAF {
+    while c_int::from(fr.fr_layout()) != FR_LEAF {
         fr = fr.child().expect("a frame that is not a leaf has a child");
         let colwise = fr
             .parent()
-            .is_some_and(|parent| c_int::from(parent.fr_layout) == FR_COL);
+            .is_some_and(|parent| c_int::from(parent.fr_layout()) == FR_COL);
         while let Some(next) = fr.next() {
-            if !(colwise && before) && fr.first_window().w_wincol + fr.fr_width >= sep_col {
+            if !(colwise && before) && fr.first_window().w_wincol + fr.fr_width() >= sep_col {
                 break;
             }
             fr = next;

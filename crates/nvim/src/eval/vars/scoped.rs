@@ -99,14 +99,14 @@ fn get_var_from(
                         tv_copy(&buffer.b_bufvar.di_tv, result);
                     }
                     Scope::Window => tv_copy(&w.w_winvar.di_tv, result),
-                    Scope::Tab => tv_copy(&tp.tp_winvar.di_tv, result),
+                    Scope::Tab => tv_copy(&tp.read().tp_winvar.di_tv, result),
                 }
                 done = true;
             } else {
                 let dict = match scope {
                     Scope::Buffer => buffer.expect("a `b:` scope").b_bufvar.di_tv.dict_handle(),
                     Scope::Window => w.w_winvar.di_tv.dict_handle(),
-                    Scope::Tab => tp.tp_winvar.di_tv.dict_handle(),
+                    Scope::Tab => tp.vars(),
                 };
                 let read = dict.as_ref().map(|dict| dict.read());
                 if let Some(item) = read.as_ref().and_then(|dict| dict.find(varname)) {
@@ -373,8 +373,8 @@ pub fn f_setbufvar(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData) {
 /// upstream spells out here rather than reaching for the macro.
 fn any_window_of(tab: Option<TabPage>) -> Option<Win> {
     let tab = tab?;
-    match tab.is_current() || tab.tp_firstwin.is_none() {
+    match tab.is_current() || tab.tp_firstwin().is_none() {
         true => first_window(),
-        false => tab.tp_firstwin.and_then(WinId::get),
+        false => tab.tp_firstwin().and_then(WinId::get),
     }
 }

@@ -107,7 +107,7 @@ impl FrameRef {
         if let Some(win) = self.win() {
             return win.w_onebuf_opt.wo_wfh != 0;
         }
-        if ::core::ffi::c_int::from(self.fr_layout) == FR_ROW {
+        if ::core::ffi::c_int::from(self.fr_layout()) == FR_ROW {
             // The row is fixed if one of the frames in it is fixed.
             return self.children().any(FrameRef::fixed_height);
         }
@@ -121,7 +121,7 @@ impl FrameRef {
         if let Some(win) = self.win() {
             return win.w_onebuf_opt.wo_wfw != 0;
         }
-        if ::core::ffi::c_int::from(self.fr_layout) == FR_COL {
+        if ::core::ffi::c_int::from(self.fr_layout()) == FR_COL {
             return self.children().any(FrameRef::fixed_width);
         }
         self.children().all(FrameRef::fixed_width)
@@ -132,12 +132,12 @@ impl FrameRef {
     pub(crate) fn add_statusline(self) {
         if let Some(mut win) = self.win() {
             win.w_status_height = STATUS_HEIGHT;
-        } else if ::core::ffi::c_int::from(self.fr_layout) == FR_ROW {
+        } else if ::core::ffi::c_int::from(self.fr_layout()) == FR_ROW {
             // Handle all the frames in the row.
             self.children().for_each(FrameRef::add_statusline);
         } else {
             debug_assert!(
-                ::core::ffi::c_int::from(self.fr_layout) == FR_COL,
+                ::core::ffi::c_int::from(self.fr_layout()) == FR_COL,
                 "frp->fr_layout == FR_COL"
             );
             // Only the last frame in the column needs a status line.
@@ -186,11 +186,11 @@ impl FrameRef {
     pub(crate) fn add_hsep(self) {
         if let Some(mut win) = self.win() {
             win.w_hsep_height = 1 as ::core::ffi::c_int;
-        } else if ::core::ffi::c_int::from(self.fr_layout) == FR_ROW {
+        } else if ::core::ffi::c_int::from(self.fr_layout()) == FR_ROW {
             self.children().for_each(FrameRef::add_hsep);
         } else {
             debug_assert!(
-                ::core::ffi::c_int::from(self.fr_layout) == FR_COL,
+                ::core::ffi::c_int::from(self.fr_layout()) == FR_COL,
                 "frp->fr_layout == FR_COL"
             );
             if let Some(last) = self.children().last() {
@@ -212,12 +212,12 @@ impl FrameRef {
                 new_win_width(win, win.w_width + 1);
                 win.w_vsep_width = 0 as ::core::ffi::c_int;
             }
-        } else if ::core::ffi::c_int::from(self.fr_layout) == FR_COL {
+        } else if ::core::ffi::c_int::from(self.fr_layout()) == FR_COL {
             // Handle all the frames in the column.
             self.children().for_each(|child| child.set_vsep(add));
         } else {
             debug_assert!(
-                ::core::ffi::c_int::from(self.fr_layout) == FR_ROW,
+                ::core::ffi::c_int::from(self.fr_layout()) == FR_ROW,
                 "frp->fr_layout == FR_ROW"
             );
             // Only the last frame in the row needs a separator.
@@ -243,11 +243,10 @@ pub(crate) fn new_height(
     wfh: bool,
     set_ch: bool,
 ) {
-    let mut topfrp = topfrp;
     if topfrp.parent().is_none() && set_ch {
         // The top frame's height is the screen's minus the command line, so
         // giving it a new one means giving 'cmdheight' the difference.
-        let want_ch = p_ch() + OptInt::from(topfrp.fr_height) - OptInt::from(height);
+        let want_ch = p_ch() + OptInt::from(topfrp.fr_height()) - OptInt::from(height);
         let new_ch = MIN_SET_CH.get().max(want_ch);
         if new_ch != p_ch() {
             let save_ch = MIN_SET_CH.get();
@@ -266,7 +265,7 @@ pub(crate) fn new_height(
             wp.w_hsep_height = 0 as ::core::ffi::c_int;
         }
         new_win_height(wp, height - wp.w_hsep_height - wp.w_status_height);
-    } else if ::core::ffi::c_int::from(topfrp.fr_layout) == FR_ROW {
+    } else if ::core::ffi::c_int::from(topfrp.fr_layout()) == FR_ROW {
         // All frames in this row get the same new height. If one of them could
         // not fit its windows in it, take its height for the whole row and go
         // round again.
@@ -274,8 +273,8 @@ pub(crate) fn new_height(
             let mut grew = false;
             for frp in topfrp.children() {
                 new_height(frp, height, topfirst, wfh, set_ch);
-                if frp.fr_height > height {
-                    height = frp.fr_height;
+                if frp.fr_height() > height {
+                    height = frp.fr_height();
                     grew = true;
                     break;
                 }
@@ -291,15 +290,15 @@ pub(crate) fn new_height(
             return;
         };
         let mut frp = Some(first);
-        let mut extra_lines = height - topfrp.fr_height;
+        let mut extra_lines = height - topfrp.fr_height();
         if extra_lines < 0 {
             while let Some(cur) = frp {
                 let h = cur.min_height(NextCurwin::Unset);
-                if cur.fr_height + extra_lines >= h {
-                    new_height(cur, cur.fr_height + extra_lines, topfirst, wfh, set_ch);
+                if cur.fr_height() + extra_lines >= h {
+                    new_height(cur, cur.fr_height() + extra_lines, topfirst, wfh, set_ch);
                     break;
                 }
-                extra_lines += cur.fr_height - h;
+                extra_lines += cur.fr_height() - h;
                 new_height(cur, h, topfirst, wfh, set_ch);
                 frp = cur.step_over_fixed_height(topfirst, wfh);
                 if frp.is_none() {
@@ -308,10 +307,16 @@ pub(crate) fn new_height(
                 }
             }
         } else if extra_lines > 0 {
-            new_height(first, first.fr_height + extra_lines, topfirst, wfh, set_ch);
+            new_height(
+                first,
+                first.fr_height() + extra_lines,
+                topfirst,
+                wfh,
+                set_ch,
+            );
         }
     }
-    topfrp.fr_height = height;
+    topfrp.set_fr_height(height);
 }
 
 /// Give frame `topfrp` width `width`, from `frame_new_width()` -- [`new_height`]
@@ -322,13 +327,12 @@ pub(crate) fn new_width(
     leftfirst: bool,
     wfw: bool,
 ) {
-    let mut topfrp = topfrp;
-    if ::core::ffi::c_int::from(topfrp.fr_layout) == FR_LEAF {
+    if ::core::ffi::c_int::from(topfrp.fr_layout()) == FR_LEAF {
         let mut wp = topfrp.win().expect("a leaf frame holds a window");
         // Find out if there are any windows right of this one.
         let mut frp = topfrp;
         while let Some(parent) = frp.parent() {
-            if ::core::ffi::c_int::from(parent.fr_layout) == FR_ROW && frp.next().is_some() {
+            if ::core::ffi::c_int::from(parent.fr_layout()) == FR_ROW && frp.next().is_some() {
                 break;
             }
             frp = parent;
@@ -337,13 +341,13 @@ pub(crate) fn new_width(
             wp.w_vsep_width = 0 as ::core::ffi::c_int;
         }
         new_win_width(wp, width - wp.w_vsep_width);
-    } else if ::core::ffi::c_int::from(topfrp.fr_layout) == FR_COL {
+    } else if ::core::ffi::c_int::from(topfrp.fr_layout()) == FR_COL {
         loop {
             let mut grew = false;
             for frp in topfrp.children() {
                 new_width(frp, width, leftfirst, wfw);
-                if frp.fr_width > width {
-                    width = frp.fr_width;
+                if frp.fr_width() > width {
+                    width = frp.fr_width();
                     grew = true;
                     break;
                 }
@@ -357,15 +361,15 @@ pub(crate) fn new_width(
             return;
         };
         let mut frp = Some(first);
-        let mut extra_cols = width - topfrp.fr_width;
+        let mut extra_cols = width - topfrp.fr_width();
         if extra_cols < 0 {
             while let Some(cur) = frp {
                 let w = cur.min_width(NextCurwin::Unset);
-                if cur.fr_width + extra_cols >= w {
-                    new_width(cur, cur.fr_width + extra_cols, leftfirst, wfw);
+                if cur.fr_width() + extra_cols >= w {
+                    new_width(cur, cur.fr_width() + extra_cols, leftfirst, wfw);
                     break;
                 }
-                extra_cols += cur.fr_width - w;
+                extra_cols += cur.fr_width() - w;
                 new_width(cur, w, leftfirst, wfw);
                 frp = cur.step_over_fixed_width(leftfirst, wfw);
                 if frp.is_none() {
@@ -373,20 +377,20 @@ pub(crate) fn new_width(
                 }
             }
         } else if extra_cols > 0 {
-            new_width(first, first.fr_width + extra_cols, leftfirst, wfw);
+            new_width(first, first.fr_width() + extra_cols, leftfirst, wfw);
         }
     }
-    topfrp.fr_width = width;
+    topfrp.set_fr_width(width);
 }
 
 /// Set a leaf frame's width from the window it contains.
 pub(crate) fn frame_fix_width(window: Win) {
-    let mut frame = window.frame();
-    frame.fr_width = window.w_width + window.w_vsep_width;
+    let frame = window.frame();
+    frame.set_fr_width(window.w_width + window.w_vsep_width);
 }
 
 /// Set a leaf frame's height from the window it contains.
 pub(crate) fn frame_fix_height(window: Win) {
-    let mut frame = window.frame();
-    frame.fr_height = window.w_height + window.w_hsep_height + window.w_status_height;
+    let frame = window.frame();
+    frame.set_fr_height(window.w_height + window.w_hsep_height + window.w_status_height);
 }

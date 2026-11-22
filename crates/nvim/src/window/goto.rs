@@ -150,8 +150,8 @@ impl Axis {
     fn frame_end(self, fr: FrameRef) -> c_int {
         let win = fr.first_window();
         match self {
-            Axis::Vertical => win.w_wincol + fr.fr_width,
-            Axis::Horizontal => win.w_winrow + fr.fr_height,
+            Axis::Vertical => win.w_wincol + fr.fr_width(),
+            Axis::Horizontal => win.w_winrow + fr.fr_height(),
         }
     }
 }
@@ -226,25 +226,25 @@ fn neighbor(
             let next = if backwards { fr.prev() } else { fr.next() };
             let parent = fr.parent().expect("not the top frame");
             match next {
-                Some(nfr) if c_int::from(parent.fr_layout) == axis.own() => break nfr,
+                Some(nfr) if c_int::from(parent.fr_layout()) == axis.own() => break nfr,
                 _ => fr = parent,
             }
         };
 
         // Now go downwards to find the frame at the far end of it.
         loop {
-            if c_int::from(nfr.fr_layout) == FR_LEAF {
+            if c_int::from(nfr.fr_layout()) == FR_LEAF {
                 foundfr = nfr;
                 break;
             }
             let mut fr = nfr.child().expect("a frame that is not a leaf has a child");
-            if c_int::from(nfr.fr_layout) == axis.cross() {
+            if c_int::from(nfr.fr_layout()) == axis.cross() {
                 // Find the frame the cursor is at, across the other axis.
                 while fr.next().is_some() && axis.frame_end(fr) <= axis.cursor(window) {
                     fr = fr.next().expect("just tested");
                 }
             }
-            if c_int::from(nfr.fr_layout) == axis.own() && backwards {
+            if c_int::from(nfr.fr_layout()) == axis.own() && backwards {
                 fr = frames(Some(fr))
                     .last()
                     .expect("a frame's sibling list holds at least itself");
@@ -412,7 +412,7 @@ pub(crate) enum DirOwner {
 pub(crate) fn own_dir(owner: DirOwner) -> Option<XString> {
     match owner {
         DirOwner::Window(window) => window.w_localdir.clone(),
-        DirOwner::TabPage(tabpage) => tabpage.tp_localdir.clone(),
+        DirOwner::TabPage(tabpage) => tabpage.read().tp_localdir.clone(),
         DirOwner::Global => GLOBALDIR.with(Clone::clone),
     }
 }
@@ -421,7 +421,7 @@ pub(crate) fn own_dir(owner: DirOwner) -> Option<XString> {
 pub(crate) fn has_own_dir(owner: DirOwner) -> bool {
     match owner {
         DirOwner::Window(window) => window.w_localdir.is_some(),
-        DirOwner::TabPage(tabpage) => tabpage.tp_localdir.is_some(),
+        DirOwner::TabPage(tabpage) => tabpage.has_localdir(),
         DirOwner::Global => GLOBALDIR.with(Option::is_some),
     }
 }
@@ -430,7 +430,7 @@ pub(crate) fn has_own_dir(owner: DirOwner) -> bool {
 pub(crate) fn set_own_dir(owner: DirOwner, dir: Option<XString>) {
     match owner {
         DirOwner::Window(mut window) => window.w_localdir = dir,
-        DirOwner::TabPage(mut tabpage) => tabpage.tp_localdir = dir,
+        DirOwner::TabPage(tabpage) => tabpage.edit().tp_localdir = dir,
         DirOwner::Global => GLOBALDIR.set(dir),
     }
 }
@@ -439,7 +439,7 @@ pub(crate) fn set_own_dir(owner: DirOwner, dir: Option<XString>) {
 pub(crate) fn prev_dir_of(owner: DirOwner) -> Option<XString> {
     match owner {
         DirOwner::Window(window) => window.w_prevdir.clone(),
-        DirOwner::TabPage(tabpage) => tabpage.tp_prevdir.clone(),
+        DirOwner::TabPage(tabpage) => tabpage.read().tp_prevdir.clone(),
         DirOwner::Global => crate::ex_docmd::global_prev_dir(),
     }
 }
@@ -448,7 +448,7 @@ pub(crate) fn prev_dir_of(owner: DirOwner) -> Option<XString> {
 pub(crate) fn set_prev_dir(owner: DirOwner, dir: Option<XString>) {
     match owner {
         DirOwner::Window(mut window) => window.w_prevdir = dir,
-        DirOwner::TabPage(mut tabpage) => tabpage.tp_prevdir = dir,
+        DirOwner::TabPage(tabpage) => tabpage.edit().tp_prevdir = dir,
         DirOwner::Global => crate::ex_docmd::set_global_prev_dir(dir),
     }
 }
@@ -462,7 +462,7 @@ fn fix_current_dir() {
     // the directory-change autocommands below may replace either.
     let window_dir = Win::current().w_localdir.clone();
     let has_window_dir = window_dir.is_some();
-    let new_dir = window_dir.or_else(|| TabPage::current().tp_localdir.clone());
+    let new_dir = window_dir.or_else(|| TabPage::current().read().tp_localdir.clone());
     // What `os_dirname` leaves when it fails is not a directory: the empty
     // string stands for "unknown", as the NUL upstream wrote did.
     let cwd = current_dir().unwrap_or_default();

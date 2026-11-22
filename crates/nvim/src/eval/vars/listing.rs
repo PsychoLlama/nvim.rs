@@ -87,7 +87,7 @@ pub(crate) fn list_win_vars(first: &mut bool) {
 
 /// The current tab page's `t:` scope.
 pub(crate) fn list_tab_vars(first: &mut bool) {
-    if let Some(dict) = TabPage::current().tp_winvar.di_tv.dict_handle() {
+    if let Some(dict) = TabPage::current().vars() {
         list_dict_vars(&dict, c"t:", true, first);
     }
 }

@@ -137,32 +137,32 @@ impl FrameRef {
     /// `window::snapshot::snapshot_win`.
     #[inline(always)]
     pub fn win(self) -> Option<Win> {
-        self.fr_win.and_then(WinId::get)
+        self.fr_win().and_then(WinId::get)
     }
 
     /// The frame this one is a child of — `None` only for the tab page's
     /// `topframe`, the one frame with no parent.
     #[inline(always)]
     pub fn parent(self) -> Option<Self> {
-        self.fr_parent.and_then(FrameId::get)
+        self.fr_parent().and_then(FrameId::get)
     }
 
     /// This frame's first child, which every non-leaf frame has.
     #[inline(always)]
     pub fn child(self) -> Option<Self> {
-        self.fr_child.and_then(FrameId::get)
+        self.fr_child().and_then(FrameId::get)
     }
 
     /// The frame beside this one, if it is not the last of its row or column.
     #[inline(always)]
     pub fn next(self) -> Option<Self> {
-        self.fr_next.and_then(FrameId::get)
+        self.fr_next().and_then(FrameId::get)
     }
 
     /// The frame before this one, if it is not the first of its row or column.
     #[inline(always)]
     pub fn prev(self) -> Option<Self> {
-        self.fr_prev.and_then(FrameId::get)
+        self.fr_prev().and_then(FrameId::get)
     }
 
     /// This frame's children, first to last: the C's

@@ -339,10 +339,10 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     win.w_s = buffer.syntax_block();
 
     // Cursor on first line by default.
-    let mut cursor = win.cursor();
-    cursor.lnum = LineNr::ONE;
-    cursor.col = ColNr::ZERO;
-    cursor.coladd = 0;
+    let cursor = win.cursor();
+    cursor.set_lnum(LineNr::ONE);
+    cursor.set_col(ColNr::ZERO);
+    cursor.set_coladd(0);
     win.w_set_curswant = true;
     win.w_topline_was_set = false;
 
@@ -375,7 +375,7 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
 
     // If autocommands did not change the cursor position, restore cursor lnum
     // and possibly cursor col.
-    if Win::current().cursor().lnum == LineNr::ONE && cursor_in_indent() {
+    if Win::current().cursor().lnum() == LineNr::ONE && cursor_in_indent() {
         restore_position();
     }
 

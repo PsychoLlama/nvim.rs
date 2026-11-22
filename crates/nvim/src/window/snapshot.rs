@@ -114,7 +114,7 @@ pub fn reset_lnums() {
 
 /// The saved frame tree in slot `idx` of `tabpage`, if there is one.
 fn snapshot_of(tabpage: TabPage, idx: c_int) -> Option<FrameRef> {
-    tabpage.tp_snapshot[as_index(idx)].and_then(FrameId::get)
+    tabpage.tp_snapshot()[as_index(idx)].and_then(FrameId::get)
 }
 
 pub fn make_snapshot(idx: c_int) {
@@ -123,9 +123,10 @@ pub fn make_snapshot(idx: c_int) {
 
 /// Save the current layout in slot `idx` of the current tab page.
 pub(crate) fn take_snapshot(idx: c_int) {
-    let mut tp = TabPage::current();
+    let tp = TabPage::current();
     drop_snapshot(tp, idx);
-    tp.tp_snapshot[as_index(idx)] = Some(current_topframe().snapshot());
+    let snapshot = current_topframe().snapshot();
+    tp.edit().tp_snapshot[as_index(idx)] = Some(snapshot);
 }
 
 impl FrameRef {
@@ -136,14 +137,14 @@ impl FrameRef {
     /// are the same identities the live tree's are -- which is what lets
     /// [`FrameRef::snapshot_matches`] walk one that a `:diffsplit` later freed.
     fn snapshot(self) -> FrameId {
-        let mut copy = new_frame();
-        copy.fr_layout = self.fr_layout;
-        copy.fr_width = self.fr_width;
-        copy.fr_height = self.fr_height;
-        copy.fr_next = self.next().map(FrameRef::snapshot);
-        copy.fr_child = self.child().map(FrameRef::snapshot);
-        if c_int::from(self.fr_layout) == FR_LEAF && self.win().is_some_and(Win::is_current) {
-            copy.fr_win = Some(Win::current().id());
+        let copy = new_frame();
+        copy.set_fr_layout(self.fr_layout());
+        copy.set_fr_width(self.fr_width());
+        copy.set_fr_height(self.fr_height());
+        copy.set_fr_next(self.next().map(FrameRef::snapshot));
+        copy.set_fr_child(self.child().map(FrameRef::snapshot));
+        if c_int::from(self.fr_layout()) == FR_LEAF && self.win().is_some_and(Win::is_current) {
+            copy.set_fr_win(Some(Win::current().id()));
         }
         copy.id()
     }
@@ -167,7 +168,7 @@ impl FrameRef {
     /// to another tab page*, and only the list walk refuses the second. The live
     /// tree's leaves cannot be either, which is why they use the plain accessor.
     fn snapshot_window(self) -> Option<Win> {
-        self.fr_win
+        self.fr_win()
             .filter(|&win| win_valid(win))
             .and_then(WinId::get)
     }
@@ -191,7 +192,7 @@ impl FrameRef {
     /// Whether the saved tree `self` still has the shape of the live tree `fr`, and
     /// every window it remembers is still there.
     fn snapshot_matches(self, fr: FrameRef) -> bool {
-        if self.fr_layout != fr.fr_layout
+        if self.fr_layout() != fr.fr_layout()
             || self.next().is_none() != fr.next().is_none()
             || self.child().is_none() != fr.child().is_none()
         {
@@ -207,19 +208,18 @@ impl FrameRef {
         {
             return false;
         }
-        self.fr_win.is_none() || self.snapshot_window().is_some()
+        self.fr_win().is_none() || self.snapshot_window().is_some()
     }
 
     /// Give the live tree `fr` the sizes saved in `self`, and answer the window `self`
     /// remembered as current.
     fn restore_snapshot(self, fr: FrameRef) -> Option<Win> {
-        let mut fr = fr;
         let mut wp = None;
-        fr.fr_height = self.fr_height;
-        fr.fr_width = self.fr_width;
-        if c_int::from(fr.fr_layout) == FR_LEAF {
-            new_height(fr, fr.fr_height, false, false, false);
-            new_width(fr, fr.fr_width, false, false);
+        fr.set_fr_height(self.fr_height());
+        fr.set_fr_width(self.fr_width());
+        if c_int::from(fr.fr_layout()) == FR_LEAF {
+            new_height(fr, fr.fr_height(), false, false, false);
+            new_width(fr, fr.fr_width(), false, false);
             wp = self.snapshot_window();
         }
         if let (Some(sn_next), Some(fr_next)) = (self.next(), fr.next()) {
@@ -234,11 +234,10 @@ impl FrameRef {
 
 /// Free the saved tree in slot `idx` of `tabpage`, if there is one.
 pub(crate) fn drop_snapshot(tabpage: TabPage, idx: c_int) {
-    let mut tabpage = tabpage;
     if let Some(fr) = snapshot_of(tabpage, idx) {
         fr.free_snapshot();
     }
-    tabpage.tp_snapshot[as_index(idx)] = None;
+    tabpage.edit().tp_snapshot[as_index(idx)] = None;
 }
 
 /// The window the snapshot in slot `idx` of the current tab page remembers as
@@ -256,8 +255,8 @@ pub(crate) fn restore_layout(idx: c_int, close_curwin: bool) {
     let tp = TabPage::current();
     let top = current_topframe();
     if let Some(sn) = snapshot_of(tp, idx)
-        && sn.fr_width == top.fr_width
-        && sn.fr_height == top.fr_height
+        && sn.fr_width() == top.fr_width()
+        && sn.fr_height() == top.fr_height()
         && sn.snapshot_matches(top)
     {
         let wp = sn.restore_snapshot(top);
@@ -424,7 +423,7 @@ pub(crate) fn lastwin_nofloating(tabpage: Option<TabPage>) -> Win {
         "tp != curtab || !tp"
     );
     let mut res = match tabpage {
-        Some(tp) => tp.tp_lastwin.and_then(WinId::get),
+        Some(tp) => tp.tp_lastwin().and_then(WinId::get),
         None => last_window(),
     }
     .expect("a window list has a tail");

@@ -153,10 +153,10 @@ pub(crate) fn current_block(
         loop {
             incl(&mut start_pos);
             sol = Win::current().w_cursor.col == ColNr::ZERO;
-            decl(&mut Win::current().cursor());
+            Win::current().cursor().modify(decl);
             while inindent(1) {
                 sol = true;
-                if decl(&mut Win::current().cursor()) != Moved::InLine {
+                if Win::current().cursor().modify(decl) != Moved::InLine {
                     break;
                 }
             }
@@ -177,7 +177,7 @@ pub(crate) fn current_block(
                 break;
             }
             Win::current().w_cursor = old_start;
-            decl(&mut Win::current().cursor());
+            Win::current().cursor().modify(decl);
             pos = findmatch(None, what);
             let Some(found) = pos else {
                 Win::current().w_cursor = old_pos;
@@ -196,10 +196,10 @@ pub(crate) fn current_block(
 
     if visual_active() {
         if P_SEL.first_byte() == b'e' {
-            inc(&mut Win::current().cursor());
+            Win::current().cursor().modify(inc);
         }
         if sol && gchar_cursor() != Codepoint::NUL {
-            inc(&mut Win::current().cursor()); // include the line break
+            Win::current().cursor().modify(inc); // include the line break
         }
         set_visual_anchor(start_pos);
         set_visual_mode(VisualMode::CHAR);
@@ -210,7 +210,7 @@ pub(crate) fn current_block(
         op.motion_type = MotionType::CharWise;
         op.inclusive = false;
         if sol {
-            incl(&mut Win::current().cursor());
+            Win::current().cursor().modify(incl);
         } else if ltoreq(start_pos, Win::current().w_cursor) {
             // Include the character under the cursor.
             op.inclusive = true;

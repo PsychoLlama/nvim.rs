@@ -398,7 +398,7 @@ pub(crate) fn current_word(
             // the end of this one.
             let _ = fwd_word(1, bigword, true);
             if Win::current().w_cursor.col == ColNr::ZERO {
-                decl(&mut Win::current().cursor());
+                Win::current().cursor().modify(decl);
             } else {
                 let _ = oneleft();
             }
@@ -423,18 +423,18 @@ pub(crate) fn current_word(
         inclusive = true;
         if visual_active() && lt(Win::current().w_cursor, visual_anchor()) {
             // In Visual mode with the cursor at the start: move it back.
-            if decl(&mut Win::current().cursor()).is_stuck() {
+            if Win::current().cursor().modify(decl).is_stuck() {
                 return Err(NoObject);
             }
             if include != (cls() != 0) {
                 bck_word(1, bigword, true)?;
             } else {
                 bckend_word(1, bigword, true)?;
-                incl(&mut Win::current().cursor());
+                Win::current().cursor().modify(incl);
             }
         } else {
             // Move the cursor forward one word and/or run of white space.
-            if incl(&mut Win::current().cursor()).is_stuck() {
+            if Win::current().cursor().modify(incl).is_stuck() {
                 return Err(NoObject);
             }
             if include != (cls() == 0) {

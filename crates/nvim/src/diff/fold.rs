@@ -104,7 +104,7 @@ pub fn diff_redraw(dofold: bool) {
 /// or [`LINE_INSERTED`], and zero when the line is not part of a change at
 /// all. The two are independent: a line can carry filler *and* be changed.
 pub fn diff_check_with_linestatus(window: Win, lnum: LineNr) -> (c_int, c_int) {
-    if TabPage::current().tp_diff_invalid != 0 {
+    if TabPage::current().tp_diff_invalid() != 0 {
         diff_update(None);
         // `DiffUpdated` runs user code, which may have closed the window
         // (or its tab page) being asked about: it has no status left.
@@ -115,7 +115,7 @@ pub fn diff_check_with_linestatus(window: Win, lnum: LineNr) -> (c_int, c_int) {
     let tp = TabPage::current();
     // A live window's buffer is live; a diffed window always has one.
     let buf = window.buffer();
-    if tp.tp_diff.is_empty() || window.w_onebuf_opt.wo_diff == 0 {
+    if tp.diff_len() == 0 || window.w_onebuf_opt.wo_diff == 0 {
         return (0, 0);
     }
     // One past the last line is legal: that is where the filler for a
@@ -137,7 +137,7 @@ pub fn diff_check_with_linestatus(window: Win, lnum: LineNr) -> (c_int, c_int) {
 
     // Line matching is deferred until a block is actually on screen.
     let on_screen = lnum >= window.w_topline && lnum < window.w_botline;
-    let slots = tp.tp_diffbuf;
+    let slots = tp.tp_diffbuf();
     tp.with_diff(|blocks| line_status(blocks, &slots, idx, lnum, on_screen))
 }
 
@@ -239,7 +239,7 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
     for i in 0..DB_COUNT as usize {
         if tp.diff_slot_holds(i, window.w_buffer) {
             idx = Some(i);
-        } else if tp.tp_diffbuf[i].is_some() {
+        } else if tp.tp_diffbuf()[i].is_some() {
             other = true;
         }
     }
@@ -247,13 +247,13 @@ pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
         return false;
     };
 
-    if tp.tp_diff_invalid != 0 {
+    if tp.tp_diff_invalid() != 0 {
         diff_update(None);
     }
     let context = LineNr::new(DIFF_CONTEXT.get());
     // The blocks are in line order, so the first one starting below the
     // context window ends the search. No blocks at all folds everything.
-    for dp in &tp.tp_diff {
+    for dp in &tp.read().tp_diff {
         if dp.df_lnum[idx] - context > lnum.get() {
             break;
         }

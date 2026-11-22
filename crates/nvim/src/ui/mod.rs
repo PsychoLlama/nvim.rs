@@ -318,8 +318,8 @@ pub fn ui_refresh() {
                 OptVal::Number(had_message.into()),
                 OptionSetFlags::NONE,
             );
-            for mut tp in tabs() {
-                tp.tp_ch_used = had_message.into();
+            for tp in tabs() {
+                tp.set_tp_ch_used(had_message.into());
             }
         }
         msg_scroll_flush();

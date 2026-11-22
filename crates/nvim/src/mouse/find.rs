@@ -59,24 +59,24 @@ pub(crate) fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
 
     let mut fp = current_topframe();
     pos.row -= first_window_row();
-    while c_int::from(fp.fr_layout) != FR_LEAF {
+    while c_int::from(fp.fr_layout()) != FR_LEAF {
         // Upstream dereferences `fr_child` unchecked: a non-leaf frame always
         // has children.  A missing one leaves `fp` non-leaf, whose `fr_win` is
         // null, and the search below then answers None.
         let Some(mut child) = fp.child() else { break };
-        let by_column = c_int::from(fp.fr_layout) == FR_ROW;
+        let by_column = c_int::from(fp.fr_layout()) == FR_ROW;
         // The last child is taken without a test, as the C's `for` is written.
         while let Some(sibling) = child.next() {
             if by_column {
-                if pos.col < child.fr_width {
+                if pos.col < child.fr_width() {
                     break;
                 }
-                pos.col -= child.fr_width;
+                pos.col -= child.fr_width();
             } else {
-                if pos.row < child.fr_height {
+                if pos.row < child.fr_height() {
                     break;
                 }
-                pos.row -= child.fr_height;
+                pos.row -= child.fr_height();
             }
             child = sibling;
         }
@@ -85,7 +85,7 @@ pub(crate) fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
 
     // When using a timer that closes a window the window might not actually
     // exist.
-    let win = windows().find(|wp| Some(wp.id()) == fp.fr_win)?;
+    let win = windows().find(|wp| Some(wp.id()) == fp.fr_win())?;
     pos.row -= win.w_winbar_height;
     Some(win)
 }

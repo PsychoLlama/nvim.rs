@@ -240,7 +240,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     }
     check_cursor(Win::current());
     changed_line_abv_curs();
-    if tp.tp_diff.is_empty() {
+    if tp.diff_len() == 0 {
         // The last block went away: the diff folds have nothing left to
         // describe, so every window folding by `diff` is rebuilt.
         for wp in windows() {
@@ -279,20 +279,24 @@ fn diffgetput(
     line2: LineNr,
 ) {
     let (idx_cur, idx_from, idx_to) = (as_index(idx_cur), as_index(idx_from), as_index(idx_to));
-    let mut tp = TabPage::current();
+    let tp = TabPage::current();
     let mut off: i32 = 0;
     let mut at = 0;
-    while at < tp.tp_diff.len() {
-        if addr_count == 0 {
-            // Without a range, a run of blocks that touch is taken as one.
-            while let Some(next) = tp.tp_diff.get(at + 1)
-                && next.df_lnum[idx_cur] == tp.tp_diff[at].end(idx_cur)
-                && next.df_lnum[idx_cur] == line1 + off + 1
-            {
-                at += 1;
+    while at < tp.diff_len() {
+        let (df_lnum, df_count) = {
+            let tpr = tp.read();
+            let blocks = &tpr.tp_diff;
+            if addr_count == 0 {
+                // Without a range, a run of blocks that touch is taken as one.
+                while let Some(next) = blocks.get(at + 1)
+                    && next.df_lnum[idx_cur] == blocks[at].end(idx_cur)
+                    && next.df_lnum[idx_cur] == line1 + off + 1
+                {
+                    at += 1;
+                }
             }
-        }
-        let (df_lnum, df_count) = (tp.tp_diff[at].df_lnum, tp.tp_diff[at].df_count);
+            (blocks[at].df_lnum, blocks[at].df_count)
+        };
         let end = |idx: usize| df_lnum[idx] + df_count[idx];
         if df_lnum[idx_cur] > line2 + off {
             break;
@@ -300,11 +304,11 @@ fn diffgetput(
         let mut freed = false;
         let mut lnum = df_lnum[idx_to];
         let mut count = df_count[idx_to];
-        let generation = tp.tp_diff_gen;
+        let generation = tp.tp_diff_gen();
         // The short circuit is upstream's.
         let undoable = end(idx_cur) > line1 + off && u_save(lnum - 1, lnum + count).is_ok();
         // `u_save` can run `FileChangedRO`.
-        if tp.tp_diff_gen != generation {
+        if tp.tp_diff_gen() != generation {
             break;
         }
         if undoable {
@@ -367,20 +371,22 @@ fn diffgetput(
                 i += 1;
             }
             let new_count = df_count[idx_to] + added;
-            tp.tp_diff[at].df_count[idx_to] = new_count;
+            tp.edit().tp_diff[at].df_count[idx_to] = new_count;
 
             // A block that now reads the same in every buffer is not a
             // difference any more.
             let mut freed_ranges = None;
             if start_skip == 0 && end_skip == 0 {
-                let slots = tp.tp_diffbuf;
-                let dp = &tp.tp_diff[at];
+                let slots = tp.tp_diffbuf();
+                let tpr = tp.read();
+                let dp = &tpr.tp_diff[at];
                 let all_equal = (0..DB_COUNT as usize).all(|i| {
                     slots[i].is_none()
                         || i == idx_from
                         || i == idx_to
                         || diff_equal_entry(dp, &slots, idx_from, i)
                 });
+                drop(tpr);
                 if all_equal {
                     // The ranges, kept for the fold update below; the block
                     // itself goes now.
@@ -389,7 +395,7 @@ fn diffgetput(
                     freed = true;
                 }
             }
-            let generation = tp.tp_diff_gen;
+            let generation = tp.tp_diff_gen();
 
             let last = lnum + count - 1;
             let max = MAXLNUM.get();
@@ -416,12 +422,12 @@ fn diffgetput(
             // the list's shape, the index no longer means this block.
             // Upstream re-checks only when lines were added or removed, and
             // otherwise writes through a block that may be gone.
-            if tp.tp_diff_gen != generation {
+            if tp.tp_diff_gen() != generation {
                 break;
             }
             if !freed {
                 // `mark_adjust` may have changed the count in a wrong way.
-                tp.tp_diff[at].df_count[idx_to] = new_count;
+                tp.edit().tp_diff[at].df_count[idx_to] = new_count;
             }
             if idx_cur == idx_to {
                 off += amount;

@@ -102,7 +102,7 @@ impl FrameRef {
                 m += 1;
             }
             m
-        } else if c_int::from(self.fr_layout) == FR_ROW {
+        } else if c_int::from(self.fr_layout()) == FR_ROW {
             // The minimal height of the tallest frame in this row.
             self.children().fold(0, |m, frp| {
                 let n = frp.min_height_with(next_curwin, opts);
@@ -135,7 +135,7 @@ impl FrameRef {
                 m += 1;
             }
             m
-        } else if c_int::from(self.fr_layout) == FR_COL {
+        } else if c_int::from(self.fr_layout()) == FR_COL {
             self.children().fold(0, |m, frp| {
                 let n = frp.min_width_with(next_curwin, opts);
                 if m > n { m } else { n }
@@ -153,11 +153,11 @@ impl FrameRef {
     /// Only a *row*'s children are checked, because only they share their parent's
     /// height; a column's are expected to differ, and so are not looked at.
     pub(crate) fn check_height(self, height: c_int) -> bool {
-        if self.fr_height != height {
+        if self.fr_height() != height {
             return false;
         }
-        if c_int::from(self.fr_layout) == FR_ROW {
-            return self.children().all(|frp| frp.fr_height == height);
+        if c_int::from(self.fr_layout()) == FR_ROW {
+            return self.children().all(|frp| frp.fr_height() == height);
         }
         true
     }
@@ -166,11 +166,11 @@ impl FrameRef {
     /// `frame_check_width()` — [`FrameRef::check_height`] with the axes exchanged, so
     /// it is a *column* whose children must match.
     pub(crate) fn check_width(self, width: c_int) -> bool {
-        if self.fr_width != width {
+        if self.fr_width() != width {
             return false;
         }
-        if c_int::from(self.fr_layout) == FR_COL {
-            return self.children().all(|frp| frp.fr_width == width);
+        if c_int::from(self.fr_layout()) == FR_COL {
+            return self.children().all(|frp| frp.fr_width() == width);
         }
         true
     }
@@ -310,35 +310,33 @@ mod tests {
             win.w_status_height = chrome.status;
             win.w_vsep_width = chrome.vsep;
 
-            let mut fr = self.frame();
-            fr.fr_layout = layout_byte(FR_LEAF);
-            fr.fr_win = Some(win.id());
-            fr.fr_height = height;
-            fr.fr_width = width;
+            let fr = self.frame();
+            fr.set_fr_layout(layout_byte(FR_LEAF));
+            fr.set_fr_win(Some(win.id()));
+            fr.set_fr_height(height);
+            fr.set_fr_width(width);
             fr
         }
 
         /// A row (`FR_ROW`) or column (`FR_COL`) of `children`, linked as the
         /// layout tree links them.
         fn branch(&mut self, layout: c_int, children: &[FrameRef]) -> FrameRef {
-            let mut parent = self.frame();
-            parent.fr_layout = layout_byte(layout);
-            parent.fr_child = Some(children[0].id());
+            let parent = self.frame();
+            parent.set_fr_layout(layout_byte(layout));
+            parent.set_fr_child(Some(children[0].id()));
             for (i, &child) in children.iter().enumerate() {
-                let mut child = child;
-                child.fr_parent = Some(parent.id());
-                child.fr_prev = (i > 0).then(|| children[i - 1].id());
-                child.fr_next = children.get(i + 1).map(|next| next.id());
+                child.set_fr_parent(Some(parent.id()));
+                child.set_fr_prev((i > 0).then(|| children[i - 1].id()));
+                child.set_fr_next(children.get(i + 1).map(|next| next.id()));
             }
-            parent.fr_height = children[0].fr_height;
-            parent.fr_width = children[0].fr_width;
+            parent.set_fr_height(children[0].fr_height());
+            parent.set_fr_width(children[0].fr_width());
             parent
         }
 
         fn set_size(&self, fr: FrameRef, height: c_int, width: c_int) {
-            let mut fr = fr;
-            fr.fr_height = height;
-            fr.fr_width = width;
+            fr.set_fr_height(height);
+            fr.set_fr_width(width);
         }
 
         fn window_of(&self, fr: FrameRef) -> Win {
@@ -500,8 +498,8 @@ mod tests {
     #[test]
     fn an_empty_row_and_column_both_cost_nothing() {
         let mut t = Tree::new();
-        let mut row = t.frame();
-        row.fr_layout = layout_byte(FR_ROW);
+        let row = t.frame();
+        row.set_fr_layout(layout_byte(FR_ROW));
         assert_eq!(row.min_height_with(NextCurwin::NoWin, heights(10, 1)), 0);
     }
 

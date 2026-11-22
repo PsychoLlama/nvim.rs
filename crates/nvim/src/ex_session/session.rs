@@ -244,7 +244,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
             if tab.is_current() {
                 (FIRSTWIN.get(), current_topframe())
             } else {
-                (tab.tp_firstwin, tab.topframe())
+                (tab.tp_firstwin(), tab.topframe())
             }
         } else {
             tab = TabPage::current();
@@ -278,7 +278,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
             out.line(c"tabnext")?;
         }
 
-        if core::ffi::c_int::from(tab_topframe.fr_layout) != FR_LEAF {
+        if core::ffi::c_int::from(tab_topframe.fr_layout()) != FR_LEAF {
             out.line(c"let s:save_splitbelow = &splitbelow")?;
             out.line(c"let s:save_splitright = &splitright")?;
             out.line(c"set splitbelow splitright")?;
@@ -383,7 +383,7 @@ fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> Writ
         if ses_do_win(window) {
             n += 1;
             // Restore the height when the window is not full height.
-            if window.w_height + window.w_hsep_height + window.w_status_height < top.fr_height {
+            if window.w_height + window.w_hsep_height + window.w_status_height < top.fr_height() {
                 out.write(format_args!(
                     "exe '{n}resize ' . ((&lines * {} + {}) / {})\n",
                     int64_t::from(window.w_height),
@@ -408,10 +408,10 @@ fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> Writ
 /// Write the splits that recreate the windows of frame `fr`, recursively.
 /// Afterwards the last window in the frame is the current one.
 fn ses_win_rec(out: &mut SessionFile, fr: FrameRef) -> Written {
-    if core::ffi::c_int::from(fr.fr_layout) == FR_LEAF {
+    if core::ffi::c_int::from(fr.fr_layout()) == FR_LEAF {
         return Ok(());
     }
-    let column = core::ffi::c_int::from(fr.fr_layout) == FR_COL;
+    let column = core::ffi::c_int::from(fr.fr_layout()) == FR_COL;
 
     // Find the first frame that is not skipped, then create a window for
     // each one after it -- the first window is already there.

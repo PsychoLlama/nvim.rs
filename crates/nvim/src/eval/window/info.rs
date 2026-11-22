@@ -70,7 +70,7 @@ fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> DictRef {
     }
     let _ = dict.edit().add_list(b"windows", Some(windows));
     // The tab page's own `t:` scope; the answer takes a reference.
-    let vars = tabpage.tp_winvar.di_tv.dict_handle();
+    let vars = tabpage.vars();
     let _ = dict.edit().add_dict(b"variables", vars);
     dict
 }
@@ -147,7 +147,7 @@ impl FrameRef {
     /// `"leaf", winid`, or `"row"|"col", [child, ...]` where each child is a
     /// two-element list of its own.
     fn write_layout(self, into: &mut List) {
-        if c_int::from(self.fr_layout) == FR_LEAF {
+        if c_int::from(self.fr_layout()) == FR_LEAF {
             // A leaf frame with no window is a frame being taken apart; it is
             // left out of the answer rather than described.
             if let Some(wp) = self.win() {
@@ -156,7 +156,7 @@ impl FrameRef {
             }
             return;
         }
-        into.push_str(Some(if c_int::from(self.fr_layout) == FR_ROW {
+        into.push_str(Some(if c_int::from(self.fr_layout()) == FR_ROW {
             c"row"
         } else {
             c"col"

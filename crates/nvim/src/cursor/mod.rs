@@ -1,6 +1,6 @@
 //! Moving and validating a window's cursor position.
 //!
-//! Everything here speaks in [`Win`], [`Buf`] and [`PosRef`] handles and
+//! Everything here speaks in [`Win`], [`Buf`] and [`PosRef`](crate::winlayer::PosRef) handles and
 //! reads lines through [`Lines`]. Callers interleave these calls with reads
 //! of the `curwin`/`CURBUF` globals — which alias the same windows — and
 //! several of them re-enter through `ml_replace` and the extmark bookkeeping,
@@ -51,7 +51,7 @@ use crate::plines::{getvcol, linetabsize, linetabsize_eol, win_charsize};
 use crate::state::mode::{RESTART_EDIT, STATE};
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{ColNr, LineNr, Pos};
-use crate::winlayer::{Buf, PosRef, Win};
+use crate::winlayer::{Buf, Win};
 
 // ---------------------------------------------------------------------------
 // The window layer, as this module uses it
@@ -135,38 +135,6 @@ impl Win {
     #[inline(always)]
     fn linetabsize_eol(self, lnum: LineNr) -> c_int {
         linetabsize_eol(self, lnum)
-    }
-}
-
-impl PosRef {
-    #[inline(always)]
-    fn lnum(self) -> LineNr {
-        self.lnum
-    }
-
-    #[inline(always)]
-    fn set_lnum(mut self, lnum: LineNr) {
-        self.lnum = lnum;
-    }
-
-    #[inline(always)]
-    fn col(self) -> ColNr {
-        self.col
-    }
-
-    #[inline(always)]
-    fn set_col(mut self, col: ColNr) {
-        self.col = col;
-    }
-
-    #[inline(always)]
-    fn coladd(self) -> i32 {
-        self.coladd
-    }
-
-    #[inline(always)]
-    fn set_coladd(mut self, coladd: i32) {
-        self.coladd = coladd;
     }
 }
 

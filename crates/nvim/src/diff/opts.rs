@@ -190,9 +190,9 @@ pub fn diffanchors_changed(buflocal: bool) -> Result<(), Failed> {
     if result.is_err() || DIFF_FLAGS.get() & DIFF_ANCHOR == 0 {
         return result;
     }
-    for mut tp in tabs() {
+    for tp in tabs() {
         if !buflocal || (0..DB_COUNT as usize).any(|i| tp.diff_slot_holds(i, Buf::current())) {
-            tp.tp_diff_invalid = 1;
+            tp.set_tp_diff_invalid(1);
         }
     }
     result
@@ -260,8 +260,8 @@ pub fn diffopt_changed() -> Result<(), Failed> {
     }
 
     if DIFF_FLAGS.get() != flags_new || DIFF_ALGORITHM.get() != algorithm_new {
-        for mut tp in tabs() {
-            tp.tp_diff_invalid = 1;
+        for tp in tabs() {
+            tp.set_tp_diff_invalid(1);
         }
     }
     DIFF_FLAGS.set(flags_new);

@@ -447,11 +447,11 @@ pub(crate) fn comp_scroll(window: Win) {
 // The rows that are not text
 
 pub fn command_height() {
-    let mut old_p_ch = number_as_int(TabPage::current().tp_ch_used);
+    let mut old_p_ch = number_as_int(TabPage::current().tp_ch_used());
     // Find the last frame that spans the whole width and is not pinned by
     // 'winfixheight', which is the one the command line trades rows with.
     let mut frp = Some(lastwin_nofloating(None).frame());
-    while let Some(fr) = frp.filter(|fr| fr.fr_width != COLUMNS.get()) {
+    while let Some(fr) = frp.filter(|fr| fr.fr_width() != COLUMNS.get()) {
         frp = fr.parent();
         if frp.is_none() {
             frp = Some(fr);
@@ -460,7 +460,7 @@ pub fn command_height() {
     }
     while let Some(fr) = frp.filter(|fr| {
         fr.prev().is_some()
-            && c_int::from(fr.fr_layout) == FR_LEAF
+            && c_int::from(fr.fr_layout()) == FR_LEAF
             && fr.win().is_some_and(|w| w.w_onebuf_opt.wo_wfh != 0)
     }) {
         frp = fr.prev();
@@ -472,7 +472,7 @@ pub fn command_height() {
             P_CH.set(OptInt::from(old_p_ch));
             break;
         };
-        let spare = fr.fr_height - fr.min_height(NextCurwin::Unset);
+        let spare = fr.fr_height() - fr.min_height(NextCurwin::Unset);
         let h = number_as_int(p_ch() - OptInt::from(old_p_ch)).min(spare);
         fr.add_height(-h);
         old_p_ch += h;
@@ -497,7 +497,7 @@ pub fn command_height() {
         grid_clear(grid, CMDLINE_ROW.get(), ROWS.get(), 0, COLUMNS.get(), 0);
         MSG_ROW.set(CMDLINE_ROW.get());
     }
-    TabPage::current().tp_ch_used = p_ch();
+    TabPage::current().set_tp_ch_used(p_ch());
     MIN_SET_CH.set(p_ch());
 }
 
@@ -505,9 +505,9 @@ impl FrameRef {
     /// Add `n` rows to this frame and to every frame above it, from
     /// `frame_add_height()`. Negative `n` takes them away.
     fn add_height(self, n: c_int) {
-        new_height(self, self.fr_height + n, false, false, false);
-        for mut fr in self.ancestors() {
-            fr.fr_height += n;
+        new_height(self, self.fr_height() + n, false, false, false);
+        for fr in self.ancestors() {
+            fr.set_fr_height(fr.fr_height() + n);
         }
     }
 
@@ -516,13 +516,13 @@ impl FrameRef {
     fn resizable_ancestor(self) -> Option<FrameRef> {
         let mut fp = self;
         let top = current_topframe();
-        while fp.fr_height <= fp.min_height(NextCurwin::Unset) {
+        while fp.fr_height() <= fp.min_height(NextCurwin::Unset) {
             if fp == top {
                 return None;
             }
             let parent = fp.parent().expect("not the top frame");
             fp = match fp.prev() {
-                Some(prev) if c_int::from(parent.fr_layout) == FR_COL => prev,
+                Some(prev) if c_int::from(parent.fr_layout()) == FR_COL => prev,
                 _ => parent,
             };
         }
@@ -536,7 +536,7 @@ impl FrameRef {
             return Err(err(WinError::NoRoom));
         };
         if fp != self {
-            new_height(fp, fp.fr_height - 1, false, false, false);
+            new_height(fp, fp.fr_height() - 1, false, false, false);
             frame_fix_height(wp);
             comp_positions();
         } else {
@@ -552,7 +552,7 @@ impl FrameRef {
         let Some(fp) = self.resizable_ancestor().filter(|fp| *fp != self) else {
             return Err(err(WinError::NoRoom));
         };
-        new_height(fp, fp.fr_height - 1, false, false, false);
+        new_height(fp, fp.fr_height() - 1, false, false, false);
         new_win_height(wp, wp.w_height + 1);
         frame_fix_height(wp);
         comp_positions();
@@ -763,7 +763,7 @@ fn cmdheight_of(tabpage: TabPage) -> OptInt {
     if tabpage.is_current() {
         p_ch()
     } else {
-        tabpage.tp_ch_used
+        tabpage.tp_ch_used()
     }
 }
 

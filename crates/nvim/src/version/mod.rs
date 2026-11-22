@@ -428,7 +428,7 @@ fn news_line() -> CString {
 pub(crate) fn intro_message(colon: bool) {
     let mut blanklines = ROWS.get() - (len_as_int(INTRO_LINES.len()) - 1);
     if p_ls() > 1 as OptInt {
-        blanklines -= ROWS.get() - current_topframe().fr_height;
+        blanklines -= ROWS.get() - current_topframe().fr_height();
     }
     let top = blanklines.max(0) / 2;
     if !(top >= 2 && COLUMNS.get() >= 50 || colon) {

@@ -293,7 +293,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i3
         let diffed =
             win.w_buffer == buffer && win.w_onebuf_opt.wo_diff != 0 && diff_internal() != 0;
         if diffed {
-            TabPage::current().tp_diff_update = 1;
+            TabPage::current().set_tp_diff_update(1);
             diff_update_line(lnum);
         }
     }

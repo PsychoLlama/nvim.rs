@@ -94,7 +94,7 @@ fn win_has_localdir(win: Win) -> bool {
 
 /// Whether the tabpage has a directory of its own.
 fn tab_has_localdir(tabpage: TabPage) -> bool {
-    tabpage.tp_localdir.is_some()
+    tabpage.has_localdir()
 }
 
 /// The window argument 0 names within `tabpage`, or NULL when there is none.

@@ -201,8 +201,8 @@ pub(crate) fn getvcols(window: Win, pos1: &mut Pos, pos2: &mut Pos) -> (ColNr, C
 /// runs, so the window may not be lent out mutably for its duration. The
 /// write-back keeps the clamp of a column past the end of the line.
 #[inline(always)]
-fn columns(win: Win, mut pos: PosRef, virtual_edit: bool) -> (ColNr, ColNr, ColNr) {
-    let mut at = *pos;
+fn columns(win: Win, pos: PosRef, virtual_edit: bool) -> (ColNr, ColNr, ColNr) {
+    let mut at = pos.get();
     // Two arms rather than one call through a function pointer: an indirect
     // call here is not inlined, and `getvcol` is on the cursor and statusline
     // paths -- it cost 1.3% of `scrbench` when this was `let get = if ...`.
@@ -211,7 +211,7 @@ fn columns(win: Win, mut pos: PosRef, virtual_edit: bool) -> (ColNr, ColNr, ColN
     } else {
         getvcol(win, &mut at)
     };
-    *pos = at;
+    pos.set(at);
     cols
 }
 

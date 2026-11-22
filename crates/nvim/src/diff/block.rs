@@ -40,7 +40,7 @@ impl TabPage {
     /// When `idx` is not a diff slot.
     #[inline]
     pub(crate) fn diffbuf(self, idx: usize) -> Option<Buf> {
-        self.tp_diffbuf[idx].and_then(BufId::get)
+        self.tp_diffbuf()[idx].and_then(BufId::get)
     }
 
     /// [`TabPage::diffbuf`] for a slot the caller has already found in
@@ -65,7 +65,7 @@ impl TabPage {
         let Some(id) = buffer.try_id() else {
             return DB_COUNT;
         };
-        self.tp_diffbuf
+        self.tp_diffbuf()
             .iter()
             .position(|&slot| slot == Some(id))
             .map_or(DB_COUNT, |i| c_int::try_from(i).expect("eight slots"))
@@ -77,7 +77,7 @@ impl TabPage {
     pub(crate) fn diff_slot_holds(self, idx: usize, buffer: Buf) -> bool {
         buffer
             .try_id()
-            .is_some_and(|id| self.tp_diffbuf[idx] == Some(id))
+            .is_some_and(|id| self.tp_diffbuf()[idx] == Some(id))
     }
 
     /// Lend the tab page's block list to `f`.
@@ -88,16 +88,34 @@ impl TabPage {
     /// and buffer reads, and why the slot table they need is copied out
     /// before the call. A loan that changes how many blocks there are bumps
     /// `tp_diff_gen`.
+    ///
+    /// The loan is an [`edit`](TabPage::edit): `f` reaching the tab page
+    /// through any handle panics rather than aliasing the list.
     #[inline(always)]
     pub(crate) fn with_diff<R>(self, f: impl FnOnce(&mut Vec<DiffBlock>) -> R) -> R {
-        let mut tabpage = self;
-        let blocks = &mut tabpage.tp_diff;
-        let before = blocks.len();
-        let r = f(blocks);
-        if blocks.len() != before {
+        let mut tabpage = self.edit();
+        let before = tabpage.tp_diff.len();
+        let r = f(&mut tabpage.tp_diff);
+        if tabpage.tp_diff.len() != before {
             tabpage.tp_diff_gen = tabpage.tp_diff_gen.wrapping_add(1);
         }
         r
+    }
+
+    /// How many blocks the diff has.
+    #[inline]
+    pub(crate) fn diff_len(self) -> usize {
+        self.read().tp_diff.len()
+    }
+
+    /// Put `buffer` in diff slot `idx`, or empty it.
+    ///
+    /// # Panics
+    ///
+    /// When `idx` is not a diff slot.
+    #[inline]
+    pub(crate) fn set_diffbuf(self, idx: usize, buffer: Option<BufId>) {
+        self.edit().tp_diffbuf[idx] = buffer;
     }
 }
 
@@ -115,12 +133,12 @@ impl DiffBlock {
 
 /// Take `buffer` out of every tabpage's diff.
 pub fn diff_buf_delete(buffer: Buf) {
-    for mut tp in tabs() {
+    for tp in tabs() {
         let i = tp.diff_index(buffer);
         if i != DB_COUNT {
             let i = usize::try_from(i).expect("a diff-buffer index is never negative");
-            tp.tp_diffbuf[i] = None;
-            tp.tp_diff_invalid = 1;
+            tp.set_diffbuf(i, None);
+            tp.set_tp_diff_invalid(1);
             if tp.is_current() {
                 NEED_DIFF_REDRAW.set(true);
                 redraw_later(Win::current(), UPD_VALID);
@@ -141,26 +159,26 @@ pub fn diff_buf_adjust(win: Win) {
     if windows().any(|wp| wp.w_buffer == win.w_buffer && wp.w_onebuf_opt.wo_diff != 0) {
         return;
     }
-    let mut tp = TabPage::current();
+    let tp = TabPage::current();
     let i = tp.diff_index(win.buffer());
     if i != DB_COUNT {
         let i = usize::try_from(i).expect("a diff-buffer index is never negative");
-        tp.tp_diffbuf[i] = None;
-        tp.tp_diff_invalid = 1;
+        tp.set_diffbuf(i, None);
+        tp.set_tp_diff_invalid(1);
         diff_redraw(true);
     }
 }
 
 /// Put `buffer` in the current tabpage's diff, if there is a slot free.
 pub fn diff_buf_add(buffer: Buf) {
-    let mut tp = TabPage::current();
+    let tp = TabPage::current();
     if tp.diff_index(buffer) != DB_COUNT {
         return;
     }
     for i in 0..DB_COUNT as usize {
-        if tp.tp_diffbuf[i].is_none() {
-            tp.tp_diffbuf[i] = Some(buffer.id());
-            tp.tp_diff_invalid = 1;
+        if tp.tp_diffbuf()[i].is_none() {
+            tp.set_diffbuf(i, Some(buffer.id()));
+            tp.set_tp_diff_invalid(1);
             diff_redraw(true);
             return;
         }
@@ -170,11 +188,11 @@ pub fn diff_buf_add(buffer: Buf) {
 
 /// Empty the current tabpage's diff.
 pub(crate) fn diff_buf_clear() {
-    let mut tp = TabPage::current();
+    let tp = TabPage::current();
     for i in 0..DB_COUNT as usize {
-        if tp.tp_diffbuf[i].is_some() {
-            tp.tp_diffbuf[i] = None;
-            tp.tp_diff_invalid = 1;
+        if tp.tp_diffbuf()[i].is_some() {
+            tp.set_diffbuf(i, None);
+            tp.set_tp_diff_invalid(1);
             diff_redraw(true);
         }
     }
@@ -182,9 +200,9 @@ pub(crate) fn diff_buf_clear() {
 
 /// Mark every tabpage `buffer` is diffed in as needing a recompute.
 pub fn diff_invalidate(buffer: Buf) {
-    for mut tp in tabs() {
+    for tp in tabs() {
         if tp.diff_index(buffer) != DB_COUNT {
-            tp.tp_diff_invalid = 1;
+            tp.set_tp_diff_invalid(1);
             if tp.is_current() {
                 diff_redraw(true);
             }
@@ -225,7 +243,7 @@ fn inserted_deleted(line2: LineNr, amount: i32, amount_after: i32) -> (i32, i32)
 /// cases in a diagram; the numbers are kept in the comments below because the
 /// arms are otherwise indistinguishable.
 fn diff_mark_adjust_tp(
-    mut tabpage: TabPage,
+    tabpage: TabPage,
     idx: c_int,
     line1: LineNr,
     line2: LineNr,
@@ -236,8 +254,8 @@ fn diff_mark_adjust_tp(
         // The blocks will be recomputed before the next redraw, so
         // nothing below survives; `_update` also gets the folds redone.
         // The *marks* are still adjusted here, which `:%diffput` needs.
-        tabpage.tp_diff_invalid = 1;
-        tabpage.tp_diff_update = 1;
+        tabpage.set_tp_diff_invalid(1);
+        tabpage.set_tp_diff_update(1);
     }
     let idx = usize::try_from(idx).expect("a diff-buffer index is never negative");
     let edit = Edit {
@@ -248,10 +266,10 @@ fn diff_mark_adjust_tp(
         amount_after,
         busy: DIFF_BUSY.get(),
     };
-    let slots = tabpage.tp_diffbuf;
+    let slots = tabpage.tp_diffbuf();
     let reshaped = tabpage.with_diff(|blocks| edit.apply(blocks, &slots));
     if reshaped {
-        tabpage.tp_diff_gen = tabpage.tp_diff_gen.wrapping_add(1);
+        tabpage.set_tp_diff_gen(tabpage.tp_diff_gen().wrapping_add(1));
     }
 
     if tabpage.is_current() {
@@ -571,7 +589,8 @@ pub(crate) fn diff_copy_entry(
 }
 
 /// Empty `tabpage`'s block list.
-pub fn diff_clear(mut tabpage: TabPage) {
+pub fn diff_clear(tabpage: TabPage) {
+    let mut tabpage = tabpage.edit();
     tabpage.tp_diff.clear();
     tabpage.tp_diff_gen = tabpage.tp_diff_gen.wrapping_add(1);
 }

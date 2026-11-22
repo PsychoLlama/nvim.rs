@@ -270,7 +270,7 @@ fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool {
     // A window that changed parents is a layout change; a float has no parent
     // to change, and answers "not moved". Two identities compared, so neither
     // frame is read.
-    let moved = wp.w_floating || wp.frame().fr_parent == Win::current().frame().fr_parent;
+    let moved = wp.w_floating || wp.frame().fr_parent() == Win::current().frame().fr_parent();
     if !moved {
         crate::semsg!("E249: Window layout changed unexpectedly");
         return true;

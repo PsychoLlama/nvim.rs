@@ -173,7 +173,7 @@ fn close_all_elsewhere(buffer: Buf) {
         let mut nexttp = tp.next();
         if !tp.is_current() {
             // Start from `tp_lastwin` to close floating windows first.
-            let mut cur = tp.tp_lastwin.and_then(WinId::get);
+            let mut cur = tp.tp_lastwin().and_then(WinId::get);
             while let Some(wp) = cur {
                 if wp.w_buffer == buffer && !locked(wp) {
                     if layout_locked(CmdIdx::SIZE) {
@@ -222,7 +222,7 @@ pub(crate) fn one_window(win: Win, tabpage: Option<TabPage>) -> bool {
 /// affected window as the argument depending on the situation.
 pub(crate) fn only_window(win: Win, tabpage: Option<TabPage>) -> bool {
     let first = match tabpage {
-        Some(tp) => tp.tp_firstwin.and_then(WinId::get),
+        Some(tp) => tp.tp_firstwin().and_then(WinId::get),
         None => first_window(),
     }
     .expect("a window list has a head");
@@ -242,7 +242,7 @@ pub(crate) fn can_close_floats(tabpage: Option<TabPage>) -> bool {
         "tp != curtab && (tp || !is_aucmd_win(lastwin))"
     );
     let mut wp = match tabpage {
-        Some(tp) => tp.tp_lastwin.and_then(WinId::get),
+        Some(tp) => tp.tp_lastwin().and_then(WinId::get),
         None => crate::winlayer::last_window(),
     }
     .expect("a window list has a tail");
@@ -306,7 +306,7 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
     // closed the window while jumping to the other one.
     if let Some(prev) =
         valid_tab(prev_curtab.id()).filter(|_| TabPage::current_raw() != prev_curtab.raw())
-        && prev.tp_firstwin == Some(win.id())
+        && prev.tp_firstwin() == Some(win.id())
     {
         let _ = close_othertab(win, free_buf, prev, false);
     }

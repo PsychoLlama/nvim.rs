@@ -18,20 +18,32 @@
 //!
 //! - **odd** while the slot holds a value, **even** while it is vacant, so a
 //!   vacant slot matches no handle whatever generation it has reached;
-//! - the **top bit is reserved** (an edit guard will mark a value lent
-//!   mutably there, so that one compare answers "live and not lent"), so a
-//!   generation runs 1, 3, …, `GENERATION_LIMIT`;
+//! - the **top bit is the edit bit**: [`edit_at`] sets it for as long as
+//!   its [`SlotEdit`] lends the value mutably, so a handle's one exact
+//!   compare answers "live *and* not lent out" -- a read, a write or a
+//!   second edit through any other copy refuses while an edit is held. A
+//!   generation therefore runs 1, 3, …, `GENERATION_LIMIT`;
 //! - a slot whose generation reaches `GENERATION_LIMIT` **retires** when it
 //!   is emptied: its word goes to zero and it is never handed out again, so
 //!   no handle can ever see a generation come round a second time.
 //!
+//! # Reads and edits
+//!
+//! Beside the generation, a slot counts the [`SlotRead`]s of its value that
+//! are out ([`read_at`]). An edit, a field write ([`check_write`]) and
+//! emptying the slot all refuse while the count is not zero, so a shared
+//! borrow handed out by a read guard cannot be written under or freed; an
+//! edit in turn refuses every read. The handles that lend through these
+//! guards alone (`winlayer`'s `TabPage` and `FrameRef`) are therefore
+//! sound however their copies are used: the worst a misuse does is panic.
+//!
 //! # What this does not check
 //!
 //! A [`SlotRef`] is `Copy`, and [`DerefMut`] through one copy while a borrow
-//! from another is held aliases, as the `winlayer` handles do:
-//! the handle checks **liveness**, not exclusivity. The borrow lasts as long
-//! as the field access that asked for it; hold none across a call that may
-//! reach the same value through another copy.
+//! from another is held aliases, as the `winlayer` handles still built on
+//! plain `Deref`/`DerefMut` do: those check **liveness**, not exclusivity.
+//! The borrow lasts as long as the field access that asked for it; hold
+//! none across a call that may reach the same value through another copy.
 //!
 //! # Pools live in statics
 //!
@@ -53,6 +65,7 @@
 
 use core::cell::{Cell, UnsafeCell};
 use core::fmt;
+use core::marker::PhantomData;
 use core::mem::{ManuallyDrop, MaybeUninit, offset_of};
 use core::ops::{Deref, DerefMut};
 use core::ptr::{self, NonNull};
@@ -67,8 +80,13 @@ const GENERATION_LIMIT: u32 = 0x7FFF_FFFF;
 /// never on the vacant list.
 const RETIRED_GENERATION: u32 = 0;
 
+/// The bit an edit sets in its slot's generation word while it lends the
+/// value mutably. No generation reaches it (`GENERATION_LIMIT`).
+pub(crate) const SLOT_EDIT_BIT: u32 = 0x8000_0000;
+
 /// One value's place: the generation word, the slot's index in its pool,
-/// and the value, initialised exactly while the generation is odd.
+/// the count of read guards out, and the value, initialised exactly while
+/// the generation is odd.
 ///
 /// `repr(C)` so the header comes first: a handle reads the generation at
 /// the slot's own address.
@@ -77,6 +95,8 @@ struct Slot<T> {
     generation: Cell<u32>,
     /// Where the pool files this slot; fixed for the slot's life.
     index: u32,
+    /// How many [`SlotRead`]s of the value are out.
+    readers: Cell<u32>,
     value: UnsafeCell<MaybeUninit<T>>,
 }
 
@@ -115,7 +135,37 @@ fn index_of<T>(slot: NonNull<Slot<T>>) -> u32 {
     }
 }
 
-/// The generation word of the slot whose value is at `value`, read now.
+/// The count of read guards out on the value in the slot at `slot`.
+#[inline(always)]
+fn readers<T>(slot: NonNull<Slot<T>>) -> &'static Cell<u32> {
+    // SAFETY: as `header`: the slot's memory lives for the rest of the run,
+    // and the count is a `Cell` beside the value, not part of it.
+    unsafe {
+        &*slot
+            .as_ptr()
+            .wrapping_byte_add(offset_of!(Slot<T>, readers))
+            .cast::<Cell<u32>>()
+    }
+}
+
+/// The slot whose value is at `value`, computed without reading anything.
+///
+/// # Safety
+/// As [`generation_at`].
+#[inline(always)]
+unsafe fn slot_of<T>(value: *const T) -> NonNull<Slot<T>> {
+    let slot = value
+        .wrapping_byte_sub(offset_of!(Slot<T>, value))
+        .cast::<Slot<T>>()
+        .cast_mut();
+    // SAFETY: the caller's promise makes it a slot's address (carrying the
+    // slot's provenance, which `value_ptr` handed on), and that is not null.
+    unsafe { NonNull::new_unchecked(slot) }
+}
+
+/// The generation the slot whose value is at `value` holds now, whether or
+/// not an edit is out: what a handle made from a bare address takes, and
+/// what "is this value still there?" compares.
 ///
 /// For the constructors that are handed a bare value address (`Win::new`
 /// and its siblings): what they promise is a live value, and a live value's
@@ -127,13 +177,186 @@ fn index_of<T>(slot: NonNull<Slot<T>>) -> u32 {
 /// and nothing else.
 #[inline(always)]
 pub(crate) unsafe fn generation_at<T>(value: *const T) -> u32 {
-    let slot = value
-        .wrapping_byte_sub(offset_of!(Slot<T>, value))
-        .cast::<Cell<u32>>();
-    // SAFETY: the caller's promise makes `slot` a slot's address, carrying
-    // the slot's provenance (`value_ptr` derived the value's address from
-    // it); a slot's memory is never given back, and its header is a `Cell`.
-    unsafe { (*slot).get() }
+    // SAFETY: the caller's promise.
+    unsafe { word_at(value) & !SLOT_EDIT_BIT }
+}
+
+/// The whole generation word of the slot whose value is at `value`: the
+/// generation, with the edit bit while an edit is out. A dereference
+/// compares this with its handle's generation *exactly*, so one compare
+/// refuses both a value that is gone and one that is lent out.
+///
+/// # Safety
+/// As [`generation_at`].
+#[inline(always)]
+pub(crate) unsafe fn word_at<T>(value: *const T) -> u32 {
+    // SAFETY: the caller's promise makes it a slot's address; a slot's
+    // memory is never given back.
+    header(unsafe { slot_of(value) }).get()
+}
+
+/// Why a slot refused a handle, for the message: gone, lent out to an edit,
+/// or read by a guard that the asked-for write would invalidate.
+#[cold]
+#[inline(never)]
+#[track_caller]
+fn refused<T>(word: u32, generation: u32, readers: u32) -> ! {
+    let type_name = core::any::type_name::<T>();
+    if word == generation | SLOT_EDIT_BIT {
+        panic!(
+            "a {type_name} was reached while an edit of it was held: an `edit()` guard lends \
+             it to nothing else, through any copy of its handle, until it is dropped"
+        )
+    }
+    if word != generation {
+        stale_slot(type_name)
+    }
+    panic!(
+        "a {type_name} was written or freed while {readers} `read()` guard(s) of it were held: \
+         a read guard's borrow may not be written under"
+    )
+}
+
+/// Panic unless the value at `value` is the one handed out under
+/// `generation`, no edit of it is out, and no read guard of it is out:
+/// what a field written in place through a handle asks first.
+///
+/// # Safety
+/// As [`generation_at`].
+#[inline(always)]
+#[track_caller]
+pub(crate) unsafe fn check_write<T>(value: *const T, generation: u32) {
+    // SAFETY: the caller's promise.
+    let slot = unsafe { slot_of(value) };
+    let (word, readers) = (header(slot).get(), readers(slot).get());
+    if word != generation || readers != 0 {
+        refused::<T>(word, generation, readers);
+    }
+}
+
+/// Lend the value at `value` mutably: the slot's word carries the edit bit
+/// until the guard is dropped, so every check through any copy of any
+/// handle -- a read, a write, another edit, emptying the slot -- refuses
+/// meanwhile, and the guard's borrow is the only one.
+///
+/// # Panics
+/// When the value is gone, already lent to an edit, or read by a guard.
+///
+/// # Safety
+/// As [`generation_at`].
+#[inline]
+#[track_caller]
+pub(crate) unsafe fn edit_at<'a, T>(value: *mut T, generation: u32) -> SlotEdit<'a, T> {
+    // SAFETY: the caller's promise.
+    let slot = unsafe { slot_of(value) };
+    let (word, readers) = (header(slot).get(), readers(slot).get());
+    if word != generation || readers != 0 {
+        refused::<T>(word, generation, readers);
+    }
+    header(slot).set(generation | SLOT_EDIT_BIT);
+    SlotEdit {
+        slot,
+        generation,
+        _lent: PhantomData,
+    }
+}
+
+/// Borrow the value at `value` for as long as the guard is held, counted:
+/// edits, field writes and emptying the slot refuse until it is dropped.
+///
+/// # Panics
+/// When the value is gone or lent to an edit.
+///
+/// # Safety
+/// As [`generation_at`].
+#[inline]
+#[track_caller]
+pub(crate) unsafe fn read_at<'a, T>(value: *mut T, generation: u32) -> SlotRead<'a, T> {
+    // SAFETY: the caller's promise.
+    let slot = unsafe { slot_of(value) };
+    let (word, count) = (header(slot).get(), readers(slot).get());
+    if word != generation {
+        refused::<T>(word, generation, count);
+    }
+    readers(slot).set(count.checked_add(1).expect("fewer than 2^32 read guards"));
+    SlotRead {
+        slot,
+        _shared: PhantomData,
+    }
+}
+
+/// A value lent mutably by [`edit_at`]. Holds the slot's address rather than
+/// a `&mut T`: a reference field would be retagged as protected when the
+/// guard is moved into a call (`drop(edit)`), and the drop's write of the
+/// header beside it would then be undefined behaviour.
+pub(crate) struct SlotEdit<'a, T> {
+    slot: NonNull<Slot<T>>,
+    generation: u32,
+    _lent: PhantomData<&'a mut T>,
+}
+
+impl<T> Deref for SlotEdit<'_, T> {
+    type Target = T;
+
+    #[inline(always)]
+    fn deref(&self) -> &T {
+        // SAFETY: live (`edit_at` checked), and the edit bit refuses every
+        // other way to the value until this guard is dropped.
+        unsafe { &*value_ptr(self.slot) }
+    }
+}
+
+impl<T> DerefMut for SlotEdit<'_, T> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut T {
+        // SAFETY: as `deref`; `&mut self` is the one way in.
+        unsafe { &mut *value_ptr(self.slot) }
+    }
+}
+
+impl<T> Drop for SlotEdit<'_, T> {
+    #[inline(always)]
+    fn drop(&mut self) {
+        debug_assert_eq!(header(self.slot).get(), self.generation | SLOT_EDIT_BIT);
+        header(self.slot).set(self.generation);
+    }
+}
+
+impl<T> fmt::Debug for SlotEdit<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SlotEdit({} @ {:p})", index_of(self.slot), self.slot)
+    }
+}
+
+/// A value borrowed by [`read_at`]: counted in its slot until dropped.
+pub(crate) struct SlotRead<'a, T> {
+    slot: NonNull<Slot<T>>,
+    _shared: PhantomData<&'a T>,
+}
+
+impl<T> Deref for SlotRead<'_, T> {
+    type Target = T;
+
+    #[inline(always)]
+    fn deref(&self) -> &T {
+        // SAFETY: live and not lent to an edit (`read_at` checked), and the
+        // count refuses edits, writes and emptying until this is dropped.
+        unsafe { &*value_ptr(self.slot) }
+    }
+}
+
+impl<T> Drop for SlotRead<'_, T> {
+    #[inline(always)]
+    fn drop(&mut self) {
+        let count = readers(self.slot);
+        count.set(count.get() - 1);
+    }
+}
+
+impl<T> fmt::Debug for SlotRead<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SlotRead({} @ {:p})", index_of(self.slot), self.slot)
+    }
 }
 
 #[cold]
@@ -185,10 +408,11 @@ impl<T> fmt::Debug for SlotRef<T> {
 }
 
 impl<T> SlotRef<T> {
-    /// Whether the value this handle was given is still in its slot.
+    /// Whether the value this handle was given is still in its slot (lent
+    /// to an edit or not).
     #[inline(always)]
     pub(crate) fn is_live(self) -> bool {
-        header(self.slot).get() == self.generation
+        header(self.slot).get() & !SLOT_EDIT_BIT == self.generation
     }
 
     /// The slot's index in its pool.
@@ -232,12 +456,13 @@ impl<T> SlotRef<T> {
         }
     }
 
-    /// Panic unless the value is still there.
+    /// Panic unless the value is still there and not lent to an edit.
     #[inline(always)]
     #[track_caller]
     fn check(self) {
-        if !self.is_live() {
-            stale_slot(core::any::type_name::<T>());
+        let word = header(self.slot).get();
+        if word != self.generation {
+            refused::<T>(word, self.generation, readers(self.slot).get());
         }
     }
 }
@@ -358,6 +583,7 @@ impl<T> SlotPool<T> {
         let slot = NonNull::from(Box::leak(Box::new(Slot {
             generation: Cell::new(0),
             index,
+            readers: Cell::new(0),
             value: UnsafeCell::new(MaybeUninit::uninit()),
         })));
         self.slots.push(slot);
@@ -390,7 +616,7 @@ impl<T> SlotPool<T> {
         }
     }
 
-    /// Check `r` names a live value of *this* pool.
+    /// Check `r` names a live value of *this* pool, lent to no edit.
     #[track_caller]
     fn own(&self, r: SlotRef<T>) {
         r.check();
@@ -398,6 +624,17 @@ impl<T> SlotPool<T> {
             self.slots.get(index_of(r.slot) as usize) == Some(&r.slot),
             "a slot handle from another pool"
         );
+    }
+
+    /// [`SlotPool::own`], and no read guard out either: what emptying the
+    /// slot asks, so a guard's borrow never outlives its value.
+    #[track_caller]
+    fn own_unread(&self, r: SlotRef<T>) {
+        self.own(r);
+        let count = readers(r.slot).get();
+        if count != 0 {
+            refused::<T>(r.generation, r.generation, count);
+        }
     }
 
     /// Take `value` into a slot, answering its handle.
@@ -453,7 +690,7 @@ impl<T> SlotPool<T> {
     /// When `r` is stale, or another pool's.
     #[track_caller]
     pub(crate) fn remove(&mut self, r: SlotRef<T>) -> T {
-        self.own(r);
+        self.own_unread(r);
         // SAFETY: the value is live (`own`), and the generation moves on
         // below before anything else can run, so nothing reads it again.
         let value = unsafe { value_ptr(r.slot).read() };
@@ -468,7 +705,7 @@ impl<T> SlotPool<T> {
     /// When `r` is stale, or another pool's.
     #[track_caller]
     pub(crate) fn forget(&mut self, r: SlotRef<T>) {
-        self.own(r);
+        self.own_unread(r);
         self.vacated(r.slot);
     }
 
@@ -479,7 +716,7 @@ impl<T> SlotPool<T> {
     /// When `r` is stale, or another pool's.
     #[track_caller]
     pub(crate) fn detach(&mut self, r: SlotRef<T>) -> Detached<T> {
-        self.own(r);
+        self.own_unread(r);
         // Vacant-shaped (or retired) so no handle matches, but kept off the
         // vacant list: its value is still there, owned by the `Detached`.
         Self::vacate(r.slot);
@@ -533,7 +770,10 @@ impl<T> SlotPool<T> {
         self.own(r);
         // SAFETY: live (`own`); the borrow is the pool's, and emptying the
         // slot needs the pool too. As with `DerefMut`, a copy of `r` used
-        // meanwhile is the aliasing the module docs leave to the caller.
+        // meanwhile is the aliasing the module docs leave to the caller --
+        // and so is a read guard out (only `winlayer`'s handles take those,
+        // and their pools are never borrowed through here). Not counted:
+        // the condition stacks take this path per command line.
         unsafe { &mut *value_ptr(r.slot) }
     }
 
@@ -810,6 +1050,64 @@ mod tests {
         POOL.with_mut(|pool| pool.forget(a));
         // SAFETY: as above; the slot outlives its value.
         assert_ne!(unsafe { generation_at(a.raw()) }, a.generation());
+    }
+
+    fn edit_of<T>(r: SlotRef<T>) -> SlotEdit<'static, T> {
+        // SAFETY: a handle's address is its slot's value address.
+        unsafe { edit_at(r.raw(), r.generation()) }
+    }
+
+    fn read_of<T>(r: SlotRef<T>) -> SlotRead<'static, T> {
+        // SAFETY: as `edit_of`.
+        unsafe { read_at(r.raw(), r.generation()) }
+    }
+
+    fn write_check_of<T>(r: SlotRef<T>) {
+        // SAFETY: as `edit_of`.
+        unsafe { check_write(r.raw(), r.generation()) }
+    }
+
+    #[test]
+    fn an_edit_refuses_every_other_way_in_until_it_is_dropped() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+        static POOL: GlobalCell<SlotPool<Vec<u32>>> = GlobalCell::new(SlotPool::new());
+        let a = POOL.with_mut(|pool| pool.insert(vec![1]));
+        let copy = a;
+        {
+            let mut edit = edit_of(a);
+            edit.push(2);
+            assert!(copy.is_live(), "lent out, not gone");
+            assert!(catch_unwind(AssertUnwindSafe(|| copy.len())).is_err());
+            assert!(catch_unwind(AssertUnwindSafe(|| drop(edit_of(a)))).is_err());
+            assert!(catch_unwind(AssertUnwindSafe(|| drop(read_of(a)))).is_err());
+            assert!(catch_unwind(AssertUnwindSafe(|| write_check_of(a))).is_err());
+            // SAFETY: `a.raw()` is a slot's value address.
+            assert_eq!(unsafe { generation_at(a.raw()) }, a.generation());
+            edit.push(3);
+        }
+        assert_eq!(*copy, [1, 2, 3]);
+        drop(POOL.with_mut(|pool| pool.remove(a)));
+    }
+
+    #[test]
+    fn a_read_refuses_writes_and_emptying_until_the_last_one_is_dropped() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+        static POOL: GlobalCell<SlotPool<Vec<u32>>> = GlobalCell::new(SlotPool::new());
+        let a = POOL.with_mut(|pool| pool.insert(vec![4]));
+        let first = read_of(a);
+        let second = read_of(a);
+        assert_eq!((first[0], second[0], a[0]), (4, 4, 4));
+        assert!(catch_unwind(AssertUnwindSafe(|| drop(edit_of(a)))).is_err());
+        assert!(catch_unwind(AssertUnwindSafe(|| write_check_of(a))).is_err());
+        POOL.with_mut(|pool| {
+            assert!(catch_unwind(AssertUnwindSafe(|| pool.forget(a))).is_err());
+        });
+        drop(first);
+        assert!(catch_unwind(AssertUnwindSafe(|| write_check_of(a))).is_err());
+        drop(second);
+        edit_of(a).push(5);
+        assert_eq!(*a, [4, 5]);
+        drop(POOL.with_mut(|pool| pool.remove(a)));
     }
 
     /// Counts the drops of the boxed values below.

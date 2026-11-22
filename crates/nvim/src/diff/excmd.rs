@@ -347,11 +347,11 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
     if excmd.forceit {
         diff_buf_clear();
     }
-    let mut tp = TabPage::current();
+    let tp = TabPage::current();
     if !diffwin {
         DIFF_NEED_UPDATE.set(false);
-        tp.tp_diff_invalid = 0;
-        tp.tp_diff_update = 0;
+        tp.set_tp_diff_invalid(0);
+        tp.set_tp_diff_update(0);
         diff_clear(tp);
     }
     if !diffwin && p_sbo(|value| value.to_bytes().contains(&b'h')) {

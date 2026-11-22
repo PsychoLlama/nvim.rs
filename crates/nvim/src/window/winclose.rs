@@ -165,7 +165,7 @@ impl Closing {
             win_frame: if win.w_floating {
                 None
             } else {
-                win.frame().fr_parent
+                win.frame().fr_parent()
             },
             had_diffmode: win.w_onebuf_opt.wo_diff != 0,
             help_window: false,
@@ -249,12 +249,12 @@ impl Closing {
             drop_grid(win);
             debug_assert!(tabs().next().is_some(), "first_tabpage != NULL");
             if win.w_config.external {
-                for mut tp in tabs() {
-                    if !tp.is_current() && tp.tp_curwin == Some(win.id()) {
+                for tp in tabs() {
+                    if !tp.is_current() && tp.tp_curwin() == Some(win.id()) {
                         // An autocommand can still abort the closing of this
                         // window, but carrying the change out anyway is no
                         // catastrophe.
-                        tp.tp_curwin = tp.tp_firstwin;
+                        tp.set_tp_curwin(tp.tp_firstwin());
                     }
                 }
             }
@@ -315,7 +315,7 @@ impl Closing {
                 // If the frame of the closed window contains the new current
                 // window, resize only that frame; otherwise resize all
                 // windows.
-                let same = Win::current().frame().fr_parent == self.win_frame;
+                let same = Win::current().frame().fr_parent() == self.win_frame;
                 equal(Some(Win::current()), same, freed.dir);
             } else {
                 comp_positions();
@@ -636,7 +636,7 @@ fn close_in_tab(win: Win, free_buf: bool, tabpage: TabPage, force: bool) -> Resu
             return Err(Stopped::AsIs);
         }
     }
-    if tabpage.tp_firstwin == tabpage.tp_lastwin && !tabpage.tp_did_tabclosedpre {
+    if tabpage.tp_firstwin() == tabpage.tp_lastwin() && !tabpage.tp_did_tabclosedpre() {
         tabclosedpre(tabpage);
         // The autocommand may have freed the window already.
         if !valid_win_any_tab(win.id()) {
@@ -701,17 +701,17 @@ fn close_floats_in_tab(win: Win, tabpage: TabPage, force: bool) -> Result<(), St
 fn free_in_tab(win: Win, tabpage: TabPage) -> Result<(), Stopped> {
     // When closing the last window of a tab page, remove the tab page.
     let mut free_tp_idx = 0;
-    if tabpage.tp_firstwin == tabpage.tp_lastwin {
+    if tabpage.tp_firstwin() == tabpage.tp_lastwin() {
         free_tp_idx = tab_index(tabpage);
         let h = tabline_rows();
         if FIRST_TABPAGE.get() == Some(tabpage.id()) {
-            FIRST_TABPAGE.set(tabpage.tp_next);
+            FIRST_TABPAGE.set(tabpage.tp_next());
         } else {
-            let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == Some(tabpage.id())) else {
+            let Some(ptp) = tabs().find(|ptp| ptp.tp_next() == Some(tabpage.id())) else {
                 internal_error(c"win_close_othertab()");
                 return Err(Stopped::AsIs);
             };
-            ptp.tp_next = tabpage.tp_next;
+            ptp.set_tp_next(tabpage.tp_next());
         }
         REDRAW_TABLINE.set(true);
         if h != tabline_rows() {
@@ -752,7 +752,7 @@ fn free_in_tab(win: Win, tabpage: TabPage) -> Result<(), Stopped> {
 /// page here, so `tp_lastwin` is the live answer.
 fn tab_last_win(tabpage: TabPage) -> Win {
     tabpage
-        .tp_lastwin
+        .tp_lastwin()
         .and_then(WinId::get)
         .expect("a window list has a tail")
 }

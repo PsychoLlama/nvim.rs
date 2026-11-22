@@ -2370,6 +2370,7 @@ COPY_KEEPERS = {
     "crates/nvim/src/winlayer.rs::Buf": "handle: the buffer's {pointer, stamp}",
     "crates/nvim/src/winlayer.rs::FrameRef": "handle: a frame's {pointer, stamp}",
     "crates/nvim/src/winlayer.rs::TabPage": "handle: the tab page's {pointer, stamp}",
+    "crates/nvim/src/winlayer.rs::PosRef": "handle: a window's cursor, named by the window's handle",
     "crates/nvim/src/xdiff/xdiffi/mod.rs": "ffi: vendored libxdiff's values",
     "crates/nvim/src/xdiff/xtypes.rs": "ffi: vendored libxdiff's values",
 }

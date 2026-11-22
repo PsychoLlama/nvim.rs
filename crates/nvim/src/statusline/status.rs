@@ -90,7 +90,7 @@ pub fn win_redr_status(window: Win) {
 pub fn stl_connected(window: Win) -> bool {
     let mut fr = window.frame();
     while let Some(parent) = fr.parent() {
-        if c_int::from(parent.fr_layout) == FR_COL {
+        if c_int::from(parent.fr_layout()) == FR_COL {
             // A row below this one ends the run.
             if fr.next().is_some() {
                 break;

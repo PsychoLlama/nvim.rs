@@ -50,7 +50,7 @@ pub(crate) fn equal(next_curwin: Option<Win>, current: bool, dir: u8) {
         0,
         tabline_rows(),
         COLUMNS.get(),
-        topfr.fr_height,
+        topfr.fr_height(),
     );
     if !is_autocmd_window(next_curwin) {
         fix_scroll(true);
@@ -70,10 +70,10 @@ fn equal_rec(
     width: c_int,
     height: c_int,
 ) {
-    if c_int::from(topfr.fr_layout) == FR_LEAF {
+    if c_int::from(topfr.fr_layout()) == FR_LEAF {
         topfr.equalize_leaf(col, row, width, height);
     } else {
-        let axis = if c_int::from(topfr.fr_layout) == FR_ROW {
+        let axis = if c_int::from(topfr.fr_layout()) == FR_ROW {
             Axis::Width
         } else {
             Axis::Height
@@ -96,9 +96,9 @@ impl FrameRef {
     /// A leaf: move and resize the one window, and redraw if either changed.
     fn equalize_leaf(self, col: c_int, row: c_int, width: c_int, height: c_int) {
         let mut win = self.win().expect("a leaf frame holds a window");
-        if self.fr_height != height
+        if self.fr_height() != height
             || win.w_winrow != row
-            || self.fr_width != width
+            || self.fr_width() != width
             || win.w_wincol != col
         {
             win.w_winrow = row;
@@ -139,9 +139,8 @@ fn equal_line(
     width: c_int,
     height: c_int,
 ) {
-    let mut topfr = topfr;
-    topfr.fr_width = width;
-    topfr.fr_height = height;
+    topfr.set_fr_width(width);
+    topfr.set_fr_height(height);
     let skipped = dir == axis.skipped_by();
     let (mut pos, mut len) = axis.along(col, row, width, height);
     let mut sh = if skipped {
@@ -317,8 +316,8 @@ impl Axis {
 
     fn size(self, fr: FrameRef) -> c_int {
         match self {
-            Axis::Width => fr.fr_width,
-            Axis::Height => fr.fr_height,
+            Axis::Width => fr.fr_width(),
+            Axis::Height => fr.fr_height(),
         }
     }
 
@@ -340,15 +339,15 @@ impl Axis {
     /// The size a pinned frame was given by [`share`].
     fn new_size(self, fr: FrameRef) -> c_int {
         match self {
-            Axis::Width => fr.fr_newwidth,
-            Axis::Height => fr.fr_newheight,
+            Axis::Width => fr.fr_newwidth(),
+            Axis::Height => fr.fr_newheight(),
         }
     }
 
-    fn set_new_size(self, mut fr: FrameRef, size: c_int) {
+    fn set_new_size(self, fr: FrameRef, size: c_int) {
         match self {
-            Axis::Width => fr.fr_newwidth = size,
-            Axis::Height => fr.fr_newheight = size,
+            Axis::Width => fr.set_fr_newwidth(size),
+            Axis::Height => fr.set_fr_newheight(size),
         }
     }
 

@@ -333,7 +333,7 @@ fn move_after(win1: Win, win2: Win) {
         return;
     }
     if win2.w_next != Some(win1.id()) {
-        if win1.frame().fr_parent != win2.frame().fr_parent {
+        if win1.frame().fr_parent() != win2.frame().fr_parent() {
             iemsg(c"INTERNAL: trying to move a window into another frame");
             return;
         }
@@ -346,18 +346,18 @@ fn move_after(win1: Win, win2: Win) {
             if prev.w_vsep_width == 1 {
                 // The last window has no separator: give it to `win1`.
                 prev.w_vsep_width = 0;
-                prev.frame().fr_width -= 1;
+                prev.frame().set_fr_width(prev.frame().fr_width() - 1);
                 win1.w_vsep_width = 1;
-                win1.frame().fr_width += 1;
+                win1.frame().set_fr_width(win1.frame().fr_width() + 1);
             }
         } else if LASTWIN.get() == Some(win2.id()) {
             swap_field!(win1, win2, w_status_height);
             swap_field!(win1, win2, w_hsep_height);
             if win1.w_vsep_width == 1 {
                 win2.w_vsep_width = 1;
-                win2.frame().fr_width += 1;
+                win2.frame().set_fr_width(win2.frame().fr_width() + 1);
                 win1.w_vsep_width = 0;
-                win1.frame().fr_width -= 1;
+                win1.frame().set_fr_width(win1.frame().fr_width() - 1);
             }
         }
         win_remove(win1, None);
@@ -378,7 +378,7 @@ impl FrameRef {
     /// plus its window bar where there is one.
     pub(crate) fn max_win_count(self, height: c_int) -> c_int {
         let per_win = number_as_int(p_wmh()) + STATUS_HEIGHT;
-        if c_int::from(self.fr_layout) != FR_COL {
+        if c_int::from(self.fr_layout()) != FR_COL {
             return height / (per_win + self.first_window().w_winbar_height);
         }
         if global_winbar_rows() != 0 {

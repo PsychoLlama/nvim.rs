@@ -69,7 +69,7 @@ fn ui_ext_tabline_update() {
     let mut tab_infos = Vec::with_capacity(tabs().count());
     for tp in tabs() {
         let mut info = DictBuilder::with_capacity(2);
-        let (handle, cwp) = (tp.handle as TabpageHandle, current_window_of(tp));
+        let (handle, cwp) = (tp.handle() as TabpageHandle, current_window_of(tp));
         put(&mut info, c"tab", Object::tabpage(handle));
         let name = trans_bufname(cwp.buffer());
         put(
@@ -96,7 +96,7 @@ fn ui_ext_tabline_update() {
     }
 
     let (tab, buf) = (
-        TabPage::current().handle as TabpageHandle,
+        TabPage::current().handle() as TabpageHandle,
         Buf::current().handle as BufferHandle,
     );
     ui_call_tabline_update(tab, tab_infos.into(), buf, bufs.into());
@@ -162,7 +162,7 @@ fn draw_default_tabline() {
             break;
         }
         let scol = col;
-        let (cwp, current) = (current_window_of(tp), tp.tp_topframe == TOPFRAME.get());
+        let (cwp, current) = (current_window_of(tp), tp.tp_topframe() == TOPFRAME.get());
         if current {
             attr = win_hl(cwp, HLF_TPS);
         }

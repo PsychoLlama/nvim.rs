@@ -579,9 +579,9 @@ pub(crate) fn normal_check(ns: &mut NormalState) -> Step {
         normal_check_window_scrolled();
         normal_check_buffer_modified();
         normal_check_safe_state();
-        if TabPage::current().tp_diff_update != 0 || TabPage::current().tp_diff_invalid != 0 {
+        if TabPage::current().tp_diff_update() != 0 || TabPage::current().tp_diff_invalid() != 0 {
             diff_update(None);
-            TabPage::current().tp_diff_update = 0;
+            TabPage::current().set_tp_diff_update(0);
         }
         if DIFF_NEED_SCROLLBIND.get() {
             check_scrollbind(0, 0);

@@ -75,10 +75,11 @@ impl DiffLine {
         };
         let i = u32::try_from(i).ok().filter(|&i| i < num)?;
         let tp = TabPage::current();
-        if tp.tp_diff_gen != generation {
+        if tp.tp_diff_gen() != generation {
             return None;
         }
-        let block = tp.tp_diff.get(block as usize)?;
+        let tpr = tp.read();
+        let block = tpr.tp_diff.get(block as usize)?;
         block.df_changes.get((first + i) as usize).copied()
     }
 
@@ -266,8 +267,8 @@ pub(crate) fn diff_find_change(window: Win, lnum: LineNr, diffline: &mut DiffLin
     if idx == DB_COUNT {
         return false;
     }
-    let slots = tp.tp_diffbuf;
-    let generation = tp.tp_diff_gen;
+    let slots = tp.tp_diffbuf();
+    let generation = tp.tp_diff_gen();
     tp.with_diff(|blocks| {
         // The first block this line is not already past.
         let Some(block) = blocks.iter().position(|dp| lnum < dp.end(as_index(idx))) else {

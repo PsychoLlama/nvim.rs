@@ -62,7 +62,7 @@ fn var_scope(stack: &mut Stack) -> Result<Option<DictRef>, Raise> {
             b"w" => find_window_by_handle(handle)
                 .map(|win| win.and_then(|win| scope_dict(&win.w_winvar))),
             b"t" => find_tab_by_handle(handle)
-                .map(|tabpage| tabpage.and_then(|tabpage| scope_dict(&tabpage.tp_winvar))),
+                .map(|tabpage| tabpage.and_then(|tabpage| scope_dict(&tabpage.read().tp_winvar))),
             _ => return Err(Raise::message("invalid scope")),
         };
     found.map_err(|err| {

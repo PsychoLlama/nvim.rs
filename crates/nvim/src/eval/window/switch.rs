@@ -35,7 +35,7 @@ pub fn win_execute_before(args: &mut WinExecute, window: Win, tabpage: TabPage) 
         && (Win::current().w_localdir.is_some()
             || window.w_localdir.is_some()
             || !tabpage.is_current()
-                && (TabPage::current().tp_localdir.is_some() || tabpage.tp_localdir.is_some())
+                && (TabPage::current().has_localdir() || tabpage.has_localdir())
             || p_acd())
     {
         args.cwd = current_dir();
@@ -172,10 +172,10 @@ pub fn restore_win_noblock(switchwin: &mut SwitchWin, no_display: bool) {
             // `unuse_tabpage` writes the current window back into the tab
             // page it is leaving; that is the wrong window here, because
             // the caller only half entered this one.
-            let mut leaving = TabPage::current();
-            let old_tp_curwin = leaving.tp_curwin;
+            let leaving = TabPage::current();
+            let old_tp_curwin = leaving.tp_curwin();
             unuse_tabpage(leaving);
-            leaving.tp_curwin = old_tp_curwin;
+            leaving.set_tp_curwin(old_tp_curwin);
             use_tabpage(back);
         } else {
             goto_tabpage_tp(back, false, false);

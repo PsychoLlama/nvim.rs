@@ -233,7 +233,7 @@ pub(crate) fn did_set_cmdheight(args: &mut OptSet) -> Result<(), OptError> {
         P_CH.set(room);
     }
     let laid_out =
-        OptInt::from(tabline_height() + global_stl_height() + current_topframe().fr_height);
+        OptInt::from(tabline_height() + global_stl_height() + current_topframe().fr_height());
     if (p_ch() != old_value || laid_out != OptInt::from(ROWS.get()) - p_ch()) && FULL_SCREEN.get() {
         command_height();
     }
@@ -339,12 +339,12 @@ pub(crate) fn did_set_laststatus(args: &mut OptSet) -> Result<(), OptError> {
     let (old_value, value) = (f.old_number(), f.new_number());
     let top = current_topframe();
     if value == 3 && old_value != 3 {
-        new_height(top, top.fr_height - STATUS_HEIGHT, false, false, false);
+        new_height(top, top.fr_height() - STATUS_HEIGHT, false, false, false);
         win_comp_pos();
         CLEAR_CMDLINE.set(true);
     }
     if old_value == 3 && value != 3 {
-        new_height(top, top.fr_height + STATUS_HEIGHT, false, false, false);
+        new_height(top, top.fr_height() + STATUS_HEIGHT, false, false, false);
         win_comp_pos();
     }
     status_redraw_curbuf();

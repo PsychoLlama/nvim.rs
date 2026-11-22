@@ -171,7 +171,7 @@ impl TabPage {
     /// The next tab page in the editor's list, if any.
     #[inline(always)]
     pub fn next(self) -> Option<Self> {
-        self.tp_next.and_then(TabId::get)
+        self.tp_next().and_then(TabId::get)
     }
 }
 
@@ -239,7 +239,7 @@ pub(crate) fn windows_in_tab(tabpage: TabPage) -> impl Iterator<Item = Win> {
     windows_from(if tabpage.is_current() {
         first_window()
     } else {
-        tabpage.tp_firstwin.and_then(WinId::get)
+        tabpage.tp_firstwin().and_then(WinId::get)
     })
 }
 

@@ -139,7 +139,7 @@ pub fn getout(mut exitval: c_int) -> ! {
             let mut next_tp = tp.next();
             let mut win = match tp.is_current() {
                 true => first_window(),
-                false => tp.tp_firstwin.and_then(WinId::get),
+                false => tp.tp_firstwin().and_then(WinId::get),
             };
             while let Some(wp) = win {
                 // An autocommand may already have closed the buffer, so the

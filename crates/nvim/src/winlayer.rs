@@ -8,11 +8,13 @@
 //! `&mut` would invalidate a pointer the caller still holds.
 //!
 //! What does not have to stay raw is the *dereference*. [`Win`], [`Buf`],
-//! [`FrameRef`], [`TabPage`] and [`PosRef`] each wrap one pointer and
-//! make its **construction** the unsafe step; from there [`Deref`]/[`DerefMut`]
-//! give ordinary field access and the accessors below give the projections a
-//! bare `&`/`&mut` cannot express — the buffer behind a window, a line of that
-//! buffer. Every one rests on the single promise the constructor took, which
+//! [`FrameRef`] and [`TabPage`] each wrap one pointer and make its
+//! **construction** the unsafe step; from there `Deref`/[`DerefMut`] (on
+//! `Win` and `Buf`), or field getters, setters and `edit()`/`read()` guards
+//! (on `TabPage` and `FrameRef`, and on [`PosRef`], a window's cursor) give
+//! field access, all of it checked in the child `deref`, and the accessors
+//! below give the projections a bare `&`/`&mut` cannot express — the buffer
+//! behind a window, a line of that buffer. Every one rests on the single promise the constructor took, which
 //! each `pub unsafe fn` in a consumer restates in its own `# Safety` section.
 //! A family adds the wrappers it needs as its own `impl Win` block (an
 //! inherent impl may live in any module of the defining crate) — the fold
@@ -116,9 +118,10 @@
 //! previously derived from the same object, so an interior `*mut Pos` taken
 //! earlier is **invalidated by the next write through the handle**. Nothing
 //! warns but Miri, and only if a test walks that path (p23-5). So when a body
-//! holds an interior raw pointer across writes through a `Win`/`Buf`, derive
-//! the address with [`Win::cursor`], or from the handle's `raw()` plus the
-//! field's offset, which compute it from the base without forming a `&mut`, or
+//! holds an interior raw pointer across writes through a `Win`/`Buf`, take
+//! the field by value instead ([`Win::cursor`] reads and writes the cursor in
+//! place), derive the address from the handle's `raw()` plus the field's
+//! offset, which computes it from the base without forming a `&mut`, or
 //! re-derive it after each write.
 //! Retyping a `*mut Window` parameter to `Win` is not by itself enough.
 //!
@@ -177,14 +180,14 @@ pub(crate) use walk::{
 
 use core::mem::offset_of;
 use core::num::NonZero;
-use core::ops::{Deref, DerefMut};
+use core::ops::DerefMut;
 use core::ptr;
 
 use crate::drawscreen::redraw_later;
 use crate::mark::mark_mb_adjustpos;
 use crate::memline::ml_get_buf_len;
 use crate::slot::{self, SlotBox, SlotRef};
-use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, SynBlock, Tabpage, Window};
+use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, SynBlock, Tabpage, Window};
 use crate::winlayer::graph::{CURBUF, CURRENT_BUF, CURRENT_TAB, CURRENT_WIN, CURTAB, curwin};
 
 // ---------------------------------------------------------------------------
@@ -211,7 +214,7 @@ pub struct Win {
     /// The window's handle, read while it was live, and its slot's
     /// generation when this was made, in one word ([`Stamp`]). The handle is
     /// [`Win::handle`], not to be confused with `Window`'s own field of that
-    /// name, which [`Deref`] still reaches: `win.handle` is a read of the
+    /// name, which `Deref` still reaches: `win.handle` is a read of the
     /// *window*, [`Win::handle`] a read of this copy.
     ///
     /// A zero handle means "no identity" — a null [`Win`], or a window whose
@@ -254,26 +257,13 @@ pub struct TabPage {
     stamp: Stamp,
 }
 
-/// A cursor or mark position the caller has promised is live.
+/// A window's cursor, named through its window: read by value and written
+/// in place (the child `deref`), every access checked against the window's
+/// slot. Lends no reference, so no `&mut Pos` into a window outlives the
+/// statement that wrote it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct PosRef(*mut Pos);
-
-impl Deref for PosRef {
-    type Target = Pos;
-
-    #[inline(always)]
-    fn deref(&self) -> &Pos {
-        // SAFETY: the constructor's promise — a live position.
-        unsafe { &*self.0 }
-    }
-}
-
-impl DerefMut for PosRef {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Pos {
-        // SAFETY: the constructor's promise — a live position.
-        unsafe { &mut *self.0 }
-    }
+pub struct PosRef {
+    win: Win,
 }
 
 impl Win {
@@ -479,16 +469,7 @@ impl Win {
     /// The window's cursor, which lives inside the window.
     #[inline(always)]
     pub fn cursor(self) -> PosRef {
-        // A field's address is the object's plus a constant, and computing it
-        // that way needs no dereference: `wrapping_byte_add` keeps the whole
-        // `Window`'s provenance, exactly as `&raw mut (*self.0).w_cursor`
-        // would, without asking the window to be readable to say where its
-        // cursor is.
-        PosRef(
-            self.ptr
-                .wrapping_byte_add(offset_of!(Window, w_cursor))
-                .cast(),
-        )
+        PosRef { win: self }
     }
 
     /// The buffer this window shows, `None` for the moment between losing one
@@ -706,8 +687,10 @@ impl Buf {
 
     /// Step `pos` back off a trail byte, so it names a whole character.
     #[inline(always)]
-    pub fn snap_to_char(self, mut pos: PosRef) {
-        mark_mb_adjustpos(self, &mut pos);
+    pub fn snap_to_char(self, pos: PosRef) {
+        let mut at = pos.get();
+        mark_mb_adjustpos(self, &mut at);
+        pos.set(at);
     }
 }
 
@@ -824,7 +807,7 @@ impl TabPage {
     /// Give this tab page its handle. [`Win::set_handle`].
     #[inline]
     pub(crate) fn set_handle(&mut self, handle: Handle) {
-        DerefMut::deref_mut(self).handle = handle;
+        self.edit().handle = handle;
         self.stamp = Stamp::new(handle, self.stamp.generation());
     }
 
@@ -851,7 +834,7 @@ impl TabPage {
     /// `topframe` global the way [`windows_in_tab`] switches to `FIRSTWIN`.
     #[inline(always)]
     pub fn topframe(self) -> FrameRef {
-        self.tp_topframe
+        self.tp_topframe()
             .and_then(FrameId::get)
             .expect("a live tab page has a layout tree")
     }
@@ -868,21 +851,7 @@ impl TabPage {
     /// wants `Win::current()`.
     #[inline(always)]
     pub(crate) fn current_window(self) -> Option<Win> {
-        self.tp_curwin.and_then(WinId::get)
-    }
-}
-
-impl PosRef {
-    /// # Safety
-    /// `pos` must stay a live position for as long as the value is used.
-    #[inline(always)]
-    pub const unsafe fn new(pos: *mut Pos) -> Self {
-        Self(pos)
-    }
-
-    #[inline(always)]
-    pub fn raw(self) -> *mut Pos {
-        self.0
+        self.tp_curwin().and_then(WinId::get)
     }
 }
 
@@ -902,11 +871,11 @@ mod tests {
         let _held = editor_state_lock();
         let mut win = bare_window();
         let mut alias = win;
-        let mut cursor = win.cursor();
+        let cursor = win.cursor();
         alias.w_cursor.lnum = LineNr::new(4);
-        assert_eq!(cursor.lnum, LineNr::new(4));
+        assert_eq!(cursor.lnum(), LineNr::new(4));
         win.w_topline = LineNr::new(2);
-        cursor.col = ColNr::new(7);
+        cursor.set_col(ColNr::new(7));
         assert_eq!(alias.w_cursor.col, ColNr::new(7));
         assert_eq!(alias.w_topline, LineNr::new(2));
         let found = window(win.handle()).expect("a registered window");
@@ -941,16 +910,16 @@ mod tests {
     #[test]
     fn a_tab_page_finds_its_top_frame_by_id() {
         let _held = editor_state_lock();
-        let mut tab = alloc_tabpage();
-        let mut frame = new_frame();
-        tab.tp_topframe = Some(frame.id());
-        frame.fr_width = 80;
-        let mut top = tab.topframe();
+        let tab = alloc_tabpage();
+        let frame = new_frame();
+        tab.set_tp_topframe(Some(frame.id()));
+        frame.set_fr_width(80);
+        let top = tab.topframe();
         assert_eq!(top, frame);
-        top.fr_height = 24;
-        assert_eq!((frame.fr_width, frame.fr_height), (80, 24));
+        top.set_fr_height(24);
+        assert_eq!((frame.fr_width(), frame.fr_height()), (80, 24));
         assert_eq!(tabpage(tab.handle()), Some(tab));
-        tab.tp_topframe = None;
+        tab.set_tp_topframe(None);
         frame.free();
         free_tab(tab);
     }

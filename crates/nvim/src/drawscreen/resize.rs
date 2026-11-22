@@ -164,13 +164,13 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
         let max_p_ch = ROWS.get() - min_rows(TabPage::current()) + 1;
         if p_ch() > 0 && p_ch() > OptInt::from(max_p_ch) {
             P_CH.set(OptInt::from(max_p_ch.max(1)));
-            TabPage::current().tp_ch_used = p_ch();
+            TabPage::current().set_tp_ch_used(p_ch());
         }
-        for mut tp in winlayer::tabs() {
+        for tp in winlayer::tabs() {
             if !tp.is_current() {
                 let max_tp_ch = ROWS.get() - min_rows(tp) + 1;
-                if tp.tp_ch_used > 0 && tp.tp_ch_used > OptInt::from(max_tp_ch) {
-                    tp.tp_ch_used = OptInt::from(max_tp_ch.max(1));
+                if tp.tp_ch_used() > 0 && tp.tp_ch_used() > OptInt::from(max_tp_ch) {
+                    tp.set_tp_ch_used(OptInt::from(max_tp_ch.max(1)));
                 }
             }
         }

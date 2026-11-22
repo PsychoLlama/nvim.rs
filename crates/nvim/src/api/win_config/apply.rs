@@ -294,9 +294,9 @@ impl Relayout {
         let raised = try_leave(&tstate).err();
 
         if split_ok {
-            let mut tp = expect_tab(self.win_tp);
-            if self.win_tp != self.parent_tp && tp.tp_curwin == Some(self.win_id) {
-                tp.tp_curwin = self.altwin.map(Win::id);
+            let tp = expect_tab(self.win_tp);
+            if self.win_tp != self.parent_tp && tp.tp_curwin() == Some(self.win_id) {
+                tp.set_tp_curwin(self.altwin.map(Win::id));
             }
             return Ok(match raised {
                 Some(raised) => Applied::Raised(raised),
@@ -542,9 +542,9 @@ impl Refloat {
         let append_tp = other_tab(expect_tab(self.parent_tp));
         win_remove(self.win, other_tab(expect_tab(self.win_tp)));
         win_append(Some(lastwin_nofloating(append_tp)), self.win, append_tp);
-        let mut tp = expect_tab(self.win_tp);
-        if !tp.is_current() && tp.tp_curwin == Some(self.win.id()) {
-            tp.tp_curwin = self.altwin.map(Win::id);
+        let tp = expect_tab(self.win_tp);
+        if !tp.is_current() && tp.tp_curwin() == Some(self.win.id()) {
+            tp.set_tp_curwin(self.altwin.map(Win::id));
         }
         ui_comp_remove_grid(self.win.grid_alloc());
         redraw_later(self.win, UPD_NOT_VALID);

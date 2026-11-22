@@ -297,7 +297,7 @@ impl FrameRef {
     ///
     /// One per column of a row frame; the last one of a column frame.
     pub fn redraw_last_status(self) {
-        match c_int::from(self.fr_layout) {
+        match c_int::from(self.fr_layout()) {
             FR_LEAF => {
                 let mut win = self.win().expect("a leaf frame holds a window");
                 win.w_redr_status = true;

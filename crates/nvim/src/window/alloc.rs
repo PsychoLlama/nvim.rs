@@ -358,27 +358,28 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
             win.w_onebuf_opt.wo_crb = 0;
         }
     }
-    let mut frame = attach_frame(win);
+    let frame = attach_frame(win);
     TOPFRAME.set(Some(frame.id()));
-    frame.fr_width = COLUMNS.get();
-    frame.fr_height =
-        ROWS.get() - c_int::try_from(p_ch()).unwrap_or(c_int::MAX) - global_stl_rows();
+    frame.set_fr_width(COLUMNS.get());
+    frame.set_fr_height(
+        ROWS.get() - c_int::try_from(p_ch()).unwrap_or(c_int::MAX) - global_stl_rows(),
+    );
     Ok(())
 }
 
 /// Give `window` a fresh leaf frame of its own.
 pub(crate) fn attach_frame(window: Win) -> FrameRef {
     let mut window = window;
-    let mut frp = new_frame();
+    let frp = new_frame();
     window.w_frame = Some(frp.id());
-    frp.fr_layout = c_char::try_from(FR_LEAF).unwrap_or(0);
-    frp.fr_win = Some(window.id());
+    frp.set_fr_layout(c_char::try_from(FR_LEAF).unwrap_or(0));
+    frp.set_fr_win(Some(window.id()));
     frp
 }
 
 pub fn win_init_size() {
     let mut win = first_win();
-    let mut top = current_topframe();
+    let top = current_topframe();
     let rows = OptInt::from(ROWS.get())
         - p_ch()
         - OptInt::from(tabline_rows())
@@ -389,11 +390,11 @@ pub fn win_init_size() {
     win.w_view_height = win.w_height - win.w_winbar_height;
     win.w_height_outer = win.w_height;
     win.w_winrow_off = win.w_winbar_height;
-    top.fr_height = rows;
+    top.set_fr_height(rows);
     win.w_width = COLUMNS.get();
     win.w_view_width = win.w_width;
     win.w_width_outer = win.w_width;
-    top.fr_width = COLUMNS.get();
+    top.set_fr_width(COLUMNS.get());
 }
 
 /// The first window of the current tab page, which exists from startup to
@@ -481,9 +482,9 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     if PREVWIN.get() == Some(window.id()) {
         PREVWIN.set(None);
     }
-    for mut ttp in tabs() {
-        if ttp.tp_prevwin == Some(window.id()) {
-            ttp.tp_prevwin = None;
+    for ttp in tabs() {
+        if ttp.tp_prevwin() == Some(window.id()) {
+            ttp.set_tp_prevwin(None);
         }
     }
     window.w_lines = Vec::new();
@@ -636,7 +637,7 @@ pub(crate) fn win_remove(window: Win, tabpage: Option<TabPage>) {
 /// The head of `tabpage`'s window list, or of the current tab page's.
 fn list_first(tabpage: Option<TabPage>) -> Option<Win> {
     match tabpage {
-        Some(tp) => tp.tp_firstwin.and_then(WinId::get),
+        Some(tp) => tp.tp_firstwin().and_then(WinId::get),
         None => crate::winlayer::first_window(),
     }
 }
@@ -645,14 +646,14 @@ fn list_first(tabpage: Option<TabPage>) -> Option<Win> {
 /// tab page's in its own `tp_firstwin`.
 fn set_first(tabpage: Option<TabPage>, window: Option<WinId>) {
     match tabpage {
-        Some(mut tp) => tp.tp_firstwin = window,
+        Some(tp) => tp.set_tp_firstwin(window),
         None => FIRSTWIN.set(window),
     }
 }
 
 fn set_last(tabpage: Option<TabPage>, window: Option<WinId>) {
     match tabpage {
-        Some(mut tp) => tp.tp_lastwin = window,
+        Some(tp) => tp.set_tp_lastwin(window),
         None => LASTWIN.set(window),
     }
 }
@@ -660,37 +661,37 @@ fn set_last(tabpage: Option<TabPage>, window: Option<WinId>) {
 /// `win_remove`'s extra write, which `win_append` does not make.
 fn sync_tab_first(tabpage: Option<TabPage>, window: Option<WinId>) {
     if tabpage.is_none() {
-        TabPage::current().tp_firstwin = window;
+        TabPage::current().set_tp_firstwin(window);
     }
 }
 
 fn sync_tab_last(tabpage: Option<TabPage>, window: Option<WinId>) {
     if tabpage.is_none() {
-        TabPage::current().tp_lastwin = window;
+        TabPage::current().set_tp_lastwin(window);
     }
 }
 
 impl FrameRef {
     /// Link `frp` in after this frame in its row or column.
-    pub(crate) fn append_sibling(mut self, mut frp: FrameRef) {
-        frp.fr_next = self.fr_next;
-        self.fr_next = Some(frp.id());
-        if let Some(mut next) = frp.next() {
-            next.fr_prev = Some(frp.id());
+    pub(crate) fn append_sibling(self, frp: FrameRef) {
+        frp.set_fr_next(self.fr_next());
+        self.set_fr_next(Some(frp.id()));
+        if let Some(next) = frp.next() {
+            next.set_fr_prev(Some(frp.id()));
         }
-        frp.fr_prev = Some(self.id());
+        frp.set_fr_prev(Some(self.id()));
     }
 
     /// Link `frp` in before this frame in its row or column.
-    pub(crate) fn prepend_sibling(mut self, mut frp: FrameRef) {
-        frp.fr_next = Some(self.id());
-        frp.fr_prev = self.fr_prev;
-        self.fr_prev = Some(frp.id());
+    pub(crate) fn prepend_sibling(self, frp: FrameRef) {
+        frp.set_fr_next(Some(self.id()));
+        frp.set_fr_prev(self.fr_prev());
+        self.set_fr_prev(Some(frp.id()));
         match frp.prev() {
-            Some(mut prev) => prev.fr_next = Some(frp.id()),
+            Some(prev) => prev.set_fr_next(Some(frp.id())),
             None => {
-                let mut parent = frp.parent().expect("a linked frame has a parent");
-                parent.fr_child = Some(frp.id());
+                let parent = frp.parent().expect("a linked frame has a parent");
+                parent.set_fr_child(Some(frp.id()));
             }
         }
     }
@@ -700,14 +701,14 @@ impl FrameRef {
     /// can put it back.
     pub(crate) fn unlink(self) {
         match self.prev() {
-            Some(mut prev) => prev.fr_next = self.fr_next,
+            Some(prev) => prev.set_fr_next(self.fr_next()),
             None => {
-                let mut parent = self.parent().expect("a linked frame has a parent");
-                parent.fr_child = self.fr_next;
+                let parent = self.parent().expect("a linked frame has a parent");
+                parent.set_fr_child(self.fr_next());
             }
         }
-        if let Some(mut next) = self.next() {
-            next.fr_prev = self.fr_prev;
+        if let Some(next) = self.next() {
+            next.set_fr_prev(self.fr_prev());
         }
     }
 }

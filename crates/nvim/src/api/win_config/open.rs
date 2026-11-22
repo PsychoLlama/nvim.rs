@@ -315,7 +315,7 @@ pub(crate) fn win_split_dir(win: Win) -> WinSplit {
     // A window in a column was split off the one below it when it still has a
     // sibling ahead of it, and off the one above it otherwise; in a row the
     // same test reads left/right.
-    let column = ::core::ffi::c_int::from(parent.fr_layout) == FR_COL;
+    let column = ::core::ffi::c_int::from(parent.fr_layout()) == FR_COL;
     match (frame.next().is_none(), column) {
         (false, true) => WinSplit::Above,
         (true, true) => WinSplit::Below,

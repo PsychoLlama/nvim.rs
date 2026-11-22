@@ -105,7 +105,7 @@ impl TabPage {
     fn lastwin(self) -> Win {
         let wp = match self.is_current() {
             true => last_window(),
-            false => self.tp_lastwin.and_then(WinId::get),
+            false => self.tp_lastwin().and_then(WinId::get),
         };
         wp.expect("a live tab page has a last window")
     }
@@ -116,7 +116,7 @@ impl TabPage {
         if self.is_current() {
             PREVWIN.get()
         } else {
-            self.tp_prevwin
+            self.tp_prevwin()
         }
         .and_then(WinId::get)
     }

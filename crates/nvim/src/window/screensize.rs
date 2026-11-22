@@ -94,7 +94,7 @@ pub(crate) fn new_screen_rows() {
     comp_positions();
     win_reconfig_floats();
     compute_cmdrow();
-    TabPage::current().tp_ch_used = p_ch();
+    TabPage::current().set_tp_ch_used(p_ch());
     if !SKIP_WIN_FIX_SCROLL.get() {
         fix_scroll(true);
     }

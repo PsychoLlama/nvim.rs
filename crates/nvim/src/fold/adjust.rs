@@ -143,24 +143,24 @@ pub fn fold_adjust_visual() {
     // evaluate 'foldexpr', which is user code that reads the same global, so
     // it must not be held open across the call.
     let stretched = with_visual_anchor(|anchor| {
-        let mut cursor = win.cursor();
+        let cursor = win.cursor();
         // Which end of the selection is the earlier one; each end is read and
         // written back where it came from, in the order the C writes them.
-        let anchor_first = ltoreq(*anchor, *cursor);
+        let anchor_first = ltoreq(*anchor, cursor.get());
 
         // The earlier end stretches back to the first line of its fold.
-        let mut start = if anchor_first { *anchor } else { *cursor };
+        let mut start = if anchor_first { *anchor } else { cursor.get() };
         if win.has_folding(start.lnum, Some(&mut start.lnum), None) {
             start.col = ColNr::ZERO;
         }
         if anchor_first {
             *anchor = start;
         } else {
-            *cursor = start;
+            cursor.set(start);
         }
 
         // The later end stretches forward to the last line of its own.
-        let mut end = if anchor_first { *cursor } else { *anchor };
+        let mut end = if anchor_first { cursor.get() } else { *anchor };
         if !win.has_folding(end.lnum, None, Some(&mut end.lnum)) {
             return false;
         }
@@ -169,7 +169,7 @@ pub fn fold_adjust_visual() {
             end.col -= 1;
         }
         if anchor_first {
-            *cursor = end;
+            cursor.set(end);
         } else {
             *anchor = end;
         }
@@ -182,9 +182,9 @@ pub fn fold_adjust_visual() {
 
 /// Move the cursor to the first line of a closed fold.
 pub fn fold_adjust_cursor(window: Win) {
-    let mut cursor = window.cursor();
-    if let Some(first) = window.fold_first(cursor.lnum) {
-        cursor.lnum = first;
+    let cursor = window.cursor();
+    if let Some(first) = window.fold_first(cursor.lnum()) {
+        cursor.set_lnum(first);
     }
 }
 

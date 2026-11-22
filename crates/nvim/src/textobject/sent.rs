@@ -250,7 +250,7 @@ fn findsent_forward(mut count: c_int, mut at_start_sent: bool) {
             cursor_to_first_blank();
         }
         if count == 0 || at_start_sent {
-            decl(&mut Win::current().cursor());
+            Win::current().cursor().modify(decl);
         }
         at_start_sent = !at_start_sent;
     }
@@ -374,7 +374,7 @@ pub(crate) fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Resul
     if ncount > 0 {
         findsent_forward(ncount, true);
     } else {
-        decl(&mut Win::current().cursor());
+        Win::current().cursor().modify(decl);
     }
 
     if include {
@@ -383,8 +383,8 @@ pub(crate) fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Resul
         // are none, take the leading blanks instead.
         if start_blank {
             cursor_to_first_blank();
-            if ascii_iswhite(gchar_pos(&Win::current().cursor())) {
-                decl(&mut Win::current().cursor());
+            if ascii_iswhite(gchar_pos(&Win::current().cursor().get())) {
+                Win::current().cursor().modify(decl);
             }
         } else if !ascii_iswhite(gchar_cursor()) {
             find_first_blank(&mut start_pos);
@@ -406,7 +406,7 @@ pub(crate) fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Resul
         redraw_curbuf_later(UPD_INVERTED); // update the inversion
     } else {
         // Include the newline after the sentence, if there is one.
-        let inclusive = incl(&mut Win::current().cursor()).is_stuck();
+        let inclusive = Win::current().cursor().modify(incl).is_stuck();
         op.inclusive = inclusive;
         op.start = start_pos;
         op.motion_type = MotionType::CharWise;

@@ -288,7 +288,7 @@ fn diff_each_segment(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg
             {
                 if let Ok(hunks) = HunkSource::open(dio) {
                     let current = TabPage::current();
-                    let slots = current.tp_diffbuf;
+                    let slots = current.tp_diffbuf();
                     current.with_diff(|blocks| {
                         diff_read(blocks, &slots, idx_orig, idx_new, hunks);
                     });
@@ -332,7 +332,7 @@ fn read_anchors(tabpage: TabPage) -> (Anchors, usize) {
     let mut num_anchors = c_int::MAX;
     if DIFF_FLAGS.get() & DIFF_ANCHOR != 0 {
         for idx in 0..DB_COUNT as usize {
-            if tabpage.tp_diffbuf[idx].is_none() {
+            if tabpage.tp_diffbuf()[idx].is_none() {
                 continue;
             }
             let found =
@@ -380,17 +380,18 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
         DIFF_NEED_UPDATE.set(true);
         return;
     }
-    let mut tp = TabPage::current();
-    let had_diffs = !tp.tp_diff.is_empty();
+    let tp = TabPage::current();
+    let had_diffs = tp.diff_len() != 0;
     diff_clear(tp);
-    tp.tp_diff_invalid = 0;
+    tp.set_tp_diff_invalid(0);
 
     // The first two buffers in the tabpage: everything is diffed against
     // the first, so there is nothing to do without a second.
+    let slots = tp.tp_diffbuf();
     let first_two = (0..DB_COUNT)
-        .find(|&i| tp.tp_diffbuf[i.cast_unsigned() as usize].is_some())
+        .find(|&i| slots[i.cast_unsigned() as usize].is_some())
         .filter(|&idx_orig| {
-            (idx_orig + 1..DB_COUNT).any(|i| tp.tp_diffbuf[i.cast_unsigned() as usize].is_some())
+            (idx_orig + 1..DB_COUNT).any(|i| slots[i.cast_unsigned() as usize].is_some())
         });
     if let Some(idx_orig) = first_two {
         let mut diffio = DiffIo {
@@ -401,7 +402,7 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
         Win::current().w_valid_cursor.lnum = LineNr::ZERO;
     }
 
-    if had_diffs || !tp.tp_diff.is_empty() {
+    if had_diffs || tp.diff_len() != 0 {
         diff_redraw(true);
         let buffer = Buf::current_or_none();
         fire_diff_updated(buffer);

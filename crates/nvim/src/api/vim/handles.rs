@@ -155,14 +155,14 @@ pub fn nvim_list_tabpages() -> Array {
     let n: size_t = tabs().count();
     let mut rv = Vec::with_capacity(n);
     for tp in tabs() {
-        rv.push(Object::tabpage(tp.handle));
+        rv.push(Object::tabpage(tp.handle()));
     }
     rv.into()
 }
 
 /// The current tab page's handle.
 pub fn nvim_get_current_tabpage() -> TabpageHandle {
-    TabPage::current().handle
+    TabPage::current().handle()
 }
 
 /// Make `tabpage` the current one, as `:tabnext` does.

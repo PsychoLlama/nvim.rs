@@ -66,7 +66,7 @@ pub fn tabpage_set_var(
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
-    let vars = scope_vars(&tab.tp_winvar);
+    let vars = scope_vars(&tab.read().tp_winvar);
     dict_set_var(&vars, &name, value, false, true)
 }
 
@@ -74,7 +74,7 @@ pub fn tabpage_del_var(tabpage: TabpageHandle, name: ApiString) -> Result<Object
     let Some(tab) = find_tab_by_handle(tabpage)? else {
         return Ok(Object::Nil);
     };
-    let vars = scope_vars(&tab.tp_winvar);
+    let vars = scope_vars(&tab.read().tp_winvar);
     dict_set_var(&vars, &name, Object::Nil, true, true)
 }
 

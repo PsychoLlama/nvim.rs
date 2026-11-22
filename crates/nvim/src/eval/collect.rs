@@ -178,7 +178,7 @@ pub fn garbage_collect(testing: bool) -> bool {
 
     // tabpage-local variables
     for tp in tabs() {
-        abort = abort || mark_root(&tp.tp_winvar.di_tv, copy_id);
+        abort = abort || mark_root(&tp.read().tp_winvar.di_tv, copy_id);
     }
 
     abort = abort || garbage_collect_globvars(copy_id) != 0;
