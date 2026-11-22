@@ -58,7 +58,8 @@ impl SynState {
     pub(crate) fn push_next_match(&mut self) -> c_int {
         let idx = self.next_match.idx;
         let block = self.block();
-        let spp = block.pattern(idx);
+        let held = block.read();
+        let spp = held.pattern(idx);
 
         self.push_current_state(idx);
         let top = self.top();
@@ -140,6 +141,7 @@ impl SynState {
             self.check_keepend();
             self.update_si_attr(top);
         }
+        drop(held);
 
         self.next_match.idx = -1; // try another match next time
         self.top()
@@ -233,7 +235,7 @@ impl SynState {
             // (SynFlags::HAS_EOL will not be set).
             let cur_si = self.item(cur);
             if cur_si.si_idx >= 0
-                && c_int::from(self.block().pattern(cur_si.si_idx).sp_type) == SPTYPE_START
+                && c_int::from(self.block().read().pattern(cur_si.si_idx).sp_type) == SPTYPE_START
                 && !cur_si.si_flags.has(SynFlags::MATCH | SynFlags::KEEPEND)
             {
                 self.update_si_end(cur, self.col.get(), true);
@@ -256,7 +258,8 @@ impl SynState {
             return; // a keyword; should not happen
         }
         let block = self.block();
-        let spp = block.pattern(si_idx);
+        let held = block.read();
+        let spp = held.pattern(si_idx);
         let is_match = self.item(idx).si_flags.has(SynFlags::MATCH);
 
         let id = if is_match {
@@ -281,6 +284,7 @@ impl SynState {
         if !spp.sp_flags.has(SynFlags::TRANSP) || is_match {
             return;
         }
+        drop(held);
         if idx == 0 {
             let sip = self.item_mut(idx);
             sip.si_attr = 0;
@@ -376,7 +380,12 @@ impl SynState {
         // A "oneline" that found no end never continues in the next line:
         // it ends with this one. Only then is the line's length wanted.
         let oneline_end = (end.m_endpos.lnum == LineNr::ZERO
-            && self.block().pattern(si_idx).sp_flags.has(SynFlags::ONELINE))
+            && self
+                .block()
+                .read()
+                .pattern(si_idx)
+                .sp_flags
+                .has(SynFlags::ONELINE))
         .then(|| self.curline_len());
         let lnum = self.lnum;
 

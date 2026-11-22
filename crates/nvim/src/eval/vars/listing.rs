@@ -73,7 +73,7 @@ pub(crate) fn list_glob_vars(first: &mut bool) {
 
 /// The current buffer's `b:` scope.
 pub(crate) fn list_buf_vars(first: &mut bool) {
-    if let Some(dict) = Buf::current().b_bufvar.di_tv.dict_handle() {
+    if let Some(dict) = Buf::current().read().b_bufvar.di_tv.dict_handle() {
         list_dict_vars(&dict, c"b:", true, first);
     }
 }

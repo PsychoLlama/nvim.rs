@@ -166,7 +166,7 @@ impl Env<'_> {
         // `g:actual_curbuf`/`g:actual_curwin`, because the two below are
         // about to be swapped out from under the expression.
         let (real_buf, real_win) = (Buf::current(), Win::current());
-        set_str_var(c"g:actual_curbuf", real_buf.handle.get());
+        set_str_var(c"g:actual_curbuf", real_buf.handle().get());
         set_str_var(c"g:actual_curwin", real_win.handle.get());
 
         let save_visual = visual_active();
@@ -202,10 +202,11 @@ impl Env<'_> {
         let name = match buf_spname(&self.buf) {
             Some(name) => name.to_bytes().to_vec(),
             None => {
+                let held = self.buf.read();
                 let path = if full {
-                    self.buf.name.full()
+                    held.name.full()
                 } else {
-                    self.buf.name.shown()
+                    held.name.shown()
                 };
                 path.map_or_else(Vec::new, |path| {
                     home_to_tilde(Some(self.buf), path, room, true).to_vec()
@@ -230,7 +231,7 @@ impl Env<'_> {
     pub(super) fn percentage(&self) -> c_int {
         calc_percentage(
             i64::from(self.win.w_cursor.lnum),
-            i64::from(self.buf.b_ml.ml_line_count),
+            i64::from(self.buf.line_count()),
         )
     }
 
@@ -346,7 +347,7 @@ impl Env<'_> {
     /// The buffer's `'filetype'`, which `%y` and `%Y` bracket.
     pub(super) fn with_filetype<R>(&self, f: impl FnOnce(&[u8]) -> R) -> R {
         // The borrow ends before anything can `:set` it.
-        f(self.buf.b_p_ft.bytes())
+        f(self.buf.read().b_p_ft.bytes())
     }
 
     /// The sign in column `i`, and the highlight id it draws in.
@@ -684,7 +685,7 @@ impl Win {
         // up to date, because of autocommands and timers.
         let mut win = win;
         let buf = win.buffer();
-        let lnum = win.w_cursor.lnum.min(buf.b_ml.ml_line_count);
+        let lnum = win.w_cursor.lnum.min(buf.line_count());
         win.w_cursor.lnum = lnum;
 
         // Read the byte under the cursor now, in case an item needs it.

@@ -152,7 +152,7 @@ fn ident_escapes(cmdchar: Key, tag_cmd: bool) -> &'static CStr {
         return c"\\|\"\n*?[";
     }
     // A help tag may contain any of these, so nothing is escaped.
-    if Buf::current().b_p_ft.bytes() == b"help" {
+    if Buf::current().read().b_p_ft.bytes() == b"help" {
         c""
     } else {
         c"\\|\"\n["
@@ -240,7 +240,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
 
     // 'keywordprg', which decides what `K` does. A copy, because it is
     // built into a command line further down.
-    let keywordprg = local_or_global(&Buf::current().b_p_kp, P_KP).get();
+    let keywordprg = local_or_global(&Buf::current().read().b_p_kp, P_KP).get();
     let kp: &[u8] = &keywordprg;
     let kp_helpbang = keywordprg == c":help!";
     let kp_help =
@@ -287,7 +287,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
         _ => {
             tag_cmd = true;
             let count0 = cmd_arg.count0;
-            let cmd: &[u8] = if Buf::current().b_help {
+            let cmd: &[u8] = if Buf::current().b_help() {
                 b"help! "
             } else if g_cmd {
                 b"tjump "
@@ -386,7 +386,7 @@ pub(crate) fn nv_gotofile(cmd_arg: &mut CmdArg) {
     // Leaving the only window on a changed buffer that cannot be hidden
     // means writing it first.
     let must_write =
-        curbuf_is_changed() && Buf::current().b_nwindows <= 1 && !buf_hide(Buf::current());
+        curbuf_is_changed() && Buf::current().b_nwindows() <= 1 && !buf_hide(Buf::current());
     if must_write {
         let _ = autowrite(Buf::current(), false);
     }

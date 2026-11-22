@@ -227,11 +227,11 @@ pub(super) fn build_replacement(
     current_match: &mut super::super::SubResult,
 ) {
     st.lnum_start = st.lnum; // save the start lnum
-    let save_ma = Buf::current().b_p_ma;
+    let save_ma = Buf::current().b_p_ma();
     let counting = SUB_FLAGS.with(|flags| flags.do_count);
     if counting {
         // Prevent a function from accidentally changing the buffer.
-        Buf::current().b_p_ma = 0;
+        Buf::current().set_b_p_ma(0);
     }
     // Held to the end of the function: the only path that reaches here with
     // `counting` set is the early return below.
@@ -254,7 +254,7 @@ pub(super) fn build_replacement(
     // replacement.  Don't keep flags set by a recursive call.
     SUB_FLAGS.set(subflags_save);
     if st.sublen == 0 as c_int || aborting() || SUB_FLAGS.with(|flags| flags.do_count) {
-        Buf::current().b_p_ma = save_ma;
+        Buf::current().set_b_p_ma(save_ma);
         return;
     }
 

@@ -80,8 +80,8 @@ impl TagFiles {
     pub(crate) fn new() -> Self {
         // SAFETY: `CURBUF` is live, and the buffer-local and global
         // `'tags'` are NUL-terminated option strings.
-        let help = Buf::current().b_help;
-        let tags = (!help).then(|| local_or_global(&Buf::current().b_p_tags, P_TAGS).get());
+        let help = Buf::current().b_help();
+        let tags = (!help).then(|| local_or_global(&Buf::current().read().b_p_tags, P_TAGS).get());
         TagFiles {
             help: help.then(HelpTags::collect),
             tags: tags.map(|tags| Name::from_bytes(&tags)),
@@ -136,7 +136,7 @@ impl TagFiles {
             FIND_LEVEL,
             FINDFILE_FILE.cast_signed(),
             true,
-            buffer.name.full(),
+            buffer.read().name.full(),
         );
         self.search.open = self.search.ctx.is_some();
         Some(())
@@ -256,7 +256,7 @@ pub(crate) fn expand_tag_fname(fname: &[u8], tag_fname: &[u8], expand: bool) -> 
     // The tags file's own directory, empty when it has none.
     let dir = &tag_fname[..tail_index(tag_fname)];
 
-    if (p_tr() || Buf::current().b_help)
+    if (p_tr() || Buf::current().b_help())
         && !cstr::with_terminated(fname, vim_is_abs_name)
         && !dir.is_empty()
     {

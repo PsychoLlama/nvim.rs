@@ -82,7 +82,7 @@ impl From<Failed> for NotDeleted {
 pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
     let old_lcount = Buf::current().line_count();
 
-    if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if Buf::current().ml_flags().has(MlFlags::EMPTY) {
         return Ok(());
     }
     // Nothing to delete -- but still prepare undo, for `op_change`.
@@ -90,7 +90,7 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
         u_save_cursor()?;
         return Ok(());
     }
-    if Buf::current().b_p_ma == 0 {
+    if Buf::current().b_p_ma() == 0 {
         emsg(gettext(E_MODIFIABLE));
         return Err(NotDeleted::NotModifiable);
     }
@@ -161,12 +161,12 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         if op.motion_type == MotionType::BlockWise {
-            Buf::current().b_op_end.lnum = op.end.lnum;
-            Buf::current().b_op_end.col = op.start.col;
+            Buf::current().edit().b_op_end.lnum = op.end.lnum;
+            Buf::current().edit().b_op_end.col = op.start.col;
         } else {
-            Buf::current().b_op_end = op.start;
+            Buf::current().set_b_op_end(op.start);
         }
-        Buf::current().b_op_start = op.start;
+        Buf::current().set_b_op_start(op.start);
     }
 
     Ok(())
@@ -324,7 +324,7 @@ fn delete_whole_lines(op: &OpArg) -> Result<(), UndoFailed> {
         Win::current().w_cursor.lnum = lnum;
     }
     u_save_cursor()?;
-    if Buf::current().b_p_ai != 0 {
+    if Buf::current().b_p_ai() != 0 {
         // Keep the indent, on the first non-white character; `DID_AI` is
         // what deletes it again if the insert is left with ESC.
         beginline(BeginlineOpts::WHITE);

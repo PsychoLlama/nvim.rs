@@ -265,7 +265,7 @@ pub fn utf_class_tab(c: Codepoint, chartab: &[uint64_t; 4]) -> c_int {
 
 /// [`utf_class_tab`] against the current buffer's `'iskeyword'`.
 pub fn utf_class(c: Codepoint) -> c_int {
-    utf_class_tab(c, &Buf::current().b_chartab)
+    utf_class_tab(c, &Buf::current().b_chartab())
 }
 
 /// The character class of a character whose first byte is `first`, judged
@@ -299,7 +299,7 @@ pub(crate) fn class_of(
 #[inline]
 pub fn class_in(bytes: &[u8], buffer: Buf) -> c_int {
     let first = bytes.first().copied().unwrap_or(0);
-    class_of(first, || char_at(bytes), &buffer.b_chartab)
+    class_of(first, || char_at(bytes), &buffer.b_chartab())
 }
 
 /// `charclass({string})` — the class of the string's first character.

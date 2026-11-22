@@ -300,7 +300,7 @@ pub(crate) fn plines_m_win(window: Win, mut first: LineNr, last: LineNr, max: c_
         count += window.screen_lines_full(first, Some(&mut next), None, false, false);
         first = next + 1;
     }
-    if first == window.w_buffer.b_ml.ml_line_count + 1 {
+    if first == window.w_buffer.line_count() + 1 {
         count += win_get_fill(window, first);
     }
     max.min(count)

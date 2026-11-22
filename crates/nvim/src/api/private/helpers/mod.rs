@@ -246,7 +246,7 @@ pub(crate) fn set_mark(
             let why = Bad::Bare(out_of_range);
             return Err(err_invalid(c"column", why));
         }
-        let line_count = Integer::from(buffer.b_ml.ml_line_count);
+        let line_count = Integer::from(buffer.line_count());
         if line < 1 || line > line_count {
             let why = Bad::Bare(out_of_range);
             return Err(err_invalid(c"line", why));
@@ -263,7 +263,7 @@ pub(crate) fn set_mark(
     // name that is not one character is the caller's check; an empty one
     // reads NUL.
     let mark = name.as_bytes().first().copied().unwrap_or(0);
-    let handle = buffer.handle;
+    let handle = buffer.handle();
     if setmark_at(mark, pos, Some(handle)).is_ok() {
         return Ok(());
     }

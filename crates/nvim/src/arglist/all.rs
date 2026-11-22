@@ -98,9 +98,9 @@ fn arg_index_for_window(
     // Reading it here rather than inside the test below costs nothing: the
     // call has no side effect.
     let aucmd_win = is_aucmd_win(window);
-    let unwanted = buffer.name.full().is_none()
+    let unwanted = buffer.read().name.full().is_none()
         || !aall.keep_tabs
-            && (buffer.b_nwindows > 1
+            && (buffer.b_nwindows() > 1
                 || window.w_width != COLUMNS.get()
                 || window.w_floating && !aucmd_win);
     if unwanted {
@@ -166,7 +166,7 @@ fn close_unused_window(
 ) -> Option<Win> {
     let hide = buf_hide(buffer);
     let changed = buf_is_changed(buffer);
-    let nwindows = buffer.b_nwindows;
+    let nwindows = buffer.b_nwindows();
     if !(hide || aall.forceit || nwindows > 1 || !changed) {
         return wpnext;
     }
@@ -343,9 +343,9 @@ fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
     // does not leave an empty tab page when it runs locally.
     let tab_drop_empty_window = aall.keep_tabs
         && buf_is_empty(Buf::current())
-        && Buf::current().b_nwindows == 1
-        && Buf::current().name.full().is_none()
-        && Buf::current().b_changed == 0;
+        && Buf::current().b_nwindows() == 1
+        && Buf::current().read().name.full().is_none()
+        && Buf::current().b_changed() == 0;
     if tab_drop_empty_window {
         aall.use_firstwin = true;
     }

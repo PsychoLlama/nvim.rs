@@ -164,11 +164,12 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
         if lnum == op.end.lnum {
             // `']` goes to the end of the block, not the end of the insert
             // in the first line.
-            Buf::current().b_op_end.lnum = op.end.lnum;
-            Buf::current().b_op_end.col = offset;
-            if Buf::current().b_visual.vi_end.coladd != 0 {
-                Buf::current().b_visual.vi_end.col += Buf::current().b_visual.vi_end.coladd;
-                Buf::current().b_visual.vi_end.coladd = 0;
+            Buf::current().edit().b_op_end.lnum = op.end.lnum;
+            Buf::current().edit().b_op_end.col = offset;
+            if Buf::current().b_visual().vi_end.coladd != 0 {
+                let value = Buf::current().b_visual().vi_end.coladd;
+                Buf::current().edit().b_visual.vi_end.col += value;
+                Buf::current().edit().b_visual.vi_end.coladd = 0;
             }
         }
         lnum += 1;

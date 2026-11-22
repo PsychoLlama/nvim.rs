@@ -34,7 +34,8 @@ use core::ffi::c_int;
 /// not `'paste'`.
 pub(crate) fn cindent_on() -> bool {
     // The cheaper tests are kept in front, as upstream has them.
-    !p_paste() && (Buf::current().b_p_cin != 0 || !Buf::current().b_p_inde.bytes().is_empty())
+    !p_paste()
+        && (Buf::current().b_p_cin() != 0 || !Buf::current().read().b_p_inde.bytes().is_empty())
 }
 
 /// Which prefix of a 'cinkeys' item this call is asking about.
@@ -69,11 +70,17 @@ pub fn in_cinkeys(keytyped: Key, when: u8, line_is_empty: bool) -> bool {
     // The walk below reads the option's own bytes, as upstream's does;
     // nothing between here and the end of it can set an option.
     let buf = Buf::current();
-    let look: &[u8] = if !buf.b_p_inde.bytes().is_empty() {
-        buf.b_p_indk.bytes()
+    // A copy: the walk reads lines (and probes one in place), which the
+    // buffer's read would refuse.
+    let held = buf.read();
+    let look: Vec<u8> = if !held.b_p_inde.bytes().is_empty() {
+        held.b_p_indk.bytes()
     } else {
-        buf.b_p_cink.bytes()
-    };
+        held.b_p_cink.bytes()
+    }
+    .to_vec();
+    drop(held);
+    let look: &[u8] = &look;
     // Past the end reads the NUL a C string has there.
     let at = |i: usize| byte_at(look, i);
 
@@ -323,7 +330,7 @@ fn word_matches(
 
 /// Reindent the current line with 'indentexpr' or the C indent.
 pub fn do_c_expr_indent() {
-    if !Buf::current().b_p_inde.bytes().is_empty() {
+    if !Buf::current().read().b_p_inde.bytes().is_empty() {
         fixthisline(Indenter::Expr);
     } else {
         fixthisline(Indenter::C);
@@ -335,7 +342,7 @@ pub fn do_c_expr_indent() {
 pub fn f_cindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let pos = Win::current().w_cursor;
     let lnum = tv_get_lnum(&args[0]) as LineNr;
-    let amount = if lnum >= LineNr::ONE && lnum <= Buf::current().b_ml.ml_line_count {
+    let amount = if lnum >= LineNr::ONE && lnum <= Buf::current().line_count() {
         Win::current().w_cursor.lnum = lnum;
         let amount = VarNumber::from(get_c_indent());
         Win::current().w_cursor = pos;

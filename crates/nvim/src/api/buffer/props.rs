@@ -28,7 +28,7 @@ pub fn nvim_buf_get_var(buf: BufferHandle, name: ApiString) -> Result<Object, Er
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(Object::Nil);
     };
-    dict_get_value(&scope_vars(&b.b_bufvar), &name)
+    dict_get_value(&scope_vars(&b.read().b_bufvar), &name)
 }
 
 pub fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
@@ -70,7 +70,7 @@ pub fn nvim_buf_set_var(buf: BufferHandle, name: ApiString, value: Object) -> Re
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
-    let vars = scope_vars(&b.b_bufvar);
+    let vars = scope_vars(&b.read().b_bufvar);
     dict_set_var(&vars, &name, value, false, false).map(|_| ())
 }
 
@@ -78,7 +78,7 @@ pub fn nvim_buf_del_var(buf: BufferHandle, name: ApiString) -> Result<(), Error>
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
-    let vars = scope_vars(&b.b_bufvar);
+    let vars = scope_vars(&b.read().b_bufvar);
     dict_set_var(&vars, &name, Object::Nil, true, false).map(|_| ())
 }
 
@@ -87,7 +87,7 @@ pub fn nvim_buf_get_name(buf: BufferHandle) -> Result<ApiString, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv);
     };
-    Ok(b.name.full().map_or(rv, ApiString::from_cstr))
+    Ok(b.read().name.full().map_or(rv, ApiString::from_cstr))
 }
 
 pub fn nvim_buf_set_name(buf: BufferHandle, name: ApiString) -> Result<(), Error> {
@@ -118,7 +118,7 @@ pub fn nvim_buf_set_name(buf: BufferHandle, name: ApiString) -> Result<(), Error
 pub fn nvim_buf_is_loaded(buf: BufferHandle) -> Boolean {
     // A handle that names nothing is not an error here, only a `false`.
     let b = find_buffer_by_handle(buf).unwrap_or_default();
-    b.is_some_and(|b| b.b_ml.ml_mfp.is_some())
+    b.is_some_and(|b| b.ml().ml_mfp.is_some())
 }
 
 pub fn nvim_buf_delete(buf: BufferHandle, opts: &mut KeyDict_buf_delete) -> Result<(), Error> {
@@ -133,7 +133,7 @@ pub fn nvim_buf_delete(buf: BufferHandle, opts: &mut KeyDict_buf_delete) -> Resu
         },
         DOBUF_FIRST,
         FORWARD as ::core::ffi::c_int,
-        b.handle.get(),
+        b.handle().get(),
         ::core::ffi::c_int::from(force),
     );
     if result.is_err() {

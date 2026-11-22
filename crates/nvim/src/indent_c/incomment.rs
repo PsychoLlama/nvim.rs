@@ -78,7 +78,7 @@ pub(crate) fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
     // nothing after the opener -- add `c`; otherwise line up with the
     // text that follows the opener.
     let mut nothing_after_opener = true;
-    if Buf::current().b_ind_in_comment2 == 0 {
+    if Buf::current().b_ind_in_comment2() == 0 {
         // `comment` is the position of a `/*` in this buffer, so `col + 2`
         // is the byte after the `*` -- at worst one past the line's end,
         // which reads as the terminator.
@@ -92,8 +92,8 @@ pub(crate) fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
         }
     }
     amount = line_vcol(comment.lnum, comment.col);
-    if Buf::current().b_ind_in_comment2 != 0 || nothing_after_opener {
-        amount += Buf::current().b_ind_in_comment;
+    if Buf::current().b_ind_in_comment2() != 0 || nothing_after_opener {
+        amount += Buf::current().b_ind_in_comment();
     }
     amount
 }
@@ -124,7 +124,8 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
 
     // The option's own bytes: nothing below sets an option.
     let buf = Buf::current();
-    let com = buf.b_p_com.bytes();
+    let held = buf.read();
+    let com = held.b_p_com.bytes();
     let mut p = 0;
     while byte_at(com, p) != 0 {
         // The flag letters in front of this item's ':'.
@@ -229,6 +230,7 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
             break;
         }
     }
+    drop(held);
     done
 }
 

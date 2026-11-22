@@ -53,7 +53,7 @@ pub fn ex_marks(excmd: &mut ExArg) {
 
     // `'<` is whichever end of the Visual range comes FIRST, so a selection
     // made backwards still lists in order.
-    let (start, end) = (buf.b_visual.vi_start, buf.b_visual.vi_end);
+    let (start, end) = (buf.b_visual().vi_start, buf.b_visual().vi_end);
     let starts_first = (lt(start, end) || end.lnum == LineNr::ZERO) && start.lnum != LineNr::ZERO;
     let (first, second) = if starts_first {
         (start, end)
@@ -65,16 +65,16 @@ pub fn ex_marks(excmd: &mut ExArg) {
     // goes between the locals and the tick family, which is why it is not one
     // list.
     let locals: Vec<(u8, Pos)> = (0..NMARKS)
-        .map(|i| (nth_name(b'a', i), buf.b_namedm[slot(i)].mark))
+        .map(|i| (nth_name(b'a', i), buf.read().b_namedm[slot(i)].mark))
         .collect();
     let ticks = [
-        (b'"', buf.b_last_cursor.mark),
-        (b'[', buf.b_op_start),
-        (b']', buf.b_op_end),
-        (b'^', buf.b_last_insert.mark),
-        (b'.', buf.b_last_change.mark),
+        (b'"', buf.read().b_last_cursor.mark),
+        (b'[', buf.b_op_start()),
+        (b']', buf.b_op_end()),
+        (b'^', buf.read().b_last_insert.mark),
+        (b'.', buf.read().b_last_change.mark),
     ];
-    let prompt = buf_is_prompt(Some(buf)).then(|| (b':', buf.b_prompt_start.mark));
+    let prompt = buf_is_prompt(Some(buf)).then(|| (b':', buf.read().b_prompt_start.mark));
     let visual = [(b'<', first), (b'>', second)];
 
     show_one_mark(b'\'', arg, win.w_pcmark, None, true);
@@ -95,7 +95,7 @@ pub fn ex_marks(excmd: &mut ExArg) {
         let Some(file) = file else {
             continue;
         };
-        let current = fnum == Some(buf.handle);
+        let current = fnum == Some(buf.handle());
         show_one_mark(name, arg, mark.fmark.mark, Some(file.as_cstr()), current);
     }
     for (c, pos) in ticks.into_iter().chain(prompt).chain(visual) {
@@ -303,13 +303,13 @@ pub fn ex_delmarks(excmd: &mut ExArg) {
         for c in from..=to {
             if lower {
                 let at = usize::from(c - b'a');
-                if buf.b_namedm[at].is_set() {
+                if buf.read().b_namedm[at].is_set() {
                     do_markset_autocmd(mark_name(c), gone, buf);
                 }
                 // Only the line and the timestamp are cleared, not the whole
                 // record: `:delmarks a` is not `clear_fmark`, and the shada
                 // writer wants the stamp to say when.
-                let mark = &mut buf.b_namedm[at];
+                let mark = &mut buf.edit().b_namedm[at];
                 mark.mark.lnum = LineNr::ZERO;
                 mark.timestamp = timestamp;
             } else {
@@ -350,17 +350,19 @@ fn delmarks_all(buffer: Buf) {
     // buffer the mark was in. `'<`/`'>` are NOT announced and not cleared:
     // `clrallmarks` leaves the Visual range alone.
     for i in 0..NMARKS {
-        if buffer.b_namedm[slot(i)].is_set() {
+        if buffer.read().b_namedm[slot(i)].is_set() {
             do_markset_autocmd(mark_name(nth_name(b'a', i)), UNSET_POS, buffer);
         }
     }
-    for (name, set) in [
-        ('"', buffer.b_last_cursor.is_set()),
-        ('^', buffer.b_last_insert.is_set()),
-        ('.', buffer.b_last_change.is_set()),
-        ('[', buffer.b_op_start.lnum != LineNr::ZERO),
-        (']', buffer.b_op_end.lnum != LineNr::ZERO),
-    ] {
+    // Asked before the loop: the autocommands run with the buffer unlent.
+    let marks = [
+        ('"', buffer.read().b_last_cursor.is_set()),
+        ('^', buffer.read().b_last_insert.is_set()),
+        ('.', buffer.read().b_last_change.is_set()),
+        ('[', buffer.b_op_start().lnum != LineNr::ZERO),
+        (']', buffer.b_op_end().lnum != LineNr::ZERO),
+    ];
+    for (name, set) in marks {
         if set {
             do_markset_autocmd(name as c_char, UNSET_POS, buffer);
         }
@@ -374,13 +376,13 @@ fn delmarks_one(buffer: &mut Buf, name: u8, timestamp: Timestamp) -> bool {
     // `:` and a space are accepted and do nothing: the prompt mark is not the
     // user's to delete, and a space is how `:delmarks a b` separates names.
     let lnum = match name {
-        b'"' => buffer.b_last_cursor.mark.lnum,
-        b'^' => buffer.b_last_insert.mark.lnum,
-        b'.' => buffer.b_last_change.mark.lnum,
-        b'[' => buffer.b_op_start.lnum,
-        b']' => buffer.b_op_end.lnum,
-        b'<' => buffer.b_visual.vi_start.lnum,
-        b'>' => buffer.b_visual.vi_end.lnum,
+        b'"' => buffer.read().b_last_cursor.mark.lnum,
+        b'^' => buffer.read().b_last_insert.mark.lnum,
+        b'.' => buffer.read().b_last_change.mark.lnum,
+        b'[' => buffer.b_op_start().lnum,
+        b']' => buffer.b_op_end().lnum,
+        b'<' => buffer.b_visual().vi_start.lnum,
+        b'>' => buffer.b_visual().vi_end.lnum,
         b':' | b' ' => return true,
         _ => return false,
     };
@@ -390,13 +392,13 @@ fn delmarks_one(buffer: &mut Buf, name: u8, timestamp: Timestamp) -> bool {
     // The three fmark stores are released; the four positions are only
     // invalidated, because they own nothing.
     match name {
-        b'"' => buffer.b_last_cursor.clear(timestamp),
-        b'^' => buffer.b_last_insert.clear(timestamp),
-        b'.' => buffer.b_last_change.clear(timestamp),
-        b'[' => buffer.b_op_start.lnum = LineNr::ZERO,
-        b']' => buffer.b_op_end.lnum = LineNr::ZERO,
-        b'<' => buffer.b_visual.vi_start.lnum = LineNr::ZERO,
-        _ => buffer.b_visual.vi_end.lnum = LineNr::ZERO,
+        b'"' => buffer.edit().b_last_cursor.clear(timestamp),
+        b'^' => buffer.edit().b_last_insert.clear(timestamp),
+        b'.' => buffer.edit().b_last_change.clear(timestamp),
+        b'[' => buffer.edit().b_op_start.lnum = LineNr::ZERO,
+        b']' => buffer.edit().b_op_end.lnum = LineNr::ZERO,
+        b'<' => buffer.edit().b_visual.vi_start.lnum = LineNr::ZERO,
+        _ => buffer.edit().b_visual.vi_end.lnum = LineNr::ZERO,
     }
     true
 }
@@ -404,7 +406,7 @@ fn delmarks_one(buffer: &mut Buf, name: u8, timestamp: Timestamp) -> bool {
 /// Return the line at mark "mp".  Truncate to fit in window.
 pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
     let buf = Buf::current();
-    if pos.lnum == LineNr::ZERO || pos.lnum > buf.b_ml.ml_line_count {
+    if pos.lnum == LineNr::ZERO || pos.lnum > buf.line_count() {
         return XString::from_cstr(c"-invalid-");
     }
     debug_assert!(COLUMNS.get() >= 0, "Columns >= 0");
@@ -440,7 +442,7 @@ pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
 /// The name of the file a filemark is in — or, when it is in the current
 /// buffer, the text at the mark. `None` when its buffer is gone.
 pub fn fm_getname(fm: &FileMark, lead_len: c_int) -> Option<XString> {
-    if fm.fnum() == Some(Buf::current().handle) {
+    if fm.fnum() == Some(Buf::current().handle()) {
         return Some(mark_line(fm.mark, lead_len));
     }
     buflist_nr2name(fm.fnum(), 0, 1)

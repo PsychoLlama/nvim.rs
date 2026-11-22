@@ -106,15 +106,15 @@ pub fn rename_buffer(new_fname: &CStr) -> Result<(), Failed> {
     // The old name is taken *out* of the buffer rather than copied:
     // `setfname` would release what it found, and the entry made below
     // wants the name the buffer had. `saved` owns it until this returns.
-    let saved = core::mem::take(&mut Buf::current().name);
+    let saved = core::mem::take(&mut Buf::current().edit().name);
     if Buf::current()
         .set_name(Some(new_fname), None, true)
         .is_err()
     {
-        Buf::current().name = saved;
+        Buf::current().edit().name = saved;
         return Err(Failed);
     }
-    Buf::current().b_flags |= BufFlags::NOTEDITED;
+    Buf::current().set_b_flags(Buf::current().b_flags() | BufFlags::NOTEDITED);
     if saved
         .shown()
         .is_some_and(|shown| !shown.to_bytes().is_empty())
@@ -160,6 +160,7 @@ pub fn ex_update(excmd: &mut ExArg) {
     if curbuf_is_changed()
         || (!buf_is_nofilename(current_buf())
             && Buf::current()
+                .read()
                 .name
                 .full()
                 .is_some_and(|name| !path_exists(name)))
@@ -173,7 +174,7 @@ pub fn ex_write(excmd: &mut ExArg) {
     if excmd.cmdidx == CmdIdx::saveas {
         // :saveas does not take a range, uses all lines.
         excmd.line1 = LineNr::ONE;
-        excmd.line2 = Buf::current().b_ml.ml_line_count;
+        excmd.line2 = Buf::current().line_count();
     }
 
     if excmd.usefilter {
@@ -224,9 +225,9 @@ impl ExArg<'_> {
         // Write to another file or b_flags set or not writing the whole file.
         let contested = other
             || (!buf_is_nofilename(Some(buffer))
-                && (buffer.b_flags.has(BufFlags::NOTEDITED)
-                    || buffer.b_flags.has(BufFlags::NEW) && !cpo_has(CpoFlag::OVERNEW)
-                    || buffer.b_flags.has(BufFlags::READERR)));
+                && (buffer.b_flags().has(BufFlags::NOTEDITED)
+                    || buffer.b_flags().has(BufFlags::NEW) && !cpo_has(CpoFlag::OVERNEW)
+                    || buffer.b_flags().has(BufFlags::READERR)));
         let ffname = ffname.unwrap_or_default();
         if !contested || p_wa() || !path_exists(ffname) {
             return Ok(());
@@ -318,7 +319,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         // Overwriting a file that is loaded in another buffer is not a good
         // idea.
         if let Some(alt_buf) = alt_buf
-            && alt_buf.b_ml.ml_mfp.is_some()
+            && alt_buf.ml().ml_mfp.is_some()
         {
             emsg(gettext(E_BUFLOADED));
             return Err(Failed);
@@ -341,7 +342,8 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
             typed.clone(),
         )
     } else {
-        let name = &Buf::current().name;
+        let held = Buf::current().read();
+        let name = &held.name;
         (own_name(name.full()), own_name(name.shown()))
     };
     args.check_overwrite(Buf::current(), fname.as_deref(), ffname.as_deref(), other)?;
@@ -360,12 +362,12 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
         }
         // The current buffer now goes by the name typed.
         short = Some(WriteName::Short);
-        mkdir_name = own_name(Buf::current().name.short());
+        mkdir_name = own_name(Buf::current().read().name.short());
     }
 
     args.make_parent_dirs(mkdir_name.as_deref())?;
 
-    let name_was_missing = Buf::current().name.full().is_none();
+    let name_was_missing = Buf::current().read().name.full().is_none();
     let request = WriteRequest {
         append: args.append,
         forceit: args.forceit,
@@ -383,7 +385,7 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
 
     // After ":saveas fname" reset 'readonly'.
     if args.cmdidx == CmdIdx::saveas && retval.is_ok() {
-        Buf::current().b_p_ro = 0;
+        Buf::current().set_b_p_ro(0);
         REDRAW_TABLINE.set(true);
     }
     // Change directories when the 'acd' option is set and the file name
@@ -401,7 +403,7 @@ fn cannot_write_curbuf(args: &mut ExArg) -> bool {
     buf_dontwrite_msg(current_buf())
         || check_fname().is_err()
         || check_writable(
-            own_name(Buf::current().name.full())
+            own_name(Buf::current().read().name.full())
                 .as_deref()
                 .unwrap_or_default(),
         )
@@ -412,7 +414,7 @@ fn cannot_write_curbuf(args: &mut ExArg) -> bool {
 /// Writing less than the whole buffer needs a `!` (E140), or the user's
 /// blessing: the dialog's "No" refuses too.
 fn confirm_partial_write(args: &mut ExArg) -> Result<(), Failed> {
-    if (args.line1 == LineNr::ONE && args.line2 == Buf::current().b_ml.ml_line_count)
+    if (args.line1 == LineNr::ONE && args.line2 == Buf::current().line_count())
         || args.forceit
         || args.append
         || p_wa()
@@ -443,7 +445,7 @@ fn confirm_partial_write(args: &mut ExArg) -> Result<(), Failed> {
 /// Safe: [`Buf`] is the live buffer this needs; `alt_buf` is expected to be a
 /// buffer other than the current one, which is a matter of sense rather than
 /// of soundness -- swapping a buffer's names with its own is a no-op.
-fn saveas_exchange_names(mut alt_buf: Buf) -> bool {
+fn saveas_exchange_names(alt_buf: Buf) -> bool {
     let was_curbuf = Buf::current_raw();
     buf_autocmd(AutoEvent::BufFilePre, Buf::current());
     buf_autocmd(AutoEvent::BufFilePre, alt_buf);
@@ -457,13 +459,13 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> bool {
     // the doc comment above: `alt_buf` is expected to be another buffer,
     // and swapping a place with itself is not a swap.
     if alt_buf.raw() != Buf::current_raw() {
-        core::mem::swap(&mut alt_buf.name, &mut Buf::current().name);
+        core::mem::swap(&mut alt_buf.edit().name, &mut Buf::current().edit().name);
     }
     buf_name_changed(Buf::current());
     buf_autocmd(AutoEvent::BufFilePost, Buf::current());
     buf_autocmd(AutoEvent::BufFilePost, alt_buf);
-    if alt_buf.b_p_bl == 0 {
-        alt_buf.b_p_bl = 1;
+    if alt_buf.b_p_bl() == 0 {
+        alt_buf.set_b_p_bl(1);
         buf_autocmd(AutoEvent::BufAdd, alt_buf);
     }
     // buffer changed, don't write the file
@@ -472,7 +474,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> bool {
     }
 
     // If 'filetype' was empty try detecting it now.
-    if c_int::from(Buf::current().b_p_ft.first_byte()) == 0 {
+    if c_int::from(Buf::current().read().b_p_ft.first_byte()) == 0 {
         if augroup_exists_of(c"filetypedetect") {
             let _ = do_doautocmd(c"filetypedetect BufRead", true, None);
         }
@@ -486,7 +488,10 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> bool {
 /// [`check_overwrite`](ExArg::check_overwrite) of `buffer` under its own names, copied for the
 /// dialogs, which can rename it.
 pub(crate) fn check_overwrite_own(args: &mut ExArg, buffer: Buf) -> Result<(), Failed> {
-    let (shown, full) = (own_name(buffer.name.shown()), own_name(buffer.name.full()));
+    let (shown, full) = (
+        own_name(buffer.read().name.shown()),
+        own_name(buffer.read().name.full()),
+    );
     args.check_overwrite(buffer, shown.as_deref(), full.as_deref(), false)
 }
 
@@ -513,7 +518,7 @@ pub fn ex_wnext(excmd: &mut ExArg) {
         Win::current().w_arg_idx - step
     };
     excmd.line1 = LineNr::ONE;
-    excmd.line2 = Buf::current().b_ml.ml_line_count;
+    excmd.line2 = Buf::current().line_count();
     if do_write(excmd).is_ok() {
         do_argfile(excmd, i);
     }
@@ -578,8 +583,8 @@ fn write_one_buffer(
 ) -> WriteAll {
     if EXITING.get()
         && !args.forceit
-        && !buffer.terminal.is_null()
-        && channel_job_running(buffer.b_p_channel.cast_unsigned())
+        && !buffer.terminal().is_null()
+        && channel_job_running(buffer.b_p_channel().cast_unsigned())
     {
         // A running terminal is not written: going on to write it would
         // add E676 to the message.
@@ -600,8 +605,8 @@ fn write_one_buffer(
         return WriteAll::Stop;
     }
     let mut deleted = false;
-    if buffer.name.full().is_none() {
-        semsg!("E141: No file name for buffer {}", buffer.handle);
+    if buffer.read().name.full().is_none() {
+        semsg!("E141: No file name for buffer {}", buffer.handle());
         *error += 1;
     } else if check_readonly(&mut args.forceit, buffer)
         || check_overwrite_own(args, buffer).is_err()
@@ -610,7 +615,7 @@ fn write_one_buffer(
     } else {
         let bufref = BufRef::of(buffer);
         if args
-            .make_parent_dirs(own_name(buffer.name.shown()).as_deref())
+            .make_parent_dirs(own_name(buffer.read().name.shown()).as_deref())
             .is_err()
             || buf_write_all(buffer, args.forceit).is_err()
         {
@@ -650,15 +655,15 @@ fn not_writing() -> bool {
 fn check_readonly(forceit: &mut bool, buffer: Buf) -> bool {
     // Handle a file being readonly when the 'readonly' option is set or when
     // the file exists and permissions are read-only.
-    let file = own_name(buffer.name.full());
+    let file = own_name(buffer.read().name.full());
     let file = file.as_deref().unwrap_or_default();
     let readonly =
-        !*forceit && (buffer.b_p_ro != 0 || path_exists(file) && os_file_is_writable(file) == 0);
+        !*forceit && (buffer.b_p_ro() != 0 || path_exists(file) && os_file_is_writable(file) == 0);
     if !readonly {
         return false;
     }
 
-    let (is_ro, name) = (buffer.b_p_ro != 0, own_name(buffer.name.shown()));
+    let (is_ro, name) = (buffer.b_p_ro() != 0, own_name(buffer.read().name.shown()));
     if !confirming() || name.is_none() {
         if is_ro {
             emsg(gettext(E_READONLY));
@@ -717,14 +722,14 @@ pub fn getfile(
         }
         otherfile(full.as_ref().map_or(c"", XString::as_cstr))
     } else {
-        fnum != Buf::current().handle.get()
+        fnum != Buf::current().handle().get()
     };
 
     // Don't wait for the autowrite message. Released at two exits.
     let mut no_prompt = other.then(Suppress::wait_return);
     if other
         && !forceit
-        && Buf::current().b_nwindows == 1
+        && Buf::current().b_nwindows() == 1
         && !buf_hide(Buf::current())
         && curbuf_is_changed()
         && autowrite(Buf::current(), forceit).is_err()

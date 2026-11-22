@@ -85,7 +85,7 @@ pub(crate) fn get_patterns_from_pattern_or_buf(
         return Err(err_expected(c"pattern", want, Some(got)));
     } else if has_buf {
         let b = find_buffer_by_handle(buffer)?;
-        let number = b.map_or(0, |b| b.handle.get());
+        let number = b.map_or(0, |b| b.handle().get());
         patterns.push(Object::string(ApiString::from(
             format!("<buffer={number}>").as_str(),
         )));

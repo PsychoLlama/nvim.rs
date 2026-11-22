@@ -102,7 +102,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     // their final destination at the new text position -- webb
 
     // The last line in the file now that the copies are in.
-    let last_line = Buf::current().b_ml.ml_line_count;
+    let last_line = Buf::current().line_count();
     mark_adjust_nofold(line1, line2, last_line - line2, 0, EXTMARK_NOOP);
     folds_frozen(|| {
         changed_lines(
@@ -181,7 +181,7 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     Win::current().w_cursor.lnum = last_moved_line(line1, line2, dest);
 
     if line1 < dest {
-        let end = (dest + num_lines + 1).min(Buf::current().b_ml.ml_line_count + 1);
+        let end = (dest + num_lines + 1).min(Buf::current().line_count() + 1);
         changed_lines(Buf::current(), line1, ColNr::ZERO, end, 0, false);
     } else {
         changed_lines(
@@ -234,10 +234,10 @@ pub(super) fn set_op_range(start: LineNr, end: LineNr) {
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
         return;
     }
-    Buf::current().b_op_start.lnum = start;
-    Buf::current().b_op_start.col = ColNr::ZERO;
-    Buf::current().b_op_end.lnum = end;
-    Buf::current().b_op_end.col = ColNr::ZERO;
+    Buf::current().edit().b_op_start.lnum = start;
+    Buf::current().edit().b_op_start.col = ColNr::ZERO;
+    Buf::current().edit().b_op_end.lnum = end;
+    Buf::current().edit().b_op_end.col = ColNr::ZERO;
 }
 
 /// `:copy` and `:t` -- copy lines `line1`..`line2` to below line `n`.

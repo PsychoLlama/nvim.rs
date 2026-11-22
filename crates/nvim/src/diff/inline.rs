@@ -359,7 +359,7 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let stale = !cache_results
         || lnum != PREV_LNUM.get()
         || CHANGEDTICK.get() != buf_get_changedtick(Buf::current())
-        || FNUM.get() != Buf::current().handle.get()
+        || FNUM.get() != Buf::current().handle().get()
         || DIFF_FLAGS.get() != PREV_DIFF_FLAGS.get();
     if stale {
         let (_, linestatus) = diff_check_with_linestatus(Win::current(), lnum);
@@ -389,7 +389,7 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         if cache_results {
             PREV_LNUM.set(lnum);
             CHANGEDTICK.set(buf_get_changedtick(Buf::current()));
-            FNUM.set(Buf::current().handle.get());
+            FNUM.set(Buf::current().handle().get());
             PREV_DIFF_FLAGS.set(DIFF_FLAGS.get());
         }
     }

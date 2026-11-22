@@ -633,9 +633,9 @@ const KMAP_LLEN: usize = 200;
 /// Source the keymap file for the current buffer's 'keymap' (or unload
 /// language mappings when it is empty). Answers an error message.
 pub fn keymap_init() -> Result<(), OptError> {
-    let mut buf = Buf::current();
-    buf.b_kmap_state &= !KEYMAP_INIT;
-    let keymap = buf.b_p_keymap.bytes().to_vec();
+    let buf = Buf::current();
+    buf.set_b_kmap_state(buf.b_kmap_state() & !KEYMAP_INIT);
+    let keymap = buf.read().b_p_keymap.bytes().to_vec();
     if keymap.is_empty() {
         // Stop any active keymap and clear the b:keymap_name variable.
         keymap_unload();
@@ -675,16 +675,16 @@ pub fn ex_loadkeymap(excmd: &mut ExArg) {
     // Stop any active keymap and load the new entries.
     keymap_unload();
     // `keymap_unload` left the keymap garray cleared.
-    let mut buf = Buf::current();
-    buf.b_kmap_state = 0;
-    buf.b_kmap_ga.clear();
+    let buf = Buf::current();
+    buf.set_b_kmap_state(0);
+    buf.edit().b_kmap_ga.clear();
     // Set 'cpoptions' to "C" to avoid line continuation.
     let _cpo = SavedCpo::held(c"C");
     // SAFETY: caller contract; the line getter was just checked to be the
     // sourcing one, and `buf`'s entry list was just emptied.
     read_keymap_entries(excmd, buf);
     apply_keymap_entries(buf);
-    buf.b_kmap_state |= KEYMAP_LOADED;
+    buf.set_b_kmap_state(buf.b_kmap_state() | KEYMAP_LOADED);
     status_redraw_curbuf();
 }
 
@@ -692,7 +692,7 @@ pub fn ex_loadkeymap(excmd: &mut ExArg) {
 /// entries, until the line getter runs out. Blank lines and `"` comments are
 /// skipped; an over-long or half-empty entry is dropped, and an empty `to`
 /// reports E791.
-fn read_keymap_entries(excmd: &mut ExArg, mut buffer: Buf) {
+fn read_keymap_entries(excmd: &mut ExArg, buffer: Buf) {
     while let Some(line) = excmd.next_source_line(Some(0), 0, true) {
         let s = skip::past_white(&line);
         if !s.is_empty() && s[0] != b'"' {
@@ -703,7 +703,7 @@ fn read_keymap_entries(excmd: &mut ExArg, mut buffer: Buf) {
                     crate::semsg!("E791: Empty keymap entry");
                 }
             } else {
-                buffer.b_kmap_ga.push(KeymapEntry {
+                buffer.edit().b_kmap_ga.push(KeymapEntry {
                     from: from.to_vec(),
                     to: to.to_vec(),
                 });
@@ -717,6 +717,7 @@ fn apply_keymap_entries(buffer: Buf) {
     // SAFETY: the caller's buffer. The commands are built before any of them
     // runs, so `do_map` cannot be reading the list it is driven by.
     let cmds: Vec<Vec<u8>> = buffer
+        .read()
         .b_kmap_ga
         .iter()
         .map(|entry| keymap_map_cmd(&entry.from, Some(&entry.to)))
@@ -742,8 +743,8 @@ fn keymap_map_cmd(from: &[u8], to: Option<&[u8]>) -> Vec<u8> {
 
 /// Stop using 'keymap': remove the language mappings and free the entries.
 fn keymap_unload() {
-    let mut buf = Buf::current();
-    if buf.b_kmap_state & KEYMAP_LOADED == 0 {
+    let buf = Buf::current();
+    if buf.b_kmap_state() & KEYMAP_LOADED == 0 {
         return;
     }
     // Set 'cpoptions' to "C" to avoid line continuation.
@@ -751,6 +752,7 @@ fn keymap_unload() {
     // The commands are built before any of them runs, so `do_map` cannot be
     // reading the list it is driven by.
     let cmds: Vec<Vec<u8>> = buf
+        .read()
         .b_kmap_ga
         .iter()
         .map(|entry| keymap_map_cmd(&entry.from, None))
@@ -760,8 +762,8 @@ fn keymap_unload() {
         let _ = do_map(MAPTYPE_UNMAP, &cmd, MODE_LANGMAP, false);
     }
     // The entries own their two strings.
-    buf.b_kmap_ga = Vec::new();
-    buf.b_kmap_state &= !(KEYMAP_LOADED);
+    buf.edit().b_kmap_ga = Vec::new();
+    buf.set_b_kmap_state(buf.b_kmap_state() & !(KEYMAP_LOADED));
     status_redraw_curbuf();
 }
 
@@ -771,7 +773,7 @@ fn keymap_unload() {
 pub fn keymap_str(window: Win) -> Option<CString> {
     // SAFETY: caller contract -- a live window whose buffer is valid.
     let buf = window.buffer();
-    if buf.b_p_iminsert != B_IMODE_LMAP {
+    if buf.b_p_iminsert() != B_IMODE_LMAP {
         return None;
     }
     // Evaluate b:keymap_name in wp's buffer.
@@ -782,7 +784,7 @@ pub fn keymap_str(window: Win) -> Option<CString> {
     saved.restore();
     let name = match s {
         Some(s) if !s.is_empty() => s.as_cstr().to_owned(),
-        _ if buf.b_kmap_state & KEYMAP_LOADED != 0 => buf.b_p_keymap.cstr().to_owned(),
+        _ if buf.b_kmap_state() & KEYMAP_LOADED != 0 => buf.read().b_p_keymap.cstr().to_owned(),
         _ => CString::new("lang").expect("no interior NUL"),
     };
     Some(name)

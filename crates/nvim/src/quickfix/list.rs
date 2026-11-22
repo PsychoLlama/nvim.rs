@@ -182,8 +182,8 @@ pub(crate) fn qf_add_entry(mut qfl: Qfl, new: &NewEntry) {
     let buf = if new.bufnum.is_some() {
         entry.fnum = new.bufnum;
         let buf = find_buf(new.bufnum);
-        if let Some(mut buf) = buf {
-            buf.b_has_qf_entry |= flag;
+        if let Some(buf) = buf {
+            buf.set_b_has_qf_entry(buf.b_has_qf_entry() | flag);
         }
         buf
     } else {
@@ -195,7 +195,7 @@ pub(crate) fn qf_add_entry(mut qfl: Qfl, new: &NewEntry) {
     // buffer's own, which is what the quickfix window would print.
     if let Some(fname) = new.fname
         && let full = fix_fname(fname)
-        && let Some(buf_ffname) = buf.and_then(|buf| buf.name.full().map(CStr::to_owned))
+        && let Some(buf_ffname) = buf.and_then(|buf| buf.read().name.full().map(CStr::to_owned))
         && path_fnamecmp(&full, buf_ffname.to_bytes()) != 0
     {
         entry.fname = Some(XString::from_cstr(path_try_shorten_fname(full.as_cstr())));
@@ -327,7 +327,7 @@ impl Buf {
         } else {
             BUF_HAS_LL_ENTRY
         };
-        self.b_has_qf_entry & wanted != 0
+        self.b_has_qf_entry() & wanted != 0
             && adjust_entries(self, window, line1, line2, amount, amount_after)
     }
 }
@@ -359,7 +359,7 @@ fn adjust_entries(
             if GOT_INT.get() {
                 break;
             }
-            if entry.fnum != Some(buffer.handle) {
+            if entry.fnum != Some(buffer.handle()) {
                 continue;
             }
             found_one = true;

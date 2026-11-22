@@ -49,7 +49,7 @@ use crate::winlayer::{Buf, Win};
 /// range and in whether the buffer is new.
 fn read_original(from: LineNr, skip: i32, lines: i32, flags: c_int) -> Result<Loaded, Failed> {
     // A copy: the read's autocommands may rename the buffer.
-    let name = Buf::current().name.full().map(CStr::to_owned);
+    let name = Buf::current().read().name.full().map(CStr::to_owned);
     let flags = ReadFlags::from_bits(flags);
     readfile_named(name.as_deref(), None, from, skip, lines, None, flags, false)
 }
@@ -83,7 +83,7 @@ struct Recorded {
 /// as it is for `nvim -r file.swp`.
 pub fn ml_recover(checkext: bool) {
     RECOVERYMODE.set(true);
-    let called_from_main = !Buf::current().b_ml.is_open();
+    let called_from_main = !Buf::current().ml().is_open();
     let mut recovery = Recovery {
         owned: None,
         buf: None,
@@ -105,7 +105,7 @@ pub fn ml_recover(checkext: bool) {
         // first one's autocommands may have changed either.
         for event in [AutoEvent::BufReadPost, AutoEvent::BufWinEnter] {
             let current = Buf::current();
-            let name = current.name.shown().map(XString::from_cstr);
+            let name = current.read().name.shown().map(XString::from_cstr);
             fire_autocmds_for(event, None, name, false, Some(current), None);
         }
     }
@@ -130,10 +130,10 @@ impl Recovery {
     /// what it holds.
     fn run(&mut self, checkext: bool, called_from_main: bool) -> Result<(), MemlineError> {
         // A copy: the autocommands below may rename the buffer.
-        let fname: CString = if Buf::current().name.is_unnamed() {
+        let fname: CString = if Buf::current().read().name.is_unnamed() {
             CString::default()
         } else {
-            Buf::current().name.shown().unwrap_or(c"").to_owned()
+            Buf::current().read().name.shown().unwrap_or(c"").to_owned()
         };
         // A name ending in ".s[a-w][a-z]" is taken to be the swap file
         // itself; otherwise its swap files are searched for.
@@ -149,7 +149,7 @@ impl Recovery {
             getout(1);
         }
 
-        let mut buf = self.open_swapfile(&fname_used)?;
+        let buf = self.open_swapfile(&fname_used)?;
         let recorded = read_block_zero(buf, directly)?;
 
         // Given the swap file's name directly, the buffer takes its name
@@ -160,7 +160,7 @@ impl Recovery {
             Buf::current().set_name(Some(&cstr::owned(&path)), None, true)?;
         }
 
-        let swap_name = buf.b_ml.memfile().fname().unwrap_or(c"").to_owned();
+        let swap_name = buf.ml().memfile().fname().unwrap_or(c"").to_owned();
         announce(&swap_name);
         check_dates(&swap_name, &recorded);
         ui_flush();
@@ -172,12 +172,10 @@ impl Recovery {
 
         // Drop the original file's lines and the empty buffer's dummy
         // line; they are now past the end of what was recovered.
-        while Buf::current().b_ml.ml_line_count > lnum
-            && !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY)
-        {
-            let _ = ml_delete(Buf::current().b_ml.ml_line_count);
+        while Buf::current().line_count() > lnum && !Buf::current().ml_flags().has(MlFlags::EMPTY) {
+            let _ = ml_delete(Buf::current().line_count());
         }
-        Buf::current().b_flags |= BufFlags::RECOVERED;
+        Buf::current().set_b_flags(Buf::current().b_flags() | BufFlags::RECOVERED);
         check_cursor(Win::current());
 
         MSG_EXT_SKIP_FLUSH.set(!GOT_INT.get());
@@ -192,17 +190,17 @@ impl Recovery {
     /// registered or put on the buffer list -- see
     /// `alloc_unregistered_buffer`.
     fn open_swapfile(&mut self, fname_used: &CStr) -> Result<Buf, MemlineError> {
-        let mut buf = Buf::owned_by(self.owned.insert(alloc_unregistered_buffer()));
+        let buf = Buf::owned_by(self.owned.insert(alloc_unregistered_buffer()));
         self.buf = Some(buf);
-        buf.b_ml.stack_clear(); // nothing in the stack
-        buf.b_ml.clear_cache(); // no cached line
-        buf.b_ml.ml_locked = None; // no locked block
-        buf.b_ml.ml_flags = MlFlags::NONE;
+        buf.ml().stack_clear(); // nothing in the stack
+        buf.ml().clear_cache(); // no cached line
+        buf.ml().ml_locked = None; // no locked block
+        buf.set_ml_flags(MlFlags::NONE);
 
         let Some(memfile) = MemFile::open(fname_used.to_owned(), libc::O_RDONLY) else {
             return Err(MemlineError::CannotOpen(ThinCString::from_cstr(fname_used)));
         };
-        buf.b_ml.ml_mfp = Some(memfile);
+        buf.ml().ml_mfp = Some(memfile);
         Ok(buf)
     }
 
@@ -210,11 +208,12 @@ impl Recovery {
     /// (the swap file stays), then free the scratch buffer: `Buffer`'s
     /// destructor runs, taking the block stack with it.
     fn close(self) {
-        if let Some(mut buf) = self.buf {
-            if let Some(locked) = buf.b_ml.unlock() {
-                buf.b_ml.put(locked.id, false);
+        if let Some(buf) = self.buf {
+            let unlocked = buf.ml().unlock();
+            if let Some(locked) = unlocked {
+                buf.ml().put(locked.id, false);
             }
-            if let Some(memfile) = buf.b_ml.ml_mfp.take() {
+            if let Some(memfile) = buf.ml().ml_mfp.take() {
                 memfile.close(false);
             }
         }
@@ -229,9 +228,9 @@ fn announce(swap_name: &CStr) {
     let path = home_to_tilde(None, swap_name, MAXPATHL as usize, true);
     smsg!(0, "Using swap file \"{}\"", shown(path.as_cstr()));
     let path = match buf_spname(&Buf::current()) {
-        Some(special) => XString::from_cstr(special),
+        Some(special) => XString::from_cstr(&special),
         None => {
-            let full = Buf::current().name.full().unwrap_or(c"").to_owned();
+            let full = Buf::current().read().name.full().unwrap_or(c"").to_owned();
             home_to_tilde(None, &full, MAXPATHL as usize, true)
         }
     };
@@ -246,7 +245,7 @@ fn announce(swap_name: &CStr) {
 fn check_dates(swap_name: &CStr, recorded: &Recorded) {
     // Block zero keeps the low 32 bits; so does this.
     let mtime = low32(recorded.mtime).cast_signed();
-    let Some(original) = Buf::current().name.full().and_then(file_info) else {
+    let Some(original) = Buf::current().read().name.full().and_then(file_info) else {
         return;
     };
     let swap = file_info(swap_name);
@@ -262,11 +261,11 @@ fn check_dates(swap_name: &CStr, recorded: &Recorded) {
 /// text itself is used only for the "unchanged?" comparison in
 /// [`mark_if_changed`].
 fn start_over(recorded: &Recorded) -> Result<Loaded, Failed> {
-    while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    while !Buf::current().ml_flags().has(MlFlags::EMPTY) {
         let _ = ml_delete(LineNr::ONE);
     }
     let mut orig_file_status = Err(Failed);
-    if Buf::current().name.full().is_some() {
+    if Buf::current().read().name.full().is_some() {
         orig_file_status = read_original(LineNr::ZERO, 0, MAXLNUM.get(), READ_NEW.cast_signed());
     }
     if recorded.fileformat != 0 {
@@ -295,11 +294,11 @@ fn mark_if_changed(lnum: LineNr, orig_file_status: Result<Loaded, Failed>) {
         buf_inc_changedtick(Buf::current());
     };
     if orig_file_status != Ok(Loaded::Read)
-        || Buf::current().b_ml.ml_line_count != LineNr::new(lnum.get() * 2 + 1)
+        || Buf::current().line_count() != LineNr::new(lnum.get() * 2 + 1)
     {
         // Recovering an empty file gives two lines of which the first is
         // empty; that is not a modification.
-        if !(Buf::current().b_ml.ml_line_count == LineNr::new(2)
+        if !(Buf::current().line_count() == LineNr::new(2)
             && Buf::current().lines().line(LineNr::ONE).is_empty())
         {
             mark();
@@ -323,36 +322,37 @@ fn mark_if_changed(lnum: LineNr, orig_file_status: Result<Loaded, Failed>) {
 ///
 /// `directly`: the user named the swap file itself, so its recorded file
 /// name is wanted.
-fn read_block_zero(mut recovery: Buf, directly: bool) -> Result<Recorded, MemlineError> {
-    let swap_name = recovery.b_ml.memfile().fname().unwrap_or(c"").to_owned();
+fn read_block_zero(recovery: Buf, directly: bool) -> Result<Recorded, MemlineError> {
+    let swap_name = recovery.ml().memfile().fname().unwrap_or(c"").to_owned();
 
     // The page size `MemFile::open` picked need not be the one the swap
     // file was written with; the real one is in block zero. Reading
     // block zero needs *a* page size, so use the smallest one a swap
     // file can have, and correct it below.
-    recovery.b_ml.memfile().mf_page_size = MIN_SWAP_PAGE_SIZE;
+    recovery.ml().memfile().mf_page_size = MIN_SWAP_PAGE_SIZE;
 
     msg_ext_set_kind(c"emsg");
-    let Some(id) = recovery.b_ml.memfile().get(0, 1) else {
+    let Some(id) = recovery.ml().memfile().get(0, 1) else {
         return Err(MemlineError::NoBlockZero(ThinCString::from_cstr(
             &swap_name,
         )));
     };
     let recorded = check_block_zero(recovery, id, &swap_name, directly);
     // Release block zero.
-    recovery.b_ml.put(id, false);
+    recovery.ml().put(id, false);
     recorded
 }
 
 /// [`read_block_zero`] once the block is in memory.
 fn check_block_zero(
-    mut recovery: Buf,
+    recovery: Buf,
     id: BlockId,
     swap_name: &CStr,
     directly: bool,
 ) -> Result<Recorded, MemlineError> {
     let swap = || ThinCString::from_cstr(swap_name);
-    let b0 = ZeroBlock(recovery.b_ml.page(id));
+    let held = recovery.ml();
+    let b0 = ZeroBlock(held.page(id));
     if b0.version().starts_with(b"VIM 3.0") {
         return Err(MemlineError::Vim3(swap()));
     }
@@ -370,7 +370,9 @@ fn check_block_zero(
     // The guessed page size was wrong, so the highest block number
     // in the file has to be worked out again.
     let recorded_page_size = low32(b0.page_size());
-    let memfile = recovery.b_ml.memfile();
+    drop(held);
+    let mut held = recovery.ml();
+    let memfile = held.memfile();
     if memfile.mf_page_size != recorded_page_size {
         let previous_page_size = memfile.mf_page_size;
         memfile.set_page_size(recorded_page_size);
@@ -395,8 +397,10 @@ fn check_block_zero(
         // Block zero's own page was read at the guessed size.
         memfile.resize_page(id, memfile.mf_page_size as usize);
     }
+    drop(held);
 
-    let b0 = ZeroBlock(recovery.b_ml.page(id));
+    let held = recovery.ml();
+    let b0 = ZeroBlock(held.page(id));
     // Take 'fileformat' and 'fileencoding' from block zero. The
     // encoding sits at the very end of the name field, behind a NUL,
     // so it is found by scanning back from there.
@@ -415,7 +419,7 @@ fn check_block_zero(
         fileencoding,
         mtime: b0.mtime(),
         pid: b0.pid(),
-        block: recovery.b_ml.page(id)[..B0_SIZE].to_vec(),
+        block: held.page(id)[..B0_SIZE].to_vec(),
     })
 }
 
@@ -519,18 +523,18 @@ struct Walk {
 impl Walk {
     /// Start at block 1, which is one page, at its first index, appending
     /// after line 0.
-    fn new(mut buffer: Buf) -> Self {
-        buffer.b_ml.stack_clear();
+    fn new(buffer: Buf) -> Self {
+        buffer.ml().stack_clear();
         Walk {
             buffer,
-            swap_name: buffer.b_ml.memfile().fname().unwrap_or(c"").to_owned(),
+            swap_name: buffer.ml().memfile().fname().unwrap_or(c"").to_owned(),
             bnum: 1,
             page_count: 1,
             idx: 0,
             line_count: LineNr::ZERO,
             lnum: LineNr::ZERO,
             error: 0,
-            cannot_open: Buf::current().name.full().is_none(),
+            cannot_open: Buf::current().read().name.full().is_none(),
         }
     }
 
@@ -554,11 +558,12 @@ impl Walk {
     /// Visit block `bnum`: lock it as the recovery memline's block and
     /// append what it holds. Errs when block 1 itself is unusable.
     fn visit(&mut self) -> Result<Next, MemlineError> {
-        let mut buffer = self.buffer;
-        if let Some(held) = buffer.b_ml.unlock() {
-            buffer.b_ml.put(held.id, false); // release the previous block
+        let buffer = self.buffer;
+        let unlocked = buffer.ml().unlock();
+        if let Some(held) = unlocked {
+            buffer.ml().put(held.id, false); // release the previous block
         }
-        let Some(id) = buffer.b_ml.memfile().get(self.bnum, self.page_count) else {
+        let Some(id) = buffer.ml().memfile().get(self.bnum, self.page_count) else {
             if self.bnum == 1 {
                 return Err(MemlineError::NoBlockOne(ThinCString::from_cstr(
                     &self.swap_name,
@@ -567,11 +572,11 @@ impl Walk {
             self.problem(c"???MANY LINES MISSING");
             return Ok(Next::Up);
         };
-        buffer.b_ml.lock(id, LineNr::ZERO, LineNr::ZERO);
-        if PointerBlock(buffer.b_ml.page(id)).is_pointer() {
+        buffer.ml().lock(id, LineNr::ZERO, LineNr::ZERO);
+        if PointerBlock(buffer.ml().page(id)).is_pointer() {
             return Ok(self.visit_pointer_block(id));
         }
-        if !DataBlock(buffer.b_ml.page(id)).is_data() {
+        if !DataBlock(buffer.ml().page(id)).is_data() {
             if self.bnum == 1 {
                 return Err(MemlineError::BlockOneId(ThinCString::from_cstr(
                     &self.swap_name,
@@ -586,12 +591,13 @@ impl Walk {
 
     /// A pointer block: check its header, then follow its entry `idx`.
     fn visit_pointer_block(&mut self, id: BlockId) -> Next {
-        let mut buffer = self.buffer;
+        let buffer = self.buffer;
         // The counts in the header have to fit the page size this build
         // uses, or the entries cannot be walked at all.
-        let page_size = buffer.b_ml.memfile().mf_page_size;
+        let page_size = buffer.ml().memfile().mf_page_size;
         let count_max = PointerBlock::<&[u8]>::count_max_for(page_size);
-        let mut pointers = PointerBlock(buffer.b_ml.page_mut(id));
+        let mut held = buffer.ml();
+        let mut pointers = PointerBlock(held.page_mut(id));
         let mut ptr_block_error = false;
         if pointers.count_max() != count_max {
             ptr_block_error = true;
@@ -601,16 +607,16 @@ impl Walk {
             ptr_block_error = true;
             pointers.set_count(pointers.count_max());
         }
+        let count = usize::from(pointers.count());
+        let line_total = pointers.line_total();
         if ptr_block_error {
             complain(c"E1364: Warning: Pointer block corrupted");
         }
 
-        let pointers = PointerBlock(buffer.b_ml.page(id));
-        let count = usize::from(pointers.count());
         // The first time down this block, its entries should account for
         // exactly the line count promised above it.
         if self.idx == 0 && self.line_count != LineNr::ZERO {
-            self.line_count -= pointers.line_total();
+            self.line_count -= line_total;
             if self.line_count != LineNr::ZERO {
                 self.problem(c"???LINE COUNT WRONG");
             }
@@ -623,7 +629,8 @@ impl Walk {
         if self.idx >= count {
             return Next::Up;
         }
-        let entry = PointerBlock(buffer.b_ml.page(id)).entry(self.idx);
+        drop(held);
+        let entry = PointerBlock(buffer.ml().page(id)).entry(self.idx);
         if entry.pe_bnum < 0 {
             self.read_unwritten(&entry);
             self.idx += 1; // same block again, for the next index
@@ -664,7 +671,7 @@ impl Walk {
     /// One block deeper in the tree, through `entry` — unless the entry's
     /// block cannot be in the file, which skips it.
     fn descend(&mut self, entry: &PointerEntry) {
-        let mut buffer = self.buffer;
+        let buffer = self.buffer;
         let top = ml_add_stack(buffer);
         let frame = InfoPtr {
             ip_bnum: self.bnum,
@@ -672,7 +679,7 @@ impl Walk {
             ip_high: LineNr::ZERO,
             ip_index: len_as_int(self.idx),
         };
-        buffer.b_ml.stack_set(top, frame);
+        buffer.ml().stack_set(top, frame);
 
         self.bnum = entry.pe_bnum;
         self.line_count = LineNr::new(entry.pe_line_count);
@@ -680,16 +687,16 @@ impl Walk {
         // `pe_page_count` sizes the allocation `get` makes, so a bogus
         // value (0x40000000, say) would ask for gigabytes. It must be at
         // least one page, and the block must lie inside the file.
-        let blocknr_max = buffer.b_ml.memfile().mf_blocknr_max;
+        let blocknr_max = buffer.ml().memfile().mf_blocknr_max;
         if self.page_count < 1 || self.bnum + BlockNr::from(self.page_count) > blocknr_max + 1 {
             self.problem(c"???ILLEGAL BLOCK NUMBER");
             // Skip this entry and pop back up, to recover whatever else
             // there is.
-            let ip = buffer.b_ml.stack_at(top);
+            let ip = buffer.ml().stack_at(top);
             self.idx = ip.ip_index.cast_unsigned() as usize + 1;
             self.bnum = ip.ip_bnum;
             self.page_count = 1;
-            buffer.b_ml.stack_pop();
+            buffer.ml().stack_pop();
             return;
         }
         self.idx = 0;
@@ -698,10 +705,11 @@ impl Walk {
     /// A data block: append every line in it, marking where its header
     /// disagrees with what the pointer block promised.
     fn copy_data_block(&mut self, id: BlockId) {
-        let mut buffer = self.buffer;
+        let buffer = self.buffer;
         let mut has_error = false;
-        let page_size = buffer.b_ml.memfile().mf_page_size;
-        let mut data = DataBlock(buffer.b_ml.page_mut(id));
+        let page_size = buffer.ml().memfile().mf_page_size;
+        let mut held = buffer.ml();
+        let mut data = DataBlock(held.page_mut(id));
 
         // The block's length has to match the page count the pointer block
         // promised; if it does not, trust the pointer block.
@@ -718,6 +726,7 @@ impl Walk {
 
         let block_lines = data.line_count();
         let (txt_start, txt_end) = (data.txt_start() as usize, data.txt_end() as usize);
+        drop(held);
         if txt_end_wrong {
             self.problem(c"??? from here until ???END lines may be messed up");
             has_error = true;
@@ -737,7 +746,8 @@ impl Walk {
                 self.problem(c"??? lines may be missing");
                 break;
             }
-            let data = DataBlock(buffer.b_ml.page(id));
+            let held = buffer.ml();
+            let data = DataBlock(held.page(id));
             let start = data.line_start(i) as usize;
             if start <= HEADER_SIZE || start >= txt_end {
                 self.error += 1;
@@ -765,7 +775,7 @@ impl Walk {
     /// One block back up the tree, and on to the next index. False when
     /// the walk is back at the root: it is finished.
     fn ascend(&mut self) -> bool {
-        let Some(ip) = self.buffer.b_ml.stack_pop() else {
+        let Some(ip) = self.buffer.ml().stack_pop() else {
             return false;
         };
         self.bnum = ip.ip_bnum;
@@ -796,7 +806,7 @@ fn report_recovery(error: c_int, recorded: &Recorded, fname_used: &CStr) {
     }
 
     msg_ext_set_kind(c"wmsg");
-    if Buf::current().b_changed != 0 {
+    if Buf::current().b_changed() != 0 {
         tell(
             c"Recovery completed. You should check if everything is OK.",
             0,
@@ -833,9 +843,9 @@ fn report_recovery(error: c_int, recorded: &Recorded, fname_used: &CStr) {
 /// unchanged. `check_char`: stop as soon as a character is typed, having
 /// synced at least one block.
 pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
-    for mut buf in buffers() {
+    for buf in buffers() {
         if buf
-            .b_ml
+            .ml()
             .ml_mfp
             .as_ref()
             .is_none_or(|memfile| memfile.fname().is_none())
@@ -847,15 +857,15 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
 
         if buf_is_changed(buf)
             && check_file != 0
-            && buf.b_ml.memfile().need_trans()
-            && let Some(full) = buf.name.full()
+            && buf.ml().memfile().need_trans()
+            && let Some(full) = buf.read().name.full()
         {
             // If the original file is gone or has changed, preserve
             // now, to get rid of all the negative numbered blocks.
             let changed = file_info(full).is_none_or(|info| {
-                info.stat.st_mtim.tv_sec != buf.b_mtime_read
-                    || info.stat.st_mtim.tv_nsec != buf.b_mtime_read_ns
-                    || info.stat.st_size != buf.b_orig_size
+                info.stat.st_mtim.tv_sec != buf.b_mtime_read()
+                    || info.stat.st_mtim.tv_nsec != buf.b_mtime_read_ns()
+                    || info.stat.st_size != buf.b_orig_size()
             });
             if changed {
                 ml_preserve(buf, false, do_fsync);
@@ -864,7 +874,7 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
             }
         }
 
-        if buf.b_ml.memfile().mf_dirty == MfDirty::Yes {
+        if buf.ml().memfile().mf_dirty == MfDirty::Yes {
             // Best effort: `ml_sync_all` writes what it can and leaves
             // the rest dirty.
             let stop = if check_char != 0 { MFS_STOP } else { 0 };
@@ -873,7 +883,7 @@ pub fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) {
             } else {
                 0
             };
-            let _ = buf.b_ml.memfile().sync(stop | flush);
+            let _ = buf.ml().memfile().sync(stop | flush);
             if check_char != 0 && os_char_avail() {
                 break; // a character is available now
             }
@@ -898,9 +908,9 @@ pub fn ml_preserve(buffer: Buf, message: bool, do_fsync: bool) {
 }
 
 /// [`ml_preserve`]'s work, answering why it did not take.
-fn preserve(mut buffer: Buf, do_fsync: bool) -> Result<(), MemlineError> {
+fn preserve(buffer: Buf, do_fsync: bool) -> Result<(), MemlineError> {
     if buffer
-        .b_ml
+        .ml()
         .ml_mfp
         .as_ref()
         .is_none_or(|memfile| memfile.fname().is_none())
@@ -916,11 +926,11 @@ fn preserve(mut buffer: Buf, do_fsync: bool) -> Result<(), MemlineError> {
     let _ = ml_find_line(buffer, LineNr::ZERO, ML_FLUSH); // flush the locked block
     let sync_flags = MFS_ALL | if do_fsync { MFS_FLUSH } else { 0 };
     let mut status = buffer
-        .b_ml
+        .ml()
         .memfile()
         .sync(sync_flags)
         .map_err(|_| MemlineError::PreserveFailed);
-    buffer.b_ml.stack_clear(); // the stack is invalid after MFS_ALL
+    buffer.ml().stack_clear(); // the stack is invalid after MFS_ALL
 
     // Some data blocks may have gone from a negative to a positive block
     // number, which means the pointer blocks referring to them need
@@ -929,7 +939,7 @@ fn preserve(mut buffer: Buf, do_fsync: bool) -> Result<(), MemlineError> {
     // the file is reached, which can only happen when a write failed —
     // a full file system, say). `ml_find_line` does the work, translating
     // the negative numbers as it fetches each block's first line.
-    if buffer.b_ml.memfile().need_trans()
+    if buffer.ml().memfile().need_trans()
         && !GOT_INT.get()
         && let Err(err) = update_pointer_blocks(buffer, sync_flags)
     {
@@ -943,16 +953,17 @@ fn preserve(mut buffer: Buf, do_fsync: bool) -> Result<(), MemlineError> {
 /// translations left, or the buffer ends, then sync the pointer blocks that
 /// were updated. Errs when a block cannot be fetched (nothing more is done
 /// then) or the sync fails.
-fn update_pointer_blocks(mut buffer: Buf, sync_flags: c_int) -> Result<(), MemlineError> {
+fn update_pointer_blocks(buffer: Buf, sync_flags: c_int) -> Result<(), MemlineError> {
     let mut lnum: LineNr = LineNr::ONE;
-    while buffer.b_ml.memfile().need_trans() && lnum <= buffer.b_ml.ml_line_count {
+    let need_trans = || buffer.ml().memfile().need_trans();
+    while need_trans() && lnum <= buffer.line_count() {
         if ml_find_line(buffer, lnum, ML_FIND).is_none() {
             return Err(MemlineError::PreserveFailed);
         }
-        lnum = buffer.b_ml.locked_high() + 1;
+        lnum = buffer.ml().locked_high() + 1;
     }
     let _ = ml_find_line(buffer, LineNr::ZERO, ML_FLUSH); // flush the locked block
-    let synced = buffer.b_ml.memfile().sync(sync_flags);
-    buffer.b_ml.stack_clear(); // the stack is invalid now
+    let synced = buffer.ml().memfile().sync(sync_flags);
+    buffer.ml().stack_clear(); // the stack is invalid now
     synced.map_err(|_| MemlineError::PreserveFailed)
 }

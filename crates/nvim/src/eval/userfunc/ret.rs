@@ -110,7 +110,7 @@ impl ExArg<'_> {
         while lnum <= line2 {
             if ranged {
                 // Default is the line number, not the range.
-                if lnum > Buf::current().b_ml.ml_line_count {
+                if lnum > Buf::current().line_count() {
                     emsg(gettext(E_INVRANGE));
                     break;
                 }

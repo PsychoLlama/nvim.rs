@@ -316,7 +316,7 @@ fn edit(
     so: ScrollOff,
 ) -> Result<(), Failed> {
     // Re-editing a terminal buffer: skip most buffer re-initialization.
-    if !other_file && !Buf::current().terminal.is_null() {
+    if !other_file && !Buf::current().terminal().is_null() {
         // Needed when called from do_argfile(); the title may show the
         // arg index, e.g. "(2 of 5)".
         check_arg_idx(Win::current());
@@ -364,7 +364,7 @@ fn edit(
     // If the file name was changed, reset the not-edit flag so that
     // ":write" works.
     if !other_file {
-        Buf::current().b_flags.clear(BufFlags::NOTEDITED);
+        Buf::current().edit().b_flags.clear(BufFlags::NOTEDITED);
     }
 
     // Check if we are editing the w_arg_idx file in the argument list.
@@ -395,7 +395,7 @@ fn edit(
 fn may_abandon(args: &EcmdArgs<'_, '_>, state: &Ecmd, other_file: bool) -> Result<(), Failed> {
     let flags = args.flags;
     let must_ask = (!other_file && !flags.has(EcmdFlags::OLDBUF))
-        || (Buf::current().b_nwindows == 1
+        || (Buf::current().b_nwindows() == 1
             && !flags.has(EcmdFlags::HIDE | EcmdFlags::ADDBUF | EcmdFlags::ALTBUF));
     // What "may we abandon this buffer" should take into account.
     let mut ccgd = 0;
@@ -429,7 +429,7 @@ fn settle_buffer(flags: EcmdFlags, state: &mut Ecmd, other_file: bool) -> Result
     let buf = Buf::current();
     if flags.has(EcmdFlags::SET_HELP) || KEEP_HELP_FLAG.get() {
         prepare_help_buffer();
-    } else if !Buf::current().b_help {
+    } else if !Buf::current().b_help() {
         // Don't make a buffer listed if it's a help buffer.  Useful when
         // using CTRL-O to go back to a help file.
         set_buflisted(1);
@@ -442,7 +442,7 @@ fn settle_buffer(flags: EcmdFlags, state: &mut Ecmd, other_file: bool) -> Result
     // Since we are starting to edit a file, consider the filetype to be
     // unset.  Helps for when an autocommand changes files and expects
     // syntax highlighting to work in the other file.
-    Buf::current().b_did_filetype = false;
+    Buf::current().set_b_did_filetype(false);
 
     // other_file oldbuf
     //  false     false       re-edit same file, buffer is re-used
@@ -470,7 +470,7 @@ fn finish_window(command: Option<&CStr>, state: &Ecmd) {
     // language.  Can only be done once the buffer is properly set up.
     if state.did_get_winopts
         && Win::current().w_onebuf_opt.wo_spell != 0
-        && c_int::from(Win::current().syntax().b_p_spl.first_byte()) != 0
+        && c_int::from(Win::current().syntax().read().b_p_spl.first_byte()) != 0
     {
         let _ = parse_spelllang(Win::current());
     }
@@ -488,11 +488,11 @@ fn finish_window(command: Option<&CStr>, state: &Ecmd) {
         report_file_info();
     }
 
-    Buf::current().b_last_used = os_time_raw();
+    Buf::current().set_b_last_used(os_time_raw());
     if let Some(command) = command {
         let _ = do_cmdline(Some(command.to_bytes()), None, DoCmdOpts::VERBOSE);
     }
-    if Buf::current().b_kmap_state & KEYMAP_INIT != 0 {
+    if Buf::current().b_kmap_state() & KEYMAP_INIT != 0 {
         let _ = keymap_init();
     }
 }
@@ -506,7 +506,7 @@ fn resolve_target(
     flags: EcmdFlags,
 ) -> Target {
     if fnum.is_some() {
-        if fnum == Some(Buf::current().handle) {
+        if fnum == Some(Buf::current().handle()) {
             // file is already being edited, nothing to do
             return Target::AlreadyHere;
         }
@@ -527,7 +527,8 @@ fn resolve_target(
         return Target::Editing(true);
     };
     if name.is_empty() {
-        let current = &Buf::current().name;
+        let held = Buf::current().read();
+        let current = &held.name;
         if current.full().is_none() {
             // there is no file name
             return Target::Editing(false);
@@ -555,21 +556,21 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     let buf = Buf::current();
     // The buffer's own file name; see [`switch`]'s copy for why it is owned
     // rather than borrowed.
-    let new_name: Option<CString> = buf.name.shown().map(CStr::to_owned);
+    let new_name: Option<CString> = buf.read().name.shown().map(CStr::to_owned);
     let bufref = BufRef::of(buf);
 
     // If the buffer was used before, store the current contents so that
     // the reload can be undone.  Do not do this if the (empty) buffer is
     // being re-used for another file.
-    if !Buf::current().b_flags.has(BufFlags::NEVERLOADED)
-        && (p_ur() < 0 || i64::from(Buf::current().b_ml.ml_line_count) <= p_ur())
+    if !Buf::current().b_flags().has(BufFlags::NEVERLOADED)
+        && (p_ur() < 0 || i64::from(Buf::current().line_count()) <= p_ur())
     {
         // Sync first so that this is a separate undo-able action.
         u_sync(false);
         if u_savecommon(
             Buf::current(),
             LineNr::ZERO,
-            Buf::current().b_ml.ml_line_count + 1,
+            Buf::current().line_count() + 1,
             LineNr::ZERO,
             true,
         )
@@ -603,8 +604,8 @@ fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     }
     buf_clear_file(Buf::current());
     // clear '[ and '] marks
-    Buf::current().b_op_start.lnum = LineNr::ZERO;
-    Buf::current().b_op_end.lnum = LineNr::ZERO;
+    Buf::current().edit().b_op_start.lnum = LineNr::ZERO;
+    Buf::current().edit().b_op_end.lnum = LineNr::ZERO;
     true
 }
 
@@ -640,7 +641,7 @@ fn enter_new_buffer(
         // need to read the file
         SWAP_EXISTS_ACTION.set(SEA_DIALOG);
         // set/reset 'ro' flag
-        Buf::current().b_flags |= BufFlags::CHECK_RO;
+        Buf::current().set_b_flags(Buf::current().b_flags() | BufFlags::CHECK_RO);
         // Open the buffer and read the file.
         if flags.has(EcmdFlags::NOWINENTER) {
             state.readfile_flags |= READ_NOWINENTER.cast_signed();
@@ -713,7 +714,7 @@ fn place_cursor(state: &Ecmd) {
     } else {
         // no line number, go to last line in Ex mode
         if EXMODE_ACTIVE.get() {
-            Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+            Win::current().w_cursor.lnum = Buf::current().line_count();
         }
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }

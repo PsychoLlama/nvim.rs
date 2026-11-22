@@ -420,10 +420,10 @@ impl Drop for SpellBuf {
 /// undo information.
 pub fn open_spellbuf() -> SpellBuf {
     let owner = SpellBuf(alloc_unregistered_buffer());
-    let mut buf = owner.buf();
+    let buf = owner.buf();
 
-    buf.b_spell = true;
-    buf.b_p_swf = 1;
+    buf.set_b_spell(true);
+    buf.set_b_p_swf(1);
     if ml_open(buf).is_err() {
         logmsg!(
             LOGLVL_ERR,

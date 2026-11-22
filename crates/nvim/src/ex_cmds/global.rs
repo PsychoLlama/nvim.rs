@@ -205,7 +205,7 @@ pub fn ex_global(excmd: &mut ExArg) {
     // When nesting, the command works on one line.  That allows for
     // ":g/found/v/notfound/command".
     if GLOBAL_BUSY.get() != 0
-        && (excmd.line1 != LineNr::ONE || excmd.line2 != Buf::current().b_ml.ml_line_count)
+        && (excmd.line1 != LineNr::ONE || excmd.line2 != Buf::current().line_count())
     {
         // Will increment global_busy to break out of the loop.
         emsg(gettext(c"E147: Cannot do :global recursive with a range"));
@@ -285,7 +285,7 @@ pub fn global_exe(cmd: &[u8]) {
     GLOBAL_NEED_MSG_KIND.set(true);
     GLOBAL_NEED_BEGINLINE.set(false);
     GLOBAL_BUSY.set(1 as c_int);
-    let old_lcount = Buf::current().b_ml.ml_line_count;
+    let old_lcount = Buf::current().line_count();
 
     while !GOT_INT.get() {
         let lnum = ml_firstmarked();
@@ -318,6 +318,6 @@ pub fn global_exe(cmd: &[u8]) {
     // edge case where the buffer we are in after execution is different from
     // the one we started in.
     if !do_sub_msg(false) && Buf::current_raw() == old_buf {
-        say::more(Buf::current().b_ml.ml_line_count.get() - old_lcount.get());
+        say::more(Buf::current().line_count().get() - old_lcount.get());
     }
 }

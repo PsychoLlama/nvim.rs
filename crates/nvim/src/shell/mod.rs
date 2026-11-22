@@ -407,7 +407,10 @@ fn word_length(bytes: &[u8]) -> usize {
 /// because reading from the child can trigger a change to the very buffer
 /// still being written from.
 fn read_input(buf: &mut Vec<u8>) {
-    let (start, end) = (Buf::current().b_op_start.lnum, Buf::current().b_op_end.lnum);
+    let (start, end) = (
+        Buf::current().b_op_start().lnum,
+        Buf::current().b_op_end().lnum,
+    );
     Buf::current().read_into(start, end, buf);
 }
 
@@ -422,7 +425,7 @@ fn write_output(output: &mut [u8], eof: bool) -> usize {
     let mut start = 0;
     let mut off = 0;
     while start + off < output.len() {
-        let binary = Buf::current().b_p_bin != 0;
+        let binary = Buf::current().b_p_bin() != 0;
         let at = start + off;
         let byte = output[at];
         // CRLF, except in binary mode, where the CR is kept.
@@ -451,10 +454,10 @@ fn write_output(output: &mut [u8], eof: bool) -> usize {
             let mut line = output[start..].to_vec();
             line.push(0);
             append_at_cursor(&line);
-            Buf::current().b_no_eol_lnum = Win::current().w_cursor.lnum;
+            Buf::current().set_b_no_eol_lnum(Win::current().w_cursor.lnum);
             start = output.len();
         } else {
-            Buf::current().b_no_eol_lnum = LineNr::ZERO;
+            Buf::current().set_b_no_eol_lnum(LineNr::ZERO);
         }
     }
 

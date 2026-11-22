@@ -359,6 +359,81 @@ impl<T> fmt::Debug for SlotRead<'_, T> {
     }
 }
 
+impl<'a, T> SlotEdit<'a, T> {
+    /// Narrow the guard to one part of the value -- a field, an element --
+    /// still holding the whole value lent: the part's borrow is the guard's.
+    #[inline(always)]
+    pub(crate) fn map<U>(mut self, part: impl FnOnce(&mut T) -> &mut U) -> EditPart<'a, T, U> {
+        let part = NonNull::from(part(&mut self));
+        EditPart { edit: self, part }
+    }
+}
+
+impl<'a, T> SlotRead<'a, T> {
+    /// [`SlotEdit::map`] for a read: the part stays counted as the whole.
+    #[inline(always)]
+    pub(crate) fn map<U>(self, part: impl FnOnce(&T) -> &U) -> ReadPart<'a, T, U> {
+        let part = NonNull::from(part(&self));
+        ReadPart { read: self, part }
+    }
+}
+
+/// A part of a value lent by [`edit_at`] ([`SlotEdit::map`]): the edit is
+/// held until the part is dropped. The part is kept as an address taken from
+/// the guard's own borrow, which nothing else can reach while the edit bit is
+/// set.
+pub(crate) struct EditPart<'a, T, U> {
+    edit: SlotEdit<'a, T>,
+    part: NonNull<U>,
+}
+
+impl<T, U> Deref for EditPart<'_, T, U> {
+    type Target = U;
+
+    #[inline(always)]
+    fn deref(&self) -> &U {
+        // SAFETY: borrowed from the value `edit` lends, which is held.
+        unsafe { self.part.as_ref() }
+    }
+}
+
+impl<T, U> DerefMut for EditPart<'_, T, U> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut U {
+        // SAFETY: as `deref`; `&mut self` is the one way in.
+        unsafe { self.part.as_mut() }
+    }
+}
+
+impl<T, U> fmt::Debug for EditPart<'_, T, U> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "EditPart({:?})", self.edit)
+    }
+}
+
+/// A part of a value borrowed by [`read_at`] ([`SlotRead::map`]): counted
+/// until dropped.
+pub(crate) struct ReadPart<'a, T, U> {
+    read: SlotRead<'a, T>,
+    part: NonNull<U>,
+}
+
+impl<T, U> Deref for ReadPart<'_, T, U> {
+    type Target = U;
+
+    #[inline(always)]
+    fn deref(&self) -> &U {
+        // SAFETY: borrowed from the value `read` counts, which is held.
+        unsafe { self.part.as_ref() }
+    }
+}
+
+impl<T, U> fmt::Debug for ReadPart<'_, T, U> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ReadPart({:?})", self.read)
+    }
+}
+
 #[cold]
 #[inline(never)]
 #[track_caller]

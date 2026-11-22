@@ -128,7 +128,7 @@ pub fn spell_add_word(word: &[u8], what: SpellAddType, idx: c_int, undo: bool) {
 
         // Refuse to write the file behind the user's back if they are
         // editing it and have unsaved changes.
-        let open = find_buffer_by_name(name.as_cstr()).filter(|b| b.b_ml.ml_mfp.is_some());
+        let open = find_buffer_by_name(name.as_cstr()).filter(|b| b.ml().ml_mfp.is_some());
         if open.is_some_and(buf_is_changed) {
             emsg(gettext(E_BUFLOADED));
             return;
@@ -194,7 +194,7 @@ pub fn spell_add_word(word: &[u8], what: SpellAddType, idx: c_int, undo: bool) {
         // change takes effect without a full :mkspell.
         mkspell(&[&fname[..]], false, true, true);
         if let Some(buf) = bufref.get() {
-            buf_reload(buf, buf.b_orig_mode, false);
+            buf_reload(buf, buf.b_orig_mode(), false);
         }
         redraw_all_later(UPD_SOME_VALID);
     }

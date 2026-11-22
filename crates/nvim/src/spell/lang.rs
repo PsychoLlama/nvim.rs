@@ -126,7 +126,7 @@ fn spell_load_lang(lang: &[u8]) {
     };
 
     // Autocommands could otherwise delete the buffer and free "lang".
-    Buf::current().b_locked += 1;
+    Buf::current().set_b_locked(Buf::current().b_locked() + 1);
 
     // Upstream's name buffer is 85 bytes, and names were written into 80 of
     // them.
@@ -147,10 +147,11 @@ fn spell_load_lang(lang: &[u8]) {
                 // Re-read each round: the handler may have changed buffers.
                 let buffer = Buf::current();
                 let event = AutoEvent::SpellFileMissing;
+                let arg = buffer.read().name.shown().map(XString::from_cstr);
                 fire_autocmds_for(
                     event,
                     Some(XString::from_bytes(cstr::until_nul(lang))),
-                    buffer.name.shown().map(XString::from_cstr),
+                    arg,
                     false,
                     Some(buffer),
                     None,
@@ -190,7 +191,7 @@ fn spell_load_lang(lang: &[u8]) {
         do_in_runtimepath_cb(&fname_enc, RuntimeOpts::ALL, &mut sl);
     }
 
-    Buf::current().b_locked -= 1;
+    Buf::current().set_b_locked(Buf::current().b_locked() - 1);
 }
 
 /// `do_in_runtimepath_visit` with [`spell_load_cb`] as the visit.
@@ -692,7 +693,7 @@ pub fn spell_delete_wordlist() {
 /// Free every loaded language and everything derived from them.
 pub fn spell_free_all() {
     for buf in buffers() {
-        buf.syntax().b_langp = Vec::new();
+        buf.syntax().edit().b_langp = Vec::new();
     }
 
     free_langs();
@@ -802,35 +803,35 @@ fn use_midword(id: LangId, window: Win) {
 impl Win {
     /// Whether `'spelllang'` named `cjk`: `b_cjk`.
     pub(super) fn set_spell_cjk(self, cjk: bool) {
-        self.syntax().b_cjk = c_int::from(cjk);
+        self.syntax().edit().b_cjk = c_int::from(cjk);
     }
 
     /// Publish the languages `'spelllang'` resolved to: `b_langp`.
     pub(super) fn set_spell_langs(self, langs: Vec<LangP>) {
-        self.syntax().b_langp = langs;
+        self.syntax().edit().b_langp = langs;
     }
 
     /// Take the compiled `'spellcapcheck'` out for a match, leaving none.
     pub(super) fn take_cap_prog(self) -> Option<OwnedProg> {
-        self.syntax().b_cap_prog.take()
+        self.syntax().edit().b_cap_prog.take()
     }
 
     /// Put the compiled `'spellcapcheck'` back (or a new one).
     pub(super) fn set_cap_prog(self, prog: Option<OwnedProg>) {
-        self.syntax().b_cap_prog = prog;
+        self.syntax().edit().b_cap_prog = prog;
     }
 
     /// Forget the midword characters.
     fn clear_spell_midword(self) {
-        let mut syn = self.syntax();
-        syn.b_spell_ismw = [false; 256];
-        syn.b_spell_ismw_mb = Vec::new();
+        let syn = self.syntax();
+        syn.edit().b_spell_ismw = [false; 256];
+        syn.edit().b_spell_ismw_mb = Vec::new();
     }
 
     /// Record `midword`'s characters as midword characters, beside those
     /// already recorded.
     fn add_spell_midword(self, midword: &[u8]) {
-        let mut syn = self.syntax();
+        let syn = self.syntax();
         let mut p = 0;
         while p < midword.len() {
             let rest = &midword[p..];
@@ -840,9 +841,9 @@ impl Win {
                 && c < 256
                 && l <= 2
             {
-                syn.b_spell_ismw[c] = true;
+                syn.edit().b_spell_ismw[c] = true;
             } else {
-                syn.b_spell_ismw_mb.extend_from_slice(&rest[..l]);
+                syn.edit().b_spell_ismw_mb.extend_from_slice(&rest[..l]);
             }
             p += l;
         }

@@ -498,7 +498,7 @@ pub(crate) fn qf_init_ext(
             // the global one and the buffer has its own.
             let local_efm = if global_efm && !from_value {
                 efm_buf
-                    .map(|buf| buf.b_p_efm.get())
+                    .map(|buf| buf.read().b_p_efm.get())
                     .filter(|efm| !efm.is_empty())
             } else {
                 None

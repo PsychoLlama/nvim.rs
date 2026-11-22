@@ -96,7 +96,7 @@ fn last_set(opt_idx: OptIndex, opt_flags: OptionSetFlags, buffer: Buf, win: Win)
     let mut script_ctx = ScriptCtx::NONE;
     if option_has_scope(opt_idx, OPT_SCOPE_BUF) {
         let idx = opt.scope_idx[OPT_SCOPE_BUF as usize].cast_unsigned();
-        script_ctx = buffer.b_p_script_ctx[idx];
+        script_ctx = buffer.read().b_p_script_ctx[idx];
     }
     if option_has_scope(opt_idx, OPT_SCOPE_WIN) {
         let idx = opt.scope_idx[OPT_SCOPE_WIN as usize].cast_unsigned();

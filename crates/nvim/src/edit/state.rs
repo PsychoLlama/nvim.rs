@@ -112,7 +112,7 @@ fn insert_enter(s: &mut InsertState) {
     } else if s.cmdchar.is('V') || s.cmdchar.is('v') {
         STATE.set(MODE_VREPLACE);
         s.replace_state = MODE_VREPLACE;
-        ORIG_LINE_COUNT.set(Buf::current().b_ml.ml_line_count);
+        ORIG_LINE_COUNT.set(Buf::current().line_count());
         VR_LINES_CHANGED.set(1);
     } else {
         STATE.set(MODE_INSERT);
@@ -127,7 +127,7 @@ fn insert_enter(s: &mut InsertState) {
             .w_valid
             .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
     }
-    if Buf::current().b_p_iminsert == B_IMODE_LMAP {
+    if Buf::current().b_p_iminsert() == B_IMODE_LMAP {
         STATE.set(STATE.get() | MODE_LANGMAP);
     }
 
@@ -206,9 +206,9 @@ fn insert_enter(s: &mut InsertState) {
     // is empty, so `b_last_changedtick` is reset here when the event was
     // not blocked by `char_avail()` (`:norm!`, say) and did fire.
     if !key_available()
-        && Buf::current().b_last_changedtick_i == buf_get_changedtick(Buf::current())
+        && Buf::current().b_last_changedtick_i() == buf_get_changedtick(Buf::current())
     {
-        Buf::current().b_last_changedtick = buf_get_changedtick(Buf::current());
+        Buf::current().set_b_last_changedtick(buf_get_changedtick(Buf::current()));
     }
 }
 
@@ -240,7 +240,7 @@ fn trigger_insert_enter(cmdchar: Key) {
     // yet, so `State` is faked for it.
     if !equalpos(Win::current().w_cursor, save_cursor)
         && with_vim_var_str(Vv::Char, |s| s.is_empty())
-        && save_cursor.lnum <= Buf::current().b_ml.ml_line_count
+        && save_cursor.lnum <= Buf::current().line_count()
     {
         let save_state = STATE.get();
         Win::current().w_cursor = save_cursor;
@@ -296,7 +296,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
         INSSTART_ORIG.set(INSSTART.get());
     }
 
-    if !Buf::current().terminal.is_null() && !STOP_INSERT_MODE.get() {
+    if !Buf::current().terminal().is_null() && !STOP_INSERT_MODE.get() {
         // Exiting a terminal buffer's Insert mode: a K_NOP is stuffed so
         // the loop wakes up and sees `STOP_INSERT_MODE`.
         STOP_INSERT_MODE.set(true);
@@ -397,7 +397,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
 /// means the line wrapped, and the cursor is on the last row 'scrolloff'
 /// allows.  Not with 'smoothscroll', and not while repeating an insert.
 fn may_scroll_for_wrap(s: &mut InsertState) {
-    if !(Buf::current().b_mod_set
+    if !(Buf::current().b_mod_set()
         && Win::current().w_onebuf_opt.wo_wrap != 0
         && Win::current().w_onebuf_opt.wo_sms == 0
         && !s.did_backspace
@@ -667,7 +667,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
 /// when inserting is not allowed here (the sandbox, textlock), which has
 /// been reported.
 pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> Result<bool, Failed> {
-    if !Buf::current().terminal.is_null() {
+    if !Buf::current().terminal().is_null() {
         if EX_NORMAL_BUSY.get() != 0 {
             // Do not enter terminal mode from `:normal`; ask for Insert
             // mode again after it finishes.

@@ -349,8 +349,8 @@ impl Default for StateCache {
 }
 
 /// Free a synblock's whole cache.
-pub(crate) fn syn_stack_free_block(mut block: SynBlockRef) {
-    block.b_sst.clear();
+pub(crate) fn syn_stack_free_block(block: SynBlockRef) {
+    block.edit().b_sst.clear();
 }
 
 /// Free a synblock's cache and force a resync everywhere.
@@ -375,7 +375,7 @@ impl SynState {
         let block = self.block();
         let lines = self.line_count().get();
         let want = clamp_entries(lines / SST_DIST + ROWS.get() * 2);
-        let have = c_int::try_from(block.b_sst.len()).unwrap_or(c_int::MAX);
+        let have = c_int::try_from(block.read().b_sst.len()).unwrap_or(c_int::MAX);
         if have <= want * 2 && have >= want {
             return; // neither much too big nor a bit too small
         }
@@ -389,17 +389,18 @@ impl SynState {
     /// Give the parsed block's cache room for `len` entries -- more, if that
     /// many are in use -- keeping the used ones in order at the front.
     fn resize_cache(&mut self, mut len: c_int) {
-        let mut block = self.block();
-        if block.b_sst.is_allocated() {
+        let block = self.block();
+        if block.read().b_sst.is_allocated() {
             // When shrinking, clean up the existing stack first and make sure
             // every entry that is still valid fits in the new array.
-            let used =
-                |block: &SynBlockRef| len_as_int(block.b_sst.len() - block.b_sst.free_count());
+            let used = |block: &SynBlockRef| {
+                len_as_int(block.read().b_sst.len() - block.read().b_sst.free_count())
+            };
             while used(&block) + 2 > len && self.stack_cleanup() {}
             len = len.max(used(&block) + 2);
         }
         debug_assert!(len >= 0);
-        block.b_sst.rebuild(as_index(len));
+        block.edit().b_sst.rebuild(as_index(len));
     }
 
     /// Thin out the parsed block's cache, answering whether anything was
@@ -408,14 +409,14 @@ impl SynState {
     /// Entries closer together than the normal distance are candidates; of
     /// those, the ones carrying the oldest display tick go.
     pub(crate) fn stack_cleanup(&mut self) -> bool {
-        let mut block = self.block();
-        if block.b_sst.first().is_none() {
+        let block = self.block();
+        if block.read().b_sst.first().is_none() {
             return false;
         }
         // Normal distance between entries for lines that are not displayed.
         let dist = self.store_distance();
-        let lasttick = block.b_sst_lasttick;
-        block.b_sst.cleanup(dist, lasttick)
+        let lasttick = block.read().b_sst_lasttick;
+        block.edit().b_sst.cleanup(dist, lasttick)
     }
 
     /// Save the state in the cache for `lnum`.
@@ -424,23 +425,23 @@ impl SynState {
     /// entry it went into, or `None` when there was nothing to store or no
     /// room.
     pub(crate) fn store_current_state(&mut self) -> Option<EntryId> {
-        let mut block = self.block();
+        let block = self.block();
         let lnum = self.lnum;
-        let mut sp = block.b_sst.find(lnum);
+        let mut sp = block.read().b_sst.find(lnum);
 
         // A state that contains a start or end pattern continuing from the
         // previous line cannot be used as a starting point, so it is not
         // stored -- and any entry that already exists for this line is wrong.
         if self.state_continues_from_previous_line() {
             if let Some(id) = sp {
-                block.b_sst.unlink(id);
-                block.b_sst.release(id);
+                block.edit().b_sst.unlink(id);
+                block.edit().b_sst.release(id);
             }
             self.state_stored = true;
             return None;
         }
 
-        if sp.is_none_or(|id| block.b_sst.entry(id).lnum != lnum) {
+        if sp.is_none_or(|id| block.read().b_sst.entry(id).lnum != lnum) {
             sp = self.new_entry(sp);
         }
         if let Some(id) = sp {
@@ -466,19 +467,20 @@ impl SynState {
     /// `after` (or at the front when that is `None`), cleaning up first when
     /// there is no free one. `None` when there is no room even then.
     fn new_entry(&mut self, mut after: Option<EntryId>) -> Option<EntryId> {
-        let mut block = self.block();
-        if block.b_sst.free_count() == 0 {
+        let block = self.block();
+        if block.read().b_sst.free_count() == 0 {
             self.stack_cleanup();
             // "after" may have been moved to the free list by the cleanup.
-            after = block.b_sst.find(self.lnum);
+            after = block.read().b_sst.find(self.lnum);
         }
-        block.b_sst.take_free(after, self.lnum)
+        block.edit().b_sst.take_free(after, self.lnum)
     }
 
     /// Copy the state stack into entry `id`, overwriting whatever was there.
     fn fill_entry(&self, id: EntryId) {
-        let mut block = self.block();
-        let entry = block.b_sst.entry_mut(id);
+        let block = self.block();
+        let mut held = block.edit();
+        let entry = held.b_sst.entry_mut(id);
         entry.items.clear();
         entry.items.extend(self.stack.iter().map(|si| CachedItem {
             idx: si.si_idx,
@@ -500,7 +502,8 @@ impl SynState {
         self.keepend_level = -1;
 
         let block = self.block();
-        let entry = block.b_sst.entry(id);
+        let held = block.read();
+        let entry = held.b_sst.entry(id);
         self.stack
             .extend(entry.items.iter().map(|cached| StateItem {
                 si_idx: cached.idx,
@@ -509,7 +512,7 @@ impl SynState {
                 si_cchar: cached.cchar,
                 si_extmatch: cached.extmatch.clone(),
                 si_next_list: if cached.idx >= 0 {
-                    block.pattern(cached.idx).sp_next_list.clone()
+                    block.read().pattern(cached.idx).sp_next_list.clone()
                 } else {
                     IdList::NONE
                 },
@@ -532,7 +535,8 @@ impl SynState {
     /// at what was cached, so everything below can be trusted again.
     pub(crate) fn syn_stack_equal(&self, id: EntryId) -> bool {
         let block = self.block();
-        let entry = block.b_sst.entry(id);
+        let held = block.read();
+        let entry = held.b_sst.entry(id);
         // A quick check first: same size and same nextlist.
         if entry.items.len() != self.stack.len() || !entry.next_list.same(&self.next_list) {
             return false;
@@ -547,7 +551,7 @@ impl SynState {
                 // A different pattern index means a different state.
                 cached.idx == si.si_idx
                     && extmatch_equal(cached.extmatch.as_ref(), si.si_extmatch.as_ref(), || {
-                        block.pattern(si.si_idx).sp_ic != 0
+                        block.read().pattern(si.si_idx).sp_ic != 0
                     })
             })
     }
@@ -575,10 +579,17 @@ pub(crate) fn syn_stack_apply_changes(buffer: Buf) {
 }
 
 /// [`StateCache::apply_changes`] for one block, with `buffer`'s change.
-fn syn_stack_apply_changes_block(mut block: SynBlockRef, buffer: Buf) {
-    let linebreaks = block.b_syn_sync_linebreaks;
-    let (top, bot, xlines) = (buffer.b_mod_top, buffer.b_mod_bot, buffer.b_mod_xlines);
-    block.b_sst.apply_changes(linebreaks, top, bot, xlines);
+fn syn_stack_apply_changes_block(block: SynBlockRef, buffer: Buf) {
+    let linebreaks = block.read().b_syn_sync_linebreaks;
+    let (top, bot, xlines) = (
+        buffer.b_mod_top(),
+        buffer.b_mod_bot(),
+        buffer.b_mod_xlines(),
+    );
+    block
+        .edit()
+        .b_sst
+        .apply_changes(linebreaks, top, bot, xlines);
 }
 
 /// Do two extmatch references hold the same submatch strings? The same set
@@ -634,11 +645,11 @@ mod tests {
         fn new(patterns: usize, entries: c_int) -> Fixture {
             let held = editor_state_lock();
             let buffer = bare_buffer();
-            let mut block = buffer.syntax();
+            let block = buffer.syntax();
             for _ in 0..patterns {
                 let mut pattern = EMPTY_SYNPAT;
                 pattern.sp_type = sp_type_char(SPTYPE_MATCH);
-                block.b_syn_patterns.push(pattern);
+                block.edit().b_syn_patterns.push(pattern);
             }
             let mut parser = SynState::new();
             parser.parsed = Some(block);
@@ -655,8 +666,8 @@ mod tests {
             }
         }
 
-        fn cache(&self) -> &StateCache {
-            &self.buffer.b_s.b_sst
+        fn cache(&self) -> crate::slot::ReadPart<'static, crate::types::Buffer, StateCache> {
+            self.buffer.read().map(|b| &b.b_s.b_sst)
         }
 
         /// The line numbers of the used entries, in list order.
@@ -804,7 +815,7 @@ mod tests {
 
         // The first entry is never a candidate; of the rest, the one with
         // the oldest tick goes.
-        f.parser.block().b_sst_lasttick = 3;
+        f.parser.block().edit().b_sst_lasttick = 3;
         assert!(f.parser.stack_cleanup());
         assert_eq!(f.used_lines(), [10, 30]);
         assert_eq!(f.cache().free_count(), 18);

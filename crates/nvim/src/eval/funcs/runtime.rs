@@ -300,7 +300,7 @@ pub fn f_api_info(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// `did_filetype()` — whether a FileType autocommand has fired for this
 /// buffer since it was last loaded.
 pub fn f_did_filetype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(VarNumber::from(Buf::current().b_did_filetype));
+    result.write_number(VarNumber::from(Buf::current().b_did_filetype()));
 }
 
 /// `eventhandler()` — whether we are inside a `vgetc().code()` from an event.
@@ -496,12 +496,12 @@ pub fn f_tabpagebuflist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDat
 /// `visualmode([{expr}])` — the last Visual mode, cleared when `{expr}` is
 /// non-zero.
 pub fn f_visualmode(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mode = [u8::try_from(Buf::current().b_visual_mode_eval)
+    let mode = [u8::try_from(Buf::current().b_visual_mode_eval())
         .unwrap_or(0)
         .cast_signed()];
     result.write_string(Some(c_chars_until_nul(&mode)));
     if args.first().is_some_and(non_zero_arg) {
-        Buf::current().b_visual_mode_eval = 0;
+        Buf::current().set_b_visual_mode_eval(0);
     }
 }
 

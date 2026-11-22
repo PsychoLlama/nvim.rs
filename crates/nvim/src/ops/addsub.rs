@@ -75,7 +75,7 @@ struct NrFormats {
 impl NrFormats {
     /// Read the current buffer's 'nrformats'.
     fn current() -> Self {
-        let has = |c: u8| Buf::current().b_p_nf.has_byte(c);
+        let has = |c: u8| Buf::current().read().b_p_nf.has_byte(c);
         NrFormats {
             hex: has(b'x'),
             oct: has(b'o'),
@@ -144,7 +144,7 @@ pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
         let one_change = do_addsub(op.op_type, &mut pos, length, amount);
         if one_change {
             if change_cnt == 0 {
-                startpos = Buf::current().b_op_start;
+                startpos = Buf::current().b_op_start();
             }
             change_cnt += 1;
             // `g CTRL-A` over more lines than `int` has room for
@@ -165,7 +165,7 @@ pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
         redraw_curbuf_later(UPD_INVERTED);
     }
     if change_cnt > 0 && !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        Buf::current().b_op_start = startpos;
+        Buf::current().set_b_op_start(startpos);
     }
     // A count of lines, which no buffer takes past `i64`.
     let changed = i64::try_from(change_cnt).unwrap_or(i64::MAX);
@@ -289,10 +289,10 @@ pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32
             did_change = true;
 
             if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-                Buf::current().b_op_start = startpos;
-                Buf::current().b_op_end = endpos;
-                if Buf::current().b_op_end.col > ColNr::ZERO {
-                    Buf::current().b_op_end.col -= 1;
+                Buf::current().set_b_op_start(startpos);
+                Buf::current().set_b_op_end(endpos);
+                if Buf::current().b_op_end().col > ColNr::ZERO {
+                    Buf::current().edit().b_op_end.col -= 1;
                 }
             }
         }
@@ -521,7 +521,7 @@ fn replace_number(
     // a linewise selection or one opened with `$`.
     let mut maxlen = 0;
     if visual && !visual_mode().is_line() {
-        maxlen = if Buf::current().b_visual.vi_curswant == ColNr::MAX {
+        maxlen = if Buf::current().b_visual().vi_curswant == ColNr::MAX {
             linelen - col.get()
         } else {
             *length

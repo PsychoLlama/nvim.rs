@@ -120,11 +120,11 @@ impl Swapped {
 
         let owned = cstr(name);
         let buf = buflist_new(Some(&owned), Some(&owned), LineNr::ONE, BLN_LISTED as c_int);
-        let mut buf = buf.expect("a buffer for {name}");
+        let buf = buf.expect("a buffer for {name}");
         // SAFETY: a buffer just created, with no memline yet. `b_p_swf` is
         // what `ml_open_file` refuses on, and a buffer made outside the
         // usual `:edit` path has not been given the option's value.
-        buf.b_p_swf = 1;
+        buf.set_b_p_swf(1);
         ml_open(buf).expect("a memline");
         ml_open_file(buf);
         // Appending after line `n` puts each line at the end in turn.

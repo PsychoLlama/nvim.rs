@@ -48,7 +48,7 @@ pub(crate) fn home_to_tilde(buffer: Option<Buf>, src: &CStr, room: usize, one: b
     if room == 0 {
         return XString::new();
     }
-    if buffer.is_some_and(|b| b.b_help) {
+    if buffer.is_some_and(|b| b.b_help()) {
         let tail = path_tail(src).to_bytes();
         return XString::from_bytes(&tail[..tail.len().min(room - 1)]);
     }

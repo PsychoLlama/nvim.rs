@@ -352,7 +352,7 @@ pub fn nvim__complete_set(
         let win = pum_set_info(number_as_int(index), info.as_bytes());
         if let Some(win) = win {
             put(&mut rv, c"winid", Object::window(win.handle));
-            put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle));
+            put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle()));
         }
     }
     Ok(rv.into())

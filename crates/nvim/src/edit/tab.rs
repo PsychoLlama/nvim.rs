@@ -119,9 +119,10 @@ pub(crate) fn ins_tab() -> bool {
         && ind
         && (tabstops(StopList::Tab) > 1
             || (tabstops(StopList::Tab) == 1 && Buf::current().first_tab_stop() != sw_value())
-            || (tabstops(StopList::Tab) == 0 && Buf::current().b_p_ts != OptInt::from(sw_value())));
+            || (tabstops(StopList::Tab) == 0
+                && Buf::current().b_p_ts() != OptInt::from(sw_value())));
     let soft_tab = tabstops(StopList::SoftTab) != 0 || sts_value() != 0;
-    if Buf::current().b_p_et == 0 && !smart_tab && !soft_tab {
+    if Buf::current().b_p_et() == 0 && !smart_tab && !soft_tab {
         // Nothing special: insert TAB like a normal character.
         return true;
     }
@@ -141,11 +142,11 @@ pub(crate) fn ins_tab() -> bool {
         // A tab in the indent uses 'shiftwidth'.
         let sw = sw_value();
         sw - nolist_virtcol().get() % sw
-    } else if tabstops(StopList::SoftTab) > 0 || Buf::current().b_p_sts != 0 {
+    } else if tabstops(StopList::SoftTab) > 0 || Buf::current().b_p_sts() != 0 {
         let sts = OptInt::from(sts_value());
         Buf::current().stop_padding(StopList::SoftTab, nolist_virtcol(), sts)
     } else {
-        let ts = Buf::current().b_p_ts;
+        let ts = Buf::current().b_p_ts();
         Buf::current().stop_padding(StopList::Tab, nolist_virtcol(), ts)
     };
 
@@ -167,7 +168,7 @@ pub(crate) fn ins_tab() -> bool {
     }
 
     // With 'expandtab' off, put TABs back where the spaces will do.
-    if Buf::current().b_p_et == 0
+    if Buf::current().b_p_et() == 0
         && (tabstops(StopList::SoftTab) > 0 || sts_value() > 0 || (p_sta() && ind))
     {
         tab_spaces_to_tabs();
@@ -296,7 +297,7 @@ fn tab_spaces_to_tabs() {
             newp.extend_from_slice(&line[at + gone..]);
             newp.push(0);
             let _ = Lines::current().line(lnum);
-            Buf::current().b_ml.swap_cached_text(newp);
+            Buf::current().ml().swap_cached_text(newp);
             let old_len = walk_col(&pos, vreplace) - change_col;
             let new_len = fpos.col - change_col;
             inserted_bytes(fpos.lnum, change_col, old_len, new_len);
@@ -306,8 +307,9 @@ fn tab_spaces_to_tabs() {
             // Only TABs went in: they are written over the spaces in the
             // cached line, which keeps its length.
             let _ = Lines::current().line(lnum);
-            let mut buffer = Buf::current();
-            let cached = buffer.b_ml.cached_bytes_mut();
+            let buffer = Buf::current();
+            let mut held = buffer.ml();
+            let cached = held.cached_bytes_mut();
             if cached.len() == line.len() {
                 cached.copy_from_slice(&line);
             }

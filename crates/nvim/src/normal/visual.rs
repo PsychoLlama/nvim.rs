@@ -260,11 +260,11 @@ pub(crate) fn end_visual_mode() {
     set_visual_active(false);
     setmouse();
     MOUSE_DRAGGING.set(0);
-    Buf::current().b_visual.vi_mode = visual_mode().raw();
-    Buf::current().b_visual.vi_start = visual_anchor();
-    Buf::current().b_visual.vi_end = Win::current().w_cursor;
-    Buf::current().b_visual.vi_curswant = Win::current().w_curswant;
-    Buf::current().b_visual_mode_eval = visual_mode().raw();
+    Buf::current().edit().b_visual.vi_mode = visual_mode().raw();
+    Buf::current().edit().b_visual.vi_start = visual_anchor();
+    Buf::current().edit().b_visual.vi_end = Win::current().w_cursor;
+    Buf::current().edit().b_visual.vi_curswant = Win::current().w_curswant;
+    Buf::current().set_b_visual_mode_eval(visual_mode().raw());
     if !virtual_active(Win::current()) {
         Win::current().w_cursor.coladd = 0;
     }
@@ -295,7 +295,7 @@ pub(crate) fn reset_visual() {
 /// operator.
 pub(crate) fn restore_visual_mode() {
     if V_ISUAL_MODE_ORIG.get() != VisualMode::NONE {
-        Buf::current().b_visual.vi_mode = V_ISUAL_MODE_ORIG.get().raw();
+        Buf::current().edit().b_visual.vi_mode = V_ISUAL_MODE_ORIG.get().raw();
         V_ISUAL_MODE_ORIG.set(VisualMode::NONE);
     }
 }
@@ -682,10 +682,10 @@ pub(crate) fn n_start_visual_mode(c: Key) {
 /// Doing it while a selection is up *swaps* the two, so `gv` twice comes back
 /// where it started.
 pub(crate) fn nv_gv_cmd(cmd_arg: &mut CmdArg) {
-    let mut buf = Buf::current();
-    let last = buf.b_visual;
+    let buf = Buf::current();
+    let last = buf.b_visual();
     if last.vi_start.lnum == LineNr::ZERO
-        || last.vi_start.lnum > buf.b_ml.ml_line_count
+        || last.vi_start.lnum > buf.line_count()
         || last.vi_end.lnum == LineNr::ZERO
     {
         beep_flush();
@@ -697,14 +697,14 @@ pub(crate) fn nv_gv_cmd(cmd_arg: &mut CmdArg) {
         // The selection that is up becomes the one `gv` comes back to.
         let mode = visual_mode();
         set_visual_mode(VisualMode::from_raw(last.vi_mode));
-        buf.b_visual.vi_mode = mode.raw();
-        buf.b_visual_mode_eval = mode.raw();
+        buf.edit().b_visual.vi_mode = mode.raw();
+        buf.set_b_visual_mode_eval(mode.raw());
         let curswant = Win::current().w_curswant;
         Win::current().w_curswant = last.vi_curswant;
-        buf.b_visual.vi_curswant = curswant;
-        buf.b_visual.vi_end = Win::current().w_cursor;
+        buf.edit().b_visual.vi_curswant = curswant;
+        buf.edit().b_visual.vi_end = Win::current().w_cursor;
         Win::current().w_cursor = last.vi_start;
-        buf.b_visual.vi_start = visual_anchor();
+        buf.edit().b_visual.vi_start = visual_anchor();
     } else {
         set_visual_mode(VisualMode::from_raw(last.vi_mode));
         Win::current().w_curswant = last.vi_curswant;
@@ -803,6 +803,7 @@ pub(crate) fn nv_select(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
     let include = !cmd_arg.cmdchar.is('i');
     let mps_save = Buf::current()
+        .edit()
         .b_p_mps
         .replace(XString::from_cstr(c"(:),{:},[:],<:>"));
 
@@ -830,7 +831,7 @@ pub(crate) fn nv_object(cmd_arg: &mut CmdArg) {
         _ => false,
     };
 
-    Buf::current().b_p_mps = mps_save;
+    Buf::current().edit().b_p_mps = mps_save;
     if !found {
         clear_op_beep(op);
     }

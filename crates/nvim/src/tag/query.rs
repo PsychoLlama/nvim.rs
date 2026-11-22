@@ -53,7 +53,7 @@ pub(crate) fn tag_matches(tagnames: bool, pat: &CStr) -> Option<Vec<XString>> {
 
     let mincount = TAG_MANY;
     // A copy: the search must not hold a borrow of the buffer.
-    let buf_ffname = Buf::current().name.full().map(XString::from_cstr);
+    let buf_ffname = Buf::current().read().name.full().map(XString::from_cstr);
     let buf_ffname = buf_ffname.as_ref().map(XString::as_cstr);
     if tagnames {
         return find_tag_names(pat, flags, mincount, buf_ffname);

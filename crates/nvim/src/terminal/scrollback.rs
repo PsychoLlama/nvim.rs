@@ -65,11 +65,11 @@ pub(crate) fn term_may_alloc_scrollback(term: Term, buffer: Option<Buf>) -> bool
 
 /// `'scrollback'` as a row count. The option's "unlimited" spelling is a
 /// negative value, which stands for a cap large enough never to be reached.
-fn scrollback_limit(mut buffer: Buf) -> usize {
-    if buffer.b_p_scbk < 1 {
-        buffer.b_p_scbk = OptInt::from(SB_MAX);
+fn scrollback_limit(buffer: Buf) -> usize {
+    if buffer.b_p_scbk() < 1 {
+        buffer.set_b_p_scbk(OptInt::from(SB_MAX));
     }
-    usize::try_from(buffer.b_p_scbk).expect("'scrollback' is positive here")
+    usize::try_from(buffer.b_p_scbk()).expect("'scrollback' is positive here")
 }
 
 /// A row scrolled off the top of the screen.

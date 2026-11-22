@@ -39,7 +39,7 @@ use crate::types::Vv;
 /// "foldclosed()" and "foldclosedend()" functions
 pub(super) fn foldclosed_both(args: &[TypVal], result: &mut TypVal, end: bool) {
     let (rv, lnum) = (result, tv_get_lnum(&args[0]));
-    if lnum >= LineNr::ONE && lnum <= Buf::current().b_ml.ml_line_count {
+    if lnum >= LineNr::ONE && lnum <= Buf::current().line_count() {
         let mut first: LineNr = LineNr::ZERO;
         let mut last: LineNr = LineNr::ZERO;
         let win = Win::current();
@@ -65,7 +65,7 @@ pub fn f_foldclosedend(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 /// "foldlevel()" function
 pub fn f_foldlevel(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let (rv, lnum) = (result, tv_get_lnum(&args[0]));
-    if lnum >= LineNr::ONE && lnum <= Buf::current().b_ml.ml_line_count {
+    if lnum >= LineNr::ONE && lnum <= Buf::current().line_count() {
         rv.write_number(VarNumber::from(fold_level(lnum)));
     }
 }
@@ -85,7 +85,7 @@ pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         LineNr::try_from(foldstart).unwrap_or(LineNr::ZERO),
         LineNr::try_from(foldend).unwrap_or(LineNr::MAX),
     );
-    if !(foldstart > LineNr::ZERO && foldend <= Buf::current().b_ml.ml_line_count) {
+    if !(foldstart > LineNr::ZERO && foldend <= Buf::current().line_count()) {
         return;
     }
     // The first line of the fold that has anything on it.

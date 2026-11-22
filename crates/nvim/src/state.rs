@@ -486,7 +486,7 @@ pub fn get_mode() -> ModeName {
         visual_select: visual_select(),
         visual_mode: visual_mode().raw(),
         restart_visual_select: RESTART_V_ISUAL_SELECT.get() != 0,
-        terminal_buffer: !Buf::current().terminal.is_null(),
+        terminal_buffer: !Buf::current().terminal().is_null(),
         finish_op: FINISH_OP.get(),
         motion_force: MOTION_FORCE.get(),
         restart_edit: RESTART_EDIT.get(),

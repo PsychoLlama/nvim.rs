@@ -350,7 +350,7 @@ impl Jump {
                         .and_then(|w| w.buffer_or_none()),
                 )
             } else {
-                Buf::current().b_help
+                Buf::current().b_help()
             });
         }
         let opened = if self.reused_window {
@@ -390,7 +390,7 @@ impl Jump {
         if retval.is_ok() {
             // In a help buffer put the cursor line at the top of the
             // window: the help subject is below it.
-            if Buf::current().b_help {
+            if Buf::current().b_help() {
                 set_topline(Win::current(), Win::current().w_cursor.lnum);
             }
             if FDO_FLAGS.get() & OPT_FDO_FLAG_TAG as c_uint != 0 && self.key_typed {

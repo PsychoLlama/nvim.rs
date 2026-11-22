@@ -110,9 +110,9 @@ impl<T> Local<T> {
     #[inline]
     fn with<R>(self, f: impl FnOnce(&mut T) -> R) -> R {
         match self {
-            Local::Buf(mut buf, field) => f(field.of(&mut buf)),
+            Local::Buf(buf, field) => f(field.of(&mut buf.edit())),
             Local::Win(mut win, set, field) => f(field.of(win.options_mut(set))),
-            Local::Syn(win, field) => f(field.of(&mut win.syntax())),
+            Local::Syn(win, field) => f(field.of(&mut win.syntax().edit())),
         }
     }
 

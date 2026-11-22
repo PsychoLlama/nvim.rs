@@ -291,7 +291,7 @@ pub(crate) fn ins_digraph() -> Key {
 /// cursor's virtual column is reached.  Answers NUL -- and beeps -- when the
 /// line does not exist or is too short.
 pub(crate) fn ins_copychar(lnum: LineNr) -> Key {
-    if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count {
+    if lnum < LineNr::ONE || lnum > Buf::current().line_count() {
         vim_beep(OPT_BO_FLAG_COPY as ::core::ffi::c_uint);
         return Key::NUL;
     }
@@ -356,10 +356,10 @@ pub(crate) fn ins_ctrl_ey(tc: Key) -> Key {
     if c.as_byte().is_some_and(|b| ctype_bits(b) & IS_ALNUM == 0) {
         append_to_redobuff(CTRL_V_STR.to_bytes());
     }
-    let tw_save = Buf::current().b_p_tw;
-    Buf::current().b_p_tw = -1;
+    let tw_save = Buf::current().b_p_tw();
+    Buf::current().set_b_p_tw(-1);
     insert_special(c, true, false);
-    Buf::current().b_p_tw = tw_save;
+    Buf::current().set_b_p_tw(tw_save);
     REVINS_CHARS.set(REVINS_CHARS.get() + 1);
     REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
     auto_format(false, true);

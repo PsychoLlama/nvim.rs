@@ -340,10 +340,11 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
     if ml_line_alloced() {
         // The cached line is this buffer's own, `oldlen + 1` bytes of it, so
         // the tail moves up inside it. `movelen` counts the NUL.
-        ml_add_deleted_len(Buf::current().b_ml.cached_bytes(), oldlen.as_usize());
-        let mut buffer = Buf::current();
-        let line = buffer
-            .b_ml
+        let arg = Buf::current().lend_cached_line();
+        ml_add_deleted_len(arg, oldlen.as_usize());
+        let buffer = Buf::current();
+        let mut held = buffer.ml();
+        let line = held
             .owned_bytes_with_nul_mut()
             .expect("an allocated line is owned");
         let (col, count, movelen) = (
@@ -352,7 +353,8 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
             usize::try_from(movelen).expect("the bytes after the deletion are never negative"),
         );
         line.copy_within(col + count..col + count + movelen, col);
-        buffer.b_ml.set_cached_len(newlen + 1);
+        drop(held);
+        buffer.ml().set_cached_len(newlen + 1);
     } else {
         let newline = {
             let mut lines = Buf::current().lines();
@@ -402,13 +404,13 @@ pub fn del_lines(nlines: i32, undo: bool) {
 
     let mut n = 0;
     while n < nlines {
-        if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+        if Buf::current().ml_flags().has(MlFlags::EMPTY) {
             break; // nothing to delete
         }
         let _ = ml_delete_flags(first, ML_DEL_MESSAGE);
         n += 1;
         // Delete the *same* line over and over, until the buffer runs out.
-        if first > Buf::current().b_ml.ml_line_count {
+        if first > Buf::current().line_count() {
             break;
         }
     }

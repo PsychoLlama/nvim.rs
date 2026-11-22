@@ -101,8 +101,8 @@ pub(crate) fn op_tilde(op: &mut OpArg) {
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        Buf::current().b_op_start = op.start;
-        Buf::current().b_op_end = op.end;
+        Buf::current().set_b_op_start(op.start);
+        Buf::current().set_b_op_end(op.end);
     }
 
     if OptInt::from(op.line_count) > p_report() {

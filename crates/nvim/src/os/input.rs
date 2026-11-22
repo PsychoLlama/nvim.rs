@@ -254,7 +254,7 @@ pub(crate) fn input_get(
 
     // No risk of a UI flood, so disable CTRL-C "interrupt" behaviour if
     // it is mapped.
-    if (MAPPED_CTRL_C.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
+    if (MAPPED_CTRL_C.get() | Buf::current().b_mapped_ctrl_c()) & get_real_state() != 0 {
         CTRL_C_INTERRUPTS.set(false);
     }
 

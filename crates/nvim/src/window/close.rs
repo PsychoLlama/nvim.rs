@@ -58,7 +58,7 @@ pub(crate) fn leave_window(win: Win) {
     if !is_prompt(win) || is_autocmd_window(Some(win)) {
         return;
     }
-    win.buffer().b_prompt_insert = RESTART_EDIT.get();
+    win.buffer().set_b_prompt_insert(RESTART_EDIT.get());
     if !RESTART_EDIT.get().is_nul() && MODE_DISPLAYED.get() {
         CLEAR_CMDLINE.set(true); // unshow mode later
     }
@@ -69,8 +69,8 @@ pub(crate) fn leave_window(win: Win) {
     // back in.
     if STATE.get() & MODE_INSERT != 0 && !STOP_INSERT_MODE.get() {
         STOP_INSERT_MODE.set(true);
-        if win.buffer().b_prompt_insert.is_nul() {
-            win.buffer().b_prompt_insert = Key::ascii(b'A');
+        if win.buffer().b_prompt_insert().is_nul() {
+            win.buffer().set_b_prompt_insert(Key::ascii(b'A'));
         }
     }
 }
@@ -83,11 +83,11 @@ pub(crate) fn enter_window(win: Win) {
     }
     // Switching to a prompt buffer that was in Insert mode must not stop Insert
     // mode: `leave_window` may have set it.
-    if !win.buffer().b_prompt_insert.is_nul() {
+    if !win.buffer().b_prompt_insert().is_nul() {
         STOP_INSERT_MODE.set(false);
     }
     if STATE.get() & MODE_INSERT == 0 {
-        RESTART_EDIT.set(win.buffer().b_prompt_insert);
+        RESTART_EDIT.set(win.buffer().b_prompt_insert());
     }
 }
 
@@ -199,7 +199,7 @@ fn close_all_elsewhere(buffer: Buf) {
 
 /// Whether `window` or the buffer it shows is pinned against closing.
 fn locked(window: Win) -> bool {
-    window.w_locked || window.buffer().b_locked > 0
+    window.w_locked || window.buffer().b_locked() > 0
 }
 
 pub fn last_window(win: Win) -> bool {
@@ -248,7 +248,7 @@ pub(crate) fn can_close_floats(tabpage: Option<TabPage>) -> bool {
     .expect("a window list has a tail");
     while wp.w_floating {
         let buf = wp.buffer();
-        let need_hide = is_changed(buf) && buf.b_nwindows <= 1;
+        let need_hide = is_changed(buf) && buf.b_nwindows() <= 1;
         if need_hide && !hides(buf) {
             return false;
         }
@@ -288,7 +288,7 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
     let old_curbuf = Buf::current_raw();
     if win
         .buffer_or_none()
-        .is_some_and(|buf| !buf.terminal.is_null())
+        .is_some_and(|buf| !buf.terminal().is_null())
     {
         free_buf = false; // Don't free terminal buffers
     }
@@ -327,15 +327,15 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
 /// Answers whether `close_buffer()` decremented `b_nwindows`.
 pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> bool {
     let mut win = win;
-    let Some(mut buf) = win.buffer_or_none() else {
+    let Some(buf) = win.buffer_or_none() else {
         return false;
     };
     // Free an independent synblock before the buffer is freed.
     reset_syntax(win);
     // When a quickfix or location list window is closed and its buffer is shown
     // in only one window, unlist the buffer.
-    if buf_is_quickfix(Some(buf)) && buf.b_nwindows == 1 {
-        buf.b_p_bl = 0;
+    if buf_is_quickfix(Some(buf)) && buf.b_nwindows() == 1 {
+        buf.set_b_p_bl(0);
     }
     // Close the link to the buffer.
     let bufref = BufRef::of(Buf::current());
@@ -362,11 +362,11 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
 /// says whether it decremented `b_nwindows`.
 pub(crate) fn unclose_win_buffer(win: Win, bufref: BufRef, did_decrement: bool) {
     let mut win = win;
-    let Some(mut buf) = win.buffer_or_none() else {
+    let Some(buf) = win.buffer_or_none() else {
         // The buffer was removed from the window: it has to be given one.
-        let mut first = first_buffer().expect("a window means a buffer list");
+        let first = first_buffer().expect("a window means a buffer list");
         win.w_buffer = first;
-        first.b_nwindows += 1;
+        first.set_b_nwindows(first.b_nwindows() + 1);
         if win.is_current() {
             first.make_current();
         }
@@ -376,7 +376,7 @@ pub(crate) fn unclose_win_buffer(win: Win, bufref: BufRef, did_decrement: bool) 
     if did_decrement && bufref.is(Some(buf)) && bufref.valid() {
         // `close_buffer()` decremented the window count but the window is being
         // kept; as it still shows the buffer, put the count back.
-        buf.b_nwindows += 1;
+        buf.set_b_nwindows(buf.b_nwindows() + 1);
     }
 }
 

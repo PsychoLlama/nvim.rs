@@ -60,32 +60,32 @@ impl WindowCorner {
 /// expression can read the sign count, so a change to it invalidates the cached
 /// width estimate even when the column itself did not move.
 pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
-    let mut buf = window.buffer();
+    let buf = window.buffer();
 
     // 'signcolumn' with a range, or a 'statuscolumn' that may ask for the
     // count, needs the per-line counts kept up to date from now on.
-    if !buf.b_signcols.autom
+    if !buf.read().b_signcols.autom
         && (window.w_onebuf_opt.wo_stc.first_byte() != 0
             || (window.w_maxscwidth > 1 && window.w_minscwidth != window.w_maxscwidth))
     {
-        buf.b_signcols.autom = true;
-        let last = buf.b_ml.ml_line_count - 1;
+        buf.edit().b_signcols.autom = true;
+        let last = buf.line_count() - 1;
         buf_signcols_count_range(buf, 0, last.get(), MAXLNUM.get(), SignCountHalf::Both);
     }
 
     // `b_signcols.max` is a high-water mark that nothing lowers as signs go
     // away, so trim the empty top buckets here.
-    while buf.b_signcols.max > 0 {
-        let top = usize::try_from(buf.b_signcols.max - 1)
+    while buf.read().b_signcols.max > 0 {
+        let top = usize::try_from(buf.read().b_signcols.max - 1)
             .expect("the loop guard keeps the top bucket index non-negative");
-        if buf.b_signcols.count[top] != 0 {
+        if buf.read().b_signcols.count[top] != 0 {
             break;
         }
-        buf.b_signcols.max -= 1;
+        buf.edit().b_signcols.max -= 1;
     }
 
-    let mut width = window.w_maxscwidth.min(buf.b_signcols.max);
-    let rebuild_stc = buf.b_signcols.max != buf.b_signcols.last_max
+    let mut width = window.w_maxscwidth.min(buf.read().b_signcols.max);
+    let rebuild_stc = buf.read().b_signcols.max != buf.read().b_signcols.last_max
         && window.w_onebuf_opt.wo_stc.first_byte() != 0;
 
     if rebuild_stc {

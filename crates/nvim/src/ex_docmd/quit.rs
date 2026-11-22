@@ -126,7 +126,7 @@ pub(crate) fn before_quit_autocmds(window: Win, quit_all: bool, forceit: bool) -
 fn quit_was_cancelled(window: WinId, buf: impl FnOnce() -> Buf) -> bool {
     if win_valid(window) && !curbuf_locked() {
         let buf = buf();
-        if !(buf.b_nwindows == 1 && buf.b_locked > 0) {
+        if !(buf.b_nwindows() == 1 && buf.b_locked() > 0) {
             return false;
         }
     }
@@ -320,7 +320,7 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
     // address on regardless (`buf_hide(buf)` at the bottom).
     let mut buffer = win.buffer_or_none();
     // Only the last window on a changed buffer has to ask.
-    let mut need_hide = buffer.is_some_and(|b| buf_is_changed(b) && b.b_nwindows <= 1);
+    let mut need_hide = buffer.is_some_and(|b| buf_is_changed(b) && b.b_nwindows() <= 1);
     if need_hide && !buffer.is_some_and(buf_hide) && forceit == 0 {
         if (p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) && p_write() {
             let bufref = BufRef::of_opt(buffer);

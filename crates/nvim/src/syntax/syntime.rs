@@ -50,7 +50,7 @@ fn syntime_clear() {
         return;
     }
     for idx in 0..cur_pattern_count() {
-        syn_clear_time(&mut cur_syn_block().pattern_mut(idx).sp_time);
+        syn_clear_time(&mut cur_syn_block().edit().pattern_mut(idx).sp_time);
     }
 }
 
@@ -87,7 +87,8 @@ fn syntime_report() {
     let mut total_count: c_int = 0;
     for idx in 0..cur_pattern_count() {
         let block = cur_syn_block();
-        let spp = block.pattern(idx);
+        let held = block.read();
+        let spp = held.pattern(idx);
         let time = spp.sp_time;
         if time.count <= 0 {
             continue;

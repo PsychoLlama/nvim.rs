@@ -63,9 +63,9 @@ impl Buf {
     pub(crate) fn write_for_diff(self, out: &mut Vec<u8>, start: LineNr, mut end: LineNr) {
         out.clear();
         if end < LineNr::ZERO {
-            end = self.b_ml.ml_line_count;
+            end = self.line_count();
         }
-        if self.b_ml.ml_flags.has(MlFlags::EMPTY) || end < start {
+        if self.ml_flags().has(MlFlags::EMPTY) || end < start {
             return;
         }
 
@@ -135,12 +135,7 @@ fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
 ///
 /// The internal engine wants a memory image, which is what `din.fname`
 /// being `None` selects; otherwise the lines go through a temp file.
-fn diff_write(
-    mut buffer: Buf,
-    din: &mut DiffIn,
-    start: LineNr,
-    mut end: LineNr,
-) -> Result<(), Failed> {
+fn diff_write(buffer: Buf, din: &mut DiffIn, start: LineNr, mut end: LineNr) -> Result<(), Failed> {
     let Some(name) = &din.fname else {
         buffer.write_for_diff(&mut din.text, start, end);
         return Ok(());
@@ -152,12 +147,12 @@ fn diff_write(
         return Err(Failed);
     }
     if end < LineNr::ZERO {
-        end = buffer.b_ml.ml_line_count;
+        end = buffer.line_count();
     }
 
-    let was_empty = buffer.b_ml.ml_flags.masked(MlFlags::EMPTY);
+    let was_empty = buffer.ml_flags().masked(MlFlags::EMPTY);
     // The diff must see the file the way the buffer holds it.
-    let save_ff = buffer.b_p_ff.replace(XString::from_cstr(c"unix"));
+    let save_ff = buffer.edit().b_p_ff.replace(XString::from_cstr(c"unix"));
     // Writing the buffer is an implementation detail of the diff, so it
     // must not move the '[ and '] marks.
     //
@@ -169,7 +164,7 @@ fn diff_write(
     if end < start {
         // The range names a completely empty file.
         end = start;
-        buffer.b_ml.ml_flags |= MlFlags::EMPTY;
+        buffer.set_ml_flags(buffer.ml_flags() | MlFlags::EMPTY);
     }
     let req = WriteRequest::filter();
     // No short name and no `ExArg` are wanted.
@@ -183,8 +178,8 @@ fn diff_write(
     );
     cmdmod_set_flags(CmdModFlags::SANDBOX.when(save_cmod_flags));
     // The forced "unix" goes when the saved value moves back in.
-    buffer.b_p_ff = save_ff;
-    buffer.b_ml.ml_flags = buffer.b_ml.ml_flags.without(MlFlags::EMPTY) | was_empty;
+    buffer.edit().b_p_ff = save_ff;
+    buffer.set_ml_flags(buffer.ml_flags().without(MlFlags::EMPTY) | was_empty);
     r
 }
 
@@ -279,7 +274,7 @@ fn diff_each_segment(dio: &mut DiffIo, idx_orig: c_int, excmd: Option<&mut ExArg
             return;
         }
         for idx_new in idx_orig + 1..DB_COUNT as usize {
-            let Some(buf) = tp.diffbuf(idx_new).filter(|b| b.b_ml.ml_mfp.is_some()) else {
+            let Some(buf) = tp.diffbuf(idx_new).filter(|b| b.ml().ml_mfp.is_some()) else {
                 continue;
             };
             let (start, end) = segment(idx_new);

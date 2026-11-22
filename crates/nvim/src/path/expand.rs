@@ -70,6 +70,7 @@ pub(crate) fn expand_path_option(curdir: &[u8], path_option: &[u8]) -> Vec<XStri
             //     "/path/file" + "."        -> "/path/"
             //     "/path/file" + "./subdir" -> "/path/subdir"
             let Some(ffname) = Buf::current()
+                .read()
                 .name
                 .full()
                 .map(|name| name.to_bytes().to_vec())
@@ -159,7 +160,7 @@ pub(crate) fn expand_in_path(
 /// The `'path'` in force: the buffer's own, or the global one when it is
 /// empty. A copy: a value that outlives the next option write.
 pub(crate) fn buffer_path() -> XString {
-    local_or_global(&Buf::current().b_p_path, P_PATH).get()
+    local_or_global(&Buf::current().read().b_p_path, P_PATH).get()
 }
 
 /// Does `p` hold what looks like an environment variable? A backslash

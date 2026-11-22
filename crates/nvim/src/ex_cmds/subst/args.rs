@@ -252,7 +252,7 @@ fn read_count(args: &mut ExArg, at: &mut usize) -> Result<(), SubError> {
     }
     args.line1 = args.line2;
     args.line2 += i - 1;
-    args.line2 = args.line2.min(Buf::current().b_ml.ml_line_count);
+    args.line2 = args.line2.min(Buf::current().line_count());
     Ok(())
 }
 
@@ -317,7 +317,7 @@ pub(super) fn parse_sub(
     };
 
     // Substitution is not allowed in a non-'modifiable' buffer.
-    if !SUB_FLAGS.with(|flags| flags.do_count) && Buf::current().b_p_ma == 0 {
+    if !SUB_FLAGS.with(|flags| flags.do_count) && Buf::current().b_p_ma() == 0 {
         return Err(SubError::NotModifiable);
     }
 

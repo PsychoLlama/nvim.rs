@@ -68,7 +68,7 @@ pub fn text_or_buf_locked() -> bool {
 /// Check `CURBUF->b_ro_locked` and `ALLBUF_LOCK`; report and answer true if
 /// either is set.
 pub fn curbuf_locked() -> bool {
-    if Buf::current().b_ro_locked > 0 {
+    if Buf::current().b_ro_locked() > 0 {
         emsg(gettext(E_CANNOT_EDIT_OTHER_BUF));
         return true;
     }
@@ -271,13 +271,13 @@ fn set_up_cmdwin_buffer() -> HistoryType {
         OptVal::static_string(c"wipe"),
         OptionSetFlags::LOCAL,
     );
-    Buf::current().b_p_ma = 1;
+    Buf::current().set_b_p_ma(1);
     Win::current().w_onebuf_opt.wo_fen = 0;
     Win::current().w_onebuf_opt.wo_rl = ::core::ffi::c_int::from(CMDMSG_RL.get());
     CMDMSG_RL.set(false);
 
     // Don't allow switching to another buffer.
-    Buf::current().b_ro_locked += 1;
+    Buf::current().set_b_ro_locked(Buf::current().b_ro_locked() + 1);
 
     // Showing the prompt may have set need_wait_return; reset it.
     NEED_WAIT_RETURN.set(false);
@@ -294,11 +294,11 @@ fn set_up_cmdwin_buffer() -> HistoryType {
             OptionSetFlags::LOCAL,
         );
     }
-    Buf::current().b_ro_locked -= 1;
+    Buf::current().set_b_ro_locked(Buf::current().b_ro_locked() - 1);
 
     // Reset 'textwidth' after setting 'filetype' (the Vim filetype plugin
     // sets 'textwidth' to 78).
-    Buf::current().b_p_tw = 0;
+    Buf::current().set_b_p_tw(0);
     histtype
 }
 
@@ -332,14 +332,14 @@ fn fill_cmdwin_with_history(histtype: HistoryType) {
 /// Replace the empty last line with the current command line and put the
 /// cursor there.
 fn put_command_line_in_cmdwin() {
-    let last = Buf::current().b_ml.ml_line_count;
+    let last = Buf::current().line_count();
     let cc = Cc::current();
     if cc.in_use() {
         // A copy of the command line's text, up to its first NUL.
         let text = cstr::until_nul(&cc.bytes()).to_vec();
         let _ = ml_replace_buf_text(Buf::current(), last, &text);
     }
-    Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+    Win::current().w_cursor.lnum = Buf::current().line_count();
     Win::current().w_cursor.col = ColNr::new(Cc::current().cmdpos());
     changed_line_abv_curs();
     invalidate_botline_win(Win::current());

@@ -160,7 +160,7 @@ fn escape_winfixbuf(
     forceit: bool,
     opened_window: &mut bool,
 ) -> Option<bool> {
-    if forceit || Win::current().w_onebuf_opt.wo_wfb == 0 || Some(Buf::current().handle) == fnum {
+    if forceit || Win::current().w_onebuf_opt.wo_wfb == 0 || Some(Buf::current().handle()) == fnum {
         return Some(true);
     }
     if qi.kind == QFLT_LOCATION {
@@ -217,7 +217,7 @@ fn qf_jump_goto_line(position: &Position) {
 
     // A line number of 0 means the entry names no line.
     if position.lnum > LineNr::ZERO {
-        Win::current().w_cursor.lnum = position.lnum.min(Buf::current().b_ml.ml_line_count);
+        Win::current().w_cursor.lnum = position.lnum.min(Buf::current().line_count());
     }
     if position.col <= 0 {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);

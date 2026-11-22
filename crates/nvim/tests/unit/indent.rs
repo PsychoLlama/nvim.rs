@@ -34,19 +34,21 @@ use crate::support::{Editor, Sandbox};
 fn with_buffer(f: impl FnOnce(&mut Buf)) {
     let _sandbox = Sandbox::globals();
     let mut buf = Buf::current();
-    let saved = (buf.b_p_sts, buf.b_p_sw, buf.b_p_ts);
+    let saved = (buf.b_p_sts(), buf.b_p_sw(), buf.b_p_ts());
     f(&mut buf);
-    (buf.b_p_sts, buf.b_p_sw, buf.b_p_ts) = saved;
+    buf.set_b_p_sts(saved.0);
+    buf.set_b_p_sw(saved.1);
+    buf.set_b_p_ts(saved.2);
 }
 
 /// A non-negative 'softtabstop' is the answer, zero included.
 #[test]
 fn a_non_negative_softtabstop_is_its_own_value() {
     with_buffer(|buf| {
-        buf.b_p_sts = 5;
+        buf.set_b_p_sts(5);
         assert_eq!(get_sts_value(), 5);
 
-        buf.b_p_sts = 0;
+        buf.set_b_p_sts(0);
         assert_eq!(get_sts_value(), 0);
     });
 }
@@ -56,12 +58,12 @@ fn a_non_negative_softtabstop_is_its_own_value() {
 #[test]
 fn a_negative_softtabstop_is_the_effective_shiftwidth() {
     with_buffer(|buf| {
-        buf.b_p_sts = -2;
-        buf.b_p_sw = 2;
-        buf.b_p_ts = 5;
+        buf.set_b_p_sts(-2);
+        buf.set_b_p_sw(2);
+        buf.set_b_p_ts(5);
         assert_eq!(get_sts_value(), 2, "'shiftwidth'");
 
-        buf.b_p_sw = 0;
+        buf.set_b_p_sw(0);
         assert_eq!(get_sts_value(), 5, "'tabstop' stands in");
     });
 }

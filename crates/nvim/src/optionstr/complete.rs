@@ -158,19 +158,19 @@ pub fn did_set_completeitemalign(_args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_completeopt(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
+    let (buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // The variable being set is the buffer's own copy for `:setlocal` and
     // the global one otherwise -- which is the value the frame holds.
     if !local && !opt_flags.has(OptionSetFlags::GLOBAL) {
         // A plain `:set` drops the buffer's own answer.
-        buf.b_cot_flags = 0 as c_uint;
+        buf.set_b_cot_flags(0 as c_uint);
     }
     let Some(mask) = opt_strings_mask(new_bytes(args), &OPT_COT_VALUES, true) else {
         return invalid();
     };
     if local {
-        buf.b_cot_flags = mask;
+        buf.set_b_cot_flags(mask);
     } else {
         COT_FLAGS.set(mask);
     }
@@ -232,7 +232,7 @@ pub fn did_set_optexpr(args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_spellcapcheck(args: &mut OptSet) -> Result<(), OptError> {
-    compile_cap_prog(&mut win(args).syntax())
+    compile_cap_prog(&mut win(args).syntax().edit())
 }
 
 pub fn did_set_spellfile(args: &mut OptSet) -> Result<(), OptError> {
@@ -265,7 +265,7 @@ pub fn did_set_spelloptions(args: &mut OptSet) -> Result<(), OptError> {
             SPO_FLAGS.set(mask);
         }
         if local {
-            wp.syntax().b_p_spo_flags = mask;
+            wp.syntax().edit().b_p_spo_flags = mask;
         }
     }
     Ok(())
@@ -279,7 +279,7 @@ pub fn did_set_spellsuggest(_args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_tagcase(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
+    let (buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // The variable being set is the buffer's own copy for `:setlocal` and
     // the global one otherwise -- which is the value the frame holds.
@@ -294,7 +294,7 @@ pub fn did_set_tagcase(args: &mut OptSet) -> Result<(), OptError> {
         }
     };
     if local {
-        buf.b_tc_flags = mask;
+        buf.set_b_tc_flags(mask);
     } else {
         TC_FLAGS.set(mask);
     }

@@ -80,7 +80,7 @@ impl Term {
 impl Buf {
     /// The terminal this buffer draws, if it is a terminal buffer.
     pub(crate) fn terminal_handle(self) -> Option<Term> {
-        NonNull::new(self.terminal).map(Term)
+        NonNull::new(self.terminal()).map(Term)
     }
 }
 
@@ -114,9 +114,9 @@ mod tests {
     fn copies_of_a_terminal_share_it_until_the_free() {
         let _held = editor_state_lock();
         let driver = Term::alloc(Terminal::new(options(), Handle::new(1)));
-        let mut buffer = bare_buffer();
+        let buffer = bare_buffer();
         assert_eq!(buffer.terminal_handle(), None);
-        buffer.terminal = driver.raw();
+        buffer.set_terminal(driver.raw());
         let drawn = buffer.terminal_handle().expect("a terminal buffer");
         assert_eq!(drawn, driver);
 
@@ -134,7 +134,7 @@ mod tests {
         }
         assert!(drawn.vt.try_borrow_mut().is_ok());
 
-        buffer.terminal = ::core::ptr::null_mut();
+        buffer.set_terminal(::core::ptr::null_mut());
         driver.free();
         free_bare_buffer(buffer);
     }

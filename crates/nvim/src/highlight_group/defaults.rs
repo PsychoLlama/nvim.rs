@@ -564,10 +564,11 @@ pub(crate) fn load_colors(name: &CStr) -> bool {
     RECURSIVE.set(true);
 
     let buffer = Buf::current();
+    let arg = buffer.read().name.shown().map(XString::from_cstr);
     apply_autocmds(
         AutoEvent::ColorSchemePre,
         Some(XString::from_cstr(name)),
-        buffer.name.shown().map(XString::from_cstr),
+        arg,
         false,
         Some(buffer),
     );
@@ -578,10 +579,11 @@ pub(crate) fn load_colors(name: &CStr) -> bool {
     if found {
         // The scheme's own file may have changed the current buffer.
         let buffer = Buf::current();
+        let arg = buffer.read().name.shown().map(XString::from_cstr);
         apply_autocmds(
             AutoEvent::ColorScheme,
             Some(XString::from_cstr(name)),
-            buffer.name.shown().map(XString::from_cstr),
+            arg,
             false,
             Some(buffer),
         );

@@ -32,9 +32,9 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
         return Err(Error::exception(E_CMDWIN));
     }
     let mut may_read_buffer: bool = true;
-    if !buffer.terminal.is_null() {
+    if !buffer.terminal().is_null() {
         if buf_terminal_running(buffer) {
-            let handle = buffer.handle;
+            let handle = buffer.handle();
             return Err(api_error!(
                 ERROR_TYPE_EXCEPTION,
                 "Terminal already connected to buffer {handle}"
@@ -67,7 +67,7 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
     };
     let mut contents: Vec<u8> = Vec::new();
     if may_read_buffer {
-        buffer.read_into(LineNr::ONE, buffer.b_ml.ml_line_count, &mut contents);
+        buffer.read_into(LineNr::ONE, buffer.line_count(), &mut contents);
     }
     // Held across `TermOpen`, which may close the terminal.
     let held = ChannelRef::new(id);

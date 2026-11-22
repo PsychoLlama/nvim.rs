@@ -276,8 +276,8 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
     let win = window;
     let buf = win.buffer();
     let key = BreakindentKey {
-        fnum: buf.handle.get(),
-        ts: buf.b_p_ts,
+        fnum: buf.handle().get(),
+        ts: buf.b_p_ts(),
         tick: buf_get_changedtick(buf),
         listopt: win.w_briopt_list,
         no_ts: win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == 0,
@@ -291,13 +291,15 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
         vcol: win.w_briopt_vcol,
     };
     let col_off2 = win_col_off2(win);
-    let flp = local_or_global(&buf.b_p_flp, P_FLP);
+    let held = buf.read();
+    let flp = local_or_global(&held.b_p_flp, P_FLP);
     // The window width minus its margins: what is left for text.
     let eff_wwidth = win.w_view_width - (window).col_off() + col_off2;
     // One exclusive borrow for the whole computation: nothing below calls
     // back into this function (the regex engine and chartabsize helpers run
     // no user code), and debug builds will catch it if that ever changes.
-    let vts = buf.b_p_vts_array.as_deref();
+    let held = buf.read();
+    let vts = held.b_p_vts_array.as_deref();
     let hit = flp.with_bytes(|flp| CACHE.with(|prev| prev.answers(&key, line, vts, flp)));
     // Copies of what the cache keys on, taken only on a miss.
     let fill = (!hit).then(|| (vts.map(Box::from), flp.get()));
@@ -319,6 +321,7 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
         }
         bri
     });
+    drop(held);
     if opt.sbr {
         bri -= win.showbreak_cells();
     }

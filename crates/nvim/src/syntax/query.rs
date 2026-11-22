@@ -26,10 +26,10 @@ use std::ffi::CString;
 /// Does this window's block define any syntax at all?
 pub(crate) fn syntax_present(win: Win) -> bool {
     let block = win.syntax();
-    !block.b_syn_patterns.is_empty()
-        || !block.b_syn_clusters.is_empty()
-        || !block.b_keywtab.is_empty()
-        || !block.b_keywtab_ic.is_empty()
+    !block.read().b_syn_patterns.is_empty()
+        || !block.read().b_syn_clusters.is_empty()
+        || !block.read().b_keywtab.is_empty()
+        || !block.read().b_keywtab_ic.is_empty()
 }
 
 /// What the next `get_syntax_name` call should offer, which
@@ -151,7 +151,8 @@ pub(crate) fn get_syntax_name(_expand: &Expand, idx: usize) -> Option<Candidate>
                 return None;
             }
             let block = cur_syn_block();
-            let name = &block.clusters()[idx].scl_name;
+            let held = block.read();
+            let name = &held.clusters()[idx].scl_name;
             let mut text = Vec::with_capacity(name.count_bytes() + 1);
             text.push(b'@');
             text.extend_from_slice(name.to_bytes());
@@ -247,14 +248,14 @@ pub(crate) fn syn_get_foldlevel(window: Win, lnum: LineNr) -> c_int {
 
     // Answer quickly when there are no fold items at all.
     let block = window.syntax();
-    if block.b_syn_folditems != 0 && !block.b_syn_error && !block.b_syn_slow {
+    if block.read().b_syn_folditems != 0 && !block.read().b_syn_error && !block.read().b_syn_slow {
         level = with_parser(|parser| {
             parser.start(window, lnum);
 
             // Start with the fold level at the start of the line.
             let mut level = parser.cur_foldlevel();
 
-            if block.b_syn_foldlevel == SYNFLD_MINIMUM {
+            if block.read().b_syn_foldlevel == SYNFLD_MINIMUM {
                 // Find the lowest fold level that is followed by a higher
                 // one.
                 let mut low_level = level;

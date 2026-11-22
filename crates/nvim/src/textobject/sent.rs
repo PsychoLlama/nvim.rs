@@ -127,7 +127,7 @@ fn next_sentence(
     {
         // At the start of a paragraph or section, going forward:
         // the next line is the answer.
-        if pos.lnum == Buf::current().b_ml.ml_line_count {
+        if pos.lnum == Buf::current().line_count() {
             return Err(NoObject);
         }
         pos.lnum += 1;

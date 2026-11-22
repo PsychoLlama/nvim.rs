@@ -218,7 +218,7 @@ pub fn goto_buffer(excmd: &mut ExArg, start: c_int, dir: c_int, count: c_int) {
 /// the buffer to go back to, `None` where the C passed a NULL `BufferRef *`;
 /// it is only ever re-validated, never trusted.
 pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
-    let old_tw: OptInt = Buf::current().b_p_tw;
+    let old_tw: OptInt = Buf::current().b_p_tw();
 
     if SWAP_EXISTS_ACTION.get() == SEA_QUIT {
         // Reset the error state, so aborting() is false while the buffer
@@ -249,7 +249,7 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
         };
         if let Some(buf) = buf {
             enter_buffer(buf);
-            if old_tw != Buf::current().b_p_tw {
+            if old_tw != Buf::current().b_p_tw() {
                 recheck_colorcolumn(Win::current());
             }
         }
@@ -313,7 +313,7 @@ pub fn do_bufdel(
         // delete the current buffer last, otherwise when the current buffer is
         // deleted, the next buffer becomes the current one and will be loaded,
         // which may then also be deleted, etc.
-        if bnr == Buf::current().handle.get() {
+        if bnr == Buf::current().handle().get() {
             do_current = bnr;
         } else if delete_one(command, bnr, forceit) {
             deleted += 1;
@@ -417,7 +417,7 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
     // exists.
     if let Some(old) = bufref
         .get()
-        .filter(|b| b.raw() != Buf::current_raw() && b.b_nwindows == 0)
+        .filter(|b| b.raw() != Buf::current_raw() && b.b_nwindows() == 0)
     {
         close_buffer(None, old, action, false, false);
     }
@@ -459,7 +459,7 @@ fn do_buffer_ext(
         return Err(Failed);
     }
 
-    if (action == DOBUF_GOTO || action == DOBUF_SPLIT) && buf.b_flags.has(BufFlags::DUMMY) {
+    if (action == DOBUF_GOTO || action == DOBUF_SPLIT) && buf.b_flags().has(BufFlags::DUMMY) {
         // disallow navigating to the dummy buffer
         err_nobufnr(count.into());
         return Err(Failed);
@@ -486,7 +486,7 @@ fn do_buffer_ext(
         return Ok(());
     }
     // Whether splitting or not, don't open a closing buffer in more windows.
-    if buf.raw() != Buf::current_raw() && buf.b_locked_split != 0 {
+    if buf.raw() != Buf::current_raw() && buf.b_locked_split() != 0 {
         err(E_CANNOT_SWITCH_TO_A_CLOSING_BUFFER);
         return Err(Failed);
     }
@@ -595,7 +595,7 @@ fn locate_arm(start: c_int, dir: c_int, count: c_int, flags: c_int, unload: bool
     if start == DOBUF_FIRST && count != 0 {
         // find specified buffer number
         let wanted = Handle::new(count);
-        return Ok(core::iter::successors(from, |b| b.next()).find(|b| b.handle == wanted));
+        return Ok(core::iter::successors(from, |b| b.next()).find(|b| b.handle() == wanted));
     }
 
     match from {
@@ -610,7 +610,7 @@ fn step_to_listed(buffer: Buf, dir: c_int, count: c_int, flags: c_int, unload: b
     let mut buffer = buffer;
     let mut count = count;
     let skip_help = flags & DOBUF_SKIPHELP != 0;
-    let help_only = skip_help && buffer.b_help;
+    let help_only = skip_help && buffer.b_help();
 
     // remember the buffer where we start, we come back there when all buffers
     // are unlisted.
@@ -619,9 +619,9 @@ fn step_to_listed(buffer: Buf, dir: c_int, count: c_int, flags: c_int, unload: b
         || bp != Some(buffer)
             && !unload
             && !(if help_only {
-                buffer.b_help
+                buffer.b_help()
             } else {
-                buffer.b_p_bl != 0
+                buffer.b_p_bl() != 0
             })
     {
         if bp.is_none() {
@@ -639,9 +639,9 @@ fn step_to_listed(buffer: Buf, dir: c_int, count: c_int, flags: c_int, unload: b
         // Avoid non-help buffers if the starting point was a help buffer and
         // vice-versa.  Don't count unlisted buffers.
         let counts = if help_only {
-            buffer.b_help
+            buffer.b_help()
         } else {
-            buffer.b_p_bl != 0 && (!skip_help || !buffer.b_help)
+            buffer.b_p_bl() != 0 && (!skip_help || !buffer.b_help())
         };
         if unload || counts {
             count -= 1;
@@ -674,7 +674,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
 
     // When unloading or deleting a buffer that's already unloaded and
     // unlisted: fail silently.
-    if action != DOBUF_WIPE && buffer.b_ml.ml_mfp.is_none() && buffer.b_p_bl == 0 {
+    if action != DOBUF_WIPE && buffer.ml().ml_mfp.is_none() && buffer.b_p_bl() == 0 {
         return Unloaded::Done(Err(Failed));
     }
 
@@ -682,7 +682,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
         return Unloaded::Done(rc);
     }
 
-    let buf_fnum = buffer.handle.get();
+    let buf_fnum = buffer.handle().get();
 
     // When closing the current buffer stop Visual mode.
     if buffer.raw() == Buf::current_raw() && visual_active() {
@@ -691,7 +691,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
 
     // If deleting the last (listed) buffer, make it empty.
     // The last (listed) buffer cannot be unloaded.
-    if !buffers().any(|b| b.b_p_bl != 0 && b != buffer) && buffer.raw() == Buf::current_raw() {
+    if !buffers().any(|b| b.b_p_bl() != 0 && b != buffer) && buffer.raw() == Buf::current_raw() {
         let forceit = flags & DOBUF_FORCEIT;
         return Unloaded::Done(empty_curbuf(true, forceit, action));
     }
@@ -700,7 +700,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
     // (unless it's the only non-floating window), for as long as we end up in
     // a window with this buffer.
     while buffer.raw() == Buf::current_raw()
-        && !(window_locked(Win::current()) || Win::current().buffer().b_locked > 0)
+        && !(window_locked(Win::current()) || Win::current().buffer().b_locked() > 0)
         && (last_listed_window().is_some_and(is_autocmd_window) || !is_last_window(Win::current()))
     {
         if close_win(Win::current(), false, false).is_err() {
@@ -719,7 +719,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
 
         if let Some(gone) = bufref
             .get()
-            .filter(|b| b.raw() != Buf::current_raw() && b.b_nwindows <= 0)
+            .filter(|b| b.raw() != Buf::current_raw() && b.b_nwindows() <= 0)
         {
             close_buffer(None, gone, action, false, false);
         }
@@ -747,13 +747,13 @@ fn refuse_unload(buffer: Buf, bufref: BufRef, flags: c_int) -> Option<Result<(),
                 return Some(Err(Failed));
             }
         } else {
-            let nr = buffer.handle.get();
+            let nr = buffer.handle().get();
             semsg!("E89: No write since last change for buffer {nr} (add ! to override)");
             return Some(Err(Failed));
         }
     }
 
-    if flags & DOBUF_FORCEIT == 0 && !buffer.terminal.is_null() && terminal_alive(buffer) {
+    if flags & DOBUF_FORCEIT == 0 && !buffer.terminal().is_null() && terminal_alive(buffer) {
         if confirming() {
             if !ask_about_terminal(buffer) {
                 return Some(Err(Failed));
@@ -777,7 +777,7 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
     // First use au_new_curbuf.br_buf, if it is valid and not closing.
     let mut buf = BufRef::of_record(AU_NEW_CURBUF.get())
         .get()
-        .filter(|b| b.b_locked_split == 0);
+        .filter(|b| b.b_locked_split() == 0);
     if buf.is_none() && Win::current().w_jumplistlen > 0 {
         if jop_clean() {
             // Remove the buffer from the jump list.
@@ -801,10 +801,10 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
     if buf.is_none() {
         // No loaded buffer, find listed one
         buf = buffers().find(|b| {
-            b.b_p_bl != 0
+            b.b_p_bl() != 0
                 && b.raw() != Buf::current_raw()
                 && !is_quickfix(*b)
-                && b.b_locked_split == 0
+                && b.b_locked_split() == 0
         });
     }
     if buf.is_none() {
@@ -813,7 +813,7 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
         // nothing to take.
         let cur = Buf::current();
         buf = cur.next().or_else(|| cur.prev()).filter(|b| {
-            !is_quickfix(*b) && !(b.raw() != Buf::current_raw() && b.b_locked_split != 0)
+            !is_quickfix(*b) && !(b.raw() != Buf::current_raw() && b.b_locked_split() != 0)
         });
     }
     buf
@@ -848,12 +848,12 @@ fn walk_jumplist(unloaded: &mut Option<Buf>, update_jumplist: &mut bool) -> Opti
             // Skip current and unlisted bufs.  Also skip a quickfix or closing
             // buffer, it might be deleted soon.
             if b.raw() == Buf::current_raw()
-                || b.b_p_bl == 0
+                || b.b_p_bl() == 0
                 || is_quickfix(b)
-                || b.b_locked_split != 0
+                || b.b_locked_split() != 0
             {
                 buf = None;
-            } else if b.b_ml.ml_mfp.is_none() {
+            } else if b.ml().ml_mfp.is_none() {
                 // skip unloaded buf, but may keep it for later
                 unloaded.get_or_insert(b);
                 buf = None;
@@ -898,8 +898,12 @@ fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
             continue;
         };
         // in non-help buffer, try to skip help buffers, and vv
-        if b.b_help == cur.b_help && b.b_p_bl != 0 && !is_quickfix(b) && b.b_locked_split == 0 {
-            if b.b_ml.ml_mfp.is_some() {
+        if b.b_help() == cur.b_help()
+            && b.b_p_bl() != 0
+            && !is_quickfix(b)
+            && b.b_locked_split() == 0
+        {
+            if b.ml().ml_mfp.is_some() {
                 return Some(b); // found loaded buffer
             }
             unloaded.get_or_insert(b); // remember unloaded buf for later
@@ -910,7 +914,9 @@ fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
 
 /// `semsg(fmt, buf->b_fname)`.
 fn err_fname(buffer: Buf) {
-    let name = msg_cstr_opt(buffer.name.shown());
+    let held = buffer.read();
+    let name = msg_cstr_opt(held.name.shown()).to_string();
+    drop(held);
     semsg!("E89: {name} will be killed (add ! to override)");
 }
 

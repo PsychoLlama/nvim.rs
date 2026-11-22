@@ -128,7 +128,7 @@ pub fn changed_lines_invalidate_buf(
 /// then only if it is far enough from the last one -- otherwise typing
 /// `xxxxx` would fill the list. "Far enough" is a 'textwidth' away, or 79
 /// columns when 'textwidth' is 0.
-fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
+fn record_change_mark(buffer: Buf, lnum: LineNr, col: ColNr) {
     // Only record the view if the changed line is on screen: a change can
     // be made outside the current window's view.
     let mut view = FileMarkView {
@@ -142,21 +142,21 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
     }
 
     // RESET_FMARK: the old mark's extra data goes with it.
-    let handle = buffer.handle;
+    let handle = buffer.handle();
     let at = Pos {
         lnum,
         col,
         coladd: 0,
     };
-    buffer.b_last_change = FileMark::fresh(at, Some(handle), view);
+    buffer.edit().b_last_change = FileMark::fresh(at, Some(handle), view);
 
-    if buffer.b_new_change || buffer.b_changelistlen == 0 {
-        let add = if buffer.b_changelistlen == 0 {
+    if buffer.b_new_change() || buffer.b_changelistlen() == 0 {
+        let add = if buffer.b_changelistlen() == 0 {
             true
         } else {
-            let last = usize::try_from(buffer.b_changelistlen - 1)
+            let last = usize::try_from(buffer.b_changelistlen() - 1)
                 .expect("a non-empty changelist has a last entry");
-            let p = buffer.b_changelist[last].mark;
+            let p = buffer.read().b_changelist[last].mark;
             if p.lnum != lnum {
                 true
             } else {
@@ -170,17 +170,17 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
         if add {
             // The first of a new sequence of undo-able changes, far enough
             // from the last one to deserve its own entry.
-            buffer.b_new_change = false;
+            buffer.set_b_new_change(false);
 
-            if buffer.b_changelistlen == JUMPLISTSIZE {
+            if buffer.b_changelistlen() == JUMPLISTSIZE {
                 // The list is full: drop the oldest entry, and pull every
                 // window's index back with it.
-                buffer.b_changelistlen = JUMPLISTSIZE - 1;
+                buffer.set_b_changelistlen(JUMPLISTSIZE - 1);
                 // Upstream `memmove`s the rest down and leaves the last
                 // slot a copy of the one before it; rotating puts the
                 // oldest there instead, and the new entry below overwrites
                 // it either way.
-                buffer.b_changelist.rotate_left(1);
+                buffer.edit().b_changelist.rotate_left(1);
                 for mut wp in tab_windows() {
                     if wp.w_buffer == buffer && wp.w_changelistidx > 0 {
                         wp.w_changelistidx -= 1;
@@ -189,21 +189,21 @@ fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
             }
             // A window sitting at the end of the list stays at the end.
             for mut wp in tab_windows() {
-                if wp.w_buffer == buffer && wp.w_changelistidx == buffer.b_changelistlen {
+                if wp.w_buffer == buffer && wp.w_changelistidx == buffer.b_changelistlen() {
                     wp.w_changelistidx += 1;
                 }
             }
-            buffer.b_changelistlen += 1;
+            buffer.set_b_changelistlen(buffer.b_changelistlen() + 1);
         }
     }
     // A plain copy: the mark was made just above and carries no extra data.
-    let last = crate::mark::defs::SavedMark::of(&buffer.b_last_change).to_mark();
-    let at = usize::try_from(buffer.b_changelistlen - 1)
+    let last = crate::mark::defs::SavedMark::of(&buffer.read().b_last_change).to_mark();
+    let at = usize::try_from(buffer.b_changelistlen() - 1)
         .expect("the changelist has at least the entry just added");
-    buffer.b_changelist[at] = last;
+    buffer.edit().b_changelist[at] = last;
     // The current window is always *after* the last change, so that `g,`
     // takes you back to it.
-    let len = buffer.b_changelistlen;
+    let len = buffer.b_changelistlen();
     if Win::current().w_buffer == buffer {
         Win::current().w_changelistidx = len;
     }
@@ -338,7 +338,7 @@ pub fn changed_bytes(lnum: LineNr, col: ColNr) {
     // the next one, so schedule that line too -- but not when a `$` is
     // being displayed at the end of the changed text.
     let spell_next = spell_check_window(Win::current())
-        && lnum < Buf::current().b_ml.ml_line_count
+        && lnum < Buf::current().line_count()
         && !cpo_has(CpoFlag::DOLLAR);
     if spell_next {
         redraw_win_line(Win::current(), lnum + 1);
@@ -414,7 +414,7 @@ pub fn deleted_lines(lnum: LineNr, count: i32) {
 /// Make sure the cursor is on a valid line before calling: a UI callback may
 /// be triggered to display it.
 pub fn deleted_lines_mark(lnum: LineNr, count: c_int) {
-    let made_empty = count > 0 && Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
+    let made_empty = count > 0 && Buf::current().ml_flags().has(MlFlags::EMPTY);
     let cb = Buf::current();
     let last = lnum + count - 1;
     let max = MAXLNUM;
@@ -433,30 +433,30 @@ pub fn deleted_lines_mark(lnum: LineNr, count: c_int) {
 /// one *before* the change, and `xtra` the net number of lines added
 /// (negative when deleting).
 ///
-pub fn changed_lines_redraw_buf(mut buffer: Buf, lnum: LineNr, mut lnume: LineNr, xtra: i32) {
+pub fn changed_lines_redraw_buf(buffer: Buf, lnum: LineNr, mut lnume: LineNr, xtra: i32) {
     // A decoration whose mark moved has to be re-measured and redrawn at
     // wherever it moved to, so widen by one line; a virt_line mark may be
     // drawn two lines below, so a deletion widens by one more.
-    if xtra != 0 && buffer.b_marktree.n_keys > 0 {
+    if xtra != 0 && buffer.read().b_marktree.n_keys > 0 {
         let lines = buf_meta_total(buffer, MT_META_LINES);
         lnume += 1 + i32::from(xtra < 0 && lines != 0);
     }
 
-    if buffer.b_mod_set {
+    if buffer.b_mod_set() {
         // Widen to the maximum area that must be redisplayed.
-        buffer.b_mod_top = buffer.b_mod_top.min(lnum);
-        if lnum < buffer.b_mod_bot {
+        buffer.set_b_mod_top(buffer.b_mod_top().min(lnum));
+        if lnum < buffer.b_mod_bot() {
             // Adjust the old bottom for the lines that came or went.
-            buffer.b_mod_bot += xtra;
-            buffer.b_mod_bot = buffer.b_mod_bot.max(lnum);
+            buffer.set_b_mod_bot(buffer.b_mod_bot() + xtra);
+            buffer.set_b_mod_bot(buffer.b_mod_bot().max(lnum));
         }
-        buffer.b_mod_bot = buffer.b_mod_bot.max(lnume + xtra);
-        buffer.b_mod_xlines += xtra;
+        buffer.set_b_mod_bot(buffer.b_mod_bot().max(lnume + xtra));
+        buffer.set_b_mod_xlines(buffer.b_mod_xlines() + xtra);
     } else {
-        buffer.b_mod_set = true;
-        buffer.b_mod_top = lnum;
-        buffer.b_mod_bot = lnume + xtra;
-        buffer.b_mod_xlines = xtra;
+        buffer.set_b_mod_set(true);
+        buffer.set_b_mod_top(lnum);
+        buffer.set_b_mod_bot(lnume + xtra);
+        buffer.set_b_mod_xlines(xtra);
     }
 }
 

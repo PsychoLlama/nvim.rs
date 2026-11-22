@@ -50,12 +50,12 @@ pub fn ex_undolist(_excmd: &mut ExArg) {
     // A leaf is a header nothing branches off downwards, and the whole tree
     // has to be walked to find them all.
     let mut rows: Vec<CString> = Vec::new();
-    for visit in buf.tree_walk(buf.b_u_oldhead, Marks::next()) {
+    for visit in buf.tree_walk(buf.b_u_oldhead(), Marks::next()) {
         if let Some(uh) = buf
             .header(visit.link)
             .filter(|uh| visit.first && uh.prev.is_none())
         {
-            rows.push(undolist_row(uh, visit.depth));
+            rows.push(undolist_row(&uh, visit.depth));
         }
     }
 
@@ -91,16 +91,17 @@ pub fn ex_undolist(_excmd: &mut ExArg) {
 fn eval_tree(buffer: Buf, first: UndoLink) -> ListRef {
     let list = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     let mut link = first;
-    while let Some(uh) = buffer.header(link) {
-        let (seq, time, save_nr, alt_next, prev) =
-            (uh.seq, uh.time, uh.save_nr, uh.alt_next, uh.prev);
+    while let Some((seq, time, save_nr, alt_next, prev)) = buffer
+        .header(link)
+        .map(|uh| (uh.seq, uh.time, uh.save_nr, uh.alt_next, uh.prev))
+    {
         let dict = tv_dict_alloc();
         let _ = dict.edit().add_number(b"seq", VarNumber::from(seq));
         let _ = dict.edit().add_number(b"time", time);
-        if link == buffer.b_u_newhead {
+        if link == buffer.b_u_newhead() {
             let _ = dict.edit().add_number(b"newhead", 1);
         }
-        if link == buffer.b_u_curhead {
+        if link == buffer.b_u_curhead() {
             let _ = dict.edit().add_number(b"curhead", 1);
         }
         if save_nr > 0 {
@@ -139,16 +140,16 @@ pub fn f_undotree(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         None => Buf::current_or_none(),
     };
     let Some(buf) = buf else { return };
-    let entries = eval_tree(buf, buf.b_u_oldhead);
+    let entries = eval_tree(buf, buf.b_u_oldhead());
     let Some(mut dict) = result.dict_mut() else {
         return;
     };
-    let _ = dict.add_number(b"synced", VarNumber::from(buf.b_u_synced));
-    let _ = dict.add_number(b"seq_last", VarNumber::from(buf.b_u_seq_last));
-    let _ = dict.add_number(b"save_last", VarNumber::from(buf.b_u_save_nr_last));
-    let _ = dict.add_number(b"seq_cur", VarNumber::from(buf.b_u_seq_cur));
-    let _ = dict.add_number(b"time_cur", buf.b_u_time_cur);
-    let _ = dict.add_number(b"save_cur", VarNumber::from(buf.b_u_save_nr_cur));
+    let _ = dict.add_number(b"synced", VarNumber::from(buf.b_u_synced()));
+    let _ = dict.add_number(b"seq_last", VarNumber::from(buf.b_u_seq_last()));
+    let _ = dict.add_number(b"save_last", VarNumber::from(buf.b_u_save_nr_last()));
+    let _ = dict.add_number(b"seq_cur", VarNumber::from(buf.b_u_seq_cur()));
+    let _ = dict.add_number(b"time_cur", buf.b_u_time_cur());
+    let _ = dict.add_number(b"save_cur", VarNumber::from(buf.b_u_save_nr_cur()));
     let _ = dict.add_list(b"entries", Some(entries));
 }
 
@@ -159,7 +160,7 @@ pub fn f_undotree(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// buffer as it needs it.
 pub fn u_force_get_undo_header(buffer: Buf) -> Option<UndoLink> {
     let current = |b: Buf| {
-        [b.b_u_curhead, b.b_u_newhead]
+        [b.b_u_curhead(), b.b_u_newhead()]
             .into_iter()
             .find(|&link| b.has_header(link))
     };

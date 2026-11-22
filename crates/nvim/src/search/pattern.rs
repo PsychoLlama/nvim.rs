@@ -428,7 +428,7 @@ pub fn ignorecase_opt(pat: &[u8], ic_in: bool, scs: bool) -> bool {
     if ic
         && !NO_SMARTCASE.get()
         && scs
-        && !(ctrl_x_mode_not_default() && Buf::current().b_p_inf != 0)
+        && !(ctrl_x_mode_not_default() && Buf::current().b_p_inf() != 0)
     {
         ic = !pat_has_uppercase(pat);
     }

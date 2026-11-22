@@ -67,11 +67,11 @@ impl CurrentDir {
 /// With `old_last` — the position of what was the last entry — the entries
 /// after it are appended; otherwise the whole buffer is rewritten.
 pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
-    let Some(mut buf) = qf_find_buf(qi) else {
+    let Some(buf) = qf_find_buf(qi) else {
         return;
     };
 
-    let old_line_count = buf.b_ml.ml_line_count;
+    let old_line_count = buf.line_count();
     let old_endcol = ml_get_buf_len(buf, old_line_count);
     let old_bytecount =
         get_region_bytecount(buf, LineNr::ONE, old_line_count, ColNr::ZERO, old_endcol);
@@ -101,7 +101,7 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
     qf_update_win_titlevar(qi);
     qf_fill_buffer(qi.current_slot(), buf, old_last, qf_winid.get());
 
-    let new_line_count = buf.b_ml.ml_line_count;
+    let new_line_count = buf.line_count();
     let new_endcol = ml_get_buf_len(buf, new_line_count);
     let delta = new_line_count - old_line_count;
     if old_last.is_none() {
@@ -133,7 +133,7 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
         );
         changed_lines(buf, start_lnum, ColNr::ZERO, start_lnum, delta, true);
     }
-    buf.b_changed = c_int::from(false);
+    buf.set_b_changed(c_int::from(false));
 
     if let Some(aco) = aco {
         qf_win_pos_update(qi, 0);
@@ -174,21 +174,23 @@ fn qf_buf_line(
         } else {
             None
         };
-        if let Some(errbuf) = errbuf.filter(|b| !b.name.is_unnamed()) {
+        if let Some(errbuf) = errbuf.filter(|b| !b.read().name.is_unnamed()) {
             if entry.kind == 1 {
                 // :helpgrep entries name the help file only.
-                let shown = errbuf.name.shown().map_or(&b""[..], CStr::to_bytes);
+                let held = errbuf.read();
+                let shown = held.name.shown().map_or(&b""[..], CStr::to_bytes);
                 out.extend_from_slice(&shown[tail_index(shown)..]);
             } else {
                 // Shorten the file name if not done already. For speed,
                 // only for the first entry of each buffer.
-                if first_bufline && errbuf.name.short().is_none_or(path_is_absolute) {
+                if first_bufline && errbuf.read().name.short().is_none_or(path_is_absolute) {
                     crate::fileio::shorten_buf_fname(errbuf, dir.get().to_bytes(), false);
                 }
                 match &entry.fname {
                     Some(own) => out.extend_from_slice(own),
                     None => {
-                        let shown = errbuf.name.shown().map_or(&b""[..], CStr::to_bytes);
+                        let held = errbuf.read();
+                        let shown = held.name.shown().map_or(&b""[..], CStr::to_bytes);
                         out.extend_from_slice(shown);
                     }
                 }
@@ -279,7 +281,7 @@ fn clear_qf_buffer() -> Result<(), Failed> {
     // No undo information is stored — the quickfix buffer is usually
     // not modifiable — so the undo stack is cleaned up instead, or an
     // autocommand could invalidate it.
-    while !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    while !Buf::current().ml_flags().has(MlFlags::EMPTY) {
         if ml_delete(LineNr::ONE).is_err() {
             internal_error(c"qf_fill_buffer()");
             return Err(Failed);
@@ -301,15 +303,15 @@ fn finish_qf_buffer() {
     // Set 'filetype' to "qf" each time after filling the buffer. This
     // resembles reading a file into a buffer, which is more logical
     // when using autocommands.
-    Buf::current().b_ro_locked += 1;
+    Buf::current().set_b_ro_locked(Buf::current().b_ro_locked() + 1);
     set_option_value_give_err(
         OPT_FILETYPE,
         OptVal::static_string(c"qf"),
         OptionSetFlags::LOCAL,
     );
-    Buf::current().b_p_ma = c_int::from(false);
+    Buf::current().set_b_p_ma(c_int::from(false));
 
-    Buf::current().b_keep_filetype = true; // don't detect 'filetype'
+    Buf::current().edit().b_keep_filetype = true; // don't detect 'filetype'
     let buffer = Buf::current_or_none();
     fire_autocmds_for(
         AutoEvent::BufReadPost,
@@ -328,8 +330,8 @@ fn finish_qf_buffer() {
         buffer,
         None,
     );
-    Buf::current().b_keep_filetype = false;
-    Buf::current().b_ro_locked -= 1;
+    Buf::current().set_b_keep_filetype(false);
+    Buf::current().set_b_ro_locked(Buf::current().b_ro_locked() - 1);
 
     // Make sure it will be redrawn.
     redraw_curbuf_later(UPD_NOT_VALID);
@@ -389,8 +391,8 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
         // that is already in the buffer.
         let (mut at, mut lnum) = match old_last {
             None => (0, LineNr::ZERO),
-            Some(last) if last + 1 < qfl.entries.len() => (last + 1, buffer.b_ml.ml_line_count),
-            Some(last) => (last, buffer.b_ml.ml_line_count),
+            Some(last) if last + 1 < qfl.entries.len() => (last + 1, buffer.line_count()),
+            Some(last) => (last, buffer.line_count()),
         };
 
         let qftf_list = call_qftf_func(qfl, qf_winid, lnum.get() + 1, qfl.count());

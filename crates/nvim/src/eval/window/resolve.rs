@@ -290,7 +290,7 @@ pub fn f_win_id2win(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 pub fn f_win_findbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut list = tv_list_alloc_ret(result, LIST_LEN_MAY_KNOW as ptrdiff_t);
     let bufnr = number_as_int(arg_number(args, 0));
-    for wp in tab_windows().filter(|wp| wp.buffer().handle == Handle::new(bufnr)) {
+    for wp in tab_windows().filter(|wp| wp.buffer().handle() == Handle::new(bufnr)) {
         (*list).push_number(VarNumber::from(wp.handle));
     }
 }
@@ -360,7 +360,7 @@ pub fn f_tabpagewinnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
 pub fn f_winbufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let wp = arg_win(args, 0);
     result.write_number(match wp {
-        Some(wp) => VarNumber::from(wp.buffer().handle),
+        Some(wp) => VarNumber::from(wp.buffer().handle()),
         None => -1,
     });
 }

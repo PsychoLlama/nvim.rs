@@ -61,8 +61,8 @@ pub(crate) fn ignore_buf(buffer: Option<Buf>, removable_bufs: &RemovableBufs) ->
     let Some(b) = buffer else {
         return true;
     };
-    b.name.full().is_none()
-        || (b.b_p_bl == 0 && b.b_p_initialized)
+    b.read().name.full().is_none()
+        || (b.b_p_bl() == 0 && b.b_p_initialized())
         || buf_is_quickfix(Some(b))
         || buf_is_terminal(Some(b))
         || removable_bufs.contains(&b.raw().cast_const())
@@ -71,7 +71,7 @@ pub(crate) fn ignore_buf(buffer: Option<Buf>, removable_bufs: &RemovableBufs) ->
 /// Collect the buffers whose files are on removable media.
 pub(crate) fn find_removable_bufs(removable_bufs: &mut RemovableBufs) {
     for buf in buffers() {
-        if buf.name.full().is_some_and(shada_removable) {
+        if buf.read().name.full().is_some_and(shada_removable) {
             removable_bufs.insert(buf.raw().cast_const());
         }
     }
@@ -87,14 +87,14 @@ pub(crate) fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaEntry {
     let mut wanted = Vec::new();
     for buf in buffers() {
         if !ignore_buf(Some(buf), removable_bufs)
-            && buf.b_p_bl != 0
+            && buf.b_p_bl() != 0
             && max_bufs.is_none_or(|max| wanted.len() < max)
-            && let Some(fname) = buf.name.full()
+            && let Some(fname) = buf.read().name.full()
         {
             wanted.push(ShadaBufferListItem {
-                pos: buf.b_last_cursor.mark,
+                pos: buf.read().b_last_cursor.mark,
                 fname: XString::from_cstr(fname),
-                extra: buf.additional_data.clone(),
+                extra: buf.read().additional_data.clone(),
             });
         }
     }
@@ -317,7 +317,7 @@ fn jump_target(fm: &ShadaMark, removable_bufs: &RemovableBufs) -> Option<XString
     if ignore_buf(buf, removable_bufs) {
         return None;
     }
-    buf?.name.full().map(XString::from_cstr)
+    buf?.read().name.full().map(XString::from_cstr)
 }
 
 /// The packed entries as the API string the context stack keeps.

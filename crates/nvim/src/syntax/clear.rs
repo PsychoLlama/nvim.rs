@@ -23,35 +23,35 @@ use core::ffi::c_int;
 use super::*;
 
 /// Clear all syntax info for one block.
-pub(crate) fn syntax_clear(mut block: SynBlockRef) {
-    block.b_syn_error = false; // clear previous error
-    block.b_syn_slow = false; // clear previous timeout
-    block.b_syn_ic = 0; // Use case, by default
-    block.b_syn_foldlevel = SYNFLD_START;
-    block.b_syn_spell = SYNSPL_DEFAULT; // default spell checking
-    block.b_syn_containedin = 0;
-    block.b_syn_conceal = 0;
+pub(crate) fn syntax_clear(block: SynBlockRef) {
+    block.edit().b_syn_error = false; // clear previous error
+    block.edit().b_syn_slow = false; // clear previous timeout
+    block.edit().b_syn_ic = 0; // Use case, by default
+    block.edit().b_syn_foldlevel = SYNFLD_START;
+    block.edit().b_syn_spell = SYNSPL_DEFAULT; // default spell checking
+    block.edit().b_syn_containedin = 0;
+    block.edit().b_syn_conceal = 0;
 
-    block.b_keywtab.clear();
-    block.b_keywtab_ic.clear();
+    block.edit().b_keywtab.clear();
+    block.edit().b_keywtab_ic.clear();
 
     // Each pattern owns its own pattern text, compiled program and id
     // lists, so dropping the array is the whole of what upstream's
     // last-to-first `syn_clear_pattern` walk did.
-    block.patterns_mut().clear();
-    block.clusters_mut().clear();
-    block.b_spell_cluster_id = 0;
-    block.b_nospell_cluster_id = 0;
+    block.edit().patterns_mut().clear();
+    block.edit().clusters_mut().clear();
+    block.edit().b_spell_cluster_id = 0;
+    block.edit().b_nospell_cluster_id = 0;
 
-    block.b_syn_sync_flags = 0;
-    block.b_syn_sync_minlines = 0;
-    block.b_syn_sync_maxlines = 0;
-    block.b_syn_sync_linebreaks = 0;
+    block.edit().b_syn_sync_flags = 0;
+    block.edit().b_syn_sync_minlines = 0;
+    block.edit().b_syn_sync_maxlines = 0;
+    block.edit().b_syn_sync_linebreaks = 0;
 
-    block.b_syn_linecont_prog = None;
-    block.b_syn_linecont_pat = None;
-    block.b_syn_folditems = 0;
-    block.b_syn_isk = None;
+    block.edit().b_syn_linecont_prog = None;
+    block.edit().b_syn_linecont_pat = None;
+    block.edit().b_syn_folditems = 0;
+    block.edit().b_syn_isk = None;
 
     syn_stack_free_all(block);
     invalidate_current_state();
@@ -125,23 +125,23 @@ pub(crate) fn reset_synblock(mut window: Win) {
 
 /// Clear the syncing info for the current window's block.
 fn syntax_sync_clear() {
-    let mut block = cur_syn_block();
-    let mut i = block.patterns().len();
+    let block = cur_syn_block();
+    let mut i = block.read().patterns().len();
     while i > 0 {
         i -= 1;
-        if block.patterns()[i].sp_syncing {
+        if block.read().patterns()[i].sp_syncing {
             syn_remove_pattern(block, i);
         }
     }
 
-    block.b_syn_sync_flags = 0;
-    block.b_syn_sync_minlines = 0;
-    block.b_syn_sync_maxlines = 0;
-    block.b_syn_sync_linebreaks = 0;
+    block.edit().b_syn_sync_flags = 0;
+    block.edit().b_syn_sync_minlines = 0;
+    block.edit().b_syn_sync_maxlines = 0;
+    block.edit().b_syn_sync_linebreaks = 0;
 
-    block.b_syn_linecont_prog = None;
-    block.b_syn_linecont_pat = None;
-    block.b_syn_isk = None;
+    block.edit().b_syn_linecont_prog = None;
+    block.edit().b_syn_linecont_pat = None;
+    block.edit().b_syn_isk = None;
 
     syn_stack_free_all(block); // Need to recompute all syntax.
 }
@@ -151,11 +151,11 @@ fn syntax_sync_clear() {
 /// Dropping the entry releases its text, its compiled program and its id
 /// lists; the items that borrow those lists are the cached states, which
 /// every caller of this drops with `syn_stack_free_all`.
-pub(crate) fn syn_remove_pattern(mut block: SynBlockRef, idx: usize) {
-    if block.patterns()[idx].sp_flags.has(SynFlags::FOLD) {
-        block.b_syn_folditems -= 1;
+pub(crate) fn syn_remove_pattern(block: SynBlockRef, idx: usize) {
+    if block.read().patterns()[idx].sp_flags.has(SynFlags::FOLD) {
+        block.edit().b_syn_folditems -= 1;
     }
-    block.patterns_mut().remove(idx);
+    block.edit().patterns_mut().remove(idx);
 }
 
 /// `:syntax clear [{group}|@{cluster}] ..` and `:syntax sync clear ..`.
@@ -169,7 +169,7 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
     // Disabled inside ":syntax include @group filename", because otherwise
     // @group would get deleted. Only Vim 5.x syntax files contain
     // ":syntax clear" at all.
-    if cur_syn_block().b_syn_topgrp != 0 {
+    if cur_syn_block().read().b_syn_topgrp != 0 {
         return;
     }
 
@@ -199,7 +199,7 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
                 // the ones after it, so the next best thing: empty it.
                 let at = usize::try_from(id - SYNID_CLUSTER)
                     .expect("a non-zero cluster id is at least `SYNID_CLUSTER`");
-                cur_syn_block().clusters_mut()[at].scl_list = IdList::NONE;
+                cur_syn_block().edit().clusters_mut()[at].scl_list = IdList::NONE;
             } else {
                 let id = syn_name2id_bytes(word);
                 if id == 0 {
@@ -220,16 +220,19 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
 fn syn_clear_one(id: c_int, syncing: bool) {
     // Keywords only when this is not ":syntax sync clear {group}".
     if !syncing {
-        cur_syn_block().b_keywtab.remove_group(id);
-        cur_syn_block().b_keywtab_ic.remove_group(id);
+        cur_syn_block().edit().b_keywtab.remove_group(id);
+        cur_syn_block().edit().b_keywtab_ic.remove_group(id);
     }
 
     let block = cur_syn_block();
-    let mut idx = block.patterns().len();
+    let mut idx = block.read().patterns().len();
     while idx > 0 {
         idx -= 1;
-        let spp = &block.patterns()[idx];
-        if c_int::from(spp.sp_syn.id) == id && spp.sp_syncing == syncing {
+        let held = block.read();
+        let spp = &held.patterns()[idx];
+        let found = c_int::from(spp.sp_syn.id) == id && spp.sp_syncing == syncing;
+        drop(held);
+        if found {
             syn_remove_pattern(block, idx);
         }
     }

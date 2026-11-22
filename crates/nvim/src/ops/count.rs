@@ -140,7 +140,7 @@ pub fn cursor_pos_info(dict: Option<&mut Dict>) {
     let mut counts = PosCounts::default();
     let mut bom_count: VarNumber = 0;
 
-    if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if Buf::current().ml_flags().has(MlFlags::EMPTY) {
         if dict.is_none() {
             msg(gettext(NO_LINES_MSG), 0);
             return;
@@ -280,8 +280,8 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
     }
 
     // The last line has no EOL, so it was counted one byte too long.
-    if Buf::current().b_p_eol == 0
-        && (Buf::current().b_p_bin != 0 || Buf::current().b_p_fixeol == 0)
+    if Buf::current().b_p_eol() == 0
+        && (Buf::current().b_p_bin() != 0 || Buf::current().b_p_fixeol() == 0)
     {
         counts.bytes -= VarNumber::from(eol_size);
     }
@@ -338,8 +338,8 @@ fn count_selected_line(
     counts.bytes_cursor += taken;
     // The last line has no EOL, and the selection reaches its end.
     if lnum == Buf::current().line_count()
-        && Buf::current().b_p_eol == 0
-        && (Buf::current().b_p_bin != 0 || Buf::current().b_p_fixeol == 0)
+        && Buf::current().b_p_eol() == 0
+        && (Buf::current().b_p_bin() != 0 || Buf::current().b_p_fixeol() == 0)
         && c_int::try_from(tail).unwrap_or(c_int::MAX) < len
     {
         counts.bytes_cursor -= VarNumber::from(eol_size);

@@ -117,14 +117,14 @@ pub(crate) fn readfile_named(
     let msg_save = MSG_SCROLL.get();
 
     // Reset before triggering any autocommands.
-    Buf::current().b_au_did_filetype = false;
+    Buf::current().set_b_au_did_filetype(false);
     // In case it was set by the previous read.
-    Buf::current().b_no_eol_lnum = LineNr::ZERO;
+    Buf::current().set_b_no_eol_lnum(LineNr::ZERO);
 
     // If there is no file name yet, use the one for the read file, and set
     // BufFlags::NOTEDITED to reflect that. Not for a read from a filter,
     // and only when 'cpoptions' contains the 'f' flag.
-    if Buf::current().name.full().is_none()
+    if Buf::current().read().name.full().is_none()
         && !how.filtering
         && fname.is_some()
         && cpo_has(CpoFlag::FNAMER)
@@ -162,7 +162,7 @@ pub(crate) fn readfile_named(
 
     // Autocommands may have added lines, so check whether the buffer is
     // empty now.
-    let wasempty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
+    let wasempty = Buf::current().ml_flags().has(MlFlags::EMPTY);
 
     if !RECOVERYMODE.get() && !how.filtering && !how.dummy && !silent && !how.stdin && !how.buffer {
         Buf::current().file_message(sfname, c"");
@@ -182,7 +182,7 @@ pub(crate) fn readfile_named(
             if !how.dummy {
                 Buf::current().file_message(sfname, gettext(E_INTERR));
                 if how.newfile {
-                    Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
+                    Buf::current().edit().b_p_ro = c_int::from(true); // must use "w!" now
                 }
             }
             MSG_SCROLL.set(msg_save);
@@ -206,7 +206,7 @@ pub(crate) fn readfile_named(
     // 'binary' is off, to support turning 'fixeol' off or writing the same
     // text again with 'binary' on. The latter is needed for
     // ":autocmd FileReadPost *.gz set bin|'[,']!gunzip" to work.
-    Buf::current().b_no_eol_lnum = read_no_eol_lnum;
+    Buf::current().set_b_no_eol_lnum(read_no_eol_lnum);
 
     // When reloading a buffer put the cursor on the first line that differs.
     if how.keep_undo {
@@ -326,15 +326,15 @@ fn settle_lines(
     filesize: FileOffset,
 ) -> i32 {
     // The last line, which came from the empty buffer, has to go.
-    if how.newfile && wasempty && !Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        let _ = ml_delete(Buf::current().b_ml.ml_line_count);
+    if how.newfile && wasempty && !Buf::current().ml_flags().has(MlFlags::EMPTY) {
+        let _ = ml_delete(Buf::current().line_count());
         linecnt -= 1;
     }
-    Buf::current().deleted_bytes = 0;
-    Buf::current().deleted_bytes2 = 0;
-    Buf::current().deleted_codepoints = 0;
-    Buf::current().deleted_codeunits = 0;
-    linecnt = (Buf::current().b_ml.ml_line_count - linecnt).get();
+    Buf::current().set_deleted_bytes(0);
+    Buf::current().set_deleted_bytes2(0);
+    Buf::current().set_deleted_codepoints(0);
+    Buf::current().set_deleted_codeunits(0);
+    linecnt = (Buf::current().line_count() - linecnt).get();
     if filesize == 0 {
         linecnt = 0;
     }

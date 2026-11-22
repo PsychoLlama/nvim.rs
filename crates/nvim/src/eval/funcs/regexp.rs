@@ -364,7 +364,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         }
         return;
     };
-    if buf.b_ml.ml_mfp.is_none() {
+    if buf.ml().ml_mfp.is_none() {
         emsg(gettext(E_BUFFER_IS_NOT_LOADED));
         return;
     }
@@ -390,7 +390,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         semsg!("E475: Invalid value for argument {arg0}");
         return;
     }
-    elnum = elnum.min(buf.b_ml.ml_line_count);
+    elnum = elnum.min(buf.line_count());
 
     let Ok(submatches) = want_submatches(args, 4) else {
         return;

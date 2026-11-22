@@ -164,7 +164,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     }
     // A tab that 'expandtab' or 'smarttab' would turn into spaces is
     // easier to get right by replaying the whole thing as `R<Tab><Esc>`.
-    if !literal && cmd_arg.nchar == Key::TAB && (Buf::current().b_p_et != 0 || p_sta()) {
+    if !literal && cmd_arg.nchar == Key::TAB && (Buf::current().b_p_et() != 0 || p_sta()) {
         stuff_readbuf_number(cmd_arg.count1);
         stuff_readbuf_char(Key::ascii(b'R'));
         stuff_readbuf_char(Key::ascii(b'\t'));
@@ -193,7 +193,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
         if literal { Key::CTRL_V } else { Key::NUL },
         Key::NUL,
     );
-    Buf::current().b_op_start = Win::current().w_cursor;
+    Buf::current().set_b_op_start(Win::current().w_cursor);
     let old_state = STATE.get();
     if cmd_arg.nchar_len > 0 {
         append_to_redobuff(cstr::until_nul(&cmd_arg.nchar_composing));
@@ -226,7 +226,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     }
     Win::current().w_cursor.col -= 1;
     mb_adjust_cursor();
-    Buf::current().b_op_end = Win::current().w_cursor;
+    Buf::current().set_b_op_end(Win::current().w_cursor);
     Win::current().w_set_curswant = true;
     set_last_insert(cmd_arg.nchar);
     fold_update_after_insert();
@@ -246,7 +246,7 @@ pub(crate) fn nv_replace_mode(cmd_arg: &mut CmdArg) {
     if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
-    if Buf::current().b_p_ma == 0 {
+    if Buf::current().b_p_ma() == 0 {
         emsg(gettext(E_MODIFIABLE));
         return;
     }
@@ -272,7 +272,7 @@ pub(crate) fn nv_vreplace(cmd_arg: &mut CmdArg) {
     if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
-    if Buf::current().b_p_ma == 0 {
+    if Buf::current().b_p_ma() == 0 {
         emsg(gettext(E_MODIFIABLE));
         return;
     }
@@ -320,7 +320,7 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
         did_change |= swapchar(cmd_arg.op().op_type, Win::current().w_cursor);
         inc_cursor();
         if gchar_cursor() == Codepoint::NUL {
-            if !(wraps && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count) {
+            if !(wraps && Win::current().w_cursor.lnum < Buf::current().line_count()) {
                 break;
             }
             Win::current().w_cursor.lnum += 1;
@@ -341,10 +341,10 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
         let (from, col) = (startpos.lnum, startpos.col);
         let to = Win::current().w_cursor.lnum + 1;
         changed_lines(Buf::current(), from, col, to, 0, true);
-        Buf::current().b_op_start = startpos;
-        Buf::current().b_op_end = Win::current().w_cursor;
-        if Buf::current().b_op_end.col > ColNr::ZERO {
-            Buf::current().b_op_end.col -= 1;
+        Buf::current().set_b_op_start(startpos);
+        Buf::current().set_b_op_end(Win::current().w_cursor);
+        if Buf::current().b_op_end().col > ColNr::ZERO {
+            Buf::current().edit().b_op_end.col -= 1;
         }
     }
 }
@@ -429,7 +429,7 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
         win.has_folding(lnum, None, Some(&mut edge));
     }
     win.w_cursor.lnum = edge;
-    Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
+    Buf::current().set_b_last_changedtick_i(buf_get_changedtick(Buf::current()));
     let undo_first = win.w_cursor.lnum - i32::from(opening_above);
     let undo_last = win.w_cursor.lnum + i32::from(!opening_above);
     let dir = if opening_above {
@@ -499,7 +499,7 @@ pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
         return;
     }
     // A terminal buffer is not 'modifiable' and is still editable.
-    if Buf::current().b_p_ma == 0 && Buf::current().terminal.is_null() {
+    if Buf::current().b_p_ma() == 0 && Buf::current().terminal().is_null() {
         emsg(gettext(E_MODIFIABLE));
         clear_op(cmd_arg.op());
         return;
@@ -552,7 +552,7 @@ pub(crate) fn invoke_edit(cmd_arg: &mut CmdArg, repl: bool, cmd: Key, startln: b
     RESTART_EDIT.set(Key::NUL);
     // `o` and `O` already recorded the tick before opening the line.
     if !cmd_arg.cmdchar.is('O') && !cmd_arg.cmdchar.is('o') {
-        Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
+        Buf::current().set_b_last_changedtick_i(buf_get_changedtick(Buf::current()));
     }
     if edit(cmd, startln, cmd_arg.count1) == Ok(true) {
         cmd_arg.outcome |= Outcome::COMMAND_BUSY;
@@ -574,15 +574,14 @@ pub(crate) fn nv_join(cmd_arg: &mut CmdArg) {
     // Joining fewer than two lines means nothing; `J` and `1J` both join
     // this line with the next.
     cmd_arg.count0 = cmd_arg.count0.max(2);
-    if Win::current().w_cursor.lnum + cmd_arg.count0 - 1 > Buf::current().b_ml.ml_line_count {
+    if Win::current().w_cursor.lnum + cmd_arg.count0 - 1 > Buf::current().line_count() {
         // A count that runs off the end joins what is left -- unless there
         // was no count, in which case there is nothing below to join to.
         if cmd_arg.count0 <= 2 {
             clear_op_beep(cmd_arg.op());
             return;
         }
-        cmd_arg.count0 =
-            (Buf::current().b_ml.ml_line_count - Win::current().w_cursor.lnum + 1) as c_int;
+        cmd_arg.count0 = (Buf::current().line_count() - Win::current().w_cursor.lnum + 1) as c_int;
     }
     prep_redo(
         RegName::from_byte((cmd_arg.op().regname).byte()),
@@ -627,8 +626,8 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     if buf_is_prompt(current_buf()) && !prompt_curpos_editable() {
         // On the prompt's own line, put in front of the prompt text
         // rather than refusing.
-        if win.w_cursor.lnum == Buf::current().b_prompt_start.mark.lnum {
-            win.w_cursor.col = Buf::current().b_prompt_start.mark.col;
+        if win.w_cursor.lnum == Buf::current().read().b_prompt_start.mark.lnum {
+            win.w_cursor.col = Buf::current().read().b_prompt_start.mark.col;
             cmd_arg.cmdchar = Key::ascii(b'P');
         } else {
             clear_op_beep(cmd_arg.op());
@@ -698,7 +697,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
             do_pending_operator(cmd_arg, 0, false);
             // The delete may have left the buffer with one empty line
             // that the put should not keep.
-            emptied = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
+            emptied = Buf::current().ml_flags().has(MlFlags::EMPTY);
             drop(silenced);
             cmd_arg.op().regname = regname;
         }
@@ -713,8 +712,8 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         // Put where the selection was, which is where the delete left the
         // cursor -- forwards only when it left it before the start.
         dir = BACKWARD;
-        if (!visual_mode().is_line() && win.w_cursor.col < Buf::current().b_op_start.col)
-            || (visual_mode().is_line() && win.w_cursor.lnum < Buf::current().b_op_start.lnum)
+        if (!visual_mode().is_line() && win.w_cursor.col < Buf::current().b_op_start().col)
+            || (visual_mode().is_line() && win.w_cursor.lnum < Buf::current().b_op_start().lnum)
         {
             dir = FORWARD;
         }
@@ -733,21 +732,23 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
             win.w_onebuf_opt.wo_fen = 1;
         }
         // Leave `gv` naming what was just put.
-        Buf::current().b_visual.vi_start = Buf::current().b_op_start;
-        Buf::current().b_visual.vi_end = Buf::current().b_op_end;
+        let value = Buf::current().b_op_start();
+        Buf::current().edit().b_visual.vi_start = value;
+        let value = Buf::current().b_op_end();
+        Buf::current().edit().b_visual.vi_end = value;
         if P_SEL.first_byte() == b'e' {
             // A copy: `inc` reads the buffer the field is in.
-            let mut end = Buf::current().b_visual.vi_end;
+            let mut end = Buf::current().b_visual().vi_end;
             inc(&mut end);
-            Buf::current().b_visual.vi_end = end;
+            Buf::current().edit().b_visual.vi_end = end;
         }
     }
-    let last = Buf::current().b_ml.ml_line_count;
+    let last = Buf::current().line_count();
     if emptied && Buf::current().lines().line(last).is_empty() {
-        let _ = ml_delete_flags(Buf::current().b_ml.ml_line_count, ML_DEL_MESSAGE);
-        deleted_lines(Buf::current().b_ml.ml_line_count + 1, 1);
-        if win.w_cursor.lnum > Buf::current().b_ml.ml_line_count {
-            win.w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+        let _ = ml_delete_flags(Buf::current().line_count(), ML_DEL_MESSAGE);
+        deleted_lines(Buf::current().line_count() + 1, 1);
+        if win.w_cursor.lnum > Buf::current().line_count() {
+            win.w_cursor.lnum = Buf::current().line_count();
             coladvance(win, ColNr::MAX);
         }
     }
@@ -765,7 +766,7 @@ pub(crate) fn nv_open(cmd_arg: &mut CmdArg) {
     } else if visual_active() {
         v_swap_corners(cmd_arg.cmdchar);
     } else if buf_is_prompt(current_buf())
-        && Win::current().w_cursor.lnum < Buf::current().b_prompt_start.mark.lnum
+        && Win::current().w_cursor.lnum < Buf::current().read().b_prompt_start.mark.lnum
     {
         clear_op_beep(cmd_arg.op());
     } else {

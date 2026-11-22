@@ -159,9 +159,9 @@ fn measure_join(
         let mut spaces = 0;
 
         if t == 0 && setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
-            let mut buf = Win::current().buffer();
-            buf.b_op_start.lnum = Win::current().w_cursor.lnum;
-            buf.b_op_start.col = ColNr::from_index(line.len());
+            let buf = Win::current().buffer();
+            buf.edit().b_op_start.lnum = Win::current().w_cursor.lnum;
+            buf.edit().b_op_start.col = ColNr::from_index(line.len());
         }
 
         if plan.remove_comments {
@@ -294,9 +294,9 @@ fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
     let _ = ml_replace_owned(Win::current().w_cursor.lnum, XString::from_vec(joined));
 
     if setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        let mut buf = Win::current().buffer();
-        buf.b_op_end.lnum = Win::current().w_cursor.lnum;
-        buf.b_op_end.col = ColNr::new(plan.sumsize);
+        let buf = Win::current().buffer();
+        buf.edit().b_op_end.lnum = Win::current().w_cursor.lnum;
+        buf.edit().b_op_end.col = ColNr::new(plan.sumsize);
     }
 
     // Only the first line's change is reported here; `del_lines` reports
@@ -322,7 +322,7 @@ fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
     del_lines(len_as_int(count) - 1, false);
     Win::current().w_cursor.lnum = joined_lnum;
     drop(splice);
-    Buf::current().deleted_bytes2 = 0;
+    Buf::current().set_deleted_bytes2(0);
 
     // 'cpoptions' `q`: Vi puts the cursor at the column of the *first*
     // join, Vim at the column of the last.

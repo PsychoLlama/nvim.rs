@@ -116,7 +116,7 @@ pub(crate) fn put_view(
     // Folds, when 'buftype' is empty and for help files.
     let buf = window.buffer();
     if opts.has(OPT_SSOP_FLAG_FOLDS)
-        && !buf.name.full().is_none()
+        && !buf.read().name.full().is_none()
         && (buf_is_normal(Some(buf)) || buf_is_help(Some(buf)))
     {
         put_folds(out, window).map_err(|_| IoFailed)?;
@@ -150,8 +150,8 @@ fn put_edit(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Result<boo
     if buf_is_help(window.buffer_or_none()) {
         return put_help_edit(out, window).map(|()| true);
     }
-    if !buffer.name.full().is_none()
-        && (!buf_is_nofilename(window.buffer_or_none()) || !buffer.terminal.is_null())
+    if !buffer.read().name.full().is_none()
+        && (!buf_is_nofilename(window.buffer_or_none()) || !buffer.terminal().is_null())
     {
         // Editing a file. This may have side effects -- a compressed or
         // network file -- and if a buffer for it already exists we
@@ -171,7 +171,7 @@ fn put_edit(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Result<boo
     // No file in this buffer: make it empty. It may still have a name that
     // is not a file name.
     out.line(c"enew")?;
-    if !buffer.name.full().is_none() {
+    if !buffer.read().name.full().is_none() {
         out.puts(c"file ")?;
         out.put_bytes(&fname_esc)?;
         out.eol()?;
@@ -203,7 +203,9 @@ fn put_help_edit(out: &mut SessionFile, window: Win) -> Written {
 fn put_alternate(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Written {
     let alt = find_buf(window.w_alt_fnum);
     let restorable = alt.is_some_and(|b| {
-        !b.name.is_unnamed() && b.name.shown().is_some_and(|name| !name.is_empty()) && b.b_p_bl != 0
+        !b.read().name.is_unnamed()
+            && b.read().name.shown().is_some_and(|name| !name.is_empty())
+            && b.b_p_bl() != 0
     });
     let wanted = opts.is_session()
         && restorable

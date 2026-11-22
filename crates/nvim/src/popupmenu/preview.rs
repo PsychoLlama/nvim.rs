@@ -50,8 +50,8 @@ fn pum_selected_info() -> Option<XString> {
 /// which is what the caller sizes the window with. A trailing empty line is
 /// dropped; empty lines anywhere else are kept.
 fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
-    let mut buf = win.buffer();
-    buf.b_p_ma = 1;
+    let buf = win.buffer();
+    buf.set_b_p_ma(1);
 
     let mut lines: Vec<Object> = Vec::new();
     let mut max_width = 0;
@@ -83,7 +83,7 @@ fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
         emsg(err.message_or_empty());
         err.clear();
     }
-    buf.b_p_ma = 0;
+    buf.set_b_p_ma(0);
 
     (lnum, max_width)
 }
@@ -126,7 +126,7 @@ fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
     }
 
     window.w_config.anchor = 0; // NW: align its top with the menu's top
-    let count = window.w_buffer.b_ml.ml_line_count;
+    let count = window.w_buffer.line_count();
     window.w_view_width = window.w_config.width;
     window.w_config.height = plines_m_win(window, window.w_topline, count, ROWS.get());
     window.w_config.row = f64::from(PUM_ROW.get());
@@ -267,10 +267,10 @@ fn pum_show_info(info: &[u8], repeat: c_int, use_float: bool, prev_selected: c_i
     if Win::current().w_onebuf_opt.wo_pvw != 0 || Win::current().w_float_is_info {
         let mut res = Ok(());
         if !resized
-            && Buf::current().b_nwindows == 1
-            && Buf::current().name.is_unnamed()
+            && Buf::current().b_nwindows() == 1
+            && Buf::current().read().name.is_unnamed()
             && buf_is_nofile(current_buf())
-            && Buf::current().b_p_bh.first_byte() == b'w'
+            && Buf::current().read().b_p_bh.first_byte() == b'w'
         {
             // Already a "wipeout" buffer: just empty it.
             buf_clear();
@@ -327,12 +327,12 @@ fn pum_fill_info(
         }
     }
 
-    Buf::current().b_changed = 0;
-    Buf::current().b_p_ma = 0;
+    Buf::current().set_b_changed(0);
+    Buf::current().set_b_p_ma(0);
     if PUM_SELECTED.get() != prev_selected {
         Win::current().w_topline = LineNr::ONE;
-    } else if Win::current().w_topline > Buf::current().b_ml.ml_line_count {
-        Win::current().w_topline = Buf::current().b_ml.ml_line_count;
+    } else if Win::current().w_topline > Buf::current().line_count() {
+        Win::current().w_topline = Buf::current().line_count();
     }
     Win::current().w_cursor.lnum = LineNr::ONE;
     Win::current().w_cursor.col = ColNr::ZERO;

@@ -290,7 +290,7 @@ pub fn check_colorcolumn(cc: Option<&CStr>, window: Option<Win>) -> Result<(), O
         (None, Some(w)) => w.w_onebuf_opt.wo_cc.bytes(),
         (None, None) => b"",
     };
-    let tw = window.map_or(0 as OptInt, |w| w.buffer().b_p_tw);
+    let tw = window.map_or(0 as OptInt, |w| w.buffer().b_p_tw());
     let cols = parse_colorcolumn(text, tw)?;
 
     let Some(mut win) = window else {

@@ -327,7 +327,7 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
         }
         // A language-mapped argument is read *with* mappings on, which is
         // the whole point of 'iminsert' being lmap.
-        let langmap_active = lang && Buf::current().b_p_iminsert == B_IMODE_LMAP;
+        let langmap_active = lang && Buf::current().b_p_iminsert() == B_IMODE_LMAP;
         let mapped = langmap_active.then(Allow::mapping_with_codes);
         if langmap_active {
             STATE.set(if repl { MODE_LREPLACE } else { MODE_LANGMAP });

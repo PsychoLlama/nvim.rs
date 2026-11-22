@@ -381,7 +381,7 @@ fn regsub_buffer(
             matches,
             buf,
             firstlnum: lnum,
-            maxline: LineNr::new(buf.b_ml.ml_line_count - lnum),
+            maxline: LineNr::new(buf.line_count() - lnum),
         },
         line_lbr: false,
     };

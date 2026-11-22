@@ -209,7 +209,8 @@ impl Write for SessionFile {
 /// the session is sourced is known -- so not for a view, not under 'acd',
 /// and not once a `:lcd` has been written.
 fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> Option<XString> {
-    let short = buffer.name.short();
+    let held = buffer.read();
+    let short = held.name.short();
     let name = if short.is_some()
         && opts.is_session()
         && opts.has(OPT_SSOP_FLAG_CURDIR | OPT_SSOP_FLAG_SESDIR)
@@ -218,7 +219,7 @@ fn ses_get_fname(buffer: Buf, opts: SessionOpts) -> Option<XString> {
     {
         short
     } else {
-        buffer.name.full()
+        held.name.full()
     };
     name.map(XString::from_cstr)
 }
@@ -284,9 +285,9 @@ pub(crate) fn ses_do_win(win: Win) -> bool {
         return false;
     }
     let buf = win.buffer();
-    if buf.name.is_unnamed()
+    if buf.read().name.is_unnamed()
         // The contents of a "nofile" buffer cannot be restored.
-        || (buf.terminal.is_null() && buf_is_nofilename(Some(buf)))
+        || (buf.terminal().is_null() && buf_is_nofilename(Some(buf)))
     {
         return SSOP_FLAGS.get() & OPT_SSOP_FLAG_BLANK != 0;
     }
@@ -352,7 +353,7 @@ fn load_view(c: u8) -> Result<(), ViewError> {
 /// depends on it. The answer keeps those bytes; its C string stops at the
 /// NUL.
 fn get_view_file(c: u8) -> Result<XString, ViewError> {
-    let Some(full) = Buf::current().name.full().map(XString::from_cstr) else {
+    let Some(full) = Buf::current().read().name.full().map(XString::from_cstr) else {
         return Err(ViewError::NoFileName);
     };
     let sname = home_to_tilde(None, full.as_cstr(), full.len() + 3, true);

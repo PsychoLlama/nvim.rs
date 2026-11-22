@@ -102,7 +102,7 @@ impl MemFile {
 
 /// A copy of `buffer`'s swap file name, or `None` when it has none.
 pub(crate) fn buf_swap_name(buffer: Buf) -> Option<CString> {
-    buffer.b_ml.ml_mfp.as_ref()?.fname().map(CStr::to_owned)
+    buffer.ml().ml_mfp.as_ref()?.fname().map(CStr::to_owned)
 }
 
 /// `PERROR`: an error message with the failing call's `strerror(errno)`
@@ -116,7 +116,7 @@ impl Buf {
     /// Whether the buffer has a memfile with a swap file name. Allocates
     /// nothing, so the out-of-memory exit may ask.
     pub(crate) fn has_swap_file(self) -> bool {
-        self.b_ml
+        self.ml()
             .ml_mfp
             .as_ref()
             .is_some_and(|memfile| memfile.fname.is_some())
@@ -124,20 +124,20 @@ impl Buf {
 
     /// Make the swap file's name absolute, if the buffer has one: before a
     /// `:cd` makes the relative one mean something else.
-    pub(crate) fn make_swap_name_full(mut self) {
-        if let Some(memfile) = self.b_ml.ml_mfp.as_deref_mut() {
+    pub(crate) fn make_swap_name_full(self) {
+        if let Some(memfile) = self.ml().ml_mfp.as_deref_mut() {
             memfile.make_name_full();
         }
     }
 
     /// The memfile's dirty state, `None` when the buffer has no memfile.
     pub(crate) fn memfile_dirty(self) -> Option<MfDirty> {
-        self.b_ml.ml_mfp.as_ref().map(|memfile| memfile.mf_dirty)
+        self.ml().ml_mfp.as_ref().map(|memfile| memfile.mf_dirty)
     }
 
     /// Set the memfile's dirty state, when the buffer has a memfile.
-    pub(crate) fn set_memfile_dirty(mut self, state: MfDirty) {
-        if let Some(memfile) = self.b_ml.ml_mfp.as_deref_mut() {
+    pub(crate) fn set_memfile_dirty(self, state: MfDirty) {
+        if let Some(memfile) = self.ml().ml_mfp.as_deref_mut() {
             memfile.mf_dirty = state;
         }
     }
@@ -145,7 +145,7 @@ impl Buf {
     /// Whether the buffer has no swap file open: no memfile, or one with no
     /// file.
     pub(crate) fn swap_file_closed(self) -> bool {
-        self.b_ml
+        self.ml()
             .ml_mfp
             .as_ref()
             .is_none_or(|memfile| !memfile.has_file())
@@ -159,7 +159,8 @@ impl Buf {
     /// for a memfile with no file open included) reads as success, and still
     /// does.
     pub(crate) fn set_swap_file_group(self, gid: uv_gid_t) -> bool {
-        let Some(memfile) = self.b_ml.ml_mfp.as_ref() else {
+        let held = self.ml();
+        let Some(memfile) = held.ml_mfp.as_ref() else {
             return false;
         };
         let Some(file) = memfile.file.as_ref() else {

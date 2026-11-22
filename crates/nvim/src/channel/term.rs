@@ -31,7 +31,7 @@ fn with_job<R>(id: uint64_t, f: impl FnOnce(Pin<&mut JobProc>) -> R) -> Option<R
 }
 
 /// Gives `buffer` a terminal driven by pty job channel `id`.
-pub fn channel_terminal_alloc(mut buffer: Buf, id: uint64_t) {
+pub fn channel_terminal_alloc(buffer: Buf, id: uint64_t) {
     let Some((width, height)) = with_job(id, |job| {
         job.pty().map_or((0, 0), |pty| (pty.width, pty.height))
     }) else {
@@ -48,7 +48,7 @@ pub fn channel_terminal_alloc(mut buffer: Buf, id: uint64_t) {
         close_cb: Some(term_close),
         force_crlf: false,
     };
-    buffer.b_p_channel = id.cast_signed();
+    buffer.set_b_p_channel(id.cast_signed());
     // The terminal's own reference, dropped by `term_delayed_free`.
     let Some(held) = ChannelRef::new(id) else {
         return;

@@ -158,7 +158,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
         // Below every block: the two buffers' tails line up by counting
         // back from the end.
         None => {
-            towin.w_topline = tobuf.b_ml.ml_line_count - (frombuf.b_ml.ml_line_count - lnum);
+            towin.w_topline = tobuf.line_count() - (frombuf.line_count() - lnum);
         }
         Some(dp) => {
             let toidx = tp.diff_index(tobuf);
@@ -186,8 +186,8 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
     }
 
     towin.w_botfill = false;
-    if towin.w_topline > tobuf.b_ml.ml_line_count {
-        towin.w_topline = tobuf.b_ml.ml_line_count;
+    if towin.w_topline > tobuf.line_count() {
+        towin.w_topline = tobuf.line_count();
         towin.w_botfill = true;
     }
     if towin.w_topline < LineNr::ONE {
@@ -244,7 +244,7 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     }
 
     drop(tpr);
-    lnum = lnum.min(Buf::current().b_ml.ml_line_count);
+    lnum = lnum.min(Buf::current().line_count());
     if lnum == Win::current().w_cursor.lnum {
         return Err(Failed);
     }
@@ -303,7 +303,7 @@ fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
 pub fn diff_get_corresponding_line(buf1: Buf, lnum1: LineNr) -> LineNr {
-    diff_get_corresponding_line_int(buf1, lnum1).min(Buf::current().b_ml.ml_line_count)
+    diff_get_corresponding_line_int(buf1, lnum1).min(Buf::current().line_count())
 }
 
 /// The line of `window`'s buffer matching `lnum` of the current one.
@@ -327,7 +327,7 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     let buf = window.buffer();
     let tpr = tp.read();
     let Some(dp) = tpr.tp_diff.iter().find(|dp| lnum <= dp.end(idx)) else {
-        return buf.b_ml.ml_line_count - (Buf::current().b_ml.ml_line_count - lnum);
+        return buf.line_count() - (Buf::current().line_count() - lnum);
     };
     let i = tp.diff_index(buf);
     if i == DB_COUNT {

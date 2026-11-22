@@ -482,14 +482,14 @@ pub fn find_shada_parameter(type_0: c_int) -> Option<usize> {
 
 /// Read the current buffer's marks, the first time it is looked at.
 pub fn check_marks_read() {
-    let mut buf = Buf::current();
-    if !buf.b_marks_read
+    let buf = Buf::current();
+    if !buf.b_marks_read()
         && get_shada_parameter(c_int::from(b'\'')).is_some_and(|n| n > 0)
-        && buf.name.full().is_some()
+        && buf.read().name.full().is_some()
     {
         shada_read_marks();
     }
     // Set unconditionally: it is what stops this running again after
     // `'shada'` gains its `'` parameter with the buffer already open.
-    buf.b_marks_read = true;
+    buf.set_b_marks_read(true);
 }

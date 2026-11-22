@@ -71,7 +71,7 @@ pub fn findpar(dir: c_int, mut count: c_int, what: u8, both: bool) -> Option<boo
                 curr -= dir;
             }
             curr += dir;
-            if curr < LineNr::ONE || curr > Buf::current().b_ml.ml_line_count {
+            if curr < LineNr::ONE || curr > Buf::current().line_count() {
                 if count != 0 {
                     return None;
                 }
@@ -88,7 +88,7 @@ pub fn findpar(dir: c_int, mut count: c_int, what: u8, both: bool) -> Option<boo
     }
     Win::current().w_cursor.lnum = curr;
     let mut inclusive = false;
-    if curr == Buf::current().b_ml.ml_line_count && what != b'}' && dir == FORWARD as c_int {
+    if curr == Buf::current().line_count() && what != b'}' && dir == FORWARD as c_int {
         // Put the cursor on the last character of the last line and make
         // the motion inclusive.
         let mut lines = Lines::current();
@@ -174,7 +174,7 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> Res
         if dir == BACKWARD as c_int {
             1
         } else {
-            Buf::current().b_ml.ml_line_count.get()
+            Buf::current().line_count().get()
         }
     };
     let mut i = count;
@@ -256,7 +256,7 @@ pub(crate) fn current_par(
 
     // Past the end of any white lines.
     let mut end_lnum = start_lnum;
-    while end_lnum <= Buf::current().b_ml.ml_line_count && line_is_white(end_lnum) {
+    while end_lnum <= Buf::current().line_count() && line_is_white(end_lnum) {
         end_lnum += 1;
     }
     end_lnum -= 1;
@@ -274,7 +274,7 @@ pub(crate) fn current_par(
         if this == 0 {
             break;
         }
-        if end_lnum == Buf::current().b_ml.ml_line_count {
+        if end_lnum == Buf::current().line_count() {
             return Err(NoObject);
         }
         if !include {
@@ -283,7 +283,7 @@ pub(crate) fn current_par(
         if include || !do_white {
             end_lnum += 1;
             // On to the end of the paragraph.
-            while end_lnum < Buf::current().b_ml.ml_line_count
+            while end_lnum < Buf::current().line_count()
                 && !line_is_white(end_lnum + 1)
                 && !line_starts_para(end_lnum + 1, 0, false)
             {
@@ -295,7 +295,7 @@ pub(crate) fn current_par(
         }
         // On to the end of the white lines after the paragraph.
         if include || do_white {
-            while end_lnum < Buf::current().b_ml.ml_line_count && line_is_white(end_lnum + 1) {
+            while end_lnum < Buf::current().line_count() && line_is_white(end_lnum + 1) {
                 end_lnum += 1;
             }
         }

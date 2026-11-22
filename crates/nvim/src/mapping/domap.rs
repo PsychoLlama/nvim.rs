@@ -346,7 +346,7 @@ impl<'a> MapRequest<'a> {
             if matched && lhs.first() == Some(&CTRL_C) {
                 // CTRL-C has been unmapped, reuse it for Interrupting.
                 match self.table {
-                    MapTable::Buffer(mut buf) => buf.b_mapped_ctrl_c &= !self.mode,
+                    MapTable::Buffer(buf) => buf.edit().b_mapped_ctrl_c &= !self.mode,
                     MapTable::Global => MAPPED_CTRL_C.set(MAPPED_CTRL_C.get() & !self.mode),
                 }
             }

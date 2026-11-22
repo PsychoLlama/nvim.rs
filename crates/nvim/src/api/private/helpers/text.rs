@@ -71,7 +71,7 @@ pub(crate) fn normalize_index(
     oob: &mut bool,
 ) -> LineNr {
     // The callers have checked that `buffer` is loaded.
-    let line_count = buffer.b_ml.ml_line_count;
+    let line_count = buffer.line_count();
     debug_assert!(line_count > LineNr::ZERO);
     let max_index = int64_t::from(line_count + i32::from(end_exclusive) - 1);
     let mut index = if index < 0 {

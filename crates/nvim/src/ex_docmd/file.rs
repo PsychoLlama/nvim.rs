@@ -78,7 +78,7 @@ use crate::winlayer::{Buf, Win};
 /// that no longer exists.
 pub(crate) fn is_other_file(fnum: c_int, ffname: Option<&CStr>) -> bool {
     if fnum != 0 {
-        return fnum != Buf::current().handle.get();
+        return fnum != Buf::current().handle().get();
     }
     let Some(ffname) = ffname else {
         return true;
@@ -87,8 +87,8 @@ pub(crate) fn is_other_file(fnum: c_int, ffname: Option<&CStr>) -> bool {
     if ffname.is_empty() {
         return false;
     }
-    if !Buf::current().file_id_valid
-        && let Some(short) = Buf::current().name.short()
+    if !Buf::current().file_id_valid()
+        && let Some(short) = Buf::current().read().name.short()
         && !short.is_empty()
     {
         return path_fnamecmp(ffname.to_bytes(), short.to_bytes()) != 0;
@@ -329,7 +329,7 @@ impl ExArg<'_> {
                 // cleanup pair keeps an exception from the failed edit from
                 // being lost while the window is closed.
                 if old_curwin.is_some() {
-                    let need_hide = curbuf_is_changed() && Buf::current().b_nwindows <= 1;
+                    let need_hide = curbuf_is_changed() && Buf::current().b_nwindows() <= 1;
                     if !need_hide || buf_hide(Buf::current()) {
                         let mut cs = Cleanup {
                             pending: 0,
@@ -341,8 +341,8 @@ impl ExArg<'_> {
                         leave_cleanup(&mut cs);
                     }
                 }
-            } else if READONLYMODE.get() && Buf::current().b_nwindows == 1 {
-                Buf::current().b_p_ro = 1;
+            } else if READONLYMODE.get() && Buf::current().b_nwindows() == 1 {
+                Buf::current().set_b_p_ro(1);
             }
             READONLYMODE.set(saved_readonly);
         } else {
@@ -361,7 +361,7 @@ impl ExArg<'_> {
             && !old.w_buffer.is_current()
             && !cmdmod_has(CmdModFlags::KEEPALT)
         {
-            old.w_alt_fnum = Some(Buf::current().handle);
+            old.w_alt_fnum = Some(Buf::current().handle());
         }
         EX_NO_REPRINT.set(true);
     }
@@ -377,7 +377,7 @@ pub(crate) fn ex_swapname(_excmd: &mut ExArg) {
 
 /// `:read` — insert a file, or the output of a command.
 pub(crate) fn ex_read(excmd: &mut ExArg) {
-    let was_empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
+    let was_empty = Buf::current().ml_flags().has(MlFlags::EMPTY);
     if excmd.usefilter {
         do_bang(1, excmd, false, false, true);
         return;
@@ -392,8 +392,8 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         }
         // Copies: `readfile` takes the command as well, and the buffer's
         // own name is not borrowable across it.
-        let full = Buf::current().name.full().map(CStr::to_owned);
-        let shown = Buf::current().name.shown().map(CStr::to_owned);
+        let full = Buf::current().read().name.full().map(CStr::to_owned);
+        let shown = Buf::current().read().name.shown().map(CStr::to_owned);
         readfile_named(
             full.as_deref(),
             shown.as_deref(),
@@ -436,7 +436,7 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
     // buffer started with; drop it.
     if was_empty && EXMODE_ACTIVE.get() {
         let lnum = if excmd.line2 == LineNr::ZERO {
-            Buf::current().b_ml.ml_line_count
+            Buf::current().line_count()
         } else {
             LineNr::ONE
         };

@@ -43,7 +43,7 @@ use crate::search::{BACKWARD, FORWARD};
 /// that are really *motions* or never-adjusted positions have no store of
 /// their own and are computed; their `view` and `timestamp` are unset.
 pub fn mark_get(buffer: Buf, win: Win, flag: MarkGet, name: u8) -> Option<FileMark> {
-    let handle = buffer.handle;
+    let handle = buffer.handle();
     if name.is_ascii_uppercase() || name.is_ascii_digit() {
         let xfm = mark_get_global(flag as c_uint != MARK_ALL_NO_RESOLVE as c_uint, name);
         // A global mark that names another buffer is *not* this buffer's
@@ -113,7 +113,7 @@ pub fn mark_get_global(resolve: bool, name: u8) -> XFileMark {
 /// reported against `buffer`: a store's record has its `fnum` set to the
 /// buffer's in place, as upstream writes it through the pointer it answers.
 pub fn mark_get_local(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
-    let handle = buffer.handle;
+    let handle = buffer.handle();
     let store = LocalMark::named(name)
         .filter(|store| *store != LocalMark::PromptStart || buf_is_prompt(Some(buffer)));
     if let Some(store) = store {
@@ -123,9 +123,9 @@ pub fn mark_get_local(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
         }));
     }
     let mut mark = if name == b'[' {
-        pos_to_mark(buffer, buffer.b_op_start)
+        pos_to_mark(buffer, buffer.b_op_start())
     } else if name == b']' {
-        pos_to_mark(buffer, buffer.b_op_end)
+        pos_to_mark(buffer, buffer.b_op_end())
     } else if name == b'<' || name == b'>' {
         mark_get_visual(buffer, name)?
     } else if name == b'\'' || name == b'`' {
@@ -189,7 +189,7 @@ pub fn mark_get_visual(buffer: Buf, name: u8) -> Option<FileMark> {
     if name != b'<' && name != b'>' {
         return None;
     }
-    let (start, end) = (buffer.b_visual.vi_start, buffer.b_visual.vi_end);
+    let (start, end) = (buffer.b_visual().vi_start, buffer.b_visual().vi_end);
     // `'<` is whichever end comes FIRST, not whichever was set first: a
     // Visual selection made backwards still reports its marks in order.
     let wants_start = (name == b'<') == lt(start, end) || end.lnum == LineNr::ZERO;
@@ -199,7 +199,7 @@ pub fn mark_get_visual(buffer: Buf, name: u8) -> Option<FileMark> {
         end
     };
     let mut mark = pos_to_mark(buffer, at);
-    if buffer.b_visual.vi_mode == c_int::from(b'V') {
+    if buffer.b_visual().vi_mode == c_int::from(b'V') {
         // A linewise selection has no columns of its own; `'<` is the start
         // of the line and `'>` the end of it.
         mark.mark.col = if name == b'<' {
@@ -232,7 +232,8 @@ pub fn getnextmark(startpos: Pos, dir: c_int, begin_line: bool) -> Option<FileMa
     }
     let buf = Buf::current();
     let mut result: Option<&FileMark> = None;
-    for mark in &buf.b_namedm {
+    let held = buf.read();
+    for mark in &held.b_namedm {
         // `> 0` rather than `!= 0`: a negative line number is what a mangled
         // shada record leaves behind, and it is not a mark to jump to.
         if mark.mark.lnum <= LineNr::ZERO {
@@ -279,7 +280,7 @@ pub fn mark_move_to(fm: Option<&FileMark>, flags: MarkMove) -> MarkMoveRes {
     };
 
     let mut res: MarkMoveRes = MARK_MOVE_SUCCESS;
-    if fm.fnum() != Some(Buf::current().handle) {
+    if fm.fnum() != Some(Buf::current().handle()) {
         res |= switch_to_mark_buf(fm, flags as c_uint & MARK_JUMP_LIST as c_uint == 0);
         if res & MARK_MOVE_FAILED != 0 {
             return res;
@@ -324,7 +325,7 @@ pub fn mark_move_to(fm: Option<&FileMark>, flags: MarkMove) -> MarkMoveRes {
 /// `pcmark_on_switch` — leave a context mark when switching buffer.
 /// Returns whether the buffer was switched or not.
 fn switch_to_mark_buf(fm: &FileMark, pcmark_on_switch: bool) -> MarkMoveRes {
-    if fm.fnum() == Some(Buf::current().handle) {
+    if fm.fnum() == Some(Buf::current().handle()) {
         return 0;
     }
     let getfile_flag = if pcmark_on_switch { GETF_SETMARK } else { 0 };

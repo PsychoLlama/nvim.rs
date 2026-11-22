@@ -80,8 +80,9 @@ pub(crate) fn op_colon(op: &OpArg) {
         stuff_readbuf(get_equalprg().as_cstr().to_bytes());
         stuff_readbuf(b"\n");
     } else if op.op_type == OpType::Format {
-        if c_int::from(Buf::current().b_p_fp.first_byte()) != 0 {
-            stuff_readbuf(Buf::current().b_p_fp.cstr().to_bytes());
+        if c_int::from(Buf::current().read().b_p_fp.first_byte()) != 0 {
+            let arg = Buf::current().read().b_p_fp.cstr().to_bytes().to_vec();
+            stuff_readbuf(&arg);
         } else if P_FP.first_byte() != 0 {
             p_fp(|fp| stuff_readbuf(fp.to_bytes()));
         } else {
@@ -120,8 +121,8 @@ pub fn set_ref_in_opfunc(copy_id: c_int) -> bool {
 /// that `mode()` answers what the user sees rather than "an operator is
 /// pending". `:lockmarks` restores the marks afterwards.
 pub(crate) fn op_function(op: &OpArg) {
-    let orig_start: Pos = Buf::current().b_op_start;
-    let orig_end: Pos = Buf::current().b_op_end;
+    let orig_start: Pos = Buf::current().b_op_start();
+    let orig_end: Pos = Buf::current().b_op_end();
 
     if p_opfunc(CStr::is_empty) {
         emsg(gettext(c"E774: 'operatorfunc' is empty"));
@@ -129,11 +130,13 @@ pub(crate) fn op_function(op: &OpArg) {
     }
 
     // Set '[ and '] to the text to be operated on.
-    Buf::current().b_op_start = op.start;
-    Buf::current().b_op_end = op.end;
+    Buf::current().set_b_op_start(op.start);
+    Buf::current().set_b_op_end(op.end);
     if op.motion_type != MotionType::LineWise && !op.inclusive {
         // Exclude the end position.
-        decl(&mut Buf::current().b_op_end);
+        let mut end = Buf::current().b_op_end();
+        decl(&mut end);
+        Buf::current().set_b_op_end(end);
     }
 
     let kind = match op.motion_type {
@@ -163,7 +166,7 @@ pub(crate) fn op_function(op: &OpArg) {
     VIRTUAL_OP.set(save_virtual_op);
     FINISH_OP.set(save_finish_op);
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
-        Buf::current().b_op_start = orig_start;
-        Buf::current().b_op_end = orig_end;
+        Buf::current().set_b_op_start(orig_start);
+        Buf::current().set_b_op_end(orig_end);
     }
 }

@@ -25,6 +25,7 @@ use crate::fileio::{EOL_DOS, FileOffset, READ_NEW};
 use crate::getchar::{FLUSH_TYPEAHEAD, flush_buffers};
 use crate::memfile::{BlockNr, MIN_SWAP_PAGE_SIZE};
 use crate::path::EQUAL_FILES;
+use std::borrow::Cow;
 
 use crate::autocmd::has_autocmd;
 use crate::buffer::state::SWAP_EXISTS_ACTION;
@@ -248,39 +249,41 @@ static PROC_RUNNING: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 /// pointer block and one data block holding a single empty line.
 ///
 /// No swap file is created here; [`ml_open_file`] does that later.
-pub fn ml_open(mut buffer: Buf) -> Result<(), Failed> {
+pub fn ml_open(buffer: Buf) -> Result<(), Failed> {
     // No stack, no cached block, no cached line, no chunk table yet.
-    buffer.b_ml.stack_clear();
-    buffer.b_ml.ml_locked = None;
-    buffer.b_ml.clear_cache();
-    buffer.b_ml.ml_chunks.free();
+    buffer.ml().stack_clear();
+    buffer.ml().ml_locked = None;
+    buffer.ml().clear_cache();
+    buffer.ml().ml_chunks.free();
 
     if cmdmod_has(CmdModFlags::NOSWAPFILE) {
-        buffer.b_p_swf = 0;
+        buffer.set_b_p_swf(0);
     }
     // A swap file may still be opened later, when 'updatecount' is set.
-    buffer.b_may_swap = buffer.terminal.is_null() && p_uc() != 0 && buffer.b_p_swf != 0;
+    buffer.set_b_may_swap(buffer.terminal().is_null() && p_uc() != 0 && buffer.b_p_swf() != 0);
 
-    buffer.b_ml.ml_mfp = Some(MemFile::in_memory());
-    buffer.b_ml.ml_flags = MlFlags::EMPTY;
-    buffer.b_ml.ml_line_count = LineNr::ONE;
+    buffer.ml().ml_mfp = Some(MemFile::in_memory());
+    buffer.set_ml_flags(MlFlags::EMPTY);
+    buffer.set_line_count(LineNr::ONE);
     if ml_open_blocks(buffer).is_ok() {
         return Ok(());
     }
-    if let Some(memfile) = buffer.b_ml.ml_mfp.take() {
+    if let Some(memfile) = buffer.ml().ml_mfp.take() {
         memfile.close(true); // also frees the swap file's name
     }
     Err(Failed)
 }
 
 /// Fill in the three blocks a fresh memline starts with.
-fn ml_open_blocks(mut buffer: Buf) -> Result<(), Failed> {
+fn ml_open_blocks(buffer: Buf) -> Result<(), Failed> {
     // Block zero: the header that says what the rest of the file means.
-    let memfile = buffer.b_ml.memfile();
+    let mut held = buffer.ml();
+    let memfile = held.memfile();
     let id = memfile.new_block(false, 1);
     if memfile.block_nr(id) != 0 {
-        iemsg(gettext(c"E298: Didn't get block nr 0?"));
         memfile.put(id, false, false);
+        drop(held);
+        iemsg(gettext(c"E298: Didn't get block nr 0?"));
         return Err(Failed);
     }
     let page_size = ::core::ffi::c_long::from(memfile.mf_page_size);
@@ -294,18 +297,22 @@ fn ml_open_blocks(mut buffer: Buf) -> Result<(), Failed> {
     version[4..4 + name.len()].copy_from_slice(name);
     version[4 + name.len()] = 0;
     b0.set_page_size(page_size);
+    drop(held);
 
-    if !buffer.b_spell {
-        let changed = buffer.b_changed != 0;
+    if !buffer.b_spell() {
+        let changed = buffer.b_changed() != 0;
         let fileformat = get_fileformat(buffer) + 1;
-        let mut b0 = ZeroBlock(buffer.b_ml.page_mut(id));
+        let mut held = buffer.ml();
+        let mut b0 = ZeroBlock(held.page_mut(id));
         b0.set_dirty(changed);
         b0.set_flags(fileformat);
+        drop(held);
         set_b0_fname(buffer, id);
         let user = crate::os::users::username_within(B0_UNAME_SIZE as usize);
         let mut host = [0u8; B0_HNAME_SIZE as usize];
         crate::os::env::hostname_into(&mut host);
-        let mut b0 = ZeroBlock(buffer.b_ml.page_mut(id));
+        let mut held = buffer.ml();
+        let mut b0 = ZeroBlock(held.page_mut(id));
         let uname = b0.uname_mut();
         uname[..user.len()].copy_from_slice(&user);
         uname[user.len()] = 0;
@@ -322,14 +329,15 @@ fn ml_open_blocks(mut buffer: Buf) -> Result<(), Failed> {
     // out of the swap file. Not for a help or spell buffer. This only
     // does anything once there is a swap file; otherwise it happens when
     // one is created.
-    buffer.b_ml.put(id, true);
-    if !buffer.b_help && !buffer.b_spell {
+    buffer.ml().put(id, true);
+    if !buffer.b_help() && !buffer.b_spell() {
         // Best effort; there may not be a swap file yet.
-        let _ = buffer.b_ml.memfile().sync(0);
+        let _ = buffer.ml().memfile().sync(0);
     }
 
     // Block one: the root pointer block, pointing at the one data block.
-    let memfile = buffer.b_ml.memfile();
+    let mut held = buffer.ml();
+    let memfile = held.memfile();
     let id = ml_new_ptr(memfile);
     if memfile.block_nr(id) != 1 {
         iemsg(gettext(c"E298: Didn't get block nr 1?"));
@@ -356,13 +364,14 @@ fn ml_open_blocks(mut buffer: Buf) -> Result<(), Failed> {
     data.set_free(data.free() - 1 - INDEX_BYTES);
     data.set_line_count(1);
     data.write(start as usize, &[0]);
+    drop(held);
     Ok(())
 }
 
 /// Open a swap file for every buffer that could use one.
 pub fn ml_open_files() {
     for buf in buffers() {
-        if buf.b_p_ro == 0 || buf.b_changed != 0 {
+        if buf.b_p_ro() == 0 || buf.b_changed() != 0 {
             ml_open_file(buf);
         }
     }
@@ -372,26 +381,26 @@ pub fn ml_open_files() {
 ///
 /// If no usable file name can be found the memfile keeps no name and
 /// remains memory-only, with no recovery possible.
-pub fn ml_open_file(mut buffer: Buf) {
+pub fn ml_open_file(buffer: Buf) {
     if buffer
-        .b_ml
+        .ml()
         .ml_mfp
         .as_ref()
         .is_none_or(|memfile| memfile.has_file())
-        || buffer.b_p_swf == 0
+        || buffer.b_p_swf() == 0
         || cmdmod_has(CmdModFlags::NOSWAPFILE)
-        || !buffer.terminal.is_null()
+        || !buffer.terminal().is_null()
     {
         return; // nothing to do
     }
 
     // A spell buffer gets a temp file name.
-    if buffer.b_spell {
+    if buffer.b_spell() {
         if let Some(fname) = temp_name() {
             // A spell buffer keeps working without a swap file.
-            let _ = buffer.b_ml.memfile().open_file(fname.as_cstr().to_owned());
+            let _ = buffer.ml().memfile().open_file(fname.as_cstr().to_owned());
         }
-        buffer.b_may_swap = false;
+        buffer.set_b_may_swap(false);
         return;
     }
 
@@ -412,35 +421,42 @@ pub fn ml_open_file(mut buffer: Buf) {
             continue;
         };
         if buffer
-            .b_ml
+            .ml()
             .memfile()
             .open_file(fname.as_cstr().to_owned())
             .is_err()
         {
             continue;
         }
-        buffer.b_ml.memfile().mf_dirty = MfDirty::YesNoSync; // don't sync yet in ml_sync_all
+        buffer.ml().memfile().mf_dirty = MfDirty::YesNoSync; // don't sync yet in ml_sync_all
         ml_upd_block0(buffer, UB_SAME_DIR);
 
         // Flush block zero, so others can read it.
-        if buffer.b_ml.memfile().sync(MFS_ZERO).is_ok() {
+        if buffer.ml().memfile().sync(MFS_ZERO).is_ok() {
             // Mark every block that belongs in the swap file dirty, for
             // when 'swapfile' was reset (deleting the file) and set again.
-            buffer.b_ml.memfile().set_dirty();
+            buffer.ml().memfile().set_dirty();
             break;
         }
         // Writing block zero failed: close it and try another directory.
         mf_close_file(buffer, false);
     }
 
-    if P_DIR.first_byte() != 0 && buffer.b_ml.memfile().fname().is_none() {
+    if P_DIR.first_byte() != 0 && buffer.ml().memfile().fname().is_none() {
         NEED_WAIT_RETURN.set(true); // call wait_return() later
         let _no_prompt = Suppress::wait_return();
-        let arg0 = msg_cstr_opt(buf_spname(&buffer).or(buffer.name.shown()));
+        let name = buf_spname(&buffer).or_else(|| {
+            buffer
+                .read()
+                .name
+                .shown()
+                .map(|name| Cow::Owned(name.to_owned()))
+        });
+        let arg0 = msg_cstr_opt(name.as_deref());
         semsg!("E303: Unable to open swap file for \"{arg0}\", recovery impossible");
     }
 
-    buffer.b_may_swap = false; // don't try to open a swap file again
+    buffer.edit().b_may_swap = false; // don't try to open a swap file again
 }
 
 /// Create the swap file now, if one is still wanted and this is a writable
@@ -449,27 +465,27 @@ pub fn check_need_swap(newfile: bool) {
     // The swap dialog may prompt, and the user has to see it; E325 may
     // reset this again.
     let _loud = Allow::messages();
-    if Buf::current().b_may_swap && (Buf::current().b_p_ro == 0 || !newfile) {
+    if Buf::current().b_may_swap() && (Buf::current().b_p_ro() == 0 || !newfile) {
         ml_open_file(Buf::current());
     }
 }
 
 /// Close `buffer`'s memline, deleting the swap file if `del_file`.
-pub fn ml_close(mut buffer: Buf, del_file: ::core::ffi::c_int) {
-    let Some(memfile) = buffer.b_ml.ml_mfp.take() else {
+pub fn ml_close(buffer: Buf, del_file: ::core::ffi::c_int) {
+    let Some(memfile) = buffer.ml().ml_mfp.take() else {
         return; // not open
     };
     // Nothing is held any more: the memfile goes, and every block in it.
-    buffer.b_ml.ml_locked = None;
+    buffer.ml().ml_locked = None;
     memfile.close(del_file != 0); // closes the .swp file
     // The cached line, whatever it was: an owned one is dropped here.
-    buffer.b_ml.clear_cache();
-    buffer.b_ml.stack_free();
-    buffer.b_ml.ml_chunks.free();
+    buffer.ml().clear_cache();
+    buffer.ml().stack_free();
+    buffer.ml().ml_chunks.free();
 
     // Clear the "recovered" flag, so the ATTENTION prompt comes back the
     // next time this buffer is loaded.
-    buffer.b_flags.clear(BufFlags::RECOVERED);
+    buffer.edit().b_flags.clear(BufFlags::RECOVERED);
 }
 
 /// Close every memline and memfile. Only used when exiting.

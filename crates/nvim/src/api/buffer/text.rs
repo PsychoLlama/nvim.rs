@@ -164,7 +164,7 @@ impl Replacement {
     /// window's cursor where the text moved.
     fn apply(mut self) -> Result<(), Error> {
         let b = self.buffer;
-        if b.b_p_ma == 0 {
+        if b.b_p_ma() == 0 {
             return Err(Error::exception(c"Buffer is not 'modifiable'"));
         }
         let (start_row, end_row) = (self.start_row, self.end_row);

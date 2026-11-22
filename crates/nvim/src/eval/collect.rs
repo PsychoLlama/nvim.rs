@@ -140,16 +140,16 @@ pub fn garbage_collect(testing: bool) -> bool {
 
     for buf in buffers() {
         // buffer-local variables
-        abort = abort || mark_root(&buf.b_bufvar.di_tv, copy_id);
+        abort = abort || mark_root(&buf.read().b_bufvar.di_tv, copy_id);
         // buffer callback functions
         for cb in [
-            &buf.b_prompt_callback,
-            &buf.b_prompt_interrupt,
-            &buf.b_cfu_cb,
-            &buf.b_ofu_cb,
-            &buf.b_tsrfu_cb,
-            &buf.b_tfu_cb,
-            &buf.b_ffu_cb,
+            &buf.read().b_prompt_callback,
+            &buf.read().b_prompt_interrupt,
+            &buf.read().b_cfu_cb,
+            &buf.read().b_ofu_cb,
+            &buf.read().b_tsrfu_cb,
+            &buf.read().b_tfu_cb,
+            &buf.read().b_ffu_cb,
         ] {
             abort = abort || mark_cb(cb, copy_id);
         }

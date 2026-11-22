@@ -243,10 +243,11 @@ fn handle_signal(signum: c_int) {
         // The autocommand is named for the signal, which is exactly what
         // signal_name yields.
         libc::SIGUSR1 | libc::SIGWINCH => {
+            let arg = Buf::current().read().name.shown().map(XString::from_cstr);
             apply_autocmds(
                 AutoEvent::Signal,
                 Some(XString::from_cstr(signal_name(signum))),
-                Buf::current().name.shown().map(XString::from_cstr),
+                arg,
                 true,
                 Buf::current_or_none(),
             );

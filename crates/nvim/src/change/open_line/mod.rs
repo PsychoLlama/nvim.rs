@@ -89,7 +89,7 @@ fn white_run(text: &[u8]) -> usize {
 /// `b_prompt_start` stays where it is.
 fn move_prompt_down(text: &[u8]) -> Option<XString> {
     if !buf_is_prompt(current_buf())
-        || Win::current().w_cursor.lnum != Buf::current().b_prompt_start.mark.lnum
+        || Win::current().w_cursor.lnum != Buf::current().read().b_prompt_start.mark.lnum
     {
         return None;
     }
@@ -164,11 +164,11 @@ fn apply_new_indent(
         newindent += sw;
     }
 
-    if Buf::current().b_p_ci != 0 {
+    if Buf::current().b_p_ci() != 0 {
         copy_indent(newindent, saved_line);
         // Keep 'preserveindent' on so that later fiddling with the line
         // does not undo the copy; restored at the end of `open_line`.
-        Buf::current().b_p_pi = c_int::from(true);
+        Buf::current().set_b_p_pi(c_int::from(true));
     } else {
         set_indent(newindent, SIN_INSERT | SIN_NOMARK);
     }
@@ -295,12 +295,12 @@ fn reindent_new_line(has_leader: bool, do_cindent: bool) {
     if !p_paste() {
         if !has_leader
             && !use_indentexpr_for_lisp()
-            && Buf::current().b_p_lisp != 0
-            && Buf::current().b_p_ai != 0
+            && Buf::current().b_p_lisp() != 0
+            && Buf::current().b_p_ai() != 0
         {
             fixthisline(Indenter::Lisp);
             AI_COL.set(getwhitecols_curline());
-        } else if do_cindent || (Buf::current().b_p_ai != 0 && use_indentexpr_for_lisp()) {
+        } else if do_cindent || (Buf::current().b_p_ai() != 0 && use_indentexpr_for_lisp()) {
             do_c_expr_indent();
             AI_COL.set(getwhitecols_curline());
         }
@@ -330,7 +330,7 @@ pub fn open_line(
     second_line_indent: c_int,
     did_do_comment: Option<&mut bool>,
 ) -> Result<(), Failed> {
-    let saved_pi = Buf::current().b_p_pi;
+    let saved_pi = Buf::current().b_p_pi();
     let opening = Opening::cut(dir, flags, second_line_indent);
     let (newindent, no_si) = opening.guess_indent();
     let do_cindent = wants_cindent(dir, flags);
@@ -349,7 +349,7 @@ pub fn open_line(
 
     let old_cmod_flags = cmdmod_flags();
     let retval = opening.put_new_line(new_text, layout, has_leader, do_cindent);
-    Buf::current().b_p_pi = saved_pi;
+    Buf::current().set_b_p_pi(saved_pi);
     cmdmod_set_flags(old_cmod_flags);
     retval
 }
@@ -414,7 +414,8 @@ fn wants_cindent(dir: c_int, flags: c_int) -> bool {
     // The short circuits are upstream's: `in_cinkeys` reads 'cinkeys' and
     // the cursor line.
     !p_paste()
-        && (Buf::current().b_p_cin != 0 || c_int::from(Buf::current().b_p_inde.first_byte()) != 0)
+        && (Buf::current().b_p_cin() != 0
+            || c_int::from(Buf::current().read().b_p_inde.first_byte()) != 0)
         && in_cinkeys(key, b' ', linewhite(Win::current().w_cursor.lnum))
         && flags & OPENLINE_FORCE_INDENT == 0
 }
@@ -502,7 +503,7 @@ impl Opening {
         if self.flags & OPENLINE_FORCE_INDENT != 0 {
             return (self.second_line_indent, false);
         }
-        if Buf::current().b_p_ai == 0 && !self.do_si {
+        if Buf::current().b_p_ai() == 0 && !self.do_si {
             return (0, false);
         }
         let head = self.head();
@@ -542,7 +543,7 @@ impl Opening {
         let head = self.head();
         (lead.len, lead.flags) = get_leader_len(head, self.dir == BACKWARD, true);
         if lead.len == 0
-            && Buf::current().b_p_cin != 0
+            && Buf::current().b_p_cin() != 0
             && do_cindent
             && self.dir == FORWARD
             && (!has_format_option(FoFlag::NO_OPEN_COMS) || self.flags & OPENLINE_FORMAT != 0)
@@ -614,7 +615,7 @@ impl Opening {
         if replace_normal(STATE.get()) {
             replace_push_nul(); // end of the extra blanks
         }
-        if Buf::current().b_p_ai != 0 || self.flags & OPENLINE_DELSPACES != 0 {
+        if Buf::current().b_p_ai() != 0 || self.flags & OPENLINE_DELSPACES != 0 {
             while matches!(byte_at(saved_line, from), b' ' | b'\t')
                 && !utf_iscomposing_first(char_at(&saved_line[from + 1..]))
             {

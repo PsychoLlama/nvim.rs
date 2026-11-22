@@ -229,7 +229,7 @@ pub fn has_autocmd(event: AutoEvent, name: &::core::ffi::CStr, buffer: Option<Bu
         let matched = if buflocal_nr == 0 {
             match_file_pat(&mut prog, fname.as_cstr(), Some(name), tail, allow_dirs)
         } else {
-            buffer.is_some_and(|b| buflocal_nr == b.handle.get())
+            buffer.is_some_and(|b| buflocal_nr == b.handle().get())
         };
         with_event_cmds_mut(event, |cmds| cmds.pat_mut(id).reg_prog = prog);
         if matched {
@@ -336,7 +336,7 @@ pub fn au_exists(arg: &::core::ffi::CStr) -> bool {
     // `path_fnamecmp` handles it.
     let buflocal = pattern.is_some_and(|pattern| pattern.eq_ignore_ascii_case(b"<buffer>"));
     let current = if buflocal {
-        Buf::current().handle
+        Buf::current().handle()
     } else {
         Handle::NONE
     };

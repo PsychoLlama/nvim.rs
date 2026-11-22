@@ -95,8 +95,9 @@ pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
 
     // When a TAB was inserted and the characters in front of it were
     // folded into it too, the cursor's column may have been *reduced*.
-    if t1.lnum == Buf::current().b_op_start_orig.lnum && lt(Buf::current().b_op_start_orig, t1) {
-        op.start = Buf::current().b_op_start_orig;
+    if t1.lnum == Buf::current().b_op_start_orig().lnum && lt(Buf::current().b_op_start_orig(), t1)
+    {
+        op.start = Buf::current().b_op_start_orig();
     }
 
     // The user moved off the line, or left Insert mode with CTRL-C: there
@@ -199,7 +200,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
     // If indenting kicked in the first line has moved -- but only count it
     // when the indent actually grew.
     let ind_post_col = getwhitecols_curline();
-    if Buf::current().b_op_start.col > pre.ind_pre_col && ind_post_col > pre.ind_pre_col {
+    if Buf::current().b_op_start().col > pre.ind_pre_col && ind_post_col > pre.ind_pre_col {
         bd.textcol += ind_post_col - pre.ind_pre_col;
         ind_post_vcol = get_indent();
         bd.start_vcol += ind_post_vcol - pre.ind_pre_vcol;
@@ -208,18 +209,19 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
 
     // The user may have moved the cursor before typing; try to move the
     // block to match. Only when the difference is not the indent's doing.
-    if op.start.lnum == Buf::current().b_op_start_orig.lnum && !bd.is_max && !did_indent {
-        let orig = Buf::current().b_op_start_orig;
+    if op.start.lnum == Buf::current().b_op_start_orig().lnum && !bd.is_max && !did_indent {
+        let orig = Buf::current().b_op_start_orig();
         let t = getviscol2(orig.col, orig.coladd);
-        let orig_at = Buf::current().b_op_start_orig.col + Buf::current().b_op_start_orig.coladd;
+        let orig_at =
+            Buf::current().b_op_start_orig().col + Buf::current().b_op_start_orig().coladd;
         let block_at = op.start.col + op.start.coladd;
 
         if op.op_type == OpType::Insert && block_at != orig_at {
-            op.start.col = Buf::current().b_op_start_orig.col;
+            op.start.col = Buf::current().b_op_start_orig().col;
             pre.pre_textlen -= t - op.start_vcol;
             op.start_vcol = t;
         } else if op.op_type == OpType::Append && block_at >= orig_at {
-            op.start.col = Buf::current().b_op_start_orig.col;
+            op.start.col = Buf::current().b_op_start_orig().col;
             // Back to what `pre_textlen` would have been for an insert.
             pre.pre_textlen += bd.textlen;
             pre.pre_textlen -= t - op.start_vcol;
@@ -321,7 +323,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
 
     // Delete the region first. In an empty buffer there is nothing to
     // delete, only undo to prepare.
-    if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if Buf::current().ml_flags().has(MlFlags::EMPTY) {
         if u_save_cursor().is_err() {
             return 0;
         }

@@ -149,6 +149,7 @@
 )]
 
 mod deref;
+pub(crate) use deref::{MlRef, SynEdit};
 mod frame;
 pub mod graph;
 mod grid;
@@ -654,13 +655,8 @@ impl Buf {
     /// Give this buffer its number. [`Win::set_handle`].
     #[inline]
     pub(crate) fn set_handle(&mut self, handle: Handle) {
-        DerefMut::deref_mut(self).handle = handle;
+        self.edit().handle = handle;
         self.stamp = Stamp::new(handle, self.stamp.generation());
-    }
-
-    #[inline(always)]
-    pub fn line_count(self) -> LineNr {
-        self.b_ml.ml_line_count
     }
 
     /// This buffer's line cache, through which lines are read as `&[u8]`.
@@ -893,11 +889,11 @@ mod tests {
         let buffer = bare_buffer();
         let mut win = bare_window();
         win.w_buffer = buffer;
-        let mut registered = self::buffer(buffer.handle()).expect("a registered buffer");
-        registered.b_changed = 1;
-        assert_eq!(win.buffer().b_changed, 1);
-        win.buffer().b_p_ma = 1;
-        assert_eq!(buffer.b_p_ma, 1);
+        let registered = self::buffer(buffer.handle()).expect("a registered buffer");
+        registered.set_b_changed(1);
+        assert_eq!(win.buffer().b_changed(), 1);
+        win.buffer().set_b_p_ma(1);
+        assert_eq!(buffer.b_p_ma(), 1);
         assert_eq!(win.buffer_or_none(), Some(registered));
         win.w_buffer = Buf::NULL;
         assert_eq!(win.buffer_or_none(), None);

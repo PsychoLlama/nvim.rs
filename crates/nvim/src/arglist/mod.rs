@@ -144,8 +144,8 @@ pub(crate) fn warg_fnum(window: Win, n: c_int) -> Option<Handle> {
 /// when it has one, since that is what the user renamed it to, and its own
 /// otherwise.
 fn with_entry_name<R>(entry: &ArgEntry, f: impl FnOnce(&CStr) -> R) -> R {
-    match find_buf(entry.fnum).filter(|buf| !buf.name.is_unnamed()) {
-        Some(buf) => f(buf.name.shown().expect("a named buffer")),
+    match find_buf(entry.fnum).filter(|buf| !buf.read().name.is_unnamed()) {
+        Some(buf) => f(buf.read().name.shown().expect("a named buffer")),
         None => f(entry.name.as_cstr()),
     }
 }
@@ -203,8 +203,8 @@ fn same_file(name: &CStr, fname: Option<&CStr>) -> bool {
 /// Is `buffer` the file `entry` names -- by number, or by resolving both
 /// names?
 fn holds_entry(buffer: Buf, entry: &ArgEntry) -> bool {
-    Some(buffer.handle) == entry.fnum
-        || with_entry_name(entry, |name| same_file(name, buffer.name.full()))
+    Some(buffer.handle()) == entry.fnum
+        || with_entry_name(entry, |name| same_file(name, buffer.read().name.full()))
 }
 
 // ---------------------------------------------------------------------------
@@ -305,7 +305,7 @@ pub(crate) fn alist_add(id: ArgListId, name: XString, set_fnum: c_int) {
     wp.w_locked = true;
     let fnum = if set_fnum > 0 {
         let flags = BLN_LISTED | if set_fnum == 2 { BLN_CURBUF } else { 0 };
-        buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags).map(|buf| buf.handle)
+        buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags).map(|buf| buf.handle())
     } else {
         None
     };
@@ -433,7 +433,7 @@ fn alist_add_list(files: Vec<XString>, after: c_int, will_edit: bool) {
         .into_iter()
         .map(|name| {
             let fnum =
-                buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags).map(|buf| buf.handle);
+                buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags).map(|buf| buf.handle());
             ArgEntry { name, fnum }
         })
         .collect();
@@ -526,7 +526,8 @@ fn do_arglist(arg: &[u8], op: ArgListOp, after: c_int, will_edit: bool) -> Resul
     // ":argadd" with no argument adds the current file, unsplit.
     let new_args = if op == ArgListOp::Add && arg.first().is_none_or(|&byte| byte == 0) {
         let buffer = Buf::current();
-        let (Some(_), Some(shown)) = (buffer.name.full(), buffer.name.shown()) else {
+        let held = buffer.read();
+        let (Some(_), Some(shown)) = (held.name.full(), held.name.shown()) else {
             return Ok(());
         };
         split_arglist(shown.to_bytes(), false)

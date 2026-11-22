@@ -113,7 +113,8 @@ pub(crate) fn trans_bufname(buffer: Buf) -> Vec<u8> {
     let mut name = match buf_spname(&buffer) {
         Some(special) => special.to_bytes().to_vec(),
         None => {
-            let shown = buffer.name.shown().unwrap_or(c"");
+            let held = buffer.read();
+            let shown = held.name.shown().unwrap_or(c"");
             crate::env::home_to_tilde(Some(buffer), shown, room, true).to_vec()
         }
     };

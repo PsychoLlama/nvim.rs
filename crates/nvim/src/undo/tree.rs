@@ -26,13 +26,14 @@ use crate::undo::node::UndoLink;
 use crate::winlayer::{Buf, Win};
 
 /// Marks `start` and everything reachable from it backwards as changed.
-pub(crate) fn u_unch_branch(mut buffer: Buf, start: UndoLink) {
+pub(crate) fn u_unch_branch(buffer: Buf, start: UndoLink) {
     for link in buffer.header_chain(start, |uh| uh.prev) {
-        let Some(uh) = buffer.header_mut(link) else {
+        let Some(alt_next) = buffer.header_mut(link).map(|mut uh| {
+            uh.flags |= UH_CHANGED;
+            uh.alt_next
+        }) else {
             break;
         };
-        uh.flags |= UH_CHANGED;
-        let alt_next = uh.alt_next;
         if alt_next.is_some() {
             u_unch_branch(buffer, alt_next);
         }
@@ -43,7 +44,7 @@ pub(crate) fn u_unch_branch(mut buffer: Buf, start: UndoLink) {
 /// come apart.
 pub(crate) fn u_get_headentry(buffer: Buf) -> bool {
     let has_entries = buffer
-        .header(buffer.b_u_newhead)
+        .header(buffer.b_u_newhead())
         .is_some_and(|uh| !uh.entries.is_empty());
     if !has_entries {
         iemsg(gettext(c"E439: Undo list corrupt"));
@@ -53,24 +54,30 @@ pub(crate) fn u_get_headentry(buffer: Buf) -> bool {
 
 /// Fills in the `bot` the newest header deferred, and marks the buffer
 /// synced.
-pub(crate) fn u_getbot(mut buffer: Buf) {
+pub(crate) fn u_getbot(buffer: Buf) {
     if !u_get_headentry(buffer) {
         return;
     }
-    let line_count = buffer.b_ml.ml_line_count;
-    let newhead = buffer.b_u_newhead;
-    let Some(uh) = buffer.header_mut(newhead) else {
+    let line_count = buffer.line_count();
+    let newhead = buffer.b_u_newhead();
+    let Some(mut uh) = buffer.header_mut(newhead) else {
         return;
     };
+    let mut missing = false;
     if let Some(entry) = uh.getbot.take().and_then(|at| uh.entries.get_mut(at)) {
         let extra: i32 = line_count - entry.lcount;
         entry.bot = entry.top + entry.size() + 1 + extra;
         if entry.bot < LineNr::ONE || entry.bot > line_count {
-            iemsg(gettext(c"E440: Undo line missing"));
+            missing = true;
             entry.bot = entry.top + 1;
         }
     }
-    buffer.b_u_synced = true;
+    // The header goes back before the message, which may redraw.
+    drop(uh);
+    if missing {
+        iemsg(gettext(c"E440: Undo line missing"));
+    }
+    buffer.set_b_u_synced(true);
 }
 
 /// Clears `held` when it names `link`. The caller's own copy of a link it is
@@ -89,30 +96,31 @@ impl Buf {
     ///
     /// `held`, when it is given, is a link the caller is still holding: it is
     /// cleared if it named a header that went away.
-    pub(crate) fn free_undo_header(mut self, link: UndoLink, mut held: Option<&mut UndoLink>) {
+    pub(crate) fn free_undo_header(self, link: UndoLink, mut held: Option<&mut UndoLink>) {
         let alt_next = self.header_link(link, |uh| uh.alt_next);
         if self.has_header(alt_next) {
             self.free_undo_branch(alt_next, held.as_deref_mut());
         }
         // Freeing the alternate branch can take the oldest header, and with it
         // this one; then there is nothing left to unlink.
-        let Some(uh) = self.header(link) else {
+        let Some((alt_prev, next, prev)) =
+            self.header(link).map(|uh| (uh.alt_prev, uh.next, uh.prev))
+        else {
             return;
         };
-        let (alt_prev, next, prev) = (uh.alt_prev, uh.next, uh.prev);
-        if let Some(before) = self.header_mut(alt_prev) {
+        if let Some(mut before) = self.header_mut(alt_prev) {
             before.alt_next = UndoLink::NONE;
         }
         match self.header_mut(next) {
-            Some(above) => above.prev = prev,
-            None => self.b_u_oldhead = prev,
+            Some(mut above) => above.prev = prev,
+            None => self.edit().b_u_oldhead = prev,
         }
         if prev.is_none() {
-            self.b_u_newhead = next;
+            self.set_b_u_newhead(next);
         } else {
             // The alternate headers at `prev` all claim this header's successor.
             for alt in self.header_chain(prev, |uh| uh.alt_next) {
-                if let Some(uh) = self.header_mut(alt) {
+                if let Some(mut uh) = self.header_mut(alt) {
                     uh.next = next;
                 }
             }
@@ -121,17 +129,17 @@ impl Buf {
     }
 
     /// Frees a whole alternate branch, oldest header first.
-    pub(crate) fn free_undo_branch(mut self, link: UndoLink, mut held: Option<&mut UndoLink>) {
+    pub(crate) fn free_undo_branch(self, link: UndoLink, mut held: Option<&mut UndoLink>) {
         // Freeing the oldest header takes the whole tree with it, so let
         // `u_freeheader` do the unlinking rather than walking here.
-        if link == self.b_u_oldhead {
-            while self.has_header(self.b_u_oldhead) {
-                self.free_undo_header(self.b_u_oldhead, held.as_deref_mut());
+        if link == self.b_u_oldhead() {
+            while self.has_header(self.b_u_oldhead()) {
+                self.free_undo_header(self.b_u_oldhead(), held.as_deref_mut());
             }
             return;
         }
         let alt_prev = self.header_link(link, |uh| uh.alt_prev);
-        if let Some(before) = self.header_mut(alt_prev) {
+        if let Some(mut before) = self.header_mut(alt_prev) {
             before.alt_next = UndoLink::NONE;
         }
         // Not `header_chain`: the step would have to read a header this loop
@@ -150,16 +158,16 @@ impl Buf {
 
     /// Frees one header, its entries and its extmark list, clearing every link
     /// the buffer (or the caller, through `held`) holds to it.
-    pub(crate) fn free_undo_entries(mut self, link: UndoLink, held: Option<&mut UndoLink>) {
-        if self.b_u_curhead == link {
-            self.b_u_curhead = UndoLink::NONE;
+    pub(crate) fn free_undo_entries(self, link: UndoLink, held: Option<&mut UndoLink>) {
+        if self.b_u_curhead() == link {
+            self.set_b_u_curhead(UndoLink::NONE);
         }
-        if self.b_u_newhead == link {
-            self.b_u_newhead = UndoLink::NONE;
+        if self.b_u_newhead() == link {
+            self.set_b_u_newhead(UndoLink::NONE);
         }
         forget(held, link);
         header_free(self, link);
-        self.b_u_numhead -= 1;
+        self.set_b_u_numhead(self.b_u_numhead() - 1);
     }
 }
 
@@ -167,29 +175,29 @@ impl Buf {
 ///
 /// The headers stay in the store; a command preview puts them back, and the
 /// `U` line with them (it took that line before calling here).
-pub fn u_clearall(mut buffer: Buf) {
-    buffer.b_u_curhead = UndoLink::NONE;
-    buffer.b_u_oldhead = UndoLink::NONE;
-    buffer.b_u_newhead = UndoLink::NONE;
-    buffer.b_u_synced = true;
-    buffer.b_u_numhead = 0;
-    buffer.b_u_line = None;
-    buffer.b_u_line_lnum = LineNr::ZERO;
+pub fn u_clearall(buffer: Buf) {
+    buffer.set_b_u_curhead(UndoLink::NONE);
+    buffer.set_b_u_oldhead(UndoLink::NONE);
+    buffer.set_b_u_newhead(UndoLink::NONE);
+    buffer.set_b_u_synced(true);
+    buffer.set_b_u_numhead(0);
+    buffer.edit().b_u_line = None;
+    buffer.set_b_u_line_lnum(LineNr::ZERO);
 }
 
 /// Frees every header the buffer's tree still reaches, and the `U` line.
-pub fn u_blockfree(mut buffer: Buf) {
-    while buffer.has_header(buffer.b_u_oldhead) {
-        let previous_oldhead = buffer.b_u_oldhead;
+pub fn u_blockfree(buffer: Buf) {
+    while buffer.has_header(buffer.b_u_oldhead()) {
+        let previous_oldhead = buffer.b_u_oldhead();
         // Each pass frees the oldest header, and the assert is the
         // transpiled loop's own guard against not making progress.
         buffer.free_undo_header(previous_oldhead, None);
         debug_assert!(
-            buffer.b_u_oldhead != previous_oldhead,
+            buffer.b_u_oldhead() != previous_oldhead,
             "buf->b_u_oldhead != previous_oldhead"
         );
     }
-    buffer.b_u_line = None;
+    buffer.edit().b_u_line = None;
     store_release(buffer);
 }
 
@@ -200,44 +208,46 @@ pub fn u_clearallandblockfree(buffer: Buf) {
 }
 
 /// Remembers one line so `U` can put it back.
-pub(crate) fn u_saveline(mut buffer: Buf, lnum: LineNr) {
-    if lnum == buffer.b_u_line_lnum {
+pub(crate) fn u_saveline(buffer: Buf, lnum: LineNr) {
+    if lnum == buffer.b_u_line_lnum() {
         return;
     }
-    if lnum < LineNr::ONE || lnum > buffer.b_ml.ml_line_count {
+    if lnum < LineNr::ONE || lnum > buffer.line_count() {
         return;
     }
     u_clearline(buffer);
-    buffer.b_u_line_lnum = lnum;
+    buffer.set_b_u_line_lnum(lnum);
     let win = Win::current();
-    buffer.b_u_line_colnr = if win.w_buffer == buffer && win.w_cursor.lnum == lnum {
+    let value = if win.w_buffer == buffer && win.w_cursor.lnum == lnum {
         win.w_cursor.col
     } else {
         ColNr::ZERO
     };
-    buffer.b_u_line = Some(line_copy(buffer, lnum));
+    buffer.edit().b_u_line_colnr = value;
+    let value = Some(line_copy(buffer, lnum));
+    buffer.edit().b_u_line = value;
 }
 
 /// Forgets the line `U` would have put back.
-pub fn u_clearline(mut buffer: Buf) {
-    if buffer.b_u_line.take().is_some() {
-        buffer.b_u_line_lnum = LineNr::ZERO;
+pub fn u_clearline(buffer: Buf) {
+    if buffer.edit().b_u_line.take().is_some() {
+        buffer.set_b_u_line_lnum(LineNr::ZERO);
     }
 }
 
 /// `U`: swap the current line against the one `u_saveline` kept.
 pub fn u_undoline() {
-    let mut buf = Buf::current();
-    if buf.b_u_line.is_none() || buf.b_u_line_lnum > buf.b_ml.ml_line_count {
+    let buf = Buf::current();
+    if buf.read().b_u_line.is_none() || buf.b_u_line_lnum() > buf.line_count() {
         beep_flush();
         return;
     }
-    let lnum = buf.b_u_line_lnum;
+    let lnum = buf.b_u_line_lnum();
     if u_savecommon(buf, lnum - 1, lnum + 1, LineNr::ZERO, false).is_err() {
         return;
     }
-    let lnum = buf.b_u_line_lnum;
-    let Some(saved) = buf.b_u_line.take() else {
+    let lnum = buf.b_u_line_lnum();
+    let Some(saved) = buf.edit().b_u_line.take() else {
         return;
     };
     // What is in the buffer now becomes the line the next `U` puts back,
@@ -245,7 +255,7 @@ pub fn u_undoline() {
     let current = line_copy(buf, lnum);
     let (old_len, new_len) = (current.len(), saved.len());
     let _ = ml_replace_buf_owned(buf, lnum, saved);
-    buf.b_u_line = Some(current);
+    buf.edit().b_u_line = Some(current);
     extmark_splice_cols(
         buf,
         (lnum - 1).get(),
@@ -256,12 +266,12 @@ pub fn u_undoline() {
     );
     changed_bytes(lnum, ColNr::ZERO);
     let mut win = Win::current();
-    let col: ColNr = buf.b_u_line_colnr;
-    if win.w_cursor.lnum == buf.b_u_line_lnum {
-        buf.b_u_line_colnr = win.w_cursor.col;
+    let col: ColNr = buf.b_u_line_colnr();
+    if win.w_cursor.lnum == buf.b_u_line_lnum() {
+        buf.set_b_u_line_colnr(win.w_cursor.col);
     }
     win.w_cursor.col = col;
-    win.w_cursor.lnum = buf.b_u_line_lnum;
+    win.w_cursor.lnum = buf.b_u_line_lnum();
     check_cursor_col(win);
 }
 
@@ -309,7 +319,7 @@ mod tests {
     ///   1 -- 2 -- 3
     ///         \-- 4
     /// ```
-    fn small_tree(mut buffer: Buf) {
+    fn small_tree(buffer: Buf) {
         for uh in [
             header(1, 0, 2, 0, 0),
             header(2, 1, 3, 0, 0),
@@ -318,10 +328,10 @@ mod tests {
         ] {
             buffer.adopt_header(uh);
         }
-        buffer.b_u_oldhead = UndoLink::to_seq(1);
-        buffer.b_u_newhead = UndoLink::to_seq(3);
-        buffer.b_u_curhead = UndoLink::NONE;
-        buffer.b_u_numhead = 4;
+        buffer.set_b_u_oldhead(UndoLink::to_seq(1));
+        buffer.set_b_u_newhead(UndoLink::to_seq(3));
+        buffer.set_b_u_curhead(UndoLink::NONE);
+        buffer.set_b_u_numhead(4);
     }
 
     fn seqs(links: impl Iterator<Item = UndoLink>) -> Vec<c_int> {
@@ -335,7 +345,7 @@ mod tests {
         small_tree(buffer);
 
         let mut seen: Vec<c_int> = buffer
-            .tree_walk(buffer.b_u_oldhead, Marks::next())
+            .tree_walk(buffer.b_u_oldhead(), Marks::next())
             .filter(|visit| visit.first)
             .map(|visit| visit.link.seq())
             .collect();
@@ -362,7 +372,7 @@ mod tests {
     #[test]
     fn freeing_a_branch_unlinks_it_and_drops_what_it_saved() {
         let _held = editor_state_lock();
-        let mut buffer = bare_buffer();
+        let buffer = bare_buffer();
         small_tree(buffer);
         let mut held = UndoLink::to_seq(4);
 
@@ -377,24 +387,24 @@ mod tests {
                 .header_link(UndoLink::to_seq(3), |uh| uh.alt_next)
                 .is_none()
         );
-        assert_eq!(buffer.b_u_numhead, 3);
+        assert_eq!(buffer.b_u_numhead(), 3);
 
         // Freeing the oldest header unlinks it from the one above.
         buffer.free_undo_header(UndoLink::to_seq(1), None);
-        assert_eq!(buffer.b_u_oldhead, UndoLink::to_seq(2));
+        assert_eq!(buffer.b_u_oldhead(), UndoLink::to_seq(2));
         assert!(
             buffer
                 .header_link(UndoLink::to_seq(2), |uh| uh.next)
                 .is_none()
         );
-        assert_eq!(buffer.b_u_numhead, 2);
+        assert_eq!(buffer.b_u_numhead(), 2);
 
         // And the rest goes with the store.
-        buffer.b_u_line = Some(XString::from_bytes(b"the U line"));
+        buffer.edit().b_u_line = Some(XString::from_bytes(b"the U line"));
         u_blockfree(buffer);
-        assert!(buffer.b_u_store.is_none());
-        assert!(buffer.b_u_line.is_none());
-        assert_eq!(buffer.b_u_numhead, 0);
+        assert!(buffer.read().b_u_store.is_none());
+        assert!(buffer.read().b_u_line.is_none());
+        assert_eq!(buffer.b_u_numhead(), 0);
         free_bare_buffer(buffer);
     }
 
@@ -403,20 +413,20 @@ mod tests {
     #[test]
     fn a_detached_tree_stays_in_the_store() {
         let _held = editor_state_lock();
-        let mut buffer = bare_buffer();
+        let buffer = bare_buffer();
         small_tree(buffer);
         u_clearall(buffer);
-        assert!(buffer.b_u_oldhead.is_none());
+        assert!(buffer.b_u_oldhead().is_none());
         u_blockfree(buffer);
         assert_eq!(
-            buffer.b_u_store.as_deref().map(|store| store.len()),
+            buffer.read().b_u_store.as_deref().map(|store| store.len()),
             Some(4)
         );
         // Put back and freed for real.
-        buffer.b_u_oldhead = UndoLink::to_seq(1);
-        buffer.b_u_numhead = 4;
+        buffer.set_b_u_oldhead(UndoLink::to_seq(1));
+        buffer.set_b_u_numhead(4);
         u_blockfree(buffer);
-        assert!(buffer.b_u_store.is_none());
+        assert!(buffer.read().b_u_store.is_none());
         free_bare_buffer(buffer);
     }
 }

@@ -151,7 +151,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
 
     // Force a redraw for an empty Visual region, an unmodifiable buffer,
     // or a fold: none of those will redraw by themselves.
-    if op.is_visual && (op.empty || Buf::current().b_p_ma == 0 || op.op_type == OpType::Fold) {
+    if op.is_visual && (op.empty || Buf::current().b_p_ma() == 0 || op.op_type == OpType::Fold) {
         restore_lbr(lbr_saved != 0);
         redraw_curbuf_later(UPD_INVERTED);
     }
@@ -314,12 +314,12 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
 
     if !gui_yank {
         // Keep the area for `'<`/`'>` and for `gv`.
-        Buf::current().b_visual.vi_start = visual_anchor();
-        Buf::current().b_visual.vi_end = Win::current().w_cursor;
-        Buf::current().b_visual.vi_mode = visual_mode().raw();
+        Buf::current().edit().b_visual.vi_start = visual_anchor();
+        Buf::current().edit().b_visual.vi_end = Win::current().w_cursor;
+        Buf::current().edit().b_visual.vi_mode = visual_mode().raw();
         restore_visual_mode();
-        Buf::current().b_visual.vi_curswant = Win::current().w_curswant;
-        Buf::current().b_visual_mode_eval = visual_mode().raw();
+        Buf::current().edit().b_visual.vi_curswant = Win::current().w_curswant;
+        Buf::current().set_b_visual_mode_eval(visual_mode().raw());
     }
 
     // In Select mode a linewise selection is operated on like a charwise
@@ -700,11 +700,12 @@ fn run_operator(
         }
 
         OpType::Format => {
-            if c_int::from(Buf::current().b_p_fex.first_byte()) != 0 {
+            if c_int::from(Buf::current().read().b_p_fex.first_byte()) != 0 {
                 // A copy: the expression is user code.
                 let arg = OpArg::clone(&op);
                 op_formatexpr(&arg);
-            } else if P_FP.first_byte() != 0 || c_int::from(Buf::current().b_p_fp.first_byte()) != 0
+            } else if P_FP.first_byte() != 0
+                || c_int::from(Buf::current().read().b_p_fp.first_byte()) != 0
             {
                 // An external program.
                 op_colon(&op);
@@ -796,7 +797,7 @@ fn indent_or_colon(op: Op) {
         op_colon(&op);
         return;
     }
-    if Buf::current().b_p_lisp != 0 {
+    if Buf::current().b_p_lisp() != 0 {
         let indent = if use_indentexpr_for_lisp() {
             Indenter::Expr
         } else {
@@ -806,7 +807,7 @@ fn indent_or_colon(op: Op) {
         op_reindent(&arg, indent);
         return;
     }
-    let indent = if c_int::from(Buf::current().b_p_inde.first_byte()) != 0 {
+    let indent = if c_int::from(Buf::current().read().b_p_inde.first_byte()) != 0 {
         Indenter::Expr
     } else {
         Indenter::C
@@ -830,7 +831,7 @@ fn run_change(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     // The user is about to edit: 'linebreak' has to look as it did.
     restore_lbr(lbr_saved != 0);
     // Trigger TextChangedI.
-    Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
+    Buf::current().set_b_last_changedtick_i(buf_get_changedtick(Buf::current()));
 
     if op.on_copy(op_change) != 0 {
         // `edit()` returned because of a CTRL-O command.
@@ -847,7 +848,7 @@ fn run_block_insert(cmd_arg: &mut CmdArg, op: Op, lbr_saved: c_int) {
     RESTART_EDIT.set(Key::NUL);
 
     restore_lbr(lbr_saved != 0);
-    Buf::current().b_last_changedtick_i = buf_get_changedtick(Buf::current());
+    Buf::current().set_b_last_changedtick_i(buf_get_changedtick(Buf::current()));
 
     op.on_copy(|arg| op_insert(arg, cmd_arg.count1));
 

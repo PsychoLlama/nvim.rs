@@ -247,7 +247,7 @@ impl Buf {
 /// @param linecnt  the line count before `text` was read
 pub(crate) fn readfile_linenr(linecnt: i32, text: &[u8]) -> LineNr {
     let newlines = text.iter().filter(|&&b| b == b'\n').count();
-    Buf::current().b_ml.ml_line_count - linecnt + 1 + len_as_int(newlines)
+    Buf::current().line_count() - linecnt + 1 + len_as_int(newlines)
 }
 
 /// Set the name of the current buffer, for a `:r` or `:w` command with a file
@@ -258,7 +258,7 @@ pub fn set_rw_fname(fname: Option<&CStr>, sfname: Option<&CStr>) -> Result<(), F
     let buf = Buf::current_raw();
 
     // It's like the unnamed buffer is deleted...
-    if Buf::current().b_p_bl != 0 {
+    if Buf::current().b_p_bl() != 0 {
         autocmd_for_curbuf(AutoEvent::BufDelete);
     }
     autocmd_for_curbuf(AutoEvent::BufWipeout);
@@ -273,12 +273,12 @@ pub fn set_rw_fname(fname: Option<&CStr>, sfname: Option<&CStr>) -> Result<(), F
     }
 
     if Buf::current().set_name(fname, sfname, false).is_ok() {
-        Buf::current().b_flags |= BufFlags::NOTEDITED;
+        Buf::current().set_b_flags(Buf::current().b_flags() | BufFlags::NOTEDITED);
     }
 
     // ...and a new named one is created.
     autocmd_for_curbuf(AutoEvent::BufNew);
-    if Buf::current().b_p_bl != 0 {
+    if Buf::current().b_p_bl() != 0 {
         autocmd_for_curbuf(AutoEvent::BufAdd);
     }
     if aborting() {
@@ -286,7 +286,7 @@ pub fn set_rw_fname(fname: Option<&CStr>, sfname: Option<&CStr>) -> Result<(), F
     }
 
     // Do filetype detection now if 'filetype' is empty.
-    if Buf::current().b_p_ft.first_byte() == 0 {
+    if Buf::current().read().b_p_ft.first_byte() == 0 {
         if augroup_exists_of(c"filetypedetect") {
             let _ = do_doautocmd(c"filetypedetect BufRead", false, None);
         }
@@ -300,14 +300,14 @@ pub fn set_rw_fname(fname: Option<&CStr>, sfname: Option<&CStr>) -> Result<(), F
 /// re-read a buffer that is already open.
 pub fn prep_exarg(excmd: &mut ExArg, buffer: Buf) {
     let mut line = b"e ++enc=".to_vec();
-    line.extend_from_slice(&buffer.b_p_fenc.get());
+    line.extend_from_slice(&buffer.read().b_p_fenc.get());
     excmd.set_cmd_text(&line);
     // Where the encoding name starts in that command.
     excmd.force_enc = Some(8);
-    excmd.bad_char = buffer.b_bad_char;
-    let ff = buffer.b_p_ff.first_byte();
+    excmd.bad_char = buffer.b_bad_char();
+    let ff = buffer.read().b_p_ff.first_byte();
     excmd.force_ff = (ff != 0).then_some(ff);
-    excmd.force_bin = Some(buffer.b_p_bin != 0);
+    excmd.force_bin = Some(buffer.b_p_bin() != 0);
     excmd.read_edit = false;
     excmd.forceit = false;
 }
@@ -330,9 +330,9 @@ pub fn set_file_options(set_options: bool, excmd: Option<&mut ExArg>) {
 
     // Set or reset 'binary'.
     if let Some(forced_bin) = forced.and_then(|command| command.force_bin) {
-        let oldval = Buf::current().b_p_bin;
-        Buf::current().b_p_bin = c_int::from(forced_bin);
-        let bin = Buf::current().b_p_bin != 0;
+        let oldval = Buf::current().b_p_bin();
+        Buf::current().set_b_p_bin(c_int::from(forced_bin));
+        let bin = Buf::current().b_p_bin() != 0;
         set_options_bin(oldval != 0, bin, OptionSetFlags::LOCAL);
     }
 }

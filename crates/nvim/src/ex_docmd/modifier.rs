@@ -161,7 +161,7 @@ impl ExArg<'_> {
             if first == 0
                 && EXMODE_ACTIVE.get()
                 && self.source_kind() == SourceKind::Typed
-                && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
+                && Win::current().w_cursor.lnum < Buf::current().line_count()
             {
                 // An Ex-mode empty line *becomes* a `+` command: the line the
                 // user did not type is retired and this one takes its place.
@@ -778,7 +778,7 @@ pub(crate) fn shared_prefix(p: &[u8], name: &CStr) -> usize {
 /// lock is about the *user's* text.
 pub fn expr_map_locked() -> bool {
     // SAFETY: `CURBUF` is a live buffer whenever a mapping can be running.
-    EXPR_MAP_LOCK.get() > 0 && !Buf::current().b_flags.has(BufFlags::DUMMY)
+    EXPR_MAP_LOCK.get() > 0 && !Buf::current().b_flags().has(BufFlags::DUMMY)
 }
 
 /// Is this the location-list spelling of a quickfix command? Upstream tells

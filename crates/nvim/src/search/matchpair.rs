@@ -120,7 +120,8 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
     let (initc, findc) = (&mut target.initc, &mut target.findc);
     let backwards = &mut target.backwards;
     let buf = Buf::current();
-    let mps = buf.b_p_mps.bytes();
+    let held = buf.read();
+    let mps = held.b_p_mps.bytes();
     // The walk reads the value as the C string it is: the end is a NUL.
     let char_from = |i: usize| char_at(mps.get(i..).unwrap_or_default());
     let len_from = |i: usize| c_cluster_len(mps.get(i..).unwrap_or_default());
@@ -352,7 +353,7 @@ fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: Codepoint) -> Option<Po
     let mut lines = Lines::current();
     while !GOT_INT.get() {
         if hash_dir > 0 {
-            if pos.lnum == Buf::current().b_ml.ml_line_count {
+            if pos.lnum == Buf::current().line_count() {
                 break;
             }
         } else if pos.lnum == LineNr::ONE {
@@ -527,7 +528,7 @@ impl Walk {
         }
         // End of file, or the line is exhausted and the comment with
         // it — then don't look for a match out in the code.
-        if self.lnum == Buf::current().b_ml.ml_line_count || self.lispcomm {
+        if self.lnum == Buf::current().line_count() || self.lispcomm {
             return false;
         }
         self.lnum += 1;
@@ -773,7 +774,7 @@ impl Walk {
 
         // For Lisp skip over backslashed (), {} and [] — actually
         // over "#\(" and friends.
-        if Buf::current().b_p_lisp != 0
+        if Buf::current().b_p_lisp() != 0
             && has_char(c"(){}[]", c)
             && col > 1
             && check_prevcol(self.lines.line(self.lnum), col, b'\\')
@@ -817,7 +818,7 @@ fn find_match(
     let mut pos = Win::current().w_cursor;
     pos.coladd = 0;
     let mut lines = Lines::current();
-    let lisp = Buf::current().b_p_lisp != 0; // engage Lisp-specific hacks ;)
+    let lisp = Buf::current().b_p_lisp() != 0; // engage Lisp-specific hacks ;)
 
     // vi compatible matching, and "don't recognise backslashes".
     let cpo_match = cpo_has(CpoFlag::MATCH);

@@ -64,6 +64,7 @@ use crate::message::{
 };
 use crate::narrow::{as_index, count_as_int};
 use crate::regexp::{REX_SET, REX_USE};
+pub(crate) use crate::winlayer::SynEdit;
 use crate::winlayer::{Buf, BufId, WinId};
 
 use crate::autocmd::defs::AutoEvent;
@@ -431,13 +432,11 @@ pub(crate) fn cur_syn_block() -> SynBlockRef {
     Win::current().syntax()
 }
 
-impl SynBlockRef {
+impl SynBlock {
     /// The block's patterns.
     ///
-    /// The borrow lasts as long as the *handle* it came from, which is what
-    /// stops a caller holding a pattern across a command that grows the
-    /// array — as long as both go through the same handle. Take one handle
-    /// per function and reach everything through it.
+    /// Reached through a [`SynBlockRef::read`] guard, which a command that
+    /// grows the array refuses while it is held.
     #[inline]
     pub(crate) fn patterns(&self) -> &[SynPat] {
         &self.b_syn_patterns
@@ -481,20 +480,20 @@ impl Win {
     /// A write in place rather than a `&mut` to the block, which may be the
     /// buffer's own `b_s`: the borrow ends before this returns.
     pub(crate) fn set_syn_error(self) {
-        self.syntax().b_syn_error = true;
+        self.syntax().edit().b_syn_error = true;
     }
 }
 
 /// Number of patterns in [`cur_syn_block`].
 #[inline]
 pub(crate) fn cur_pattern_count() -> ::core::ffi::c_int {
-    count_as_int(cur_syn_block().patterns().len())
+    count_as_int(cur_syn_block().read().patterns().len())
 }
 
 /// Number of clusters in [`cur_syn_block`].
 #[inline]
 pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
-    count_as_int(cur_syn_block().clusters().len())
+    count_as_int(cur_syn_block().read().clusters().len())
 }
 /// A syntax block -- a buffer's own `b_s`, or the block `:ownsyntax` gave a
 /// window -- reached through the handle of the object that owns it.
@@ -505,8 +504,9 @@ pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
 /// reading freed memory. The block's address is kept beside the owner for
 /// identity alone ([`SynBlockRef::raw`]) and is never dereferenced.
 ///
-/// Aliasing is the owner handle's: two copies lend overlapping `&mut`s as
-/// two copies of a [`Buf`] do.
+/// Every access is a [`SynBlockRef::read`] or [`SynBlockRef::edit`], checked
+/// against the owner's slot; two guards at once still alias (the open row in
+/// `docs/safe-surface.md`).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct SynBlockRef {
     owner: SynOwner,
@@ -538,33 +538,45 @@ impl SynBlockRef {
     }
 }
 
-impl core::ops::Deref for SynBlockRef {
-    type Target = SynBlock;
-
+impl SynBlockRef {
+    /// Borrow the block until the guard is dropped.
+    ///
+    /// # Panics
+    /// When the owner is gone or lent to an edit, or an `:ownsyntax` block
+    /// has been taken from its window.
     #[inline]
     #[track_caller]
-    fn deref(&self) -> &SynBlock {
-        match &self.owner {
-            SynOwner::Buffer(buffer) => &buffer.b_s,
-            SynOwner::Window(window) => window
-                .w_own_syntax
-                .as_deref()
-                .expect("an :ownsyntax block outlives its handles"),
+    pub(crate) fn read<'a>(self) -> SynRead<'a> {
+        SynRead(self.edit())
+    }
+
+    /// Lend the block mutably until the guard is dropped. Checked against
+    /// the owner's slot (live, not lent to an edit) and no further: the
+    /// engine holds the pattern list across matches that take a pattern's
+    /// program out, so a counted borrow here would refuse the engine itself
+    /// (`docs/safe-surface.md`, the syntax block row).
+    ///
+    /// # Panics
+    /// As [`SynBlockRef::read`].
+    #[inline]
+    #[track_caller]
+    pub(crate) fn edit<'a>(self) -> SynEdit<'a> {
+        match self.owner {
+            SynOwner::Buffer(buffer) => buffer.syn_block_lent(),
+            SynOwner::Window(window) => window.own_syn_block_lent(),
         }
     }
 }
 
-impl core::ops::DerefMut for SynBlockRef {
-    #[inline]
-    #[track_caller]
-    fn deref_mut(&mut self) -> &mut SynBlock {
-        match &mut self.owner {
-            SynOwner::Buffer(buffer) => &mut buffer.b_s,
-            SynOwner::Window(window) => window
-                .w_own_syntax
-                .as_deref_mut()
-                .expect("an :ownsyntax block outlives its handles"),
-        }
+/// A syntax block borrowed through its owner: [`SynBlockRef::read`].
+pub(crate) struct SynRead<'a>(SynEdit<'a>);
+
+impl core::ops::Deref for SynRead<'_> {
+    type Target = SynBlock;
+
+    #[inline(always)]
+    fn deref(&self) -> &SynBlock {
+        &self.0
     }
 }
 
@@ -678,13 +690,13 @@ mod tests {
         let buffer = bare_buffer();
         win.w_buffer = buffer;
         win.w_s = buffer.syntax_block();
-        let mut through_window = win.syntax();
+        let through_window = win.syntax();
         let through_buffer = buffer.syntax();
         assert_eq!(through_window, through_buffer);
-        through_window.b_syn_ic = 1;
-        assert_eq!(through_buffer.b_syn_ic, 1);
+        through_window.edit().b_syn_ic = 1;
+        assert_eq!(through_buffer.read().b_syn_ic, 1);
         win.set_syn_error();
-        assert!(buffer.syntax().b_syn_error);
+        assert!(buffer.syntax().read().b_syn_error);
         assert_eq!(win.syn_block().b_syn_ic, 1);
         win.w_s = ::core::ptr::null_mut();
         free_bare_window(win);
@@ -703,11 +715,11 @@ mod tests {
             .w_own_syntax
             .insert(Box::new(crate::types::SynBlock::new()));
         win.w_s = own;
-        let mut block = win.syntax();
+        let block = win.syntax();
         assert_ne!(block, buffer.syntax());
         assert_eq!(block.raw(), own);
-        block.b_syn_ic = 1;
-        assert_eq!(buffer.syntax().b_syn_ic, 0);
+        block.edit().b_syn_ic = 1;
+        assert_eq!(buffer.syntax().read().b_syn_ic, 0);
         assert_eq!(win.syn_block().b_syn_ic, 1);
         win.w_s = ::core::ptr::null_mut();
         win.w_own_syntax = None;

@@ -202,7 +202,7 @@ fn compile_patterns(pattern: &[u8], whole: bool, kind: c_int) -> Option<Patterns
     }
 
     if kind == FIND_DEFINE {
-        let def = local_or_global(&Buf::current().b_p_def, P_DEF).get();
+        let def = local_or_global(&Buf::current().read().b_p_def, P_DEF).get();
         // Don't ignore case in the 'define' pattern.
         if !def.is_empty() && !compile(&mut pats.def, def.as_cstr(), false) {
             return None;
@@ -215,7 +215,7 @@ fn compile_patterns(pattern: &[u8], whole: bool, kind: c_int) -> Option<Patterns
 /// The effective `'include'`: the buffer-local one, or the global one
 /// when it is empty.
 fn include_option() -> XString {
-    local_or_global(&Buf::current().b_p_inc, P_INC).get()
+    local_or_global(&Buf::current().read().b_p_inc, P_INC).get()
 }
 
 /// Line `lnum` of the current buffer, cut to what upstream's `LSIZE` buffer
@@ -268,7 +268,7 @@ struct Walk {
 /// The current buffer as a line's source: `None` when it has no name, as
 /// its null name pointer was upstream.
 fn buffer_ref() -> Option<FileRef> {
-    Buf::current().name.shown().map(|_| FileRef::Buffer)
+    Buf::current().read().name.shown().map(|_| FileRef::Buffer)
 }
 
 impl Walk {
@@ -285,7 +285,7 @@ impl Walk {
     /// The name of the file `fname` names, as it is shown.
     fn name_of(&self, fname: Option<FileRef>) -> Option<XString> {
         match fname? {
-            FileRef::Buffer => Buf::current().name.shown().map(XString::from_cstr),
+            FileRef::Buffer => Buf::current().read().name.shown().map(XString::from_cstr),
             FileRef::Included(id) => self.files.name_of(id).cloned(),
         }
     }
@@ -386,7 +386,7 @@ fn handle_include(
     // A relative name is resolved against the file the line is in. A copy:
     // the lookup can run 'includeexpr', which may rename the buffer.
     let p_fname = match walk.curr_fname {
-        None | Some(FileRef::Buffer) => Buf::current().name.full().map(XString::from_cstr),
+        None | Some(FileRef::Buffer) => Buf::current().read().name.full().map(XString::from_cstr),
         included => walk.name_of(included),
     };
     let p_fname = p_fname.as_ref().map(XString::as_cstr);
@@ -747,7 +747,7 @@ fn goto_match(
                     return After::Stop;
                 };
                 // GETFILE_SUCCESS: anything but a positive answer.
-                let handle = saved.buffer().handle.get();
+                let handle = saved.buffer().handle().get();
                 // Jumping to a buffer named by its own handle.
                 let failed = getfile(handle, None, None, true, walk.lnum, forceit);
                 if failed > 0 {
@@ -823,7 +823,7 @@ pub fn find_pattern_in_path(
     // from "after the match" to "the match itself".
     let uses_zs = has_bytes(include_option().as_cstr(), b"\\zs");
 
-    let end_lnum = end_lnum.min(Buf::current().b_ml.ml_line_count);
+    let end_lnum = end_lnum.min(Buf::current().line_count());
     // Do at least one line.
     let lnum = start_lnum.min(end_lnum);
     let mut walk = Walk {

@@ -111,7 +111,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         // The borrow ends with the statement: the match search reads other
         // lines, and only runs once `find_last_paren` found one.
         let has_paren = find_last_paren(Lines::current().line(ourscope), b'(', b')');
-        if has_paren && let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen) {
+        if has_paren && let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen()) {
             lnum = trypos.lnum;
         }
 
@@ -120,7 +120,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         //                      ldfd) {
         //                  }
         let js_or_keep_case =
-            Buf::current().b_ind_js != 0 || Buf::current().b_ind_keep_case_label != 0;
+            Buf::current().b_ind_js() != 0 || Buf::current().b_ind_keep_case_label() != 0;
         let starts_case = js_or_keep_case && {
             let cursor_lnum = Win::current().w_cursor.lnum;
             let mut lines = Lines::current();
@@ -129,7 +129,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         };
         let amount = if starts_case {
             get_indent()
-        } else if Buf::current().b_ind_js != 0 {
+        } else if Buf::current().b_ind_js() != 0 {
             get_indent_lnum(lnum)
         } else {
             skip_label(lnum).0
@@ -139,12 +139,12 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
 
     // For Javascript, check whether the line starts with "key:".
     // The `&&` keeps the call behind the option.
-    let js_cur_has_key = Buf::current().b_ind_js != 0 && has_js_key(line.theline(), 0);
+    let js_cur_has_key = Buf::current().b_ind_js() != 0 && has_js_key(line.theline(), 0);
 
     // A closing brace is where we want to be already; some people want it
     // lined up with something other than the open brace.
     if line.starts_with(b'}') {
-        return amount + Buf::current().b_ind_close_extra;
+        return amount + Buf::current().b_ind_close_extra();
     }
 
     // An "else" wants its "if", a "while" its "do".
@@ -169,38 +169,38 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     if start_brace == BRACE_IN_COL0 {
         // A brace *really* at the left margin: use the imaginary
         // location of one, and look further back for a `namespace`.
-        amount = Buf::current().b_ind_open_left_imag;
+        amount = Buf::current().b_ind_open_left_imag();
         lookfor_cpp_namespace = true;
     } else if start_brace == BRACE_AT_END {
-        amount += Buf::current().b_ind_open_imag;
+        amount += Buf::current().b_ind_open_imag();
         let cursor_lnum = Win::current().w_cursor.lnum;
         let mut lines = Lines::current();
         let text = lines.line(cursor_lnum);
         let at = skip::white(text);
         if opens_namespace(text, at) {
-            amount += Buf::current().b_ind_cpp_namespace;
+            amount += Buf::current().b_ind_cpp_namespace();
         } else if opens_extern_c(text, at) {
-            amount += Buf::current().b_ind_cpp_extern_c;
+            amount += Buf::current().b_ind_cpp_extern_c();
         }
     } else {
         // Compensate for adding `b_ind_open_extra` later.
-        amount = (amount - Buf::current().b_ind_open_extra).max(0);
+        amount = (amount - Buf::current().b_ind_open_extra()).max(0);
     }
 
     // What kind of line is being indented decides what to search for.
     let mut lookfor_break = false;
     let lookfor = if is_case_label(line.theline(), 0, false) {
-        amount += Buf::current().b_ind_case;
+        amount += Buf::current().b_ind_case();
         LOOKFOR_CASE // a switch() label: find a previous one
     } else if is_scope_decl(line.theline(), 0) {
-        amount += Buf::current().b_ind_scopedecl;
+        amount += Buf::current().b_ind_scopedecl();
         LOOKFOR_SCOPEDECL // private:, ...: the class declaration
     } else {
         // The `&&` keeps the call behind the option test.
-        if Buf::current().b_ind_case_break != 0 && is_break(line.theline(), 0) {
+        if Buf::current().b_ind_case_break() != 0 && is_break(line.theline(), 0) {
             lookfor_break = true;
         }
-        amount += Buf::current().b_ind_level;
+        amount += Buf::current().b_ind_level();
         LOOKFOR_INITIAL
     };
 
@@ -214,7 +214,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         cur_amount: c_int::MAX,
         cont_amount: 0,
         // A copy: the C++ base-class arm sets it to zero mid-scan.
-        ind_continuation: Buf::current().b_ind_continuation,
+        ind_continuation: Buf::current().b_ind_continuation(),
         added_to_amount,
         lookfor,
         whilelevel: 0,

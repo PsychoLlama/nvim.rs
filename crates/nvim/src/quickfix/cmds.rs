@@ -66,7 +66,7 @@ pub fn ex_cfile(excmd: &mut ExArg) {
         );
     }
 
-    let enc = local_or_global(&Buf::current().b_p_menc, P_MENC).get();
+    let enc = local_or_global(&Buf::current().read().b_p_menc, P_MENC).get();
 
     let wp = is_loclist_cmd(excmd.cmdidx).then(Win::current);
 
@@ -144,19 +144,19 @@ fn cbuffer_process_args(excmd: &mut ExArg) -> Option<Buf> {
         qf_emsg(E_INVARG);
         return None;
     };
-    if buf.b_ml.ml_mfp.is_none() {
+    if buf.ml().ml_mfp.is_none() {
         qf_emsg(E_BUFFER_IS_NOT_LOADED);
         return None;
     }
 
     if excmd.addr_count == 0 {
         excmd.line1 = LineNr::ONE;
-        excmd.line2 = buf.b_ml.ml_line_count;
+        excmd.line2 = buf.line_count();
     }
     if excmd.line1 < LineNr::ONE
-        || excmd.line1 > buf.b_ml.ml_line_count
+        || excmd.line1 > buf.line_count()
         || excmd.line2 < LineNr::ONE
-        || excmd.line2 > buf.b_ml.ml_line_count
+        || excmd.line2 > buf.line_count()
     {
         qf_emsg(E_INVRANGE);
         return None;
@@ -183,7 +183,7 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
 
     // The title names the buffer as well as the command.
     let mut title = XString::from_cstr(&qf_cmdtitle(excmd.line.line()));
-    if let Some(sfname) = buf.name.short() {
+    if let Some(sfname) = buf.read().name.short() {
         let mut with_name = title.to_vec();
         with_name.extend_from_slice(b" (");
         with_name.extend_from_slice(sfname.to_bytes());

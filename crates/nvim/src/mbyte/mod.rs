@@ -202,7 +202,7 @@ pub fn utf_find_illegal() {
     let start = Win::current().w_cursor;
     let mut vimconv = CONV_NONE_INIT;
 
-    let fenc = Buf::current().b_p_fenc.cstr().to_owned();
+    let fenc = Buf::current().read().b_p_fenc.cstr().to_owned();
     if canon_props(fenc.to_bytes()) & ENC_8BIT != 0 {
         // 'encoding' is utf-8 but the file is 8-bit, so what is illegal is
         // decided after converting back to the file's encoding.
@@ -239,7 +239,7 @@ pub fn utf_find_illegal() {
             break true;
         }
 
-        if Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count {
+        if Win::current().w_cursor.lnum == Buf::current().line_count() {
             break false;
         }
         Win::current().w_cursor.lnum += 1;

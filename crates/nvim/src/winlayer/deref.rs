@@ -1,7 +1,7 @@
 //! Field access through a graph handle, and handle equality — both checked
 //! against the slot the handle names.
 //!
-//! # `Win` and `Buf`: plain `Deref`/`DerefMut`
+//! # `Win`: plain `Deref`/`DerefMut`
 //!
 //! A [`Win`], [`Buf`], [`TabPage`] or [`FrameRef`] holds its object's slot
 //! address and the generation the slot had when the handle was made
@@ -23,7 +23,7 @@
 //! so the same one compare refuses a read or a write through any copy of a
 //! handle while another copy's edit is held.
 //!
-//! # `TabPage`, `FrameRef` and the cursor: no borrow escapes unguarded
+//! # `Buf`, `TabPage`, `FrameRef` and the cursor: no borrow escapes unguarded
 //!
 //! These lend no `&mut` and no bare `&` at all. A field is read by value and
 //! written in place through its getter and setter (`slot_fields!` below:
@@ -45,12 +45,17 @@
     clippy::ptr_as_ptr
 )]
 
+use core::cell::{RefCell, RefMut};
 use core::ffi::{c_char, c_int};
+use core::fmt;
+use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
-use core::ptr;
+use core::ptr::{self, NonNull};
 
+use crate::memline::MlFlags;
+use crate::memline::state::MemLine;
 use crate::slot::{self, SlotEdit, SlotRead};
-use crate::types::{Buffer, ColNr, LineNr, OptInt, Pos, Tabpage, Window};
+use crate::types::{Buffer, ColNr, LineNr, OptInt, Pos, SynBlock, Tabpage, Window};
 use crate::winlayer::{Buf, FrameId, FrameRef, PosRef, Stamp, TabId, TabPage, Win, WinId};
 
 /// What each handle kind is called in a panic, by `checked_handles!`'s
@@ -153,11 +158,10 @@ macro_rules! plain_deref {
 
 plain_deref! {
     Win => Window;
-    Buf => Buffer;
 }
 
 /// `edit()` and `read()` for a handle whose object lends through guards
-/// only. The same two serve `Win` and `Buf` once they give up `DerefMut`.
+/// only. The same two serve `Win` once it gives up `DerefMut`.
 macro_rules! guarded_handles {
     ($($ty:ident => $target:ty;)+) => { $(
         impl $ty {
@@ -168,14 +172,16 @@ macro_rules! guarded_handles {
             ///
             /// Scope it: in an `if let`/`match`/`while let`/`for` head or a
             /// call argument the guard lives to the end of the body or the
-            /// statement.
+            /// statement. Its lifetime is not the handle's: the guard itself
+            /// keeps the object in its slot (emptying a lent slot panics),
+            /// so it may outlive the handle it came from.
             ///
             /// # Panics
             /// When the object is gone, already lent to an edit, or a
             /// `read()` of it is held.
             #[inline]
             #[track_caller]
-            pub(crate) fn edit(&self) -> SlotEdit<'_, $target> {
+            pub(crate) fn edit<'a>(self) -> SlotEdit<'a, $target> {
                 // SAFETY: a live handle's address is its slot's value address
                 // (the constructors' promise).
                 unsafe { slot::edit_at(self.ptr, self.stamp.generation()) }
@@ -189,7 +195,7 @@ macro_rules! guarded_handles {
             /// When the object is gone or lent to an edit.
             #[inline]
             #[track_caller]
-            pub(crate) fn read(&self) -> SlotRead<'_, $target> {
+            pub(crate) fn read<'a>(self) -> SlotRead<'a, $target> {
                 // SAFETY: as `edit`.
                 unsafe { slot::read_at(self.ptr, self.stamp.generation()) }
             }
@@ -199,41 +205,58 @@ macro_rules! guarded_handles {
 
 guarded_handles! {
     TabPage => Tabpage;
+    Buf => Buffer;
 }
 
 /// A getter and (where named) a setter per `Copy` field. The getter checks
 /// the slot (one compare: live, not lent to an edit) and reads the field by
 /// value; the setter also refuses while a `read()` is out, and stores in
 /// place. Neither forms a reference to the object: a place access through
-/// the raw address touches the field's bytes alone.
+/// the raw address touches the field's bytes alone. A leaf of a nested
+/// field names its path after `=` (`ml_line_count: LineNr = b_ml.ml_line_count`).
 macro_rules! slot_fields {
-    ($ty:ident => $target:ty { $( $(#[$doc:meta])* $field:ident $(, $set:ident)? : $fty:ty; )* }) => {
+    ($ty:ident => $target:ty {
+        $( $(#[$doc:meta])* $field:ident $(, $set:ident)? : $fty:ty $(= $($path:ident).+)?; )*
+    }) => {
+        slot_fields!(pub(crate) $ty => $target { $( $(#[$doc])* $field $(, $set)? : $fty $(= $($path).+)?; )* });
+    };
+    ($vis:vis $ty:ident => $target:ty {
+        $( $(#[$doc:meta])* $field:ident $(, $set:ident)? : $fty:ty $(= $($path:ident).+)?; )*
+    }) => {
         impl $ty { $(
-            $(#[$doc])*
-            #[inline(always)]
-            #[track_caller]
-            pub(crate) fn $field(self) -> $fty {
-                self.check_live();
-                // SAFETY: live and lent to no edit (`check_live`); a place
-                // read through the slot's address borrows nothing.
-                unsafe { (*self.ptr).$field }
-            }
-
-            $(
-                #[doc = concat!("Store `", stringify!($field), "` in place.")]
-                #[inline(always)]
-                #[track_caller]
-                pub(crate) fn $set(self, value: $fty) {
-                    // SAFETY: as `edit`: the slot's value address.
-                    unsafe { slot::check_write(self.ptr, self.stamp.generation()) };
-                    // SAFETY: live, lent to no edit and read by no guard
-                    // (`check_write`); a place write borrows nothing.
-                    unsafe { (*self.ptr).$field = value };
-                }
-            )?
+            slot_fields!(@get $vis [$(#[$doc])*] $field ($fty) [$($($path).+)?]);
+            slot_fields!(@set $vis [$($set)?] $field ($fty) [$($($path).+)?]);
         )* }
     };
+    (@get $vis:vis [$(#[$doc:meta])*] $field:ident ($fty:ty) [$($path:tt)*]) => {
+        $(#[$doc])*
+        #[inline(always)]
+        #[track_caller]
+        $vis fn $field(self) -> $fty {
+            self.check_live();
+            // SAFETY: live and lent to no edit (`check_live`); a place read
+            // through the slot's address borrows nothing.
+            unsafe { slot_fields!(@place (*self.ptr) $field $($path)*) }
+        }
+    };
+    (@set $vis:vis [] $field:ident ($fty:ty) [$($path:tt)*]) => {};
+    (@set $vis:vis [$set:ident] $field:ident ($fty:ty) [$($path:tt)*]) => {
+        #[doc = concat!("Store `", stringify!($field), "` in place.")]
+        #[inline(always)]
+        #[track_caller]
+        $vis fn $set(self, value: $fty) {
+            // SAFETY: as `edit`: the slot's value address.
+            unsafe { slot::check_write(self.ptr, self.stamp.generation()) };
+            // SAFETY: live, lent to no edit and read by no guard
+            // (`check_write`); a place write borrows nothing.
+            unsafe { slot_fields!(@place (*self.ptr) $field $($path)*) = value };
+        }
+    };
+    (@place ($base:expr) $field:ident) => { $base.$field };
+    (@place ($base:expr) $field:ident $($path:tt)+) => { $base.$($path)+ };
 }
+
+mod buf_fields;
 
 slot_fields! {
     FrameRef => Frame {
@@ -267,6 +290,216 @@ slot_fields! {
         tp_diff_invalid, set_tp_diff_invalid: c_int;
         tp_diff_update, set_tp_diff_update: c_int;
         tp_snapshot: [Option<FrameId>; 3];
+    }
+}
+
+/// A buffer's memline, lent for a walk ([`Buf::ml`]): a read of the buffer
+/// -- no edit and no free while it is held, other reads welcome -- and the
+/// memline's own cell borrowed mutably, so two walks of one memline at once
+/// panic at the second.
+pub(crate) struct MlRef<'a> {
+    // Declared first, dropped first: the cell's borrow ends before the read
+    // that keeps the buffer in its slot.
+    ml: RefMut<'a, MemLine>,
+    _read: SlotRead<'a, Buffer>,
+}
+
+impl Deref for MlRef<'_> {
+    type Target = MemLine;
+
+    #[inline(always)]
+    fn deref(&self) -> &MemLine {
+        &self.ml
+    }
+}
+
+impl DerefMut for MlRef<'_> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut MemLine {
+        &mut self.ml
+    }
+}
+
+impl fmt::Debug for MlRef<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("MlRef")
+    }
+}
+
+/// The memline: [`Buf::ml`] for a walk, the line count and flags by value,
+/// and the line text a memline cache holds, lent past the check that
+/// reached it. The text is not the buffer's borrow but the line cache's
+/// loan, whose bound is the reader's own -- [`crate::memline::Lines`]'
+/// `&mut self` (the next read through it refills the cache) and
+/// [`crate::memline::HeldLines`]' memfile pin (a write or free of a lent
+/// block panics).
+impl Buf {
+    /// Lend the memline for a walk: [`MlRef`].
+    ///
+    /// # Panics
+    /// When the buffer is gone or lent to an edit, or the memline is
+    /// already lent.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn ml<'a>(self) -> MlRef<'a> {
+        let read = self.read();
+        // SAFETY: the read keeps the buffer in its slot and refuses every
+        // edit while it is held, and `MlRef` drops the cell's borrow first;
+        // the reference is to the cell alone, which the read's shared
+        // borrow of the buffer allows.
+        let cell: &'a RefCell<MemLine> = unsafe { &(*self.ptr).b_ml };
+        MlRef {
+            ml: cell.borrow_mut(),
+            _read: read,
+        }
+    }
+
+    /// The memline, for a copy out of it while nothing holds it.
+    #[inline(always)]
+    #[track_caller]
+    fn ml_unlent<'a>(self) -> &'a MemLine {
+        self.check_live();
+        // SAFETY: live and lent to no edit; `try_borrow_unguarded` refuses
+        // while a walk holds the cell. The reference lives as long as the
+        // caller's one read of a field (the getters below) or the line
+        // cache's loan (the `lend_` family).
+        unsafe { (*self.ptr).b_ml.try_borrow_unguarded() }
+            .expect("the memline was read while a walk held it: read it through the walk's MlRef")
+    }
+
+    /// The memline, writable in place while nothing holds it.
+    #[inline(always)]
+    #[track_caller]
+    fn ml_unlent_mut<'a>(self) -> &'a mut MemLine {
+        // SAFETY: as `edit`: the slot's value address.
+        unsafe { slot::check_write(self.ptr, self.stamp.generation()) };
+        // SAFETY: live, lent to no edit and read by no guard; the cell is
+        // asked whether a walk holds it before the reference is formed.
+        let cell = unsafe { &(*self.ptr).b_ml };
+        assert!(
+            cell.try_borrow_mut().is_ok(),
+            "the memline was written while a walk held it"
+        );
+        // SAFETY: no borrow of the cell is out (just asked), and the
+        // reference lives as long as the caller's one write.
+        unsafe { &mut *cell.as_ptr() }
+    }
+
+    /// The buffer's line count: `b_ml.ml_line_count`.
+    #[inline(always)]
+    #[track_caller]
+    pub fn line_count(self) -> LineNr {
+        self.ml_unlent().ml_line_count
+    }
+
+    /// Store the line count in place.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn set_line_count(self, count: LineNr) {
+        self.ml_unlent_mut().ml_line_count = count;
+    }
+
+    /// The memline's flags: `b_ml.ml_flags`.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn ml_flags(self) -> MlFlags {
+        self.ml_unlent().ml_flags
+    }
+
+    /// Store the memline's flags in place.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn set_ml_flags(self, flags: MlFlags) {
+        self.ml_unlent_mut().ml_flags = flags;
+    }
+
+    /// The cached line, without its NUL.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn lend_cached_line<'a>(self) -> &'a [u8] {
+        self.ml_unlent().cached_bytes()
+    }
+
+    /// The cached line, with its NUL.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn lend_cached_line_with_nul<'a>(self) -> &'a [u8] {
+        self.ml_unlent().cached_bytes_with_nul()
+    }
+
+    /// The cached line with its NUL, as a block-pinned reader lends it.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn lend_pinned_line<'a>(self) -> &'a [u8] {
+        self.ml_unlent().lend_cached_bytes_with_nul()
+    }
+
+    /// The cached line, writable in place (its length fixed).
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn lend_cached_line_mut<'a>(self) -> &'a mut [u8] {
+        self.ml_unlent_mut().cached_bytes_mut()
+    }
+}
+
+/// A syntax block lent through its owner ([`crate::syntax::SynBlockRef`]):
+/// the owner was live and lent to no edit when it was made, and nothing
+/// counts it after. The engine holds the pattern list across matches that
+/// take a pattern's program out, so the block's aliasing stays open until a
+/// program lives in a cell of its own (`docs/safe-surface.md`).
+pub(crate) struct SynEdit<'a> {
+    block: NonNull<SynBlock>,
+    _lent: PhantomData<&'a mut SynBlock>,
+}
+
+impl Deref for SynEdit<'_> {
+    type Target = SynBlock;
+
+    #[inline(always)]
+    fn deref(&self) -> &SynBlock {
+        // SAFETY: the owner was live when the guard was made, and a slot's
+        // memory is never given back; the aliasing is the open row above.
+        unsafe { self.block.as_ref() }
+    }
+}
+
+impl DerefMut for SynEdit<'_> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut SynBlock {
+        // SAFETY: as `deref`.
+        unsafe { self.block.as_mut() }
+    }
+}
+
+impl Buf {
+    /// The buffer's own syntax block, `b_s`, as [`SynEdit`] lends it.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn syn_block_lent<'a>(self) -> SynEdit<'a> {
+        self.check_live();
+        SynEdit {
+            block: NonNull::new(self.syntax_block()).expect("a live buffer's block"),
+            _lent: PhantomData,
+        }
+    }
+}
+
+impl Win {
+    /// The window's `:ownsyntax` block, as [`SynEdit`] lends it.
+    ///
+    /// # Panics
+    /// When the window has none.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn own_syn_block_lent<'a>(self) -> SynEdit<'a> {
+        self.check_live();
+        // SAFETY: live and lent to no edit; a place read of the one field.
+        let own = unsafe { (*self.ptr).w_own_syntax.as_deref() }
+            .expect("an :ownsyntax block outlives its handles");
+        SynEdit {
+            block: NonNull::from(own),
+            _lent: PhantomData,
+        }
     }
 }
 
@@ -369,10 +602,6 @@ impl DerefMut for Win {
     checked_deref_mut!(Window);
 }
 
-impl DerefMut for Buf {
-    checked_deref_mut!(Buffer);
-}
-
 #[cfg(test)]
 mod tests {
     use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -438,11 +667,11 @@ mod tests {
     fn a_freed_buffer_refuses_a_write() {
         let _held = editor_state_lock();
         let buffer = bare_buffer();
-        let mut copy = buffer;
-        copy.b_changed = 1;
-        assert_eq!(buffer.b_changed, 1);
+        let copy = buffer;
+        copy.set_b_changed(1);
+        assert_eq!(buffer.b_changed(), 1);
         free_bare_buffer(buffer);
-        let caught = catch_unwind(AssertUnwindSafe(move || copy.b_changed = 0));
+        let caught = catch_unwind(AssertUnwindSafe(move || copy.edit().b_changed = 0));
         assert!(caught.is_err(), "a stale buffer handle written through");
     }
 }

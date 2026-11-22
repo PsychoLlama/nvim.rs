@@ -38,7 +38,7 @@ use core::ffi::c_int;
 /// Where the comment enclosing the cursor starts, bounded by 'cinoptions'
 /// `*N`.
 pub(crate) fn ind_find_start_comment() -> Option<Pos> {
-    find_start_comment(Buf::current().b_ind_maxcomment)
+    find_start_comment(Buf::current().b_ind_maxcomment())
 }
 
 /// Search backwards from the cursor for the `/*` that opens the comment it is
@@ -92,8 +92,8 @@ pub(crate) fn find_start_rawstring(ind_maxcomment: c_int) -> Option<Pos> {
 /// when the answer is a raw string, which is how `get_c_indent` knows not to
 /// treat that line as an unterminated statement.
 pub(crate) fn ind_find_start_comment_or_raw_string(is_raw: Option<&mut LineNr>) -> Option<Pos> {
-    let comment_pos = find_start_comment(Buf::current().b_ind_maxcomment);
-    let rs_pos = find_start_rawstring(Buf::current().b_ind_maxcomment);
+    let comment_pos = find_start_comment(Buf::current().b_ind_maxcomment());
+    let rs_pos = find_start_rawstring(Buf::current().b_ind_maxcomment());
 
     let raw_wins = match (comment_pos, rs_pos) {
         (None, _) => true,
@@ -209,7 +209,7 @@ pub fn is_pos_in_string(line: &[u8], col: ColNr) -> bool {
 /// `false` where there is no buffer, which is the library test harness and
 /// nothing else -- and is also the option's default.
 fn hash_comments() -> bool {
-    Buf::current_or_none().is_some_and(|buffer| buffer.b_ind_hash_comment != 0)
+    Buf::current_or_none().is_some_and(|buffer| buffer.b_ind_hash_comment() != 0)
 }
 
 /// The offset of the first byte of code at or after `at`: white space and C

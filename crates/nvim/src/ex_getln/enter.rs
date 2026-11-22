@@ -324,7 +324,7 @@ fn prepare_command_line(s: &mut CommandLineState, cc: Cc) {
 
     if s.firstc == b'/' || s.firstc == b'?' || s.firstc == b'@' {
         // Use ":lmap" mappings for the search pattern and input().
-        let which = if Buf::current().b_p_imsearch == B_IMODE_USE_INSERT {
+        let which = if Buf::current().b_p_imsearch() == B_IMODE_USE_INSERT {
             ImOption::Insert
         } else {
             ImOption::Search
@@ -730,15 +730,15 @@ pub(crate) fn getcmdline_prompt_text(
 /// A buffer's `'iminsert'` or `'imsearch'`: what C's `b_im_ptr` read.
 pub(crate) fn im_value(buffer: Buf, which: ImOption) -> OptInt {
     match which {
-        ImOption::Insert => buffer.b_p_iminsert,
-        ImOption::Search => buffer.b_p_imsearch,
+        ImOption::Insert => buffer.b_p_iminsert(),
+        ImOption::Search => buffer.b_p_imsearch(),
     }
 }
 
 /// Write a buffer's `'iminsert'` or `'imsearch'`: `*b_im_ptr = value`.
-pub(crate) fn set_im_value(mut buffer: Buf, which: ImOption, value: OptInt) {
+pub(crate) fn set_im_value(buffer: Buf, which: ImOption, value: OptInt) {
     match which {
-        ImOption::Insert => buffer.b_p_iminsert = value,
-        ImOption::Search => buffer.b_p_imsearch = value,
+        ImOption::Insert => buffer.edit().b_p_iminsert = value,
+        ImOption::Search => buffer.edit().b_p_imsearch = value,
     }
 }

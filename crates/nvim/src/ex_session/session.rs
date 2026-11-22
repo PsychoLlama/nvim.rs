@@ -192,11 +192,11 @@ fn put_cd(out: &mut SessionFile, dirnow: &XString) -> Written {
 fn put_buffer_list(out: &mut SessionFile, only_save_windows: bool) -> Written {
     let opts = SessionOpts::Session;
     for buf in buffers() {
-        let wanted = !(only_save_windows && buf.b_nwindows == 0)
-            && !(buf.b_help && !opts.has(OPT_SSOP_FLAG_HELP))
+        let wanted = !(only_save_windows && buf.b_nwindows() == 0)
+            && !(buf.b_help() && !opts.has(OPT_SSOP_FLAG_HELP))
             && !(buf_is_terminal(Some(buf)) && !opts.has(OPT_SSOP_FLAG_TERMINAL))
-            && !buf.name.is_unnamed()
-            && buf.b_p_bl != 0;
+            && !buf.read().name.is_unnamed()
+            && buf.b_p_bl() != 0;
         if wanted {
             let lnum = first_wininfo_lnum(buf).map_or(1, int64_t::from);
             out.write(format_args!("badd +{lnum} "))?;
@@ -257,7 +257,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
         for window in windows_in_tab(tab) {
             let buffer = window.buffer();
             if ses_do_win(window)
-                && !buffer.name.full().is_none()
+                && !buffer.read().name.full().is_none()
                 && !buf_is_help(Some(buffer))
                 && !buf_is_nofilename(Some(buffer))
             {

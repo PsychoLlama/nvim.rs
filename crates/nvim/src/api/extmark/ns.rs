@@ -59,7 +59,7 @@ pub(crate) fn ns_is_local(ns_id: uint32_t) -> bool {
 /// Whether `win`'s buffer holds any extmark in namespace `ns_id`.
 ///
 fn buffer_uses_ns(win: Win, ns_id: uint32_t) -> bool {
-    win.buffer().b_extmark_ns.contains_key(&ns_id)
+    win.buffer().read().b_extmark_ns.contains_key(&ns_id)
 }
 
 /// Whether namespace `ns_id` is one of the ones `win` shows.

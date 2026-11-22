@@ -117,7 +117,7 @@ pub(crate) fn vim_chdirfile(fname: &CStr, cause: CdCause) -> Result<(), IoFailed
 /// found but not entered has not. The caller says E472 either way.
 pub(crate) fn vim_chdir(new_dir: &CStr) -> Result<(), IoFailed> {
     // A copy: the search can run user code, which may rename the buffer.
-    let rel_fname = Buf::current().name.full().map(XString::from_cstr);
+    let rel_fname = Buf::current().read().name.full().map(XString::from_cstr);
     let rel_fname = rel_fname.as_ref().map(XString::as_cstr);
     match find_directory_in_path(new_dir.to_bytes(), FileNameOpts::MESS, rel_fname) {
         Some(dir_name) if os_chdir(dir_name.as_cstr()).is_ok() => Ok(()),

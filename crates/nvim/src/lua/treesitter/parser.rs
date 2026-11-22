@@ -139,10 +139,10 @@ unsafe extern "C" fn input_cb(
     // Looked up afresh: a log callback runs Lua between two reads, and may
     // have wiped the buffer (or unloaded it). The rest of the text is then
     // simply not there.
-    let Some(buffer) = winlayer::buffer(input.buffer).filter(|b| b.b_ml.ml_mfp.is_some()) else {
+    let Some(buffer) = winlayer::buffer(input.buffer).filter(|b| b.ml().ml_mfp.is_some()) else {
         return c"".as_ptr();
     };
-    let line_count = buffer.b_ml.ml_line_count;
+    let line_count = buffer.line_count();
     let row = i32::try_from(position.row).map_or(LineNr::MAX, LineNr::new);
     if row >= line_count {
         return c"".as_ptr();
@@ -165,8 +165,8 @@ unsafe extern "C" fn input_cb(
     let mut read = count;
     if count < CHUNK_SIZE
         && (lnum != line_count
-            || buffer.b_p_bin == 0 && buffer.b_p_fixeol != 0
-            || lnum != buffer.b_no_eol_lnum && buffer.b_p_eol != 0)
+            || buffer.b_p_bin() == 0 && buffer.b_p_fixeol() != 0
+            || lnum != buffer.b_no_eol_lnum() && buffer.b_p_eol() != 0)
     {
         chunk[count] = b'\n';
         read += 1;

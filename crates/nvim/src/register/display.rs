@@ -194,7 +194,7 @@ pub fn ex_display(excmd: &mut ExArg) {
         last.as_ref().map(XString::as_cstr),
         false,
     );
-    let current = Buf::current().name.shown().map(XString::from_cstr);
+    let current = Buf::current().read().name.shown().map(XString::from_cstr);
     special(
         RegName::FILE_NAME,
         c"\n  c  \"%   ",
@@ -207,8 +207,8 @@ pub fn ex_display(excmd: &mut ExArg) {
     if want_alt && !GOT_INT.get() {
         // A copy: the filter runs a regexp and the display the message
         // machinery.
-        let alt =
-            buflist_name_nr(None).and_then(|(alt, _)| alt.name.shown().map(XString::from_cstr));
+        let alt = buflist_name_nr(None)
+            .and_then(|(alt, _)| alt.read().name.shown().map(XString::from_cstr));
         if let Some(fname) = alt
             && !message_filtered(fname.as_cstr())
         {

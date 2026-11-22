@@ -171,7 +171,7 @@ impl Buf {
         let d = tv_dict_alloc();
         let l = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
         retlist.push_dict(Some(d.clone()));
-        put_nr(&mut d.edit(), "bufnr", VarNumber::from(self.handle));
+        put_nr(&mut d.edit(), "bufnr", VarNumber::from(self.handle()));
         let _ = d.edit().add_list(b"signs", Some(l.clone()));
 
         let ns = group_get_ns(group);

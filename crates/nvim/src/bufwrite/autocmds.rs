@@ -157,18 +157,18 @@ impl Buf {
         mode: WriteMode,
         orig: OpMarks,
     ) -> PreWrite {
-        let old_line_count = self.b_ml.ml_line_count;
+        let old_line_count = self.line_count();
         let msg_save = MSG_SCROLL.get();
-        let empty_memline = self.b_ml.ml_mfp.is_none();
+        let empty_memline = self.ml().ml_mfp.is_none();
         // The short name the events are fired with, each firing its own.
         let sfname = names.sfname.text.clone();
 
         // Which of the three names are the buffer's own, and so have to be
         // re-read if the autocommands rename it.
-        let buf_ffname = names.ffname.is(self.name.full());
-        let buf_sfname = names.sfname.is(self.name.short());
-        let buf_fname_f = names.fname.is(self.name.full());
-        let buf_fname_s = names.fname.is(self.name.short());
+        let buf_ffname = names.ffname.is(self.read().name.full());
+        let buf_sfname = names.sfname.is(self.read().name.short());
+        let buf_fname_f = names.fname.is(self.read().name.full());
+        let buf_fname_s = names.fname.is(self.read().name.short());
 
         // Set curwin/curbuf to buf and save a few things.
         let mut aco = AcoSave::default();
@@ -237,16 +237,16 @@ impl Buf {
         // In three situations the file is not written here: the buffer is
         // gone, script processing was aborted, or one of the "Cmd"
         // autocommands already did it.
-        let unloaded = |b: &Buf| b.b_ml.ml_mfp.is_none() && !empty_memline;
+        let unloaded = |b: &Buf| b.ml().ml_mfp.is_none() && !empty_memline;
         if live.is_none_or(|b| unloaded(&b)) || did_cmd || nofile_err || aborting() {
-            if let Some(mut b) = live.filter(|_| cmdmod_has(CmdModFlags::LOCKMARKS)) {
-                b.b_op_start = orig.start;
-                b.b_op_end = orig.end;
+            if let Some(b) = live.filter(|_| cmdmod_has(CmdModFlags::LOCKMARKS)) {
+                b.set_b_op_start(orig.start);
+                b.set_b_op_end(orig.end);
             }
             NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1);
             MSG_SCROLL.set(msg_save);
             if nofile_err {
-                let buftype = Buf::current().b_p_bt.clone().unwrap_or_default();
+                let buftype = Buf::current().read().b_p_bt.clone().unwrap_or_default();
                 let buftype = msg_bytes(&buftype);
                 semsg!("E676: No matching autocommands for buftype={buftype} buffer");
             }
@@ -256,7 +256,7 @@ impl Buf {
                 return PreWrite::Finished(Err(Failed));
             }
             if did_cmd {
-                let Some(mut written) = live else {
+                let Some(written) = live else {
                     // The buffer was deleted. Assume it was written; there is
                     // no retrying anyway.
                     return PreWrite::Finished(Ok(()));
@@ -265,13 +265,13 @@ impl Buf {
                     // Assume the written was written; update the timestamp.
                     ml_timestamp(written);
                     if mode.req.append {
-                        written.b_flags.clear(BufFlags::NEW);
+                        written.edit().b_flags.clear(BufFlags::NEW);
                     } else {
-                        written.b_flags.clear(BufFlags::WRITE_MASK);
+                        written.edit().b_flags.clear(BufFlags::WRITE_MASK);
                     }
                 }
                 if mode.req.reset_changed
-                    && written.b_changed != 0
+                    && written.b_changed() != 0
                     && !mode.req.append
                     && (mode.overwriting || cpo_has(CpoFlag::PLUS))
                 {
@@ -292,7 +292,7 @@ impl Buf {
         // When writing the whole file, adjust the end. When writing part of
         // it, assume they only changed the number of lines to be written
         // (tricky!).
-        let line_count = self.b_ml.ml_line_count;
+        let line_count = self.line_count();
         if line_count != old_line_count {
             if mode.whole {
                 *end = line_count;
@@ -314,16 +314,16 @@ impl Buf {
         // The autocommands may have renamed the buffer; the names that came
         // from it have to be re-read.
         if buf_ffname {
-            names.ffname.reread(self.name.full());
+            names.ffname.reread(self.read().name.full());
         }
         if buf_sfname {
-            names.sfname.reread(self.name.short());
+            names.sfname.reread(self.read().name.short());
         }
         if buf_fname_f {
-            names.fname.reread(self.name.full());
+            names.fname.reread(self.read().name.full());
         }
         if buf_fname_s {
-            names.fname.reread(self.name.short());
+            names.fname.reread(self.read().name.short());
         }
         PreWrite::Proceed
     }
@@ -338,7 +338,7 @@ impl Buf {
         mode: WriteMode,
     ) {
         // In case it was set by the previous read.
-        Buf::current().b_no_eol_lnum = LineNr::ZERO;
+        Buf::current().set_b_no_eol_lnum(LineNr::ZERO);
 
         let mut aco = AcoSave::default();
         aucmd_prepbuf(&mut aco, self);

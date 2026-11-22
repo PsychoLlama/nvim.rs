@@ -53,18 +53,18 @@ fn var_scope(stack: &mut Stack) -> Result<Option<DictRef>, Raise> {
     let handle: Handle = Handle::new(number_as_int(
         i64::try_from(stack.check_integer(At::arg(2))?).unwrap_or_default(),
     ));
-    let found: Result<Option<DictRef>, Error> =
-        match scope.as_slice() {
-            b"g" => Ok(Some(globvar_dict())),
-            b"v" => Ok(Some(vimvar_dict())),
-            b"b" => find_buffer_by_handle(handle)
-                .map(|buf| buf.and_then(|buf| scope_dict(&buf.b_bufvar))),
-            b"w" => find_window_by_handle(handle)
-                .map(|win| win.and_then(|win| scope_dict(&win.w_winvar))),
-            b"t" => find_tab_by_handle(handle)
-                .map(|tabpage| tabpage.and_then(|tabpage| scope_dict(&tabpage.read().tp_winvar))),
-            _ => return Err(Raise::message("invalid scope")),
-        };
+    let found: Result<Option<DictRef>, Error> = match scope.as_slice() {
+        b"g" => Ok(Some(globvar_dict())),
+        b"v" => Ok(Some(vimvar_dict())),
+        b"b" => find_buffer_by_handle(handle)
+            .map(|buf| buf.and_then(|buf| scope_dict(&buf.read().b_bufvar))),
+        b"w" => {
+            find_window_by_handle(handle).map(|win| win.and_then(|win| scope_dict(&win.w_winvar)))
+        }
+        b"t" => find_tab_by_handle(handle)
+            .map(|tabpage| tabpage.and_then(|tabpage| scope_dict(&tabpage.read().tp_winvar))),
+        _ => return Err(Raise::message("invalid scope")),
+    };
     found.map_err(|err| {
         let why = err.message_or_empty().to_bytes();
         Raise::message([b"scoped variable: ".as_slice(), why].concat())

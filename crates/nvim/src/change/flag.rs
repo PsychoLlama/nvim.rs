@@ -42,18 +42,18 @@ const W_READONLY: &CStr = c"W10: Warning: Changing a readonly file";
 /// FileChangedRO may run arbitrary autocommands, which can reload the buffer,
 /// change `CURBUF` or wipe the buffer: one wiped is not warned about (upstream
 /// read it after it was freed).
-pub fn change_warning(mut buffer: Buf, col: c_int) {
-    if buffer.b_did_warn || curbuf_is_changed() || AUTOCMD_BUSY.get() || buffer.b_p_ro == 0 {
+pub fn change_warning(buffer: Buf, col: c_int) {
+    if buffer.b_did_warn() || curbuf_is_changed() || AUTOCMD_BUSY.get() || buffer.b_p_ro() == 0 {
         return;
     }
     let bufref = BufRef::of(buffer);
-    buffer.b_ro_locked += 1;
+    buffer.set_b_ro_locked(buffer.b_ro_locked() + 1);
     fire_autocmds(AutoEvent::FileChangedRO, false, Some(buffer));
-    let Some(mut buffer) = bufref.get() else {
+    let Some(buffer) = bufref.get() else {
         return;
     };
-    buffer.b_ro_locked -= 1;
-    if buffer.b_p_ro == 0 {
+    buffer.set_b_ro_locked(buffer.b_ro_locked() - 1);
+    if buffer.b_p_ro() == 0 {
         // An autocommand cleared 'readonly': nothing to warn about.
         return;
     }
@@ -73,7 +73,7 @@ pub fn change_warning(mut buffer: Buf, col: c_int) {
         // Give the user time to think about it.
         msg_delay(1002, true);
     }
-    buffer.b_did_warn = true;
+    buffer.set_b_did_warn(true);
     // Don't redraw and erase the message.
     REDRAW_CMDLINE.set(false);
     if MSG_ROW.get() < ROWS.get() - 1 {
@@ -93,7 +93,7 @@ pub fn change_warning(mut buffer: Buf, col: c_int) {
 /// buffer).
 pub fn changed(buffer: Buf) {
     let bufref = BufRef::of(buffer);
-    if buffer.b_changed == 0 {
+    if buffer.b_changed() == 0 {
         let save_msg_scroll = MSG_SCROLL.get();
 
         // May check the file out, and so change `CURBUF`.
@@ -104,7 +104,7 @@ pub fn changed(buffer: Buf) {
 
         // Create a swap file if that is wanted; not for "nofile" and
         // "nowrite" buffers.
-        if buffer.b_may_swap && !buf_is_dontwrite(Some(buffer)) {
+        if buffer.b_may_swap() && !buf_is_dontwrite(Some(buffer)) {
             let save_need_wait_return = NEED_WAIT_RETURN.get();
             NEED_WAIT_RETURN.set(false);
             ml_open_file(buffer);
@@ -138,9 +138,9 @@ pub fn changed(buffer: Buf) {
 /// swap file or the `b:changedtick` bump [`changed`] also does.
 ///
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
-pub fn changed_internal(mut buffer: Buf) {
-    buffer.b_changed = c_int::from(true);
-    buffer.b_changed_invalid = true;
+pub fn changed_internal(buffer: Buf) {
+    buffer.set_b_changed(c_int::from(true));
+    buffer.set_b_changed_invalid(true);
     ml_setflags(buffer);
     redraw_buf_status_later(buffer);
     REDRAW_TABLINE.set(true);
@@ -159,10 +159,10 @@ pub fn changed_internal(mut buffer: Buf) {
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
 /// The `b:changedtick` bump notifies the `b:` watchers, which may re-enter,
 /// but nothing here reads the buffer after it.
-pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
-    if buffer.b_changed != 0 || (ff && file_ff_differs(buffer, false)) {
-        buffer.b_changed = c_int::from(false);
-        buffer.b_changed_invalid = true;
+pub fn unchanged(buffer: Buf, ff: bool, always_inc_changedtick: bool) {
+    if buffer.b_changed() != 0 || (ff && file_ff_differs(buffer, false)) {
+        buffer.set_b_changed(c_int::from(false));
+        buffer.set_b_changed_invalid(true);
         ml_setflags(buffer);
         if ff {
             save_file_ff(buffer);
@@ -181,21 +181,24 @@ pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
 /// whether the user changed one.
 ///
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
-pub fn save_file_ff(mut buffer: Buf) {
-    buffer.b_start_ffc = c_int::from(buffer.b_p_ff.first_byte());
-    buffer.b_start_eof = buffer.b_p_eof;
-    buffer.b_start_eol = buffer.b_p_eol;
-    buffer.b_start_bomb = buffer.b_p_bomb;
+pub fn save_file_ff(buffer: Buf) {
+    let value = c_int::from(buffer.read().b_p_ff.first_byte());
+    buffer.set_b_start_ffc(value);
+    buffer.set_b_start_eof(buffer.b_p_eof());
+    buffer.set_b_start_eol(buffer.b_p_eol());
+    buffer.set_b_start_bomb(buffer.b_p_bomb());
 
     // Only free and allocate when the value actually changed.
-    let fenc = buffer.b_p_fenc.bytes();
-    if buffer
+    let held = buffer.read();
+    let fenc = held.b_p_fenc.bytes();
+    if held
         .b_start_fenc
         .as_ref()
         .is_none_or(|recorded| recorded.as_bytes() != fenc)
     {
         let recorded = ThinCString::from_bytes(fenc);
-        buffer.b_start_fenc = Some(recorded);
+        drop(held);
+        buffer.edit().b_start_fenc = Some(recorded);
     }
 }
 
@@ -208,31 +211,31 @@ pub fn save_file_ff(mut buffer: Buf) {
 pub fn file_ff_differs(buffer: Buf, ignore_empty: bool) -> bool {
     // Handle a file that was never loaded as "not changed": the recorded
     // values are the defaults, not the file's.
-    if buffer.b_flags.has(BufFlags::NEVERLOADED) {
+    if buffer.b_flags().has(BufFlags::NEVERLOADED) {
         return false;
     }
     if ignore_empty
-        && buffer.b_flags.has(BufFlags::NEW)
-        && buffer.b_ml.ml_line_count == LineNr::ONE
+        && buffer.b_flags().has(BufFlags::NEW)
+        && buffer.line_count() == LineNr::ONE
         && buffer.lines().line(LineNr::ONE).is_empty()
     {
         return false;
     }
-    if buffer.b_start_ffc != c_int::from(buffer.b_p_ff.first_byte()) {
+    if buffer.b_start_ffc() != c_int::from(buffer.read().b_p_ff.first_byte()) {
         return true;
     }
     // 'endofline' and 'endoffile' only matter with 'binary' set or
     // 'fixendofline' off: otherwise the writer normalises them anyway.
-    if (buffer.b_p_bin != 0 || buffer.b_p_fixeol == 0)
-        && (buffer.b_start_eof != buffer.b_p_eof || buffer.b_start_eol != buffer.b_p_eol)
+    if (buffer.b_p_bin() != 0 || buffer.b_p_fixeol() == 0)
+        && (buffer.b_start_eof() != buffer.b_p_eof() || buffer.b_start_eol() != buffer.b_p_eol())
     {
         return true;
     }
-    if buffer.b_p_bin == 0 && buffer.b_start_bomb != buffer.b_p_bomb {
+    if buffer.b_p_bin() == 0 && buffer.b_start_bomb() != buffer.b_p_bomb() {
         return true;
     }
-    match &buffer.b_start_fenc {
-        None => !buffer.b_p_fenc.bytes().is_empty(),
-        Some(recorded) => recorded.as_bytes() != buffer.b_p_fenc.bytes(),
+    match &buffer.read().b_start_fenc {
+        None => !buffer.read().b_p_fenc.bytes().is_empty(),
+        Some(recorded) => recorded.as_bytes() != buffer.read().b_p_fenc.bytes(),
     }
 }

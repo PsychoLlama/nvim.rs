@@ -85,13 +85,13 @@ pub(crate) fn at_vcol(rex: Rex, state: &NfaState) -> bool {
     // Likewise for `\%>`, but the bound is the tab width: no character
     // expands to more columns than one tab does.
     if op == 1 && col - 1 > ColNr::new(want) && col > ColNr::new(100) {
-        let ts = wp.buffer().b_p_ts.max(4);
+        let ts = wp.buffer().b_p_ts().max(4);
         if i64::from(col) > i64::from(want) * ts {
             return true;
         }
     }
     let mut lnum = if rex.multi() { lnum(rex) } else { LineNr::ONE };
-    if rex.multi() && (lnum <= LineNr::ZERO || lnum > wp.buffer().b_ml.ml_line_count) {
+    if rex.multi() && (lnum <= LineNr::ZERO || lnum > wp.buffer().line_count()) {
         lnum = LineNr::ONE;
     }
     let vcol = win_linetabsize(wp, lnum, rex.line(), col);

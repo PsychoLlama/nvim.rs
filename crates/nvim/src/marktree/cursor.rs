@@ -32,6 +32,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::slot::EditPart;
+use crate::types::Buffer;
 use core::ffi::c_int;
 
 use crate::marktree::iter::{
@@ -60,8 +62,8 @@ pub struct Cursor<'a> {
 
 /// The mark `ns`/`id` names in `buffer` — the `end` half when asked for it —
 /// without moving any walk.
-pub fn lookup_ns(mut buffer: Buf, ns: uint32_t, id: uint32_t, end: bool) -> MTKey {
-    marktree_lookup_ns(&mut buffer.b_marktree, ns, id, end, None)
+pub fn lookup_ns(buffer: Buf, ns: uint32_t, id: uint32_t, end: bool) -> MTKey {
+    marktree_lookup_ns(&mut buffer.edit().b_marktree, ns, id, end, None)
 }
 
 impl<'a> Cursor<'a> {
@@ -73,8 +75,11 @@ impl<'a> Cursor<'a> {
     }
 
     /// The tree and the iterator, for the length of one call.
-    fn parts(&mut self) -> (&mut MarkTree, &mut MarkTreeIter) {
-        (&mut self.buffer.b_marktree, &mut *self.iter)
+    fn parts(&mut self) -> (EditPart<'static, Buffer, MarkTree>, &mut MarkTreeIter) {
+        (
+            self.buffer.edit().map(|buffer| &mut buffer.b_marktree),
+            &mut *self.iter,
+        )
     }
 
     /// Whether the walk has run off the end of the tree.
@@ -84,8 +89,8 @@ impl<'a> Cursor<'a> {
 
     /// Position the walk at the first mark at or after (`row`, `col`).
     pub fn seek(&mut self, row: int32_t, col: c_int) -> bool {
-        let (tree, iter) = self.parts();
-        marktree_itr_get(tree, row, col, iter)
+        let (mut tree, iter) = self.parts();
+        marktree_itr_get(&mut tree, row, col, iter)
     }
 
     /// [`Cursor::seek`], descending only into subtrees `filter` wants and
@@ -98,8 +103,8 @@ impl<'a> Cursor<'a> {
         stop_col: c_int,
         filter: &MetaCount,
     ) -> bool {
-        let (tree, iter) = self.parts();
-        marktree_itr_get_filter(tree, row, col, stop_row, stop_col, filter, iter)
+        let (mut tree, iter) = self.parts();
+        marktree_itr_get_filter(&mut tree, row, col, stop_row, stop_col, filter, iter)
     }
 
     /// Position the walk to enumerate the ranges *covering* (`row`, `col`) —
@@ -107,8 +112,8 @@ impl<'a> Cursor<'a> {
     /// [`Cursor::step_overlap`] until it answers `None`, which leaves the
     /// walk an ordinary one positioned at (`row`, `col`).
     pub fn seek_overlap(&mut self, row: c_int, col: c_int) -> bool {
-        let (tree, iter) = self.parts();
-        marktree_itr_get_overlap(tree, row, col, iter)
+        let (mut tree, iter) = self.parts();
+        marktree_itr_get_overlap(&mut tree, row, col, iter)
     }
 
     /// One more range covering the position [`Cursor::seek_overlap`] was
@@ -121,44 +126,44 @@ impl<'a> Cursor<'a> {
             end_pos: MTPos::default(),
             end_right_gravity: false,
         };
-        let (tree, iter) = self.parts();
-        let more = marktree_itr_step_overlap(tree, iter, &mut pair);
+        let (mut tree, iter) = self.parts();
+        let more = marktree_itr_step_overlap(&mut tree, iter, &mut pair);
         more.then_some(pair)
     }
 
     /// Leave the subtrees `filter` has nothing in, and answer whether the
     /// walk still names a node.
     pub fn step_out_filter(&mut self, filter: &MetaCount) -> bool {
-        let (tree, iter) = self.parts();
-        marktree_itr_step_out_filter(tree, iter, filter)
+        let (mut tree, iter) = self.parts();
+        marktree_itr_step_out_filter(&mut tree, iter, filter)
     }
 
     /// The mark the walk is on, or [`MT_INVALID_KEY`]
     /// once it has run off the end.
     pub fn current(&mut self) -> MTKey {
         let (tree, iter) = self.parts();
-        marktree_itr_current(tree, iter)
+        marktree_itr_current(&tree, iter)
     }
 
     /// Step to the next mark. Not `Iterator::next` — a cursor answers
     /// "is there one" and leaves the mark itself to [`current`](Self::current).
     pub fn step(&mut self) -> bool {
-        let (tree, iter) = self.parts();
-        marktree_itr_next(tree, iter)
+        let (mut tree, iter) = self.parts();
+        marktree_itr_next(&mut tree, iter)
     }
 
     /// Step to the next mark `filter` wants, giving up at (`stop_row`,
     /// `stop_col`).
     pub fn step_filter(&mut self, stop_row: c_int, stop_col: c_int, filter: &MetaCount) -> bool {
-        let (tree, iter) = self.parts();
-        marktree_itr_next_filter(tree, iter, stop_row, stop_col, filter)
+        let (mut tree, iter) = self.parts();
+        marktree_itr_next_filter(&mut tree, iter, stop_row, stop_col, filter)
     }
 
     /// Where the other half of `mark`'s pair sits — `mark`'s own position
     /// when it is unpaired. Does not move the walk.
     pub fn altpos(&mut self, mark: MTKey) -> MTPos {
-        let tree = self.parts().0;
-        marktree_get_altpos(tree, mark, None)
+        let mut tree = self.parts().0;
+        marktree_get_altpos(&mut tree, mark, None)
     }
 }
 

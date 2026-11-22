@@ -763,7 +763,7 @@ fn dispatch_action(a: Action, win: Win) {
         return;
     }
 
-    if mods.has(ModMask::CTRL) || (buf.b_help && double_click) {
+    if mods.has(ModMask::CTRL) || (buf.b_help() && double_click) {
         // Ctrl-Mouse click (or double click in a help window) jumps to the
         // tag under the mouse pointer.
         if STATE.get() & MODE_INSERT != 0 {

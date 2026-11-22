@@ -176,18 +176,18 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
         (top, bot, sel.mode, wp.w_curswant)
     } else {
         let buf = Buf::current();
-        let (start, end) = (buf.b_visual.vi_start, buf.b_visual.vi_end);
+        let (start, end) = (buf.b_visual().vi_start, buf.b_visual().vi_end);
         let (top, mut bot) = if lt(start, end) {
             (start, end)
         } else {
             (end, start)
         };
-        bot.lnum = bot.lnum.min(buf.b_ml.ml_line_count);
+        bot.lnum = bot.lnum.min(buf.line_count());
         (
             top,
             bot,
-            VisualMode::from_raw(buf.b_visual.vi_mode),
-            buf.b_visual.vi_curswant,
+            VisualMode::from_raw(buf.b_visual().vi_mode),
+            buf.b_visual().vi_curswant,
         )
     };
 

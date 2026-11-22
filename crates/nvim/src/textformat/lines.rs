@@ -62,7 +62,7 @@ use crate::undo::{u_save, u_save_cursor};
 /// `keep_cursor` is `gw`: the cursor goes back to where the command was
 /// given, adjusted for the lines that were joined and split under it.
 pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
-    let mut old_line_count = Buf::current().b_ml.ml_line_count;
+    let mut old_line_count = Buf::current().line_count();
 
     // Put the cursor where the command was given, so `u` can put it back.
     Win::current().w_cursor = op.cursor_start;
@@ -77,7 +77,7 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
     }
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // The `'[` mark goes at the start of the formatted area.
-        Buf::current().b_op_start = op.start;
+        Buf::current().set_b_op_start(op.start);
     }
     if keep_cursor {
         SAVED_CURSOR.set(op.cursor_start);
@@ -88,16 +88,16 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
     // Leave the cursor on the first non-blank of the last formatted line.
     // If it moved a line back (`Q}` does that), step forward so `.`
     // carries on with the next lines.
-    if op.end_adjusted && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count {
+    if op.end_adjusted && Win::current().w_cursor.lnum < Buf::current().line_count() {
         Win::current().w_cursor.lnum += 1;
     }
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-    old_line_count = LineNr::new(Buf::current().b_ml.ml_line_count - old_line_count);
+    old_line_count = LineNr::new(Buf::current().line_count() - old_line_count);
     msgmore(old_line_count.get());
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // The `']` mark goes at the end of it.
-        Buf::current().b_op_end = Win::current().w_cursor;
+        Buf::current().set_b_op_end(Win::current().w_cursor);
     }
     if keep_cursor {
         Win::current().w_cursor = SAVED_CURSOR.get();
@@ -145,9 +145,10 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
     set_vim_var_char(Key::from_raw(c));
 
     // Copy it: the option can be changed while it is running.
-    let fex = Buf::current().b_p_fex.get();
+    let fex = Buf::current().read().b_p_fex.get();
     // Errors go against the script that set `'formatexpr'`.
-    let script_ctx = Script::context(Buf::current().b_p_script_ctx[BUF_OPT_FORMATEXPR as usize]);
+    let script_ctx =
+        Script::context(Buf::current().read().b_p_script_ctx[BUF_OPT_FORMATEXPR as usize]);
     let r = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         number_as_int(eval_to_number(&fex, true))
@@ -165,10 +166,10 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
 fn paragraph_indent(first_line: LineNr) -> c_int {
     if Win::current().w_cursor.lnum == first_line {
         get_indent()
-    } else if Buf::current().b_p_lisp != 0 {
+    } else if Buf::current().b_p_lisp() != 0 {
         get_lisp_indent()
     } else if cindent_on() {
-        if c_int::from(Buf::current().b_p_inde.first_byte()) != 0 {
+        if c_int::from(Buf::current().read().b_p_inde.first_byte()) != 0 {
             get_expr_indent()
         } else {
             get_c_indent()
@@ -274,7 +275,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
         }
 
         // The last line to be formatted.
-        if count == 1 || Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count {
+        if count == 1 || Win::current().w_cursor.lnum == Buf::current().line_count() {
             next_is_not_par = true;
             next_leader = Leader::NONE;
         } else {
@@ -301,7 +302,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
             if first_par_line
                 && (do_second_indent || do_number_indent)
                 && prev_is_end_par
-                && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
+                && Win::current().w_cursor.lnum < Buf::current().line_count()
             {
                 let no_comment = leader.len == 0 && next_leader.len == 0;
                 if do_second_indent
@@ -329,7 +330,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
             }
 
             // A change of comment leader ends the paragraph.
-            if Win::current().w_cursor.lnum >= Buf::current().b_ml.ml_line_count
+            if Win::current().w_cursor.lnum >= Buf::current().line_count()
                 || !same_leader(Win::current().w_cursor.lnum, leader, next_leader)
             {
                 // Except when the next line opens a line comment and this

@@ -186,9 +186,10 @@ impl Buf {
         which: StopList,
         f: impl FnOnce(Option<tabstop::TabStops<'_>>) -> R,
     ) -> R {
+        let held = self.read();
         let vts = match which {
-            StopList::Tab => self.b_p_vts_array.as_deref(),
-            StopList::SoftTab => self.b_p_vsts_array.as_deref(),
+            StopList::Tab => held.b_p_vts_array.as_deref(),
+            StopList::SoftTab => held.b_p_vsts_array.as_deref(),
         };
         f(tabstops(vts))
     }
@@ -197,7 +198,7 @@ impl Buf {
     /// `'tabstop'` and `'vartabstop'`.
     #[inline]
     pub fn tab_padding(self, col: ColNr) -> i32 {
-        self.stop_padding(StopList::Tab, col, self.b_p_ts)
+        self.stop_padding(StopList::Tab, col, self.b_p_ts())
     }
 
     /// How many columns from `col` to the next stop of `which`, the uniform
@@ -225,7 +226,7 @@ impl Buf {
     /// The width of the 'vartabstop' stop at `col` ('tabstop' when there is
     /// no list); with `left`, of the one a cursor moving back would cross.
     pub(crate) fn tab_width_at(self, col: ColNr, left: bool) -> c_int {
-        let ts = number_as_int(self.b_p_ts);
+        let ts = number_as_int(self.b_p_ts());
         self.with_stops(StopList::Tab, |stops| {
             stops.map_or(ts, |stops| stops.at(col, left))
         })
@@ -243,7 +244,7 @@ impl Buf {
     /// The tabs and trailing spaces that fill the columns `start_col` to
     /// `end_col`, by this buffer's 'tabstop' and 'vartabstop'.
     pub(crate) fn tab_fill(self, start_col: ColNr, end_col: ColNr) -> (c_int, c_int) {
-        let ts = number_as_int(self.b_p_ts);
+        let ts = number_as_int(self.b_p_ts());
         self.with_stops(StopList::Tab, |stops| match stops {
             Some(stops) => stops.from_to(start_col, end_col),
             None => tabstop::uniform_from_to(start_col, end_col, ts),
@@ -266,7 +267,7 @@ impl Buf {
     /// The screen width of the indent at `text`, by this buffer's
     /// 'tabstop' and 'vartabstop'.
     pub(crate) fn indent_width(self, text: &[u8]) -> c_int {
-        let ts = self.b_p_ts;
+        let ts = self.b_p_ts();
         self.with_stops(StopList::Tab, |stops| {
             indent_width(text, stops.map(tabstop::TabStops::widths), ts)
         })
@@ -301,8 +302,8 @@ pub fn get_sw_value_indent(buffer: Buf, left: bool) -> c_int {
 
 /// `buffer`'s 'shiftwidth' at screen column `col`.
 pub fn get_sw_value_col(buffer: Buf, col: ColNr, left: bool) -> c_int {
-    if buffer.b_p_sw != 0 {
-        number_as_int(buffer.b_p_sw)
+    if buffer.b_p_sw() != 0 {
+        number_as_int(buffer.b_p_sw())
     } else {
         buffer.tab_width_at(col, left)
     }
@@ -311,10 +312,10 @@ pub fn get_sw_value_col(buffer: Buf, col: ColNr, left: bool) -> c_int {
 /// The current buffer's 'softtabstop', with a negative value meaning
 /// 'shiftwidth'.
 pub fn get_sts_value() -> c_int {
-    if Buf::current().b_p_sts < 0 {
+    if Buf::current().b_p_sts() < 0 {
         get_sw_value(Buf::current())
     } else {
-        number_as_int(Buf::current().b_p_sts)
+        number_as_int(Buf::current().b_p_sts())
     }
 }
 
@@ -469,7 +470,7 @@ struct IndentPlan {
 /// `oldline` is the current line; reading past its end reads its NUL.
 fn plan_indent(size: c_int, flags: c_int, oldline: &[u8]) -> IndentPlan {
     let buf = Buf::current();
-    let preserve = flags & SIN_INSERT == 0 && buf.b_p_pi != 0;
+    let preserve = flags & SIN_INSERT == 0 && buf.b_p_pi() != 0;
     let pad = |col: c_int| buf.tab_padding(ColNr::new(col));
     let at = |i: usize| c_int::from(byte_at(oldline, i));
     let mut plan = IndentPlan {
@@ -481,7 +482,7 @@ fn plan_indent(size: c_int, flags: c_int, oldline: &[u8]) -> IndentPlan {
     };
     let mut todo = size;
 
-    if buf.b_p_et == 0 || preserve {
+    if buf.b_p_et() == 0 || preserve {
         let mut ind_col = 0;
         if preserve {
             // Reuse as much of the existing indent's structure as fits.
@@ -507,7 +508,7 @@ fn plan_indent(size: c_int, flags: c_int, oldline: &[u8]) -> IndentPlan {
             ind_col = plan.ind_done;
             // The initial run of characters to copy when the indent is
             // preserved under 'expandtab'.
-            if buf.b_p_et != 0 {
+            if buf.b_p_et() != 0 {
                 plan.orig_char_len = plan.ind_len;
             }
             // Fill to the next tabstop with a tab, if possible.
@@ -641,8 +642,8 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
     }
 
     // Put the characters in the new line; without 'expandtab', use tabs.
-    if buf.b_p_et == 0 {
-        if flags & SIN_INSERT == 0 && buf.b_p_pi != 0 {
+    if buf.b_p_et() == 0 {
+        if flags & SIN_INSERT == 0 && buf.b_p_pi() != 0 {
             // Reuse as much of the existing indent's structure as fits.
             p = 0;
             ind_done = 0;
@@ -759,7 +760,7 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
 /// arbitrary, so it can name more than a number, and it is matched past any
 /// comment leader -- which is the only reason `get_leader_len` is here.
 pub fn get_number_indent(lnum: LineNr) -> c_int {
-    if lnum > Buf::current().b_ml.ml_line_count {
+    if lnum > Buf::current().line_count() {
         return -1;
     }
     let mut pos = Pos {
@@ -776,7 +777,7 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
     if STATE.get() & MODE_INSERT != 0 || has_format_option(FoFlag::Q_COMS) {
         lead_len = get_leader_len(&line, false, true).0;
     }
-    let flp = Buf::current().b_p_flp.get();
+    let flp = Buf::current().read().b_p_flp.get();
     let mut regmatch = RegMatch::new(vim_regcomp(flp.as_cstr(), RE_MAGIC), false);
     if regmatch.regprog.is_some() {
         regmatch.rm_ic = false;

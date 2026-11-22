@@ -65,7 +65,7 @@ pub(crate) fn prepare_line(
         s.check_decor_providers = true;
 
         // 'colorcolumn'; a terminal buffer never shows one.
-        wlv.color_col = if window.w_buffer.terminal.is_null() && !window.w_p_cc_cols.is_empty() {
+        wlv.color_col = if window.w_buffer.terminal().is_null() && !window.w_p_cc_cols.is_empty() {
             0
         } else {
             NO_COLOR_COL
@@ -165,7 +165,7 @@ pub(crate) fn prepare_line(
 
     // The `:terminal` attributes themselves are filled in by the caller:
     // see [`LineSetup::has_terminal`].
-    if !window.w_buffer.terminal.is_null() {
+    if !window.w_buffer.terminal().is_null() {
         s.has_terminal = true;
         s.extra_check = true;
     }
@@ -193,7 +193,7 @@ impl LineSetup {
             is_wrapped: window.w_onebuf_opt.wo_wrap != 0 && !has_fold,
             // The line one past the end of the buffer exists only to carry
             // the filler lines below the last one.
-            draw_text: !concealed && wlv.lnum != window.w_buffer.b_ml.ml_line_count + 1,
+            draw_text: !concealed && wlv.lnum != window.w_buffer.line_count() + 1,
             start_vcol: 0,
             bg_attr: 0,
             may_have_inline_virt: false,
@@ -522,7 +522,7 @@ impl LineSetup {
         // Trick: `spell_cat_line` skips a few characters for C/shell/Vim
         // comment leaders.
         nextline[SPELL_LOOKAHEAD] = 0;
-        if lnum < window.w_buffer.b_ml.ml_line_count {
+        if lnum < window.w_buffer.line_count() {
             let mut lines = window.buffer().lines();
             let next = lines.line(lnum + 1);
             spell_cat_line(&mut nextline[SPELL_LOOKAHEAD..], next, SPELL_LOOKAHEAD);

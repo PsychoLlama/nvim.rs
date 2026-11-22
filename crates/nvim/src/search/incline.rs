@@ -206,7 +206,7 @@ pub(crate) fn show_pat_in_path(
             *lnum += 1;
         } else {
             *lnum += 1;
-            if *lnum > Buf::current().b_ml.ml_line_count {
+            if *lnum > Buf::current().line_count() {
                 break;
             }
             line = Lines::current().line(*lnum).to_vec();

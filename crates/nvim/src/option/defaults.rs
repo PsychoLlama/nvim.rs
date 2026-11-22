@@ -249,12 +249,12 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     // From here no string option is upstream's NULL.
     mark_option_defaults_set();
 
-    Buf::current().b_p_initialized = true;
+    Buf::current().set_b_p_initialized(true);
     // The four global-local options the first buffer starts unset.
-    Buf::current().b_p_ac = -1;
-    Buf::current().b_p_ar = -1;
-    Buf::current().b_p_fs = -1;
-    Buf::current().b_p_ul = OptInt::from(NO_LOCAL_UNDOLEVEL);
+    Buf::current().set_b_p_ac(-1);
+    Buf::current().set_b_p_ar(-1);
+    Buf::current().set_b_p_fs(-1);
+    Buf::current().set_b_p_ul(OptInt::from(NO_LOCAL_UNDOLEVEL));
 
     check_buf_options(Buf::current());
     last_status(false);

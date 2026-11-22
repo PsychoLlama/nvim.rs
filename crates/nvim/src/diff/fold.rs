@@ -120,7 +120,7 @@ pub fn diff_check_with_linestatus(window: Win, lnum: LineNr) -> (c_int, c_int) {
     }
     // One past the last line is legal: that is where the filler for a
     // deletion at end of buffer goes.
-    if lnum < LineNr::ONE || lnum > buf.b_ml.ml_line_count + 1 {
+    if lnum < LineNr::ONE || lnum > buf.line_count() + 1 {
         return (0, 0);
     }
     let idx = tp.diff_index(buf);

@@ -236,7 +236,7 @@ pub(crate) fn cursor_up(n: i32, upd_topline: bool) -> Result<(), Failed> {
 /// Safe: a [`Win`] carries the whole of the promise this needs.
 pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) {
     let mut lnum = win.w_cursor.lnum;
-    let line_count = win.buffer().b_ml.ml_line_count;
+    let line_count = win.buffer().line_count();
 
     if lnum + n >= line_count {
         lnum = line_count;
@@ -270,7 +270,7 @@ pub(crate) fn cursor_down(n: c_int, upd_topline: bool) -> Result<(), Failed> {
     let win = Win::current();
     let mut lnum = win.w_cursor.lnum;
     fold_end(win, lnum, &mut lnum);
-    if n > 0 && lnum >= win.buffer().b_ml.ml_line_count {
+    if n > 0 && lnum >= win.buffer().line_count() {
         return Err(Failed);
     }
     cursor_down_inner(win, n, false);

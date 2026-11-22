@@ -57,7 +57,7 @@ pub(crate) fn ins_mouse(c: Key) {
             old_curwin.buffer().make_current();
             if buf_is_prompt(old_curwin.buffer_or_none()) {
                 // Restart Insert mode when re-entering the prompt buffer.
-                old_curwin.buffer().b_prompt_insert = Key::ascii(b'A');
+                old_curwin.buffer().set_b_prompt_insert(Key::ascii(b'A'));
             }
         }
         // No end means "the cursor moved to another window".

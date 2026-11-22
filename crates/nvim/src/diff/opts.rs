@@ -103,12 +103,14 @@ pub(crate) fn parse_diffanchors(
     // place and put the byte back; the slice `get_address` takes is read
     // only.)
     let global_dia = P_DIA.get();
-    let mut dia: Vec<u8> = if buffer.b_p_dia.first_byte() == 0 {
+    let held = buffer.read();
+    let mut dia: Vec<u8> = if held.b_p_dia.first_byte() == 0 {
         global_dia.as_cstr().to_bytes()
     } else {
-        buffer.b_p_dia.bytes()
+        held.b_p_dia.bytes()
     }
     .to_vec();
+    drop(held);
     dia.push(0);
     let mut at = 0;
     // `None` means "stay where you are": `check_only` resolves the address in
@@ -158,7 +160,7 @@ pub(crate) fn parse_diffanchors(
         // The validator accepts an address it cannot resolve yet; only
         // the real parse insists the line exists.
         if !check_only
-            && (lnum == MAXLNUM || lnum <= LineNr::ZERO || lnum > buffer.b_ml.ml_line_count + 1)
+            && (lnum == MAXLNUM || lnum <= LineNr::ZERO || lnum > buffer.line_count() + 1)
         {
             emsg(gettext(E_INVRANGE));
             return Err(Failed);

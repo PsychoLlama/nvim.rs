@@ -35,14 +35,15 @@ use crate::types::ExArgt;
 /// Sets the contained flag, and if the item is not already contained adds it to
 /// the top-level cluster the `:syntax include` named, if any.
 pub(crate) fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
-    if flags.has(SynFlags::CONTAINED) || cur_syn_block().b_syn_topgrp == 0 {
+    if flags.has(SynFlags::CONTAINED) || cur_syn_block().read().b_syn_topgrp == 0 {
         return;
     }
     *flags |= SynFlags::CONTAINED | SynFlags::INCLUDED_TOPLEVEL;
-    if cur_syn_block().b_syn_topgrp >= SYNID_CLUSTER {
-        let tlg_id = as_index(cur_syn_block().b_syn_topgrp - SYNID_CLUSTER);
-        let mut block = cur_syn_block();
-        let list = &mut block.clusters_mut()[tlg_id].scl_list;
+    if cur_syn_block().read().b_syn_topgrp >= SYNID_CLUSTER {
+        let tlg_id = as_index(cur_syn_block().read().b_syn_topgrp - SYNID_CLUSTER);
+        let block = cur_syn_block();
+        let mut held = block.edit();
+        let list = &mut held.clusters_mut()[tlg_id].scl_list;
         syn_combine_list(list, IdList::from_ids(&[id16(id)]), CLUSTER_ADD);
     }
 }
@@ -94,8 +95,8 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
     let prev_syn_inc_tag = CURRENT_SYN_INC_TAG.get();
     RUNNING_SYN_INC_TAG.set(RUNNING_SYN_INC_TAG.get() + 1);
     CURRENT_SYN_INC_TAG.set(RUNNING_SYN_INC_TAG.get());
-    let prev_toplvl_grp = cur_syn_block().b_syn_topgrp;
-    cur_syn_block().b_syn_topgrp = sgl_id;
+    let prev_toplvl_grp = cur_syn_block().read().b_syn_topgrp;
+    cur_syn_block().edit().b_syn_topgrp = sgl_id;
 
     let arg = args.line.cstr_from(args.line.arg);
     // The command's own line, which nothing the script runs can reach.
@@ -109,7 +110,7 @@ pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
         semsg!("E484: Can't open file {arg}");
     }
 
-    cur_syn_block().b_syn_topgrp = prev_toplvl_grp;
+    cur_syn_block().edit().b_syn_topgrp = prev_toplvl_grp;
     CURRENT_SYN_INC_TAG.set(prev_syn_inc_tag);
 }
 
@@ -179,20 +180,20 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
                 item.sp_sync_idx = opt.sync_idx;
                 item.sp_cchar = conceal_char;
                 if !opt.cont_in_list.is_none() {
-                    cur_syn_block().b_syn_containedin = 1;
+                    cur_syn_block().edit().b_syn_containedin = 1;
                 }
                 item.sp_cont_list = ::core::mem::take(&mut opt.cont_list);
                 item.sp_cont_in_list = ::core::mem::take(&mut opt.cont_in_list);
                 item.sp_next_list = ::core::mem::take(&mut opt.next_list);
-                cur_syn_block().patterns_mut().push(item);
+                cur_syn_block().edit().patterns_mut().push(item);
                 stored = true;
 
                 // Remember that we found a match to sync on.
                 if opt.flags.has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE) {
-                    cur_syn_block().b_syn_sync_flags |= SF_MATCH;
+                    cur_syn_block().edit().b_syn_sync_flags |= SF_MATCH;
                 }
                 if opt.flags.has(SynFlags::FOLD) {
-                    cur_syn_block().b_syn_folditems += 1;
+                    cur_syn_block().edit().b_syn_folditems += 1;
                 }
 
                 redraw_curbuf_later(UPD_SOME_VALID);
@@ -405,9 +406,9 @@ fn store_region(args: RegionArgs, syn_id: c_int, syncing: bool) {
         conceal_char,
         ..
     } = args;
-    let mut block = cur_syn_block();
+    let block = cur_syn_block();
     if !opt.cont_in_list.is_none() {
-        block.b_syn_containedin = 1;
+        block.edit().b_syn_containedin = 1;
     }
     for item in [ITEM_START, ITEM_SKIP, ITEM_END] {
         for entry in ::core::mem::take(&mut pats[as_index(item)]) {
@@ -433,9 +434,9 @@ fn store_region(args: RegionArgs, syn_id: c_int, syncing: bool) {
                 spp.sp_cont_in_list = opt.cont_in_list.clone();
                 spp.sp_next_list = opt.next_list.clone();
             }
-            block.patterns_mut().push(spp);
+            block.edit().patterns_mut().push(spp);
             if opt.flags.has(SynFlags::FOLD) {
-                block.b_syn_folditems += 1;
+                block.edit().b_syn_folditems += 1;
             }
         }
     }
@@ -481,7 +482,7 @@ pub(crate) fn read_pattern(
         // The compiler has said why.
         return Err(SyntaxError::Reported(Failed));
     }
-    ci.sp_ic = cur_syn_block().b_syn_ic;
+    ci.sp_ic = cur_syn_block().read().b_syn_ic;
     syn_clear_time(&mut ci.sp_time);
 
     let end = read_pattern_offsets(ci, &mut tail, end + 1);

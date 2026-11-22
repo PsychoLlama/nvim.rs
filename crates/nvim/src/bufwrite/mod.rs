@@ -252,9 +252,9 @@ impl WriteName<'_> {
         let own =
             |name: Option<&CStr>| name.map(|name| WriteNameCopy::new(name, name.as_ptr().addr()));
         match self {
-            WriteName::Full => own(buffer.name.full()),
-            WriteName::Short => own(buffer.name.short()),
-            WriteName::Shown => own(buffer.name.shown()),
+            WriteName::Full => own(buffer.read().name.full()),
+            WriteName::Short => own(buffer.read().name.short()),
+            WriteName::Shown => own(buffer.read().name.shown()),
             WriteName::Other(name) => Some(WriteNameCopy::new(name, 0)),
         }
     }
@@ -297,7 +297,7 @@ impl Buf {
         let mut end = end;
         let msg_save = MSG_SCROLL.get();
         let mut prev_got_int = GOT_INT.get();
-        let whole = start == LineNr::ONE && end == buf.b_ml.ml_line_count;
+        let whole = start == LineNr::ONE && end == buf.line_count();
         let bkc = get_bkc_flags(buf);
 
         let Some(fname) = fname.filter(|name| !name.as_cstr().is_empty()) else {
@@ -311,7 +311,7 @@ impl Buf {
         // With no file name yet, take the one being written to. BufFlags::NOTEDITED
         // records that, in case the write fails. Not for a filter command,
         // not when appending, and only when 'cpoptions' contains "F".
-        if buf.name.full().is_none()
+        if buf.read().name.full().is_none()
             && req.reset_changed
             && whole
             && buf == Buf::current()
@@ -333,21 +333,21 @@ impl Buf {
         let fname = sfname.clone();
 
         // Writing over the file the buffer came from?
-        let overwriting = buf
-            .name
-            .full()
-            .is_some_and(|full| path_fnamecmp(ffname.as_cstr().to_bytes(), full.to_bytes()) == 0);
+        let overwriting =
+            buf.read().name.full().is_some_and(|full| {
+                path_fnamecmp(ffname.as_cstr().to_bytes(), full.to_bytes()) == 0
+            });
         NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() + 1); // don't wait for return yet
 
         let orig = OpMarks {
-            start: buf.b_op_start,
-            end: buf.b_op_end,
+            start: buf.b_op_start(),
+            end: buf.b_op_end(),
         };
         // Set '[ and '] to the lines to be written.
-        buf.b_op_start.lnum = start;
-        buf.b_op_start.col = ColNr::ZERO;
-        buf.b_op_end.lnum = end;
-        buf.b_op_end.col = ColNr::ZERO;
+        buf.edit().b_op_start.lnum = start;
+        buf.edit().b_op_start.col = ColNr::ZERO;
+        buf.edit().b_op_end.lnum = end;
+        buf.edit().b_op_end.col = ColNr::ZERO;
 
         let mode = WriteMode {
             req,
@@ -379,8 +379,8 @@ impl Buf {
 
         if cmdmod_has(CmdModFlags::LOCKMARKS) {
             // Restore the original '[ and '] positions.
-            buf.b_op_start = orig.start;
-            buf.b_op_end = orig.end;
+            buf.set_b_op_start(orig.start);
+            buf.set_b_op_end(orig.end);
         }
         // Overwrite the previous file message, or don't.
         MSG_SCROLL.set(if shortmess(ShmFlag::OVER) && !EXITING.get() {
@@ -404,7 +404,7 @@ impl Buf {
         );
 
         // Done saving; accept changed-buffer warnings again.
-        buf.b_saving = false;
+        buf.set_b_saving(false);
         let original_lost = job.end == LineNr::ZERO;
         let undo_hash = job.release();
 
@@ -436,7 +436,7 @@ impl Buf {
     /// Refuse a write that cannot work at all: no memline yet, the sandbox,
     /// or a name too long to handle. Said here.
     fn check_can_write(self, fname: &CStr) -> Result<(), Failed> {
-        if self.b_ml.ml_mfp.is_none() {
+        if self.ml().ml_mfp.is_none() {
             // Can happen during startup, from a stray "w" in the vimrc.
             emsg(gettext(E_EMPTY_BUFFER));
             return Err(Failed);
@@ -453,7 +453,7 @@ impl Buf {
 
     /// Say why the write to `fname` failed, and warn when the original may
     /// be gone too.
-    fn report_write_failure(mut self, fname: &CStr, err: &WriteError, original_lost: bool) {
+    fn report_write_failure(self, fname: &CStr, err: &WriteError, original_lost: bool) {
         // -100 to save some space for a further error message.
         let quoted = Report::quoted_fname(self, Some(fname), IOSIZE as usize - 100);
         err.report(quoted.as_cstr());
@@ -469,8 +469,8 @@ impl Buf {
         // when writing again.
         if let Some(info) = crate::os::fs::file_info(fname) {
             buf_store_file_info(self, &info);
-            self.b_mtime_read = self.b_mtime;
-            self.b_mtime_read_ns = self.b_mtime_ns;
+            self.set_b_mtime_read(self.b_mtime());
+            self.set_b_mtime_read_ns(self.b_mtime_ns());
         }
     }
 }

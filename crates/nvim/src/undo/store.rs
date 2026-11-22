@@ -39,6 +39,8 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::slot::{EditPart, ReadPart};
+use crate::types::Buffer;
 use core::ffi::c_int;
 
 use crate::registry::{IdMap, id_map};
@@ -144,14 +146,30 @@ impl Buf {
     /// that names nothing, or names a header that has been freed, resolves to
     /// `None`. The borrow is the buffer handle's.
     #[inline]
-    pub(crate) fn header(&self, link: UndoLink) -> Option<&UndoHeader> {
-        self.b_u_store.as_deref()?.get(link)
+    pub(crate) fn header<'a>(self, link: UndoLink) -> Option<ReadPart<'a, Buffer, UndoHeader>> {
+        let read = self.read();
+        read.b_u_store.as_deref()?.get(link)?;
+        Some(read.map(|buffer| {
+            buffer
+                .b_u_store
+                .as_deref()
+                .and_then(|store| store.get(link))
+                .expect("asked just above")
+        }))
     }
 
     /// [`header`](Self::header), for writing.
     #[inline]
-    pub(crate) fn header_mut(&mut self, link: UndoLink) -> Option<&mut UndoHeader> {
-        self.b_u_store.as_deref_mut()?.get_mut(link)
+    pub(crate) fn header_mut<'a>(self, link: UndoLink) -> Option<EditPart<'a, Buffer, UndoHeader>> {
+        let edit = self.edit();
+        edit.b_u_store.as_deref()?.get(link)?;
+        Some(edit.map(|buffer| {
+            buffer
+                .b_u_store
+                .as_deref_mut()
+                .and_then(|store| store.get_mut(link))
+                .expect("asked just above")
+        }))
     }
 
     /// Whether `link` names a header this buffer holds.
@@ -168,7 +186,7 @@ impl Buf {
         link: UndoLink,
         field: fn(&UndoHeader) -> UndoLink,
     ) -> UndoLink {
-        self.header(link).map_or(UndoLink::NONE, field)
+        self.header(link).map_or(UndoLink::NONE, |uh| field(&uh))
     }
 
     /// A depth-first walk of this buffer's whole undo tree, from the header
@@ -185,8 +203,9 @@ impl Buf {
     }
 
     /// The buffer's store, created if this is the buffer's first header.
-    fn store_for(&mut self) -> &mut UndoStore {
-        self.b_u_store.get_or_insert_with(Box::default)
+    fn store_for<'a>(self) -> EditPart<'a, Buffer, UndoStore> {
+        self.edit()
+            .map(|buffer| &mut **buffer.b_u_store.get_or_insert_with(Box::default))
     }
 }
 
@@ -228,7 +247,7 @@ impl Marks {
     pub(crate) fn unwalked(self, buffer: Buf, link: UndoLink) -> Option<UndoLink> {
         buffer
             .header(link)
-            .is_some_and(|uh| self.unstamped(uh))
+            .is_some_and(|uh| self.unstamped(&uh))
             .then_some(link)
     }
 }
@@ -306,7 +325,7 @@ impl TreeWalk {
 
     /// Stamps the header `link` names.
     fn stamp(&mut self, link: UndoLink, mark: c_int) {
-        if let Some(uh) = self.buf.header_mut(link) {
+        if let Some(mut uh) = self.buf.header_mut(link) {
             uh.walk = mark;
         }
     }
@@ -356,8 +375,8 @@ impl Iterator for TreeWalk {
             WalkState::At(arrived) => self.advance(arrived),
         };
         let marks = self.marks;
-        let uh = self.buf.header_mut(here)?;
-        let first = marks.unstamped(uh);
+        let mut uh = self.buf.header_mut(here)?;
+        let first = marks.unstamped(&uh);
         uh.walk = marks.mark;
         self.state = WalkState::At(Arrived {
             link: here,
@@ -380,7 +399,7 @@ impl Buf {
     /// The header's `seq` must already be set: it is the key. A header whose
     /// number is not one a buffer hands out is dropped, since nothing could name
     /// it.
-    pub(crate) fn adopt_header(mut self, header: Box<UndoHeader>) -> UndoLink {
+    pub(crate) fn adopt_header(self, header: Box<UndoHeader>) -> UndoLink {
         let seq = header.seq;
         debug_assert!(seq > 0, "an undo header's sequence number is positive");
         if seq <= 0 {
@@ -416,8 +435,8 @@ impl Buf {
 
 /// Drops the header `link` names from `buffer`'s store, and with it every
 /// entry and extmark record it held.
-pub(crate) fn header_free(mut buffer: Buf, link: UndoLink) {
-    if let Some(store) = buffer.b_u_store.as_deref_mut() {
+pub(crate) fn header_free(buffer: Buf, link: UndoLink) {
+    if let Some(store) = buffer.edit().b_u_store.as_deref_mut() {
         drop(store.take(link));
     }
 }
@@ -462,9 +481,14 @@ impl Iterator for HeaderChain {
 /// is kept: a command preview detaches the buffer's real tree from
 /// `b_u_*head` with `u_clearall` and restores it afterwards, and those
 /// headers are only reachable through the store in between.
-pub(crate) fn store_release(mut buffer: Buf) {
-    if buffer.b_u_store.as_deref().is_some_and(UndoStore::is_empty) {
-        buffer.b_u_store = None;
+pub(crate) fn store_release(buffer: Buf) {
+    if buffer
+        .read()
+        .b_u_store
+        .as_deref()
+        .is_some_and(UndoStore::is_empty)
+    {
+        buffer.edit().b_u_store = None;
     }
 }
 

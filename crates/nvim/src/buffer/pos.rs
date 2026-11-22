@@ -53,13 +53,17 @@ fn current_win() -> Win {
 /// `win` is `None` for `:badd`, which records a position for no window at
 /// all.
 pub fn buflist_setfpos(
-    mut buffer: Buf,
+    buffer: Buf,
     win: Option<Win>,
     mut lnum: LineNr,
     col: ColNr,
     copy_options: bool,
 ) {
-    let found = buffer.b_wininfo.iter().position(|e| e.window() == win);
+    let found = buffer
+        .read()
+        .b_wininfo
+        .iter()
+        .position(|e| e.window() == win);
     let mut entry = match found {
         None => {
             if lnum == LineNr::ZERO {
@@ -69,7 +73,7 @@ pub fn buflist_setfpos(
             WinInfo::new(win.map(Win::id))
         }
         Some(i) => {
-            let mut entry = buffer.b_wininfo.remove(i);
+            let mut entry = buffer.edit().b_wininfo.remove(i);
             if copy_options && entry.wi_optset {
                 clear_winopt(&mut entry.wi_opt);
                 entry.wi_folds = Vec::new();
@@ -96,7 +100,7 @@ pub fn buflist_setfpos(
         entry.wi_optset = true;
     }
 
-    buffer.b_wininfo.insert(0, entry);
+    buffer.edit().b_wininfo.insert(0, entry);
 }
 
 /// Whether `entry` has `'diff'` set and the diff belongs to another tab page
@@ -117,7 +121,7 @@ fn wininfo_other_tab_diff(entry: &WinInfo) -> bool {
 /// `skip_diff_buffer` skips windows whose `'diff'` is another tab page's.
 fn find_wininfo(buffer: Buf, need_options: bool, skip_diff_buffer: bool) -> Option<usize> {
     let cur = Some(current_win());
-    let list = &buffer.b_wininfo;
+    let list = &buffer.read().b_wininfo;
     let found = list.iter().position(|e| {
         e.window() == cur
             && (!skip_diff_buffer || !wininfo_other_tab_diff(e))
@@ -151,7 +155,8 @@ pub fn get_winopts(buffer: Buf) {
     clear_folding(cur);
 
     let found = find_wininfo(buffer, true, true);
-    let entry = found.map(|i| &buffer.b_wininfo[i]);
+    let held = buffer.read();
+    let entry = found.map(|i| &held.b_wininfo[i]);
     let entry_win = entry.and_then(WinInfo::window);
 
     match (entry, entry_win) {
@@ -182,6 +187,7 @@ pub fn get_winopts(buffer: Buf) {
     if let Some(entry) = entry {
         cur.w_changelistidx = entry.wi_changelistidx;
     }
+    drop(held);
 
     if cur.w_config.style == WIN_STYLE_MINIMAL {
         didset_window_options(cur, false);
@@ -200,6 +206,7 @@ pub fn get_winopts(buffer: Buf) {
 /// remembers one. What `:mksession`'s `badd +N` writes.
 pub(crate) fn first_wininfo_lnum(buffer: Buf) -> Option<LineNr> {
     buffer
+        .read()
         .b_wininfo
         .first()
         .map(|entry| entry.wi_mark.mark.lnum)
@@ -209,7 +216,7 @@ pub(crate) fn first_wininfo_lnum(buffer: Buf) -> Option<LineNr> {
 /// of the entry [`find_wininfo`] picks, or line 1 when there is none.
 pub fn buflist_findfmark(buffer: Buf) -> FileMark {
     match find_wininfo(buffer, false, false) {
-        Some(i) => buffer.b_wininfo[i].wi_mark.clone(),
+        Some(i) => buffer.read().b_wininfo[i].wi_mark.clone(),
         None => FileMark {
             mark: Pos {
                 lnum: LineNr::ONE,

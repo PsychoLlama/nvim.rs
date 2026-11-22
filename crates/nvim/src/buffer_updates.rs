@@ -29,6 +29,8 @@
 use crate::api::private::helpers::LUA_INTERNAL_CALL;
 use crate::lua::ffi::LUA_NOREF;
 use crate::narrow::len_as_integer;
+use crate::slot::EditPart;
+use crate::types::Buffer;
 use core::ffi::{CStr, c_int};
 
 use crate::api::buffer::LineSink;
@@ -137,32 +139,38 @@ pub(crate) struct Subscribers {
 }
 
 impl Buf {
-    /// This buffer's subscribers, created empty on first use.
-    fn subscribers(&mut self) -> &mut Subscribers {
-        self.update_subscribers.get_or_insert_with(Box::default)
-    }
-
     /// The RPC channels watching this buffer.
-    fn channels(&mut self) -> &mut SubscriberList<uint64_t> {
-        &mut self.subscribers().channels
+    fn channels<'a>(self) -> EditPart<'a, Buffer, SubscriberList<uint64_t>> {
+        self.edit().map(|buffer| {
+            &mut buffer
+                .update_subscribers
+                .get_or_insert_with(Box::default)
+                .channels
+        })
     }
 
     /// The Lua callback tables watching this buffer.
-    fn callbacks(&mut self) -> &mut SubscriberList<BufUpdateCallbacks> {
-        &mut self.subscribers().callbacks
+    fn callbacks<'a>(self) -> EditPart<'a, Buffer, SubscriberList<BufUpdateCallbacks>> {
+        self.edit().map(|buffer| {
+            &mut buffer
+                .update_subscribers
+                .get_or_insert_with(Box::default)
+                .callbacks
+        })
     }
 }
 
 /// Drop every subscriber `buffer` has, as a buffer reused for another file
 /// must: `kv_destroy` + `kv_init` of both lists.
-pub(crate) fn reset_subscribers(mut buffer: Buf) {
-    buffer.update_subscribers = None;
+pub(crate) fn reset_subscribers(buffer: Buf) {
+    buffer.edit().update_subscribers = None;
 }
 
 /// Whether a Lua callback is watching `buffer` — the only subscribers that
 /// are told how many bytes an edit deleted.
 pub(crate) fn has_callbacks(buffer: Buf) -> bool {
     buffer
+        .read()
         .update_subscribers
         .as_ref()
         .is_some_and(|subscribers| subscribers.callbacks.len() != 0)
@@ -282,14 +290,9 @@ pub fn buf_updates_register(
     register(buffer, channel_id, cb, send_buffer)
 }
 
-fn register(
-    mut buffer: Buf,
-    channel_id: uint64_t,
-    cb: BufUpdateCallbacks,
-    send_buffer: bool,
-) -> bool {
+fn register(buffer: Buf, channel_id: uint64_t, cb: BufUpdateCallbacks, send_buffer: bool) -> bool {
     // Must fail if the buffer isn't loaded.
-    if buffer.b_ml.ml_mfp.is_none() {
+    if buffer.ml().ml_mfp.is_none() {
         return false;
     }
 
@@ -303,7 +306,7 @@ fn register(
         if utf_sizes {
             // Sticky: nothing clears it when the callback detaches, so the
             // buffer keeps counting codepoints for the rest of its life.
-            buffer.update_need_codepoints = true;
+            buffer.set_update_need_codepoints(true);
         }
         return true;
     }
@@ -334,7 +337,7 @@ fn send_whole_buffer(buffer: Buf, channel_id: uint64_t) {
     }
 
     let mut args = ArrayBuf::<6>::new();
-    args.push(Object::buffer(buffer.handle));
+    args.push(Object::buffer(buffer.handle()));
     args.push(Object::integer(changedtick(buffer)));
     // The first line that changed (zero-indexed), then the last.
     args.push(Object::integer(0));
@@ -351,6 +354,7 @@ pub fn buf_updates_active(buffer: Buf) -> bool {
 
 fn active(buffer: Buf) -> bool {
     buffer
+        .read()
         .update_subscribers
         .as_ref()
         .is_some_and(|subscribers| {
@@ -365,7 +369,7 @@ pub fn buf_updates_send_end(buffer: Buf, channelid: uint64_t) {
 
 fn send_end(buffer: Buf, channelid: uint64_t) {
     let mut args = ArrayBuf::<1>::new();
-    args.push(Object::buffer(buffer.handle));
+    args.push(Object::buffer(buffer.handle()));
     send_event(channelid, c"nvim_buf_detach_event", args.array());
 }
 
@@ -374,8 +378,8 @@ pub fn buf_updates_unregister(buffer: Buf, channelid: uint64_t) {
     unregister(buffer, channelid);
 }
 
-fn unregister(mut buffer: Buf, channelid: uint64_t) {
-    if buffer.update_subscribers.is_none() {
+fn unregister(buffer: Buf, channelid: uint64_t) {
+    if buffer.read().update_subscribers.is_none() {
         return;
     }
     let size = buffer.channels().len();
@@ -386,17 +390,19 @@ fn unregister(mut buffer: Buf, channelid: uint64_t) {
     // Compact the id out of the list — it should never appear more than
     // once, but upstream counts rather than assuming.
     let (mut j, mut found) = (0, 0);
-    let channels = buffer.channels();
+    let mut channels = buffer.channels();
     for i in 0..size {
         if channels.at(i) == channelid {
             found += 1;
         } else {
             if i != j {
-                channels.set_at(j, channels.at(i));
+                let moved = channels.at(i);
+                channels.set_at(j, moved);
             }
             j += 1;
         }
     }
+    drop(channels);
 
     if found != 0 {
         // Remove `found` items from the end of the array.
@@ -416,8 +422,8 @@ pub fn buf_free_callbacks(buffer: Buf) {
     free_callbacks(buffer);
 }
 
-fn free_callbacks(mut buffer: Buf) {
-    let Some(subscribers) = buffer.update_subscribers.take() else {
+fn free_callbacks(buffer: Buf) {
+    let Some(subscribers) = buffer.edit().update_subscribers.take() else {
         return;
     };
     for cb in subscribers.callbacks.as_slice() {
@@ -432,8 +438,8 @@ pub fn buf_updates_unload(buffer: Buf, can_reload: bool) {
     unload(buffer, can_reload);
 }
 
-fn unload(mut buffer: Buf, can_reload: bool) {
-    if buffer.update_subscribers.is_none() {
+fn unload(buffer: Buf, can_reload: bool) {
+    if buffer.read().update_subscribers.is_none() {
         return;
     }
     let size = buffer.channels().len();
@@ -458,7 +464,7 @@ fn unload(mut buffer: Buf, can_reload: bool) {
 
         if thecb != LUA_NOREF {
             let mut args = ArrayBuf::<1>::new();
-            args.push(Object::buffer(buffer.handle));
+            args.push(Object::buffer(buffer.handle()));
             let name = if keep { c"reload" } else { c"detach" };
             // Upstream discards the result here: a reload callback cannot
             // detach itself the way `on_lines` can.
@@ -485,7 +491,7 @@ fn unload(mut buffer: Buf, can_reload: bool) {
 /// returns rather than reusing the one it was handed, exactly as the loops
 /// it replaces did: a callback that detaches or recurses has rewritten the
 /// list under it.
-fn retain_callbacks(mut buffer: Buf, mut visit: impl FnMut(BufUpdateCallbacks) -> bool) {
+fn retain_callbacks(buffer: Buf, mut visit: impl FnMut(BufUpdateCallbacks) -> bool) {
     let mut j = 0;
     let mut i = 0;
     while i < buffer.callbacks().len() {
@@ -503,10 +509,11 @@ fn retain_callbacks(mut buffer: Buf, mut visit: impl FnMut(BufUpdateCallbacks) -
 /// Hand `visit` each RPC channel watching `buffer`, re-reading the length
 /// every step for [`retain_callbacks`]' reason. Nothing is compacted: a dead
 /// channel is unregistered by the caller once the walk is over.
-fn each_channel(mut buffer: Buf, mut visit: impl FnMut(uint64_t)) {
+fn each_channel(buffer: Buf, mut visit: impl FnMut(uint64_t)) {
     let mut i = 0;
     while i < buffer.channels().len() {
-        visit(buffer.channels().at(i));
+        let channel = buffer.channels().at(i);
+        visit(channel);
         i += 1;
     }
 }
@@ -524,7 +531,7 @@ pub fn buf_updates_send_changes(
     send_changes(buffer, firstline, num_added, num_removed);
 }
 
-fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_removed: int64_t) {
+fn send_changes(buffer: Buf, firstline: LineNr, num_added: int64_t, num_removed: int64_t) {
     let deleted = flush_deleted_bytes(buffer);
 
     if !active(buffer) {
@@ -548,7 +555,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
     // Notify each of the active channels.
     each_channel(buffer, |channelid| {
         let mut args = ArrayBuf::<6>::new();
-        args.push(Object::buffer(buffer.handle));
+        args.push(Object::buffer(buffer.handle()));
         args.push(tick_obj(buffer, send_tick));
         // The first line that changed (zero-indexed), then the last.
         args.push(Object::integer(i64::from(firstline - 1)));
@@ -577,7 +584,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
         if cb.on_lines != LUA_NOREF && (cb.preview || !CMDPREVIEW.get()) {
             // Six arguments, or eight with the UTF sizes.
             let mut args = ArrayBuf::<8>::new();
-            args.push(Object::buffer(buffer.handle));
+            args.push(Object::buffer(buffer.handle()));
             args.push(tick_obj(buffer, send_tick));
             // First changed line, last changed line, last line of the new
             // range, then the byte count of the previous contents.
@@ -655,7 +662,7 @@ fn send_splice(buffer: Buf, start: Corner, old: Corner, new: Corner) {
         let mut keep = true;
         if cb.on_bytes != LUA_NOREF && (cb.preview || !CMDPREVIEW.get()) {
             let mut args = ArrayBuf::<11>::new();
-            args.push(Object::buffer(buffer.handle));
+            args.push(Object::buffer(buffer.handle()));
             args.push(Object::integer(changedtick(buffer)));
             for corner in [start, old, new] {
                 args.push(Object::integer(Integer::from(corner.row)));
@@ -690,7 +697,7 @@ fn changedtick_event(buffer: Buf) {
         let mut keep = true;
         if cb.on_changedtick != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
-            args.push(Object::buffer(buffer.handle));
+            args.push(Object::buffer(buffer.handle()));
             args.push(Object::integer(changedtick(buffer)));
             let res = call_ref(
                 cb.on_changedtick,
@@ -714,7 +721,7 @@ pub fn buf_updates_changedtick_single(buffer: Buf, channel_id: uint64_t) {
 
 fn changedtick_single(buffer: Buf, channel_id: uint64_t) {
     let mut args = ArrayBuf::<2>::new();
-    args.push(Object::buffer(buffer.handle));
+    args.push(Object::buffer(buffer.handle()));
     args.push(Object::integer(changedtick(buffer)));
     // Don't try and clean up dead channels here.
     send_event(channel_id, c"nvim_buf_changedtick_event", args.array());

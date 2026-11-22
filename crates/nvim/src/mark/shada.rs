@@ -99,12 +99,13 @@ pub(crate) fn shada_global_marks() -> Vec<(c_char, ShadaMark)> {
 /// Every set mark of `buffer` with its name, `'"`, `'^`, `'.` then
 /// `'a`-`'z`, copied.
 pub(crate) fn shada_buffer_marks(buffer: Buf) -> Vec<(c_char, ShadaMark)> {
+    let held = buffer.read();
     let special = [
-        (b'"', &buffer.b_last_cursor),
-        (b'^', &buffer.b_last_insert),
-        (b'.', &buffer.b_last_change),
+        (b'"', &held.b_last_cursor),
+        (b'^', &held.b_last_insert),
+        (b'.', &held.b_last_change),
     ];
-    let named = buffer
+    let named = held
         .b_namedm
         .iter()
         .zip(b'a'..=b'z')
@@ -128,8 +129,8 @@ pub(crate) fn shada_jumps(win: Win) -> Vec<ShadaMark> {
 
 /// The change list of `buffer`, oldest first, copied.
 pub(crate) fn shada_changes(buffer: Buf) -> Vec<ShadaMark> {
-    let len = slot(buffer.b_changelistlen);
-    buffer.b_changelist[..len]
+    let len = slot(buffer.b_changelistlen());
+    buffer.read().b_changelist[..len]
         .iter()
         .map(|change| ShadaMark::of(change, None))
         .collect()
@@ -178,14 +179,15 @@ pub(crate) fn shada_local_mark_timestamp(buffer: Buf, win: Win, name: u8) -> Tim
 
 /// The `"` mark the buffer list restores: `pos`, stamped now, releasing
 /// what the store held.
-pub(crate) fn shada_restore_last_cursor(mut buffer: Buf, pos: Pos) {
-    buffer.b_last_cursor = FileMark {
+pub(crate) fn shada_restore_last_cursor(buffer: Buf, pos: Pos) {
+    let value = FileMark {
         mark: pos,
         in_buffer: Handle::NONE,
         timestamp: os_time(),
         view: FileMarkView::NONE,
         extra: None,
     };
+    buffer.edit().b_last_cursor = value;
 }
 
 /// Put a jump read from a file into the current window's jump list, which
@@ -231,10 +233,10 @@ pub(crate) fn shada_insert_jump(fm: ShadaMark) {
 
 /// [`shada_insert_jump`] for a buffer's change list, which needs no file
 /// name to compare on because every entry in it is in this buffer.
-pub(crate) fn shada_insert_change(mut buffer: Buf, fm: ShadaMark) {
-    let mut i = buffer.b_changelistlen;
+pub(crate) fn shada_insert_change(buffer: Buf, fm: ShadaMark) {
+    let mut i = buffer.b_changelistlen();
     while i > 0 {
-        let existing = &buffer.b_changelist[list_index(i - 1)];
+        let existing = &buffer.read().b_changelist[list_index(i - 1)];
         if existing.timestamp <= fm.timestamp {
             if marks_equal(existing.mark, fm.mark) {
                 return; // already there
@@ -244,13 +246,13 @@ pub(crate) fn shada_insert_change(mut buffer: Buf, fm: ShadaMark) {
         i -= 1;
     }
     // A full list loses its oldest change the same way.
-    let len = list_index(buffer.b_changelistlen);
-    let Some(at) = marklist_insert(&mut buffer.b_changelist, len, list_index(i)) else {
+    let len = list_index(buffer.b_changelistlen());
+    let Some(at) = marklist_insert(&mut buffer.edit().b_changelist, len, list_index(i)) else {
         return;
     };
-    buffer.b_changelist[at] = fm.into_fmark().0;
-    if buffer.b_changelistlen < JUMPLISTSIZE {
-        buffer.b_changelistlen += 1;
+    buffer.edit().b_changelist[at] = fm.into_fmark().0;
+    if buffer.b_changelistlen() < JUMPLISTSIZE {
+        buffer.set_b_changelistlen(buffer.b_changelistlen() + 1);
     }
 }
 

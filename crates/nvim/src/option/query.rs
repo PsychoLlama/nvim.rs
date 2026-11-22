@@ -54,12 +54,12 @@ use crate::state::MODE_TERMINAL;
 
 /// 'equalprg', local where set.
 pub(crate) fn get_equalprg() -> XString {
-    local_or_global(&Buf::current().b_p_ep, P_EP).get()
+    local_or_global(&Buf::current().read().b_p_ep, P_EP).get()
 }
 
 /// 'findfunc', local where set.
 pub(crate) fn get_findfunc() -> XString {
-    local_or_global(&Buf::current().b_p_ffu, P_FFU).get()
+    local_or_global(&Buf::current().read().b_p_ffu, P_FFU).get()
 }
 
 /// Whether 'shortmess' asks for message `x` to be shortened. The `a` flag is
@@ -206,7 +206,7 @@ pub(crate) fn can_bs(what: BsFlag) -> bool {
 
 /// 'backupcopy' as flags, local where set.
 pub(crate) fn get_bkc_flags(buffer: Buf) -> c_uint {
-    match buffer.b_bkc_flags {
+    match buffer.b_bkc_flags() {
         0 => BKC_FLAGS.get(),
         local => local,
     }
@@ -263,8 +263,8 @@ impl Win {
 /// The buffer's line ending. 'binary' forces Unix whatever 'fileformat' says.
 ///
 pub(crate) fn get_fileformat(buffer: Buf) -> c_int {
-    let c = buffer.b_p_ff.bytes().first().copied().unwrap_or(0);
-    if buffer.b_p_bin != 0 || c == b'u' {
+    let c = buffer.read().b_p_ff.bytes().first().copied().unwrap_or(0);
+    if buffer.b_p_bin() != 0 || c == b'u' {
         EOL_UNIX
     } else if c == b'm' {
         EOL_MAC
@@ -283,10 +283,10 @@ impl Buf {
         let c = if let Some(forced) = force_ff {
             forced
         } else {
-            if force_bin.unwrap_or(self.b_p_bin != 0) {
+            if force_bin.unwrap_or(self.b_p_bin() != 0) {
                 return EOL_UNIX;
             }
-            self.b_p_ff.bytes().first().copied().unwrap_or(0)
+            self.read().b_p_ff.bytes().first().copied().unwrap_or(0)
         };
         match c {
             b'u' => EOL_UNIX,
@@ -512,7 +512,7 @@ pub(crate) fn get_winbuf_options(buffer: bool) -> DictRef {
 /// scrolls off, whatever the option says.
 ///
 pub(crate) fn get_scrolloff_value(window: Win) -> int64_t {
-    if STATE.get() & MODE_TERMINAL != 0 && !window.w_buffer.terminal.is_null() {
+    if STATE.get() & MODE_TERMINAL != 0 && !window.w_buffer.terminal().is_null() {
         return 0;
     }
     match window.w_onebuf_opt.wo_so {

@@ -187,20 +187,20 @@ pub fn buflist_new(
     };
 
     if let Some((full, short)) = names {
-        buf.name.set(full, Some(short));
+        buf.edit().name.set(full, Some(short));
     }
 
     clear_wininfo(buf);
-    buf.b_wininfo.push(WinInfo::new(None));
+    buf.edit().b_wininfo.push(WinInfo::new(None));
 
     if reused_curbuf {
         // Delete the local variables and the rest.
         free_buffer_stuff(buf, BFF_INIT_CHANGEDTICK);
         // Init the options.
-        buf.b_p_initialized = false;
+        buf.set_b_p_initialized(false);
         copy_options_into(buf, BCO_ENTER);
         // The keymaps have to be reloaded and b:keymap_name set.
-        buf.b_kmap_state |= KEYMAP_INIT;
+        buf.set_b_kmap_state(buf.b_kmap_state() | KEYMAP_INIT);
     } else {
         // `fresh` is `Some` exactly when the buffer is not the reused
         // current one, which is the branch this is.
@@ -214,48 +214,48 @@ pub fn buflist_new(
     // the buffer's variables and options.
     let mut mark = INIT_FMARK;
     mark.mark.lnum = lnum;
-    if let Some(entry) = buf.b_wininfo.last_mut() {
+    if let Some(entry) = buf.edit().b_wininfo.last_mut() {
         entry.wi_mark = mark;
         entry.wi_win = Some(current_win().id());
     }
 
-    buf.b_s.b_keywtab.clear();
-    buf.b_s.b_keywtab_ic.clear();
+    buf.edit().b_s.b_keywtab.clear();
+    buf.edit().b_s.b_keywtab_ic.clear();
 
-    buf.name.show_short();
-    buf.file_id_valid = file_id.is_some();
+    buf.edit().name.show_short();
+    buf.set_file_id_valid(file_id.is_some());
     if let Some(file_id) = file_id {
-        buf.file_id = file_id;
+        buf.edit().file_id = file_id;
     }
-    buf.b_u_synced = true;
-    buf.b_flags = BufFlags::CHECK_RO | BufFlags::NEVERLOADED;
+    buf.set_b_u_synced(true);
+    buf.set_b_flags(BufFlags::CHECK_RO | BufFlags::NEVERLOADED);
     if flags & BLN_DUMMY != 0 {
-        buf.b_flags |= BufFlags::DUMMY;
+        buf.set_b_flags(buf.b_flags() | BufFlags::DUMMY);
     }
     buf_clear_file(buf);
     clrallmarks(buf, 0 as Timestamp);
     fmarks_check_names(buf);
     // Init 'buflisted'.
-    buf.b_p_bl = if flags & BLN_LISTED != 0 { 1 } else { 0 };
+    buf.set_b_p_bl(if flags & BLN_LISTED != 0 { 1 } else { 0 });
     reset_update_subscribers(buf);
 
     if flags & BLN_DUMMY == 0 && !announce_new_buffer(buf, flags) {
         return None;
     }
 
-    buf.b_prompt_callback = Callback::None;
-    buf.b_prompt_interrupt = Callback::None;
-    buf.b_prompt_start = INIT_FMARK;
+    buf.edit().b_prompt_callback = Callback::None;
+    buf.edit().b_prompt_interrupt = Callback::None;
+    buf.edit().b_prompt_start = INIT_FMARK;
     // The default prompt is "% ".
-    buf.b_prompt_start.mark.col = ColNr::new(2);
-    buf.b_prompt_append_new_line = true;
+    buf.edit().b_prompt_start.mark.col = ColNr::new(2);
+    buf.set_b_prompt_append_new_line(true);
 
     Some(buf)
 }
 
 /// The entry a buffer with this name already has: refresh its position and
 /// options, and list it if `BLN_LISTED` asked and it was not listed.
-fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Option<Buf> {
+fn reuse_entry(buffer: Buf, lnum: LineNr, flags: c_int) -> Option<Buf> {
     if lnum != LineNr::ZERO {
         let win = (flags & BLN_NOCURWIN == 0).then(current_win);
         buflist_setfpos(buffer, win, lnum, ColNr::ZERO, false);
@@ -265,8 +265,8 @@ fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Option<Buf> {
         // already.
         copy_options_into(buffer, 0);
     }
-    if flags & BLN_LISTED != 0 && buffer.b_p_bl == 0 {
-        buffer.b_p_bl = 1;
+    if flags & BLN_LISTED != 0 && buffer.b_p_bl() == 0 {
+        buffer.set_b_p_bl(1);
         let bufref = BufRef::of(buffer);
         if flags & BLN_DUMMY == 0 && fire_buf_event(AutoEvent::BufAdd, buffer) && !bufref.valid() {
             return None;
@@ -283,10 +283,10 @@ fn new_buffer() -> SlotBox<Buffer> {
     // A zeroed `Buffer` is what upstream starts one from; `append_to_list`
     // gives it its number and puts it in the registry.
     let owned = alloc_unregistered_buffer();
-    let mut buf = Buf::owned_by(&owned);
+    let buf = Buf::owned_by(&owned);
     // Init the b: variables. The entry holds the dictionary until
     // `release_var_scope`.
-    buf.b_bufvar = new_var_scope(VAR_SCOPE);
+    buf.edit().b_bufvar = new_var_scope(VAR_SCOPE);
     buf_init_changedtick(buf);
     owned
 }
@@ -324,7 +324,7 @@ pub(crate) fn bare_buffer() -> Buf {
     // One at a time: a test holds the editor lock while it has one.
     const HANDLE: Handle = Handle::new(1 << 24);
     let owned = alloc_unregistered_buffer();
-    Buf::owned_by(&owned).handle = HANDLE;
+    Buf::owned_by(&owned).edit().handle = HANDLE;
     register_buffer(HANDLE, owned)
 }
 
@@ -353,17 +353,17 @@ impl Buf {
         TOP_FILE_NUM.set(TOP_FILE_NUM.get() + 1);
         register_buffer(self.handle(), owned);
 
-        self.b_next = None;
+        self.set_b_next(None);
         match current_last() {
             // The buffer list is empty.
             None => {
-                self.b_prev = None;
+                self.set_b_prev(None);
                 FIRSTBUF.set(Some(self.id()));
             }
             // Append the new buffer at the end of the list.
-            Some(mut last) => {
-                last.b_next = Some(self.id());
-                self.b_prev = Some(last.id());
+            Some(last) => {
+                last.set_b_next(Some(self.id()));
+                self.set_b_prev(Some(last.id()));
             }
         }
         LASTBUF.set(Some(self.id()));
@@ -410,10 +410,10 @@ pub fn curbuf_reusable() -> bool {
     let Some(buf) = current_buf() else {
         return false;
     };
-    let empty = buf.b_ml.ml_mfp.is_none() || buf_is_empty(buf);
-    buf.name.full().is_none()
-        && buf.b_nwindows <= 1
-        && buf.terminal.is_null()
+    let empty = buf.ml().ml_mfp.is_none() || buf_is_empty(buf);
+    buf.read().name.full().is_none()
+        && buf.b_nwindows() <= 1
+        && buf.terminal().is_null()
         && empty
         && !buf_is_quickfix(Some(buf))
         && !curbuf_is_changed()
@@ -424,81 +424,81 @@ pub fn curbuf_reusable() -> bool {
 
 /// Free the memory for a buffer's options. `free_p_ff` frees `'fileformat'`,
 /// `'buftype'` and `'fileencoding'` too.
-pub fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
+pub fn free_buf_options(buffer: Buf, free_p_ff: bool) {
     if free_p_ff {
-        buffer.b_p_fenc = None;
-        buffer.b_p_ff = None;
-        buffer.b_p_bh = None;
-        buffer.b_p_bt = None;
+        buffer.edit().b_p_fenc = None;
+        buffer.edit().b_p_ff = None;
+        buffer.edit().b_p_bh = None;
+        buffer.edit().b_p_bt = None;
     }
-    buffer.b_p_def = None;
-    buffer.b_p_inc = None;
-    buffer.b_p_inex = None;
-    buffer.b_p_inde = None;
-    buffer.b_p_indk = None;
-    buffer.b_p_fp = None;
-    buffer.b_p_fex = None;
-    buffer.b_p_kp = None;
-    buffer.b_p_mps = None;
-    buffer.b_p_fo = None;
-    buffer.b_p_flp = None;
-    buffer.b_p_isk = None;
-    buffer.b_p_vsts = None;
-    buffer.b_p_vsts_nopaste = None;
-    buffer.b_p_vsts_array = None;
-    buffer.b_p_vts = None;
-    buffer.b_p_vts_array = None;
-    buffer.b_p_keymap = None;
-    buffer.b_kmap_ga = Vec::new();
-    buffer.b_p_com = None;
-    buffer.b_p_cms = None;
-    buffer.b_p_nf = None;
-    buffer.b_p_syn = None;
-    buffer.b_s.b_syn_isk = None;
-    buffer.b_s.b_p_spc = None;
-    buffer.b_s.b_p_spf = None;
-    buffer.b_s.b_cap_prog = None;
-    buffer.b_s.b_p_spl = None;
-    buffer.b_s.b_p_spo = None;
-    buffer.b_p_sua = None;
-    buffer.b_p_ft = None;
-    buffer.b_p_cink = None;
-    buffer.b_p_cino = None;
-    buffer.b_p_lop = None;
-    buffer.b_p_cinsd = None;
-    buffer.b_p_cinw = None;
-    buffer.b_p_cot = None;
-    buffer.b_p_cpt = None;
-    buffer.b_p_cfu = None;
-    callback_free(&mut buffer.b_cfu_cb);
-    buffer.b_p_ofu = None;
-    callback_free(&mut buffer.b_ofu_cb);
-    buffer.b_p_tsrfu = None;
-    callback_free(&mut buffer.b_tsrfu_cb);
+    buffer.edit().b_p_def = None;
+    buffer.edit().b_p_inc = None;
+    buffer.edit().b_p_inex = None;
+    buffer.edit().b_p_inde = None;
+    buffer.edit().b_p_indk = None;
+    buffer.edit().b_p_fp = None;
+    buffer.edit().b_p_fex = None;
+    buffer.edit().b_p_kp = None;
+    buffer.edit().b_p_mps = None;
+    buffer.edit().b_p_fo = None;
+    buffer.edit().b_p_flp = None;
+    buffer.edit().b_p_isk = None;
+    buffer.edit().b_p_vsts = None;
+    buffer.edit().b_p_vsts_nopaste = None;
+    buffer.edit().b_p_vsts_array = None;
+    buffer.edit().b_p_vts = None;
+    buffer.edit().b_p_vts_array = None;
+    buffer.edit().b_p_keymap = None;
+    buffer.edit().b_kmap_ga = Vec::new();
+    buffer.edit().b_p_com = None;
+    buffer.edit().b_p_cms = None;
+    buffer.edit().b_p_nf = None;
+    buffer.edit().b_p_syn = None;
+    buffer.edit().b_s.b_syn_isk = None;
+    buffer.edit().b_s.b_p_spc = None;
+    buffer.edit().b_s.b_p_spf = None;
+    buffer.edit().b_s.b_cap_prog = None;
+    buffer.edit().b_s.b_p_spl = None;
+    buffer.edit().b_s.b_p_spo = None;
+    buffer.edit().b_p_sua = None;
+    buffer.edit().b_p_ft = None;
+    buffer.edit().b_p_cink = None;
+    buffer.edit().b_p_cino = None;
+    buffer.edit().b_p_lop = None;
+    buffer.edit().b_p_cinsd = None;
+    buffer.edit().b_p_cinw = None;
+    buffer.edit().b_p_cot = None;
+    buffer.edit().b_p_cpt = None;
+    buffer.edit().b_p_cfu = None;
+    callback_free(&mut buffer.edit().b_cfu_cb);
+    buffer.edit().b_p_ofu = None;
+    callback_free(&mut buffer.edit().b_ofu_cb);
+    buffer.edit().b_p_tsrfu = None;
+    callback_free(&mut buffer.edit().b_tsrfu_cb);
     clear_buffer_cpt_callbacks(buffer);
-    buffer.b_p_gefm = None;
-    buffer.b_p_gp = None;
-    buffer.b_p_mp = None;
-    buffer.b_p_efm = None;
-    buffer.b_p_ep = None;
-    buffer.b_p_path = None;
-    buffer.b_p_tags = None;
-    buffer.b_p_tc = None;
-    buffer.b_p_tfu = None;
-    callback_free(&mut buffer.b_tfu_cb);
-    buffer.b_p_ffu = None;
-    callback_free(&mut buffer.b_ffu_cb);
-    buffer.b_p_dict = None;
-    buffer.b_p_dia = None;
-    buffer.b_p_tsr = None;
-    buffer.b_p_qe = None;
-    buffer.b_p_ac = -1;
-    buffer.b_p_ar = -1;
-    buffer.b_p_fs = -1;
-    buffer.b_p_ul = OptInt::from(NO_LOCAL_UNDOLEVEL);
-    buffer.b_p_lw = None;
-    buffer.b_p_bkc = None;
-    buffer.b_p_menc = None;
+    buffer.edit().b_p_gefm = None;
+    buffer.edit().b_p_gp = None;
+    buffer.edit().b_p_mp = None;
+    buffer.edit().b_p_efm = None;
+    buffer.edit().b_p_ep = None;
+    buffer.edit().b_p_path = None;
+    buffer.edit().b_p_tags = None;
+    buffer.edit().b_p_tc = None;
+    buffer.edit().b_p_tfu = None;
+    callback_free(&mut buffer.edit().b_tfu_cb);
+    buffer.edit().b_p_ffu = None;
+    callback_free(&mut buffer.edit().b_ffu_cb);
+    buffer.edit().b_p_dict = None;
+    buffer.edit().b_p_dia = None;
+    buffer.edit().b_p_tsr = None;
+    buffer.edit().b_p_qe = None;
+    buffer.set_b_p_ac(-1);
+    buffer.set_b_p_ar(-1);
+    buffer.set_b_p_fs(-1);
+    buffer.set_b_p_ul(OptInt::from(NO_LOCAL_UNDOLEVEL));
+    buffer.edit().b_p_lw = None;
+    buffer.edit().b_p_bkc = None;
+    buffer.edit().b_p_menc = None;
 }
 
 // ---------------------------------------------------------------------------
@@ -542,7 +542,7 @@ pub fn buflist_getfile(
     }
 
     let redraw_off = Suppress::redraw();
-    let (handle, setmark) = (buf.handle.get(), options & GETF_SETMARK != 0);
+    let (handle, setmark) = (buf.handle().get(), options & GETF_SETMARK != 0);
     // A live buffer's handle, and no file name to load under it.
     let failed = getfile(handle, None, None, setmark, lnum, forceit != 0) > 0;
     drop(redraw_off);
@@ -624,8 +624,9 @@ pub fn buflist_findname(ffname: &CStr) -> Option<Buf> {
 /// [`buflist_findname`] with the file id already looked up (`None` when the
 /// file does not exist). Dummy buffers do not count.
 pub(crate) fn buflist_findname_file_id(ffname: &CStr, file_id: Option<&FileID>) -> Option<Buf> {
-    buffers_back()
-        .find(|buf| !buf.b_flags.has(BufFlags::DUMMY) && !buf.is_other_file(ffname, Some(file_id)))
+    buffers_back().find(|buf| {
+        !buf.b_flags().has(BufFlags::DUMMY) && !buf.is_other_file(ffname, Some(file_id))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -699,7 +700,7 @@ pub fn buflist_findpat(
 /// the regexp.
 fn match_shorthand(head: u8, diffmode: bool) -> Matched {
     let matched = if head == b'%' {
-        Some(Buf::current().handle)
+        Some(Buf::current().handle())
     } else {
         current_win().w_alt_fnum
     };
@@ -752,7 +753,7 @@ fn match_pattern(
             for b in buffers_back() {
                 // An invalid pattern.
                 regmatch.regprog.as_ref()?;
-                if (b.b_p_bl != 0) != find_listed
+                if (b.b_p_bl() != 0) != find_listed
                     || diffmode && !is_diff_mode(b)
                     || buflist_match(&mut regmatch, b, false).is_none()
                 {
@@ -769,7 +770,7 @@ fn match_pattern(
                     break;
                 }
                 // Remember the first match.
-                matched = Matched::One(Some(b.handle));
+                matched = Matched::One(Some(b.handle()));
             }
 
             drop(regmatch);
@@ -809,7 +810,7 @@ impl LastUsed for Buf {
 pub(crate) fn sort_by_last_used<T: LastUsed + Copy>(items: &mut [T]) {
     crate::memory::qsort_by(items, |a, b| {
         let (a, b) = (a.last_used_buffer(), b.last_used_buffer());
-        b.b_last_used.cmp(&a.b_last_used)
+        b.b_last_used().cmp(&a.b_last_used())
     });
 }
 
@@ -827,9 +828,10 @@ mod tests {
     #[test]
     fn a_fresh_buffer_holds_valid_owners() {
         let _held = editor_state_lock();
-        let mut buffer = bare_buffer();
+        let buffer = bare_buffer();
         {
-            let b: &mut Buffer = &mut buffer;
+            let mut edit = buffer.edit();
+            let b: &mut Buffer = &mut edit;
             for field in BUF_STRING_OPTIONS {
                 assert!(
                     field.of(b).is_none(),
@@ -848,13 +850,13 @@ mod tests {
             assert!(!b.b_s.b_sst.is_allocated());
             assert!(b.b_s.b_keywtab.is_empty());
             assert!(b.b_s.b_keywtab_ic.is_empty());
-            assert!(b.b_ml.ml_stack.is_empty());
-            assert_eq!(b.b_ml.ml_chunks.len(), 0);
-            assert!(b.b_ml.ml_locked.is_none());
+            assert!(b.b_ml.get_mut().ml_stack.is_empty());
+            assert_eq!(b.b_ml.get_mut().ml_chunks.len(), 0);
+            assert!(b.b_ml.get_mut().ml_locked.is_none());
             // The memfile and the line cache's owned text, both owners.
-            assert!(b.b_ml.ml_mfp.is_none());
-            assert!(!b.b_ml.line_is_dirty());
-            assert!(b.b_ml.cached_bytes().is_empty());
+            assert!(b.b_ml.get_mut().ml_mfp.is_none());
+            assert!(!b.b_ml.get_mut().line_is_dirty());
+            assert!(b.b_ml.get_mut().cached_bytes().is_empty());
             assert!(b.b_marktree.id2node.is_empty());
             assert!(b.b_extmark_ns.is_empty());
             assert!(b.b_start_fenc.is_none());

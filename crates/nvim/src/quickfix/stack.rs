@@ -221,7 +221,7 @@ pub(crate) fn qf_emsg(msg: &'static CStr) {
 /// event, the ones taking their input from Vimscript match on neither.
 pub(crate) fn fire_qf_autocmd(event: AutoEvent, name: &CStr, on_fname: bool) -> bool {
     let fname = if on_fname {
-        Buf::current().name.shown().map(XString::from_cstr)
+        Buf::current().read().name.shown().map(XString::from_cstr)
     } else {
         None
     };
@@ -506,7 +506,7 @@ fn wipe_qf_buffer(mut qi: Qi) {
     if qi.bufnr.is_none() {
         return;
     }
-    let Some(qfbuf) = find_buf(qi.bufnr).filter(|b| b.b_nwindows == 0) else {
+    let Some(qfbuf) = find_buf(qi.bufnr).filter(|b| b.b_nwindows() == 0) else {
         return;
     };
     // `close_buffer` insists that `curwin->w_buffer == CURBUF`, and it
@@ -599,7 +599,7 @@ pub(crate) fn qf_free_stack(window: Option<Win>, mut qi: Qi) {
     wp.free_location_lists();
     if let Some(mut qfwin) = qfwin {
         let fresh = new_location_stack(QFLT_LOCATION, wp.w_onebuf_opt.wo_lhi);
-        fresh.stack().bufnr = Some(qfwin.buffer().handle);
+        fresh.stack().bufnr = Some(qfwin.buffer().handle());
         let shown = qfwin.w_llist_ref.take();
         drop_stack_ref(shown);
         qfwin.w_llist_ref = Some(fresh);

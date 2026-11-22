@@ -67,7 +67,6 @@ use crate::getchar::state::VGETC_BUSY;
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::memline::MlFlags;
-use crate::memory::XString;
 use crate::message::state::{MSG_COL, MSG_DIDANY, MSG_DIDOUT, MSG_ROW};
 use crate::message::{Answer, DialogKind};
 use crate::message::{
@@ -231,8 +230,8 @@ pub(crate) fn autowrite(buffer: Buf, forceit: bool) -> Result<(), Failed> {
         || !p_write()
         // never autowrite a "nofile" or "nowrite" buffer
         || buf_is_dontwrite(Some(buffer))
-        || (!forceit && buffer.b_p_ro != 0)
-        || buffer.name.full().is_none()
+        || (!forceit && buffer.b_p_ro() != 0)
+        || buffer.read().name.full().is_none()
     {
         return Err(Failed);
     }
@@ -254,7 +253,7 @@ pub(crate) fn autowrite_all() {
     }
     let mut cur = first_buffer();
     while let Some(b) = cur {
-        if buf_is_changed(b) && b.b_p_ro == 0 && !buf_is_dontwrite(Some(b)) {
+        if buf_is_changed(b) && b.b_p_ro() == 0 && !buf_is_dontwrite(Some(b)) {
             let bufref = BufRef::of(b);
             let _ = buf_write_all(b, false);
             if !bufref.valid() {
@@ -273,7 +272,7 @@ pub(crate) fn check_changed(buffer: Buf, flags: c_int) -> bool {
 
     let blocked = !forceit
         && buf_is_changed(buffer)
-        && (flags & CCGD_MULTWIN != 0 || buffer.b_nwindows <= 1)
+        && (flags & CCGD_MULTWIN != 0 || buffer.b_nwindows() <= 1)
         && (flags & CCGD_AW == 0 || autowrite(buffer, forceit).is_err());
     if !blocked {
         return false;
@@ -294,7 +293,7 @@ pub(crate) fn check_changed(buffer: Buf, flags: c_int) -> bool {
     let mut count = 0;
     if flags & CCGD_ALLBUF != 0 {
         for buf2 in buffers() {
-            if buf_is_changed(buf2) && !buf2.name.full().is_none() {
+            if buf_is_changed(buf2) && !buf2.read().name.full().is_none() {
                 count += 1;
             }
         }
@@ -313,11 +312,12 @@ pub(crate) fn check_changed(buffer: Buf, flags: c_int) -> bool {
 /// Ask what to do about abandoning the changed buffer `buffer`. The caller must
 /// have checked 'write' first. `checkall` offers to deal with every changed
 /// buffer at once.
-pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
+pub(crate) fn dialog_changed(buffer: Buf, checkall: bool) {
     // `check_overwrite` needs an ExArg; upstream hands it an all-zero one.
     let mut ea = ExArg::default();
 
-    let question = dialog_msg(c"Save changes to \"%s\"?", buffer.name.shown());
+    let arg = buffer.read().name.shown().map(CStr::to_owned);
+    let question = dialog_msg(c"Save changes to \"%s\"?", arg.as_deref());
     let ret = if checkall {
         vim_dialog_yesnoallcancel(DialogKind::Question, None, question.as_cstr(), Answer::Yes)
     } else {
@@ -325,9 +325,9 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
     };
 
     if ret == Answer::Yes {
-        let empty_bufname = buffer.name.is_unnamed();
+        let empty_bufname = buffer.read().name.is_unnamed();
         if empty_bufname {
-            buf_set_name(buffer.handle.get(), c"Untitled");
+            buf_set_name(buffer.handle().get(), c"Untitled");
         }
         let target = buffer;
         if check_overwrite_own(&mut ea, target).is_ok()
@@ -341,7 +341,7 @@ pub(crate) fn dialog_changed(mut buffer: Buf, checkall: bool) {
             // Upstream frees both names here without the
             // `b_sfname != b_ffname` guard every other site has, which is
             // a double free the moment the two ever alias.
-            buffer.name.clear();
+            buffer.edit().name.clear();
         }
     } else if ret == Answer::No {
         unchanged(buffer, true, false);
@@ -360,9 +360,9 @@ fn write_all_writable() {
     let mut ea = ExArg::default();
     let mut cur = first_buffer();
     while let Some(target) = cur {
-        if buf_is_changed(target) && !target.name.full().is_none() && target.b_p_ro == 0 {
+        if buf_is_changed(target) && !target.read().name.full().is_none() && target.b_p_ro() == 0 {
             let bufref = BufRef::of(target);
-            if !target.name.is_unnamed() && check_overwrite_own(&mut ea, target).is_ok() {
+            if !target.read().name.is_unnamed() && check_overwrite_own(&mut ea, target).is_ok() {
                 // didn't hit Cancel
                 let _ = buf_write_all(target, false);
             }
@@ -376,7 +376,8 @@ fn write_all_writable() {
 
 /// Ask whether to close the terminal buffer `buffer`.
 pub(crate) fn dialog_close_terminal(buffer: Buf) -> bool {
-    let name = buffer.name.shown().unwrap_or(c"?");
+    let held = buffer.read();
+    let name = held.name.shown().unwrap_or(c"?");
     let question = dialog_msg(c"Close \"%s\"?", Some(name));
     vim_dialog_yesnocancel(DialogKind::Question, None, question.as_cstr(), Answer::Yes)
         == Answer::Yes
@@ -388,7 +389,7 @@ pub(crate) fn can_abandon(buffer: Buf, forceit: bool) -> bool {
     let hidden = buf_hide(buffer);
     hidden
         || !buf_is_changed(buffer)
-        || buffer.b_nwindows > 1
+        || buffer.b_nwindows() > 1
         || autowrite(buffer, forceit).is_ok()
         || forceit
 }
@@ -404,7 +405,7 @@ fn changed_check_order() -> Vec<c_int> {
     }
 
     let mut nrs = Vec::new();
-    nrs.push(Buf::current().handle.get());
+    nrs.push(Buf::current().handle().get());
     for wp in windows() {
         if !wp.w_buffer.is_current() {
             push_unique(&mut nrs, wp.w_buffer.handle().get());
@@ -412,11 +413,11 @@ fn changed_check_order() -> Vec<c_int> {
     }
     for (tp, wp) in tab_windows() {
         if !tp.is_current() {
-            push_unique(&mut nrs, wp.buffer().handle.get());
+            push_unique(&mut nrs, wp.buffer().handle().get());
         }
     }
     for buf in buffers() {
-        push_unique(&mut nrs, buf.handle.get());
+        push_unique(&mut nrs, buf.handle().get());
     }
     nrs
 }
@@ -435,7 +436,7 @@ pub(crate) fn check_changed_any(hidden: bool, unload: bool) -> bool {
         let Some(buf) = find_buf(Handle::from_number(nr)) else {
             continue;
         };
-        if hidden && buf.b_nwindows != 0 || !buf_is_changed(buf) {
+        if hidden && buf.b_nwindows() != 0 || !buf_is_changed(buf) {
             continue;
         }
         let bufref = BufRef::of(buf);
@@ -497,23 +498,25 @@ fn report_unwritten(buffer: Buf) {
         MSG_COL.set(0);
         MSG_DIDOUT.set(false);
     }
-    let shown =
-        if !buffer.terminal.is_null() && channel_job_running(buffer.b_p_channel.cast_unsigned()) {
-            semsg!(
-                "E947: Job still running in buffer \"{}\"",
-                msg_cstr_opt(buffer.name.shown())
-            )
-        } else {
-            let special = buf_spname_owned(buffer);
-            let name = special
-                .as_ref()
-                .map(XString::as_cstr)
-                .or_else(|| buffer.name.shown());
-            semsg!(
-                "E162: No write since last change for buffer \"{}\"",
-                msg_cstr_opt(name)
-            )
-        };
+    let shown = if !buffer.terminal().is_null()
+        && channel_job_running(buffer.b_p_channel().cast_unsigned())
+    {
+        let name = buffer.read().name.shown().map(CStr::to_owned);
+        semsg!(
+            "E947: Job still running in buffer \"{}\"",
+            msg_cstr_opt(name.as_deref())
+        )
+    } else {
+        let special = buf_spname_owned(buffer);
+        let name = special
+            .as_ref()
+            .map(|name| name.as_cstr().to_owned())
+            .or_else(|| buffer.read().name.shown().map(CStr::to_owned));
+        semsg!(
+            "E162: No write since last change for buffer \"{}\"",
+            msg_cstr_opt(name.as_deref())
+        )
+    };
     // Only makes sense if the error is shown, which `cause_errthrow` may
     // prevent.
     if shown && MSG_DIDANY.get() {
@@ -525,7 +528,7 @@ fn report_unwritten(buffer: Buf) {
 /// `Err` and an error message when the current buffer has no file name,
 /// `Ok` when it has one.
 pub(crate) fn check_fname() -> Result<(), Failed> {
-    if Buf::current().name.full().is_none() {
+    if Buf::current().read().name.full().is_none() {
         emsg(gettext(c"E32: No file name"));
         return Err(Failed);
     }
@@ -540,7 +543,7 @@ pub(crate) fn buf_write_all(buffer: Buf, forceit: bool) -> Result<(), Failed> {
             WriteName::Full,
             Some(WriteName::Shown),
             LineNr::ONE,
-            buffer.b_ml.ml_line_count,
+            buffer.line_count(),
             None,
             WriteRequest {
                 append: false,
@@ -677,12 +680,12 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
         Win::current().w_arg_idx = 0;
         if !buf_is_changed(Buf::current()) {
             // Reload the file if it is newer.
-            let save_ar = Buf::current().b_p_ar;
-            Buf::current().b_p_ar = 1;
+            let save_ar = Buf::current().b_p_ar();
+            Buf::current().set_b_p_ar(1);
             buf_check_timestamp(Buf::current());
-            Buf::current().b_p_ar = save_ar;
+            Buf::current().set_b_p_ar(save_ar);
         }
-        if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+        if Buf::current().ml_flags().has(MlFlags::EMPTY) {
             ex_rewind(excmd);
         }
         // Execute [+cmd]. No need to execute [++opts]: those only apply

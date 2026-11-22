@@ -172,7 +172,7 @@ impl ExArg<'_> {
         // The number of lines joined is the number of lines in the range, plus
         // one more if this is not the end of the file.
         let joined_lines_count =
-            self.line2 - self.line1 + 1 + i32::from(self.line2 < Buf::current().b_ml.ml_line_count);
+            self.line2 - self.line1 + 1 + i32::from(self.line2 < Buf::current().line_count());
         if joined_lines_count > 1 {
             let joined = usize::try_from(joined_lines_count).expect("more than one line");
             let _ = do_join(joined, false, true, false, true);

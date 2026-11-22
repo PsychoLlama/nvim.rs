@@ -42,7 +42,7 @@ pub fn grep_internal(cmdidx: CmdIdx) -> bool {
     ) {
         return false;
     }
-    local_or_global(&Buf::current().b_p_gp, P_GP).get() == c"internal"
+    local_or_global(&Buf::current().read().b_p_gp, P_GP).get() == c"internal"
 }
 
 /// The name the `QuickFixCmdPre`/`QuickFixCmdPost` autocommands are matched
@@ -100,7 +100,7 @@ pub fn ex_make(excmd: &mut ExArg) {
         return;
     }
 
-    let enc = local_or_global(&Buf::current().b_p_menc, P_MENC).get();
+    let enc = local_or_global(&Buf::current().read().b_p_menc, P_MENC).get();
 
     let au_name = make_get_auname(excmd.cmdidx);
     if let Some(name) = au_name {
@@ -128,7 +128,7 @@ pub fn ex_make(excmd: &mut ExArg) {
     let errorformat = if is_make {
         P_EFM.get()
     } else {
-        local_or_global(&Buf::current().b_p_gefm, P_GEFM).get()
+        local_or_global(&Buf::current().read().b_p_gefm, P_GEFM).get()
     };
     let newlist = !matches!(excmd.cmdidx, CmdIdx::grepadd | CmdIdx::lgrepadd);
 

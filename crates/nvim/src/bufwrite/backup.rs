@@ -96,8 +96,8 @@ fn open_for_write(path: &CStr, options: &mut OpenOptions, mode: c_int) -> Result
 /// The size is not checked: a tool like `gzip` keeps the timestamp but
 /// cannot keep the size. Returns false if the user answers "no".
 fn check_mtime(buffer: Buf, file_info: &FileInfo) -> bool {
-    if buffer.b_mtime_read == 0
-        || !time_differs(file_info, buffer.b_mtime_read, buffer.b_mtime_read_ns)
+    if buffer.b_mtime_read() == 0
+        || !time_differs(file_info, buffer.b_mtime_read(), buffer.b_mtime_read_ns())
     {
         return true;
     }
@@ -699,8 +699,8 @@ pub(crate) fn finish_write(
     // meta-data is journalled. Syncing slows the system down but assures
     // the data reached the disk. For a device the fsync is attempted but
     // not complained about; it could be a pipe.
-    let fsync = if buffer.b_p_fs >= 0 {
-        buffer.b_p_fs != 0
+    let fsync = if buffer.b_p_fs() >= 0 {
+        buffer.b_p_fs() != 0
     } else {
         p_fs()
     };
@@ -731,7 +731,7 @@ pub(crate) fn finish_write(
             }
         }
         buf_set_file_id(buffer);
-    } else if !buffer.file_id_valid {
+    } else if !buffer.file_id_valid() {
         buf_set_file_id(buffer); // the file is new
     }
 

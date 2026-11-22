@@ -60,7 +60,7 @@ impl SynState {
         let start_lnum = self.sync_backoff(start_lnum);
         self.lnum = start_lnum;
 
-        let flags = self.block().b_syn_sync_flags;
+        let flags = self.block().read().b_syn_sync_flags;
         if flags & SF_CCOMMENT != 0 {
             self.sync_by_ccomment(window, start_lnum);
         } else if flags & SF_MATCH != 0 {
@@ -76,7 +76,7 @@ impl SynState {
     /// times 1.5 -- or times 2 when minlines is small. Watch out for overflow when
     /// minlines is MAXLNUM.
     fn sync_backoff(&self, start_lnum: LineNr) -> LineNr {
-        let minlines = self.block().b_syn_sync_minlines;
+        let minlines = self.block().read().b_syn_sync_minlines;
         if minlines > start_lnum.get() {
             return LineNr::ONE;
         }
@@ -87,7 +87,7 @@ impl SynState {
         } else {
             minlines * 3 / 2
         };
-        let maxlines = self.block().b_syn_sync_maxlines;
+        let maxlines = self.block().read().b_syn_sync_maxlines;
         if maxlines != 0 && back > maxlines {
             back = maxlines;
         }
@@ -122,13 +122,15 @@ impl SynState {
         window.w_cursor.col = ColNr::ZERO;
 
         // Restrict the search for the end of the comment to "maxlines".
-        if find_start_comment(self.block().b_syn_sync_maxlines as c_int).is_some() {
-            let mut idx = count_as_int(self.block().patterns().len());
+        let maxlines = self.block().read().b_syn_sync_maxlines as c_int;
+        if find_start_comment(maxlines).is_some() {
+            let mut idx = count_as_int(self.block().read().patterns().len());
             while idx > 0 {
                 idx -= 1;
                 let block = self.block();
-                let spp = block.pattern(idx);
-                if c_int::from(spp.sp_syn.id) == c_int::from(self.block().b_syn_sync_id)
+                let held = block.read();
+                let spp = held.pattern(idx);
+                if c_int::from(spp.sp_syn.id) == c_int::from(self.block().read().b_syn_sync_id)
                     && c_int::from(spp.sp_type) == SPTYPE_START
                 {
                     self.validate_current_state();
@@ -146,7 +148,7 @@ impl SynState {
 
     /// Search backwards, one line at a time, for a `:syntax sync match`.
     fn sync_by_match(&mut self, start_lnum: LineNr, last_valid: Option<EntryId>) {
-        let maxlines = self.block().b_syn_sync_maxlines;
+        let maxlines = self.block().read().b_syn_sync_maxlines;
         let break_lnum = if maxlines != 0 && start_lnum > LineNr::new(maxlines) {
             start_lnum - maxlines
         } else {
@@ -170,7 +172,7 @@ impl SynState {
             }
             // Have we run into a saved state stack that is still valid?
             if let Some(id) = last_valid
-                && lnum == self.block().b_sst.entry(id).lnum
+                && lnum == self.block().read().b_sst.entry(id).lnum
             {
                 self.load_current_state(id);
                 break;
@@ -259,7 +261,8 @@ impl SynState {
                     (SynFlags::NONE, KEYWORD_IDX) // cannot happen?
                 } else {
                     let block = self.block();
-                    let spp = block.pattern(cur_si.si_idx);
+                    let held = block.read();
+                    let spp = held.pattern(cur_si.si_idx);
                     (spp.sp_flags, spp.sp_sync_idx)
                 };
                 let m_endpos = cur_si.si_m_endpos;
@@ -308,39 +311,38 @@ impl SynState {
     /// [`SynState::restore_chartab`] is a no-op too and the saved table is
     /// never read.
     pub(crate) fn install_syntax_chartab(&self, chartab: &mut [uint64_t; 4]) {
-        let (mut buffer, block) = (self.buffer, self.block());
-        if block.b_syn_isk.is_unset() {
+        let (buffer, block) = (self.buffer, self.block());
+        if block.read().b_syn_isk.is_unset() {
             return;
         }
         // The two tables are the same 32 bytes, one typed as four `uint64_t`
         // and one as `uint8_t[32]`.
-        let installed: [uint8_t; 32] = block.b_syn_chartab;
-        let buf_chartab = &mut buffer.b_chartab;
-        *chartab = *buf_chartab;
-        *buf_chartab = ::core::array::from_fn(|i| {
+        let installed: [uint8_t; 32] = block.read().b_syn_chartab;
+        *chartab = buffer.b_chartab();
+        buffer.set_b_chartab(::core::array::from_fn(|i| {
             uint64_t::from_ne_bytes(::core::array::from_fn(|j| installed[i * 8 + j]))
-        });
+        }));
     }
 
     /// Put back what [`SynState::install_syntax_chartab`] saved.
     pub(crate) fn restore_chartab(&self, chartab: &[uint64_t; 4]) {
-        if !self.block().b_syn_isk.is_unset() {
-            let mut buffer = self.buffer;
-            buffer.b_chartab = *chartab;
+        if !self.block().read().b_syn_isk.is_unset() {
+            let buffer = self.buffer;
+            buffer.set_b_chartab(*chartab);
         }
     }
 
     /// Does line `lnum` match the `:syntax sync linecont` pattern, i.e. does the
     /// line after it continue it?
     pub(crate) fn match_linecont(&mut self, lnum: LineNr) -> bool {
-        if self.block().b_syn_linecont_prog.is_none() {
+        if self.block().read().b_syn_linecont_prog.is_none() {
             return false;
         }
         let mut buf_chartab = [0u64; 4];
         self.install_syntax_chartab(&mut buf_chartab);
 
         let mut regmatch = RegMMatch {
-            regprog: self.block().b_syn_linecont_prog.take(),
+            regprog: self.block().edit().b_syn_linecont_prog.take(),
             startpos: [LPos {
                 lnum: LineNr::ZERO,
                 col: ColNr::ZERO,
@@ -350,17 +352,22 @@ impl SynState {
                 col: ColNr::ZERO,
             }; 10],
             rmm_matchcol: ColNr::ZERO,
-            rmm_ic: self.block().b_syn_linecont_ic,
+            rmm_ic: self.block().read().b_syn_linecont_ic,
             rmm_maxcol: ColNr::ZERO,
         };
-        let mut block = self.block();
-        let time = &mut block.b_syn_linecont_time;
+        let block = self.block();
+        // A copy for the match, which reads the buffer (whose block this may
+        // be), stored back after.
+        let mut time = block.read().b_syn_linecont_time;
         let io = ExtMatchIo {
             input: None,
             output: None,
         };
-        let r = self.syn_regexec(&mut regmatch, lnum, ColNr::ZERO, time, io);
-        self.block().b_syn_linecont_prog = regmatch.regprog.take();
+        let r = self.syn_regexec(&mut regmatch, lnum, ColNr::ZERO, &mut time, io);
+        let mut held = block.edit();
+        held.b_syn_linecont_prog = regmatch.regprog.take();
+        held.b_syn_linecont_time = time;
+        drop(held);
 
         self.restore_chartab(&buf_chartab);
         r
@@ -446,17 +453,17 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
 
         if word == b"CCOMMENT" {
             if !args.skip {
-                cur_syn_block().b_syn_sync_flags |= SF_CCOMMENT;
+                cur_syn_block().edit().b_syn_sync_flags |= SF_CCOMMENT;
             }
             if !ends_excmd(args.line.byte_at(next_arg)) {
                 arg_end = args.line.skip_to_white(next_arg);
                 if !args.skip {
                     let name = args.line.slice_at(next_arg, arg_end - next_arg);
-                    cur_syn_block().b_syn_sync_id = id16(syn_check_group(name));
+                    cur_syn_block().edit().b_syn_sync_id = id16(syn_check_group(name));
                 }
                 next_arg = args.line.skip_white(arg_end);
             } else if !args.skip {
-                cur_syn_block().b_syn_sync_id = id16(syn_name2id(c"Comment"));
+                cur_syn_block().edit().b_syn_sync_id = id16(syn_name2id(c"Comment"));
             }
         } else if let Some(count) = sync_count_key(word) {
             if word.get(count.digits_at - 1) != Some(&b'=')
@@ -467,17 +474,17 @@ pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
             }
             let (n, _) = getdigits_int_at(&key, count.digits_at, false, 0);
             if !args.skip {
-                let mut block = cur_syn_block();
+                let block = cur_syn_block();
                 match count.field {
-                    SyncField::MinLines => block.b_syn_sync_minlines = n,
-                    SyncField::MaxLines => block.b_syn_sync_maxlines = n,
-                    SyncField::LineBreaks => block.b_syn_sync_linebreaks = n,
+                    SyncField::MinLines => block.edit().b_syn_sync_minlines = n,
+                    SyncField::MaxLines => block.edit().b_syn_sync_maxlines = n,
+                    SyncField::LineBreaks => block.edit().b_syn_sync_linebreaks = n,
                 }
             }
         } else if word == b"FROMSTART" {
             if !args.skip {
-                cur_syn_block().b_syn_sync_minlines = MAXLNUM.get();
-                cur_syn_block().b_syn_sync_maxlines = 0;
+                cur_syn_block().edit().b_syn_sync_minlines = MAXLNUM.get();
+                cur_syn_block().edit().b_syn_sync_maxlines = 0;
             }
         } else if word == b"LINECONT" {
             match sync_linecont(args, next_arg) {
@@ -541,7 +548,7 @@ fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, SyntaxError> {
     if delim == 0 {
         return Err(SyntaxError::Unexplained); // missing pattern
     }
-    if cur_syn_block().b_syn_linecont_pat.is_some() {
+    if cur_syn_block().read().b_syn_linecont_pat.is_some() {
         return Err(SyntaxError::LineContTwice);
     }
     let arg_end = next_arg + 1 + skip_regexp_at(args.line.tail(next_arg + 1), char_delim(delim), 1);
@@ -550,20 +557,21 @@ fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, SyntaxError> {
     }
 
     if !args.skip {
-        let mut block = cur_syn_block();
+        let block = cur_syn_block();
         // Store the pattern and its compiled program. 'cpoptions' is
         // emptied first, to avoid the 'l' flag.
         let pat = name_in(args.line.slice_at(next_arg + 1, arg_end - next_arg - 1));
-        block.b_syn_linecont_ic = block.b_syn_ic;
+        let value = block.read().b_syn_ic;
+        block.edit().b_syn_linecont_ic = value;
         let _cpo = SavedCpo::empty();
-        block.b_syn_linecont_prog = vim_regcomp(&pat, RE_MAGIC);
-        syn_clear_time(&mut block.b_syn_linecont_time);
+        block.edit().b_syn_linecont_prog = vim_regcomp(&pat, RE_MAGIC);
+        syn_clear_time(&mut block.edit().b_syn_linecont_time);
 
-        if block.b_syn_linecont_prog.is_none() {
+        if block.read().b_syn_linecont_prog.is_none() {
             // The compiler has said why.
             return Err(SyntaxError::Reported(Failed));
         }
-        block.b_syn_linecont_pat = Some(pat);
+        block.edit().b_syn_linecont_pat = Some(pat);
     }
     Ok(args.line.skip_white(arg_end + 1))
 }

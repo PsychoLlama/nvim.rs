@@ -305,7 +305,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
     } else {
         BUF_HAS_LL_ENTRY
     };
-    if Buf::current().b_has_qf_entry & buf_has_flag == 0 {
+    if Buf::current().b_has_qf_entry() & buf_has_flag == 0 {
         qf_emsg(E_NO_ERRORS);
         return;
     }
@@ -341,7 +341,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
     };
     let errornr = Adjacent {
         entries: &qi.current_list().entries,
-        bnr: Some(Buf::current().handle),
+        bnr: Some(Buf::current().handle()),
         pos,
         linewise,
     }

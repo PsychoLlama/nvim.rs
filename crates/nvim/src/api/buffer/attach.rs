@@ -25,7 +25,7 @@ pub(crate) fn api_buf_ensure_loaded(buffer: BufferHandle) -> Result<Option<Buf>,
     let Some(b) = find_buffer_by_handle(buffer)? else {
         return Ok(None);
     };
-    if b.b_ml.ml_mfp.is_none() && !buf_ensure_loaded(b) {
+    if b.ml().ml_mfp.is_none() && !buf_ensure_loaded(b) {
         return Err(Error::exception(c"Failed to load buffer"));
     }
     Ok(Some(b))
@@ -98,23 +98,23 @@ pub fn nvim__buf_stats(buf: BufferHandle) -> Result<ApiDict, Error> {
     };
     let buffer = b;
     let mut rv = DictBuilder::with_capacity(7 as size_t);
-    let d_flush_count = Object::integer(Integer::from(b.flush_count));
+    let d_flush_count = Object::integer(Integer::from(b.ml().flush_count));
     rv.insert(c"flush_count", d_flush_count);
-    let d_current_lnum = Object::integer(Integer::from(b.b_ml.cached_lnum()));
+    let d_current_lnum = Object::integer(Integer::from(b.ml().cached_lnum()));
     rv.insert(c"current_lnum", d_current_lnum);
-    let d_line_dirty = Object::boolean(b.b_ml.line_is_dirty());
+    let d_line_dirty = Object::boolean(b.ml().line_is_dirty());
     rv.insert(c"line_dirty", d_line_dirty);
-    let d_dirty_bytes = Object::integer(len_as_integer(b.deleted_bytes));
+    let d_dirty_bytes = Object::integer(len_as_integer(b.deleted_bytes()));
     rv.insert(c"dirty_bytes", d_dirty_bytes);
-    let d_dirty_bytes2 = Object::integer(len_as_integer(b.deleted_bytes2));
+    let d_dirty_bytes2 = Object::integer(len_as_integer(b.deleted_bytes2()));
     rv.insert(c"dirty_bytes2", d_dirty_bytes2);
     let total = buf_meta_total(buffer, MT_META_LINES);
     let d_virt_blocks = Object::integer(Integer::from(total));
     rv.insert(c"virt_blocks", d_virt_blocks);
     let tip = buffer;
     if let Some(uhp) = tip
-        .header(tip.b_u_curhead)
-        .or_else(|| tip.header(tip.b_u_newhead))
+        .header(tip.b_u_curhead())
+        .or_else(|| tip.header(tip.b_u_newhead()))
     {
         let d_uhp_extmark_size = Object::integer(len_as_integer(uhp.extmarks.len()));
         rv.insert(c"uhp_extmark_size", d_uhp_extmark_size);

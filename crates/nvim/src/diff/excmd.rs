@@ -108,8 +108,9 @@ fn patch_into(excmd: &mut ExArg, tmp_orig: &CStr, tmp_new: &CStr) {
         return;
     }
     let mut newname = None;
-    if !Buf::current().name.is_unnamed() {
+    if !Buf::current().read().name.is_unnamed() {
         let mut patched = Buf::current()
+            .read()
             .name
             .shown()
             .map_or_else(XString::new, XString::from_cstr);
@@ -141,7 +142,7 @@ fn patch_into(excmd: &mut ExArg, tmp_orig: &CStr, tmp_new: &CStr) {
 /// Write the current buffer out to `tmp_orig`, the patch's input.
 fn write_orig(tmp_orig: &CStr) -> Result<(), Failed> {
     let cb = Buf::current();
-    let end = Buf::current().b_ml.ml_line_count;
+    let end = Buf::current().line_count();
     let req = WriteRequest::filter();
     // No shortname and no `ExArg` are wanted.
     cb.write_file(
@@ -214,12 +215,12 @@ pub fn ex_diffthis(_excmd: &mut ExArg) {
 /// the buffer registry.
 fn set_diff_option(window: Win, value: bool) {
     let saved = switch_to(window);
-    Buf::current().b_ro_locked += 1;
+    Buf::current().set_b_ro_locked(Buf::current().b_ro_locked() + 1);
     // `curwin`/`CURBUF` name `window` and its buffer, which is what the option
     // code reads; the buffer is locked against a `:set` side effect.
     let val = OptVal::Boolean(Some(value));
     set_option_value_give_err(OPT_DIFF, val, OptionSetFlags::LOCAL);
-    Buf::current().b_ro_locked -= 1;
+    Buf::current().set_b_ro_locked(Buf::current().b_ro_locked() - 1);
     saved.restore();
 }
 

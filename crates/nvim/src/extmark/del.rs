@@ -39,9 +39,9 @@ pub fn extmark_del_id(buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
 }
 
 /// [`extmark_del_id`] for the callers that already hold a [`Buf`].
-pub(crate) fn del_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
+pub(crate) fn del_id(buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
     let mut iter = MarkTreeIter::default();
-    let key = tree_lookup_ns(buffer.marktree(), ns_id, id, false, Some(&mut iter));
+    let key = tree_lookup_ns(&mut buffer.marktree(), ns_id, id, false, Some(&mut iter));
     if key.id != 0 {
         del(buffer, &mut iter, key, false);
     }
@@ -49,17 +49,17 @@ pub(crate) fn del_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
 }
 
 /// Remove the (possibly paired) extmark `key` that `itr` is on.
-pub(crate) fn del(mut buffer: Buf, iter: &mut MarkTreeIter, mut key: MTKey, restore: bool) {
+pub(crate) fn del(buffer: Buf, iter: &mut MarkTreeIter, mut key: MTKey, restore: bool) {
     debug_assert!(key.pos.row >= 0, "key.pos.row >= 0");
 
     let mut key2 = key;
-    let other = tree_del_itr(buffer.marktree(), iter, false);
+    let other = tree_del_itr(&mut buffer.marktree(), iter, false);
     if other != 0 {
-        key2 = tree_lookup(buffer.marktree(), other, Some(iter));
+        key2 = tree_lookup(&mut buffer.marktree(), other, Some(iter));
         debug_assert!(key2.pos.row >= 0, "key2.pos.row >= 0");
-        tree_del_itr(buffer.marktree(), iter, false);
+        tree_del_itr(&mut buffer.marktree(), iter, false);
         if restore {
-            itr_get(buffer.marktree(), key.pos.row, key.pos.col, iter);
+            itr_get(&mut buffer.marktree(), key.pos.row, key.pos.col, iter);
         }
     }
 
@@ -89,7 +89,7 @@ pub(crate) fn del(mut buffer: Buf, iter: &mut MarkTreeIter, mut key: MTKey, rest
 /// Free every mark of namespace `ns_id` (or of every namespace, when it is 0)
 /// between two positions.
 pub fn extmark_clear(
-    mut buffer: Buf,
+    buffer: Buf,
     ns_id: uint32_t,
     l_row: c_int,
     l_col: ColNr,
@@ -101,7 +101,7 @@ pub fn extmark_clear(
     }
 
     let all_ns = ns_id == 0;
-    if !all_ns && !ns_has(buffer.extmark_ns(), ns_id) {
+    if !all_ns && !ns_has(&buffer.extmark_ns(), ns_id) {
         // Nothing to do.
         return false;
     }
@@ -110,9 +110,9 @@ pub fn extmark_clear(
     let mut marks_cleared_all = l_row == 0 && l_col == ColNr::ZERO;
 
     let mut iter = MarkTreeIter::default();
-    itr_get(buffer.marktree(), l_row, l_col.get(), &mut iter);
+    itr_get(&mut buffer.marktree(), l_row, l_col.get(), &mut iter);
     loop {
-        let mark = itr_current(buffer.marktree(), &iter);
+        let mark = itr_current(&buffer.marktree(), &iter);
         if mark.pos.row < 0
             || mark.pos.row > u_row
             || (mark.pos.row == u_row && mark.pos.col > u_col.get())
@@ -126,15 +126,15 @@ pub fn extmark_clear(
             marks_cleared_any = true;
             del(buffer, &mut iter, mark, true);
         } else {
-            itr_next(buffer.marktree(), &mut iter);
+            itr_next(&mut buffer.marktree(), &mut iter);
         }
     }
 
     if marks_cleared_all {
         if all_ns {
-            ns_destroy(buffer.extmark_ns());
+            ns_destroy(&mut buffer.extmark_ns());
         } else {
-            ns_del(buffer.extmark_ns(), ns_id);
+            ns_del(&mut buffer.extmark_ns(), ns_id);
         }
     }
 

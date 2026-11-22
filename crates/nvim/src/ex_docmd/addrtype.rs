@@ -103,7 +103,7 @@ pub fn get_cmd_default_range(excmd: &mut ExArg) -> c_int {
             Win::current()
                 .w_cursor
                 .lnum
-                .min(Buf::current().b_ml.ml_line_count)
+                .min(Buf::current().line_count())
                 .get()
         }
         CmdAddr::Windows => current_win_nr(Win::current_or_none()),
@@ -115,7 +115,7 @@ pub fn get_cmd_default_range(excmd: &mut ExArg) -> c_int {
                 len
             }
         }
-        CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle.get(),
+        CmdAddr::LoadedBuffers | CmdAddr::Buffers => Buf::current().handle().get(),
         CmdAddr::Tabs => current_tab_nr(TabPage::current_or_none()),
         CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
         CmdAddr::Quickfix => len_as_int(qf_get_cur_idx(excmd.cmdidx)),
@@ -133,18 +133,18 @@ pub fn set_cmd_dflall_range(excmd: &mut ExArg) {
     }
     match excmd.addr_type {
         CmdAddr::Lines => {
-            excmd.line2 = Buf::current().b_ml.ml_line_count;
+            excmd.line2 = Buf::current().line_count();
         }
         // An "other" kind's whole range is still every line.
         CmdAddr::Other => {
-            excmd.number2 = Buf::current().b_ml.ml_line_count.get();
+            excmd.number2 = Buf::current().line_count().get();
         }
         CmdAddr::LoadedBuffers => {
             (excmd.number1, excmd.number2) = loaded_buffer_range();
         }
         CmdAddr::Buffers => {
-            excmd.number1 = head().handle.get();
-            excmd.number2 = tail().handle.get();
+            excmd.number1 = head().handle().get();
+            excmd.number2 = tail().handle().get();
         }
         CmdAddr::Windows => {
             excmd.number2 = current_win_nr(None);
@@ -176,15 +176,15 @@ pub(super) fn arglist_len() -> c_int {
 /// The numbers of the first and last *loaded* buffers.
 pub(super) fn loaded_buffer_range() -> (c_int, c_int) {
     let mut buf = head();
-    while buf.b_ml.ml_mfp.is_none() {
+    while buf.ml().ml_mfp.is_none() {
         let Some(next) = buf.next() else { break };
         buf = next;
     }
-    let first = buf.handle.get();
+    let first = buf.handle().get();
     let mut buf = tail();
-    while buf.b_ml.ml_mfp.is_none() {
+    while buf.ml().ml_mfp.is_none() {
         let Some(prev) = buf.prev() else { break };
         buf = prev;
     }
-    (first, buf.handle.get())
+    (first, buf.handle().get())
 }

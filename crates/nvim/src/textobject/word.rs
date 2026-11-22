@@ -113,7 +113,7 @@ pub(crate) fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(),
 
         // Always move at least one character, unless this is the last one
         // in the buffer.
-        let last_line = Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count;
+        let last_line = Win::current().w_cursor.lnum == Buf::current().line_count();
         let mut i = inc_cursor();
         if i.is_stuck() || (i.left_the_line() && last_line) {
             return Err(NoObject); // started on the last character of the file

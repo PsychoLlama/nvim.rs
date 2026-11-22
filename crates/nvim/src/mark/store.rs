@@ -136,8 +136,8 @@ impl LocalMark {
 
     /// Run `f` on the record in `buffer`, which it must not re-enter the
     /// editor from: the record is lent for the call and no longer.
-    pub(super) fn with<R>(self, mut buffer: Buf, f: impl FnOnce(&mut FileMark) -> R) -> R {
-        let b = &mut *buffer;
+    pub(super) fn with<R>(self, buffer: Buf, f: impl FnOnce(&mut FileMark) -> R) -> R {
+        let mut b = buffer.edit();
         f(match self {
             LocalMark::Named(i) => &mut b.b_namedm[i],
             LocalMark::LastCursor => &mut b.b_last_cursor,

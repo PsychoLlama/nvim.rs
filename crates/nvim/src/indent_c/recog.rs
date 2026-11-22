@@ -59,7 +59,8 @@ pub fn starts_with_cinword(line: &[u8]) -> bool {
         .unwrap_or(line.len());
 
     let buf = Buf::current();
-    let words = buf.b_p_cinw.bytes();
+    let held = buf.read();
+    let words = held.b_p_cinw.bytes();
     let mut rest = words;
     let mut word = Vec::with_capacity(words.len());
     while !rest.is_empty() {
@@ -81,6 +82,7 @@ pub fn starts_with_cinword(line: &[u8]) -> bool {
             return true;
         }
     }
+    drop(held);
     false
 }
 
@@ -181,7 +183,7 @@ fn is_option_label(line: &[u8], at: usize, option: &[u8]) -> bool {
 /// 'cinscopedecls' -- `public`, `protected`, `private` by default.
 pub(crate) fn is_scope_decl(line: &[u8], at: usize) -> bool {
     let buf = Buf::current();
-    is_option_label(line, at, buf.b_p_cinsd.bytes())
+    is_option_label(line, at, buf.read().b_p_cinsd.bytes())
 }
 
 /// Whether `line[at..]` starts with `word` followed by a non-identifier
@@ -248,7 +250,7 @@ pub(crate) fn while_closes_do(lnum: LineNr) -> bool {
     };
     Win::current().w_cursor.col = ColNr::try_from(w).unwrap_or(ColNr::MAX);
 
-    let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
+    let maxparen = int64_t::from(Buf::current().b_ind_maxparen());
     let matched = findmatchlimit(None, Codepoint::NUL, 0, maxparen);
     let retval = matched.is_some_and(|pos| {
         // The match is a position in this buffer, so the cache answers with
@@ -347,7 +349,7 @@ pub(crate) fn ends_a_do_while(terminated: u8) -> bool {
             // Found ");" at end of the line; now check there is a "while"
             // before the matching '('.
             Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
-            if let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen) {
+            if let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen()) {
                 // `trypos` is a position in this buffer, so the cache answers
                 // with the line the `(` sits on.
                 let opens_while = {

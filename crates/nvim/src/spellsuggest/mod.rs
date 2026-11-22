@@ -458,6 +458,7 @@ fn spell_find_suggest(
     // languages rather than the window's.
     su.su_sallang = Buf::current()
         .syntax()
+        .read()
         .b_langp
         .iter()
         .find_map(|lp| lp.sallang);

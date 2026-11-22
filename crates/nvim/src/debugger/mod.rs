@@ -313,7 +313,7 @@ fn dbg_parsearg(arg: &[u8], list: BreakList) -> Result<Breakpoint, Failed> {
     } else if arg.starts_with(b"file") {
         (DBG_FILE, false)
     } else if debugger && arg.starts_with(b"here") {
-        if Buf::current().name.full().is_none() {
+        if Buf::current().read().name.full().is_none() {
             semsg!("E32: No file name");
             return Err(Failed);
         }
@@ -355,6 +355,7 @@ fn dbg_parsearg(arg: &[u8], list: BreakList) -> Result<Breakpoint, Failed> {
     } else if here {
         XString::from_cstr(
             Buf::current()
+                .read()
                 .name
                 .full()
                 .expect("`here` is refused above when the buffer has no name"),

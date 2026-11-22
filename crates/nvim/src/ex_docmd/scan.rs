@@ -112,8 +112,8 @@ pub fn set_cmd_count(excmd: &mut ExArg, count: i32, validate: bool) {
         excmd.line2 += count - 1;
     }
     excmd.addr_count += 1;
-    if validate && excmd.line2 > Buf::current().b_ml.ml_line_count {
-        excmd.line2 = Buf::current().b_ml.ml_line_count;
+    if validate && excmd.line2 > Buf::current().line_count() {
+        excmd.line2 = Buf::current().line_count();
     }
 }
 

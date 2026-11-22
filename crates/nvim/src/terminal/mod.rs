@@ -181,11 +181,11 @@ fn buf_for_handle(handle: Handle) -> Option<Buf> {
 ///
 /// The buffer owns the terminal from here; whoever drives it frees it with
 /// [`terminal_destroy`].
-pub(crate) fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> Term {
+pub(crate) fn terminal_alloc(buffer: Buf, opts: TerminalOptions) -> Term {
     // Owned by the buffer from here; every other reference reaches it
     // through `Buffer::terminal`, and `terminal_destroy` frees it.
-    let term = Term::alloc(Terminal::new(opts, buffer.handle));
-    buffer.terminal = term.raw();
+    let term = Term::alloc(Terminal::new(opts, buffer.handle()));
+    buffer.set_terminal(term.raw());
 
     // None of the consumers being installed can run before this returns.
     term.vt.borrow_mut().set_utf8(true);
@@ -240,11 +240,11 @@ pub(crate) fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> Term {
     term.invalid_end.set(c_int::from(term.opts.height));
     term.pending.events.replace(Some(ParkingQueue::detached()));
 
-    if !buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if !buffer.ml_flags().has(MlFlags::EMPTY) {
         let line_count = buffer.line_count();
         // Not immutable: ml_delete_buf() mutates b_ml behind the pointer.
         #[allow(clippy::while_immutable_condition)]
-        while !buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
+        while !buffer.ml_flags().has(MlFlags::EMPTY) {
             let _ = ml_delete_buf(buffer, LineNr::ONE, false);
         }
         deleted_lines_buf(buffer, LineNr::ONE, line_count.get());
@@ -259,7 +259,7 @@ pub(crate) fn terminal_alloc(mut buffer: Buf, opts: TerminalOptions) -> Term {
 /// outright — hence the re-check before touching either again: `attached`
 /// answers whether the terminal's driver still holds it, and only then is
 /// it reached.
-pub(crate) fn terminal_open(term: Term, mut buffer: Buf, attached: &dyn Fn() -> bool) {
+pub(crate) fn terminal_open(term: Term, buffer: Buf, attached: &dyn Fn() -> bool) {
     let mut aco = AcoSave::default();
     // SAFETY: paired with the `aucmd_restbuf` below.
     aucmd_prepbuf(&mut aco, buffer);
@@ -272,16 +272,21 @@ pub(crate) fn terminal_open(term: Term, mut buffer: Buf, attached: &dyn Fn() -> 
 
     // Locked because setting 'buftype' can run OptionSet, and the buffer's
     // lines are the emulator's to write.
-    buffer.b_locked += 1;
+    buffer.set_b_locked(buffer.b_locked() + 1);
     let _ = set_option_value(
         OPT_BUFTYPE,
         OptVal::static_string(c"terminal"),
         OptionSetFlags::LOCAL,
     );
-    buffer.b_locked -= 1;
+    buffer.set_b_locked(buffer.b_locked() - 1);
 
     // A copy: the title is set on the buffer whose name it is.
-    if let Some(title) = buffer.name.full().map(|name| name.to_bytes().to_vec()) {
+    let title = buffer
+        .read()
+        .name
+        .full()
+        .map(|name| name.to_bytes().to_vec());
+    if let Some(title) = title {
         callbacks::buf_set_term_title(Some(buffer), &title);
     }
     // Both would tie the terminal window's scroll position to another
@@ -373,8 +378,8 @@ pub(crate) fn terminal_close(term: Term, status: c_int) {
     if status == -1 || EXITING.get() {
         // Nothing to report on: detach from the buffer straight away.
         term.buf_handle.set(Handle::NONE);
-        if let Some(mut buf) = buf {
-            buf.terminal = ::core::ptr::null_mut();
+        if let Some(buf) = buf {
+            buf.set_terminal(::core::ptr::null_mut());
         }
         if term.refcount.get() == RefcountSize::ZERO {
             term.destroy.set(true);
@@ -439,7 +444,7 @@ fn handle_of(word: u64) -> Handle {
 fn terminal_state_change_event(handle: u64, _: u64) {
     let buf = buf_for_handle(handle_of(handle));
     if let Some(buf) = buf
-        && !buf.terminal.is_null()
+        && !buf.terminal().is_null()
     {
         let last = buf.line_count();
         redraw_buf_line_later(buf, last, false);
@@ -495,7 +500,7 @@ pub(crate) fn terminal_check_size(term: Term) {
         }
         if wp
             .buffer_or_none()
-            .is_none_or(|buf| buf.terminal != term.raw())
+            .is_none_or(|buf| buf.terminal() != term.raw())
         {
             continue;
         }
@@ -524,9 +529,9 @@ pub(crate) fn terminal_check_size(term: Term) {
 /// wiped — and does nothing until `refcount` reaches zero. Answers whether
 /// it freed the terminal, after which the caller drops its handle.
 pub(crate) fn terminal_destroy(term: Term) -> bool {
-    if let Some(mut buf) = term_buf(term) {
+    if let Some(buf) = term_buf(term) {
         term.buf_handle.set(Handle::NONE);
-        buf.terminal = ::core::ptr::null_mut();
+        buf.set_terminal(::core::ptr::null_mut());
     }
     if term.refcount.get() != RefcountSize::ZERO {
         return false;
@@ -793,7 +798,7 @@ fn linenr_to_row(term: Term, linenr: c_int) -> c_int {
 
 /// Whether the user is typing at this terminal right now.
 fn is_focused(term: Term) -> bool {
-    STATE.get() & MODE_TERMINAL != 0 && Buf::current().terminal == term.raw()
+    STATE.get() & MODE_TERMINAL != 0 && Buf::current().terminal() == term.raw()
 }
 
 /// What `dict` holds under `key`, or nil.
@@ -809,7 +814,7 @@ fn dict_lookup(dict: &DictRef, key: &CStr) -> Object {
 
 /// `b:<key>`, falling back to `g:<key>`, if it is a string.
 fn get_config_string(buffer: Buf, key: &CStr) -> Option<ApiString> {
-    let mut obj = dict_lookup(&scope_vars(&buffer.b_bufvar), key);
+    let mut obj = dict_lookup(&scope_vars(&buffer.read().b_bufvar), key);
     if obj.is_nil() {
         obj = dict_lookup(&globvar_dict(), key);
     }

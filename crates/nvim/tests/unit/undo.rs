@@ -156,9 +156,9 @@ mod write {
             // A zeroed buffer nobody numbers or lists, freed with the
             // fixture.
             let scratch = ScratchBuffer::new();
-            let mut buf = scratch.buf();
-            buf.b_u_synced = true;
-            buf.b_u_numhead = 1;
+            let buf = scratch.buf();
+            buf.set_b_u_synced(true);
+            buf.set_b_u_numhead(1);
 
             let old_udir = P_UDIR.swap(Some(XString::from_cstr(&udir)));
             // `u_write_undo` syncs the *current* buffer before serialising
@@ -168,9 +168,9 @@ mod write {
             // buffer stays current and is only marked synced, which is all
             // that pointing `CURBUF` at an already-synced fixture bought --
             // `u_sync` returns at its first test either way.
-            let mut current = Buf::current();
-            let old_synced = current.b_u_synced;
-            current.b_u_synced = true;
+            let current = Buf::current();
+            let old_synced = current.b_u_synced();
+            current.set_b_u_synced(true);
 
             let mut fixture = Fixture {
                 _guard: guard,
@@ -194,12 +194,16 @@ mod write {
         /// absolute name, which is what `u_get_undo_file_name` mangles.
         fn set_ffname(&mut self, path: &std::path::Path) {
             let ffname = CString::new(path.to_str().unwrap()).unwrap();
-            self.buf.buf().name.set(XString::from_cstr(&ffname), None);
+            self.buf
+                .buf()
+                .set_name(Some(&ffname), None, false)
+                .expect("a fresh name");
         }
 
         /// Where `u_write_undo(NULL, ..)` puts this buffer's undo file.
         fn undo_file_name(&self) -> PathBuf {
-            let name = u_get_undo_file_name(self.buf.buf().name.full(), false)
+            let full = self.buf.buf().full_name();
+            let name = u_get_undo_file_name(full.as_deref(), false)
                 .expect("no undo file name for the buffer");
             PathBuf::from(String::from_utf8(name.to_vec()).unwrap())
         }
@@ -215,7 +219,7 @@ mod write {
     impl Drop for Fixture {
         fn drop(&mut self) {
             P_UDIR.restore(self.old_udir.take());
-            Buf::current().b_u_synced = self.old_synced;
+            Buf::current().set_b_u_synced(self.old_synced);
             let _ = fs::remove_dir_all(&self.dir);
         }
     }
@@ -331,7 +335,7 @@ mod write {
         let first = fs::File::open(&written).unwrap();
         let first_meta = first.metadata().unwrap();
 
-        fixture.buf.buf().b_u_numhead = 1; // Mark it as if there are changes again.
+        fixture.buf.buf().set_b_u_numhead(1); // Mark it as if there are changes again.
         fixture.write(None, false);
 
         let replaced = first.metadata().unwrap();
@@ -347,7 +351,7 @@ mod write {
     fn nothing_is_written_when_the_buffer_has_no_undo_information() {
         let mut fixture = Fixture::new("nothing");
         fixture.set_ffname(&fixture.path("Xtest-unit-undo"));
-        fixture.buf.buf().b_u_numhead = 0;
+        fixture.buf.buf().set_b_u_numhead(0);
 
         let written = fixture.undo_file_name();
         assert!(!written.exists());

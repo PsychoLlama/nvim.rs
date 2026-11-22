@@ -275,7 +275,7 @@ fn windows_showing(buffer: Buf) -> impl Iterator<Item = Win> {
 /// A window whose cursor was on the last line before `added` lines arrived
 /// was following the output, and keeps following. One that had scrolled up
 /// stays where it was, clamped to the buffer.
-pub(crate) fn adjust_topline_cursor(term: Term, mut buffer: Buf, added: c_int) {
+pub(crate) fn adjust_topline_cursor(term: Term, buffer: Buf, added: c_int) {
     let ml_end = buffer.line_count();
     for mut wp in windows_showing(buffer) {
         if wp.is_current() && is_focused(term) {
@@ -297,10 +297,10 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buffer: Buf, added: c_int) {
 
     // Windows are not the only things remembering a line: the buffer's own
     // last-cursor mark and the per-window info follow too.
-    if ml_end == buffer.b_last_cursor.mark.lnum + added {
-        buffer.b_last_cursor.mark.lnum = ml_end;
+    if ml_end == buffer.read().b_last_cursor.mark.lnum + added {
+        buffer.edit().b_last_cursor.mark.lnum = ml_end;
     }
-    for wip in buffer.b_wininfo.iter_mut() {
+    for wip in buffer.edit().b_wininfo.iter_mut() {
         if ml_end == wip.wi_mark.mark.lnum + added {
             wip.wi_mark.mark.lnum = ml_end;
         }

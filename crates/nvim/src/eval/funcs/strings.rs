@@ -265,7 +265,7 @@ fn with_spell(body: impl FnOnce()) {
         let _ = parse_spelllang(win);
         win.w_onebuf_opt.wo_spell = 1;
     }
-    if win.syntax().b_p_spl.first_byte() == 0 {
+    if win.syntax().read().b_p_spl.first_byte() == 0 {
         emsg(gettext(E_NO_SPELL));
     } else {
         body();
@@ -292,7 +292,7 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
                 word = line[col..(col + len).min(line.len())].to_vec();
                 Win::current().w_set_curswant = true;
             }
-        } else if Buf::current().b_s.b_p_spl.first_byte() != 0 {
+        } else if Buf::current().read().b_s.b_p_spl.first_byte() != 0 {
             let text = numbuf.string_chk(&args[0]).ok();
             let mut capcol = ColNr::NONE;
             if let Some(text) = text {

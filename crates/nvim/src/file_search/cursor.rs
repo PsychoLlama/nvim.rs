@@ -38,7 +38,7 @@ use core::ffi::{c_int, c_long};
 /// The current buffer's full name, copied: the name is looked up after
 /// `'includeexpr'` has run, and that may rename the buffer.
 fn own_buffer_name() -> Option<XString> {
-    Buf::current().name.full().map(XString::from_cstr)
+    Buf::current().read().name.full().map(XString::from_cstr)
 }
 
 /// The file name at the cursor, or the Visual selection when there is one.
@@ -266,10 +266,11 @@ pub(crate) fn file_name_in_line(
 pub(crate) fn eval_includeexpr(name: &[u8]) -> Option<XString> {
     set_vim_var_string(Vv::Fname, Some(name));
     // Errors go against the script that set `'includeexpr'`.
-    let script_ctx = Script::context(Buf::current().b_p_script_ctx[BUF_OPT_INCLUDEEXPR as usize]);
+    let script_ctx =
+        Script::context(Buf::current().read().b_p_script_ctx[BUF_OPT_INCLUDEEXPR as usize]);
 
     // A copy: the expression may set the option and free its text.
-    let expr = Buf::current().b_p_inex.get();
+    let expr = Buf::current().read().b_p_inex.get();
     let sandbox = was_set_insecurely(Win::current(), OPT_INCLUDEEXPR, OptionSetFlags::LOCAL);
     let res = eval_to_string_safe(&expr, sandbox, true);
 
@@ -311,7 +312,7 @@ pub(crate) fn find_file_name_in_path(
 
     // What 'includeexpr' made of the name, when it ran.
     let mut included: Option<XString> = None;
-    if options.has(FileNameOpts::INCL) && Buf::current().b_p_inex.first_byte() != 0 {
+    if options.has(FileNameOpts::INCL) && Buf::current().read().b_p_inex.first_byte() != 0 {
         included = eval_includeexpr(name);
     }
 
@@ -328,7 +329,7 @@ pub(crate) fn find_file_name_in_path(
     // 'includeexpr' (unless done already).
     if file_name.is_none()
         && !options.has(FileNameOpts::INCL)
-        && Buf::current().b_p_inex.first_byte() != 0
+        && Buf::current().read().b_p_inex.first_byte() != 0
         && let Some(expr) = eval_includeexpr(name)
     {
         let current = included.insert(expr);

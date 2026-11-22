@@ -69,8 +69,8 @@ use crate::types::{
 fn findfunc_callback() -> Callback {
     let mut cb = Callback::None;
     let buf = Buf::current();
-    if buf.b_p_ffu.first_byte() != 0 {
-        callback_copy(&mut cb, &buf.b_ffu_cb);
+    if buf.read().b_p_ffu.first_byte() != 0 {
+        callback_copy(&mut cb, &buf.read().b_ffu_cb);
     } else {
         FFU_CB.with(|global| callback_copy(&mut cb, global));
     }
@@ -172,10 +172,11 @@ pub(crate) fn findfunc_find_file(findarg: &[u8], count: c_int) -> Option<ThinCSt
 ///
 /// The generated option table holds it as an `opt_did_set_cb` fn pointer.
 pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
-    let mut buf = args.os_buf;
+    let buf = args.os_buf;
     let parsed = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        callback_from_option(buf.b_p_ffu.get().as_cstr())
-            .map(|cb| set_callback_from_option(&mut buf.b_ffu_cb, cb))
+        let value = buf.read().b_p_ffu.get();
+        callback_from_option(value.as_cstr())
+            .map(|cb| set_callback_from_option(&mut buf.edit().b_ffu_cb, cb))
     } else {
         // Parsed before the slot is lent: the parse evaluates an
         // expression, which may read the option's callback.
@@ -185,7 +186,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
             // Setting it globally without `:setglobal` clears the local
             // one.
             if !args.os_flags.has(OptionSetFlags::GLOBAL) {
-                callback_free(&mut buf.b_ffu_cb);
+                callback_free(&mut buf.edit().b_ffu_cb);
             }
         })
     };

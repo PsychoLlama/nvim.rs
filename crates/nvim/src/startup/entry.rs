@@ -472,7 +472,7 @@ fn open_buffers(params: &mut MainParams) {
     set_vim_var_string(Vv::Swapcommand, None);
 
     if EXMODE_ACTIVE.get() {
-        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+        Win::current().w_cursor.lnum = Buf::current().line_count();
     }
     fire_autocmds(AutoEvent::BufEnter, false, Buf::current_or_none());
     time_msg_at(c"BufEnter autocommands");

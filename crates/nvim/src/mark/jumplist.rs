@@ -78,7 +78,7 @@ pub fn setpcmark() {
     let view = mark_view_make_at(win, win.w_pcmark);
     let newest = slot(win.w_jumplistlen - 1);
     win.w_jumplist[newest] = XFileMark {
-        fmark: FileMark::fresh(win.w_pcmark, Some(buf.handle), view),
+        fmark: FileMark::fresh(win.w_pcmark, Some(buf.handle()), view),
         fname: None,
     };
 }
@@ -137,7 +137,7 @@ pub fn get_jumplist(mut win: Win, mut count: c_int) -> Option<FileMark> {
         let fnum = win.w_jumplist[at].fmark.fnum();
         // An entry whose buffer no longer exists is skipped rather than
         // jumped to, and the step continues in the same direction.
-        if fnum == Some(Buf::current().handle) || find_buf(fnum).is_some() {
+        if fnum == Some(Buf::current().handle()) || find_buf(fnum).is_some() {
             return Some(win.w_jumplist[at].fmark.clone());
         }
         count += if count < 0 { -1 } else { 1 };
@@ -151,9 +151,9 @@ pub fn get_jumplist(mut win: Win, mut count: c_int) -> Option<FileMark> {
 /// `count` — count to move may be negative.
 ///
 /// Returns a copy of the mark, `None` if out of bounds.
-pub fn get_changelist(mut buffer: Buf, win: Win, count: c_int) -> Option<FileMark> {
+pub fn get_changelist(buffer: Buf, win: Win, count: c_int) -> Option<FileMark> {
     let mut win = win;
-    if buffer.b_changelistlen == 0 {
+    if buffer.b_changelistlen() == 0 {
         return None;
     }
     let at = win.w_changelistidx;
@@ -165,19 +165,19 @@ pub fn get_changelist(mut buffer: Buf, win: Win, count: c_int) -> Option<FileMar
             return None;
         }
         0
-    } else if at + count >= buffer.b_changelistlen {
-        if at == buffer.b_changelistlen - 1 {
+    } else if at + count >= buffer.b_changelistlen() {
+        if at == buffer.b_changelistlen() - 1 {
             return None;
         }
-        buffer.b_changelistlen - 1
+        buffer.b_changelistlen() - 1
     } else {
         at + count
     };
     win.w_changelistidx = n;
     // The entries carry no buffer of their own, so the entry is stamped with
     // the CURRENT buffer rather than with `buffer`, in place.
-    let change = &mut buffer.b_changelist[slot(n)];
-    change.set_fnum(Some(Buf::current().handle));
+    let change = &mut buffer.edit().b_changelist[slot(n)];
+    change.set_fnum(Some(Buf::current().handle()));
     Some(change.clone())
 }
 
@@ -278,7 +278,7 @@ pub fn cleanup_jumplist(mut window: Win, loadfiles: bool) {
         return;
     }
     let last = slot(w.w_jumplistlen - 1);
-    let here = Buf::current().handle;
+    let here = Buf::current().handle();
     if w.w_jumplist[last].fmark.is_in(here) && w.w_jumplist[last].fmark.mark.lnum == w.w_cursor.lnum
     {
         w.w_jumplist[last] = XFileMark::UNSET;
@@ -341,7 +341,7 @@ pub fn ex_jumps(_excmd: &mut ExArg) {
                 if GOT_INT.get() {
                     break;
                 }
-                let here = Buf::current().handle;
+                let here = Buf::current().handle();
                 let row = list_row(
                     2,
                     i == win.w_jumplistidx,
@@ -376,8 +376,8 @@ pub fn ex_changes(_excmd: &mut ExArg) {
     msg_ext_set_kind(c"list_cmd");
     msg_title(gettext(c"\nchange line  col text"));
     let mut i: c_int = 0;
-    while i < buf.b_changelistlen && !GOT_INT.get() {
-        let pos = buf.b_changelist[slot(i)].mark;
+    while i < buf.b_changelistlen() && !GOT_INT.get() {
+        let pos = buf.read().b_changelist[slot(i)].mark;
         if pos.lnum != LineNr::ZERO {
             msg_put_ascii(b'\n');
             if GOT_INT.get() {
@@ -396,7 +396,7 @@ pub fn ex_changes(_excmd: &mut ExArg) {
         }
         i += 1;
     }
-    if win.w_changelistidx == buf.b_changelistlen {
+    if win.w_changelistidx == buf.b_changelistlen() {
         msg_str(c"\n>");
     }
 }

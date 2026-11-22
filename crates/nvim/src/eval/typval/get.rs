@@ -102,7 +102,7 @@ pub fn tv_get_lnum_buf(tv: &TypVal, buffer: Option<Buf>) -> LineNr {
     if let Some(buffer) = buffer
         && tv.string_bytes() == b"$"
     {
-        return buffer.b_ml.ml_line_count;
+        return buffer.line_count();
     }
     number_as_lnum(tv_get_bool(tv))
 }

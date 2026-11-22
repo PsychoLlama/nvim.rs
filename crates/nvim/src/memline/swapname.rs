@@ -67,8 +67,8 @@ fn directory_entries(dir: &[u8]) -> impl Iterator<Item = (Vec<u8>, bool)> + '_ {
 /// The name is what identifies the swap file to the next `:recover`, so it
 /// has to follow the file. Failing that, the swap file is at least reopened
 /// under its old name — losing it entirely is worse than a stale name.
-pub fn ml_setname(mut buffer: Buf) {
-    if !buffer.b_ml.memfile().has_file() {
+pub fn ml_setname(buffer: Buf) {
+    if !buffer.ml().memfile().has_file() {
         // There is no swap file yet: with `'updatecount'` zero and
         // `'noswapfile'` there never was one. Help files get one now.
         if p_uc() != 0 && !cmdmod_has(CmdModFlags::NOSWAPFILE) {
@@ -86,7 +86,7 @@ pub fn ml_setname(mut buffer: Buf) {
     for (dir_name, last) in directory_entries(&dir) {
         // A copy of the name the swap file has now: finding a new one can
         // run autocommands.
-        let old = buffer.b_ml.memfile().fname().map(CStr::to_owned);
+        let old = buffer.ml().memfile().fname().map(CStr::to_owned);
         let found = buffer.find_swap_name(&dir_name, last, old.as_deref(), &mut found_existing_dir);
         let Some(fname) = found else {
             continue; // no name found for this directory
@@ -99,19 +99,22 @@ pub fn ml_setname(mut buffer: Buf) {
             break;
         }
         // The swap file has to be closed before it can be renamed.
-        buffer.b_ml.memfile().close_file();
+        buffer.ml().memfile().close_file();
         if rename_file(&old, fname.as_cstr()).is_ok() {
             success = true;
-            let memfile = buffer.b_ml.memfile();
+            let mut held = buffer.ml();
+            let memfile = held.memfile();
             memfile.free_fnames();
             memfile.set_fnames(fname.as_cstr().to_owned());
+            drop(held);
             ml_upd_block0(buffer, UB_SAME_DIR);
             break;
         }
         // This name did not work, try another.
     }
 
-    if !buffer.b_ml.memfile().has_file() && !buffer.b_ml.memfile().reopen() {
+    let has_file = buffer.ml().memfile().has_file();
+    if !has_file && !buffer.ml().memfile().reopen() {
         // Could not reopen the swap file. Nothing can be done.
         complain(c"E301: Oops, lost the swap file!!!");
         return;
@@ -339,14 +342,8 @@ fn do_swapexists(buffer: Buf, fname: &CStr) -> Option<SwapExistsChoice> {
     // `<afile>` is the file being edited. Changing directory is not
     // allowed from here.
     let locked = Lock::all_buffers();
-    fire_autocmds_for(
-        AutoEvent::SwapExists,
-        buffer.name.shown().map(XString::from_cstr),
-        None,
-        false,
-        None,
-        None,
-    );
+    let arg = buffer.read().name.shown().map(XString::from_cstr);
+    fire_autocmds_for(AutoEvent::SwapExists, arg, None, false, None, None);
     drop(locked);
 
     set_vim_var_string(Vv::Swapname, None);
@@ -359,11 +356,11 @@ fn do_swapexists(buffer: Buf, fname: &CStr) -> Option<SwapExistsChoice> {
 /// put the ATTENTION message in front of the user.
 ///
 /// Returns true when the swap file is gone afterwards, so its name is free.
-fn resolve_swapfile_clash(mut buffer: Buf, fname: &CStr, buf_fname: &CStr) -> bool {
+fn resolve_swapfile_clash(buffer: Buf, fname: &CStr, buf_fname: &CStr) -> bool {
     // Only worth a word if the swap file belongs to *this* file, the
     // buffer was not already recovered, and 'shortmess' allows it.
     if swapfile_is_for_other_file(buffer, fname)
-        || Buf::current().b_flags.has(BufFlags::RECOVERED)
+        || Buf::current().b_flags().has(BufFlags::RECOVERED)
         || P_SHM.has_byte(ShmFlag::ATTENTION.byte())
     {
         return false;
@@ -402,7 +399,7 @@ fn resolve_swapfile_clash(mut buffer: Buf, fname: &CStr, buf_fname: &CStr) -> bo
     }
 
     match choice {
-        Some(SwapExistsChoice::Readonly) => buffer.b_p_ro = 1,
+        Some(SwapExistsChoice::Readonly) => buffer.edit().b_p_ro = 1,
         Some(SwapExistsChoice::Recover) => SWAP_EXISTS_ACTION.set(SEA_RECOVER),
         Some(SwapExistsChoice::Delete) => {
             os_remove(fname);
@@ -439,7 +436,7 @@ fn ask_about_swapfile(buffer: Buf, fname: &CStr) -> Option<SwapExistsChoice> {
     // Room for the name, a `~/` and the terminator, as `home_replace_save`
     // sized it.
     let fhname = home_to_tilde(None, fname, fname.count_bytes() + 3, true);
-    let shown = buffer.name.shown().unwrap_or(c"").to_owned();
+    let shown = buffer.read().name.shown().unwrap_or(c"").to_owned();
     attention_message(fname, &fhname, &shown, &mut msg);
 
     // A 'q' typed at the more-prompt must not interrupt loading the
@@ -510,7 +507,7 @@ impl Buf {
         found_existing_dir: &mut bool,
     ) -> Option<XString> {
         // A copy: the autocommands below may rename the buffer.
-        let buf_fname = self.name.shown().map(CStr::to_owned);
+        let buf_fname = self.read().name.shown().map(CStr::to_owned);
 
         let mut fname = makeswapname(buf_fname.as_deref(), dir_name);
         while let Some(name) = fname.as_mut() {
@@ -546,8 +543,8 @@ impl Buf {
             if &ext == b"wp"
                 && !RECOVERYMODE.get()
                 && let Some(buf_fname) = buf_fname.as_deref()
-                && !self.b_help
-                && !self.b_flags.has(BufFlags::DUMMY)
+                && !self.b_help()
+                && !self.b_flags().has(BufFlags::DUMMY)
             {
                 let swap = name.as_cstr().to_owned();
                 if resolve_swapfile_clash(self, &swap, buf_fname) {
@@ -700,7 +697,7 @@ pub fn recover_names(
         // The current buffer's own swap file is not interesting — except
         // to swapfilelist(), which wants everything.
         let mine = Buf::current()
-            .b_ml
+            .ml()
             .ml_mfp
             .as_ref()
             .and_then(|memfile| memfile.fname().map(CStr::to_owned));

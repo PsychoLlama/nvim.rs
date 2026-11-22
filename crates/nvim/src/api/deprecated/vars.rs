@@ -26,7 +26,7 @@ pub fn buffer_set_var(
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(Object::Nil);
     };
-    let vars = scope_vars(&buf.b_bufvar);
+    let vars = scope_vars(&buf.read().b_bufvar);
     dict_set_var(&vars, &name, value, false, true)
 }
 
@@ -34,7 +34,7 @@ pub fn buffer_del_var(buffer: BufferHandle, name: ApiString) -> Result<Object, E
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(Object::Nil);
     };
-    let vars = scope_vars(&buf.b_bufvar);
+    let vars = scope_vars(&buf.read().b_bufvar);
     dict_set_var(&vars, &name, Object::Nil, true, true)
 }
 

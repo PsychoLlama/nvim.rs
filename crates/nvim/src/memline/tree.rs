@@ -66,10 +66,11 @@ impl MemLine {
 /// dirties the block and books the old text as deleted.
 ///
 /// Never fails: the failure paths cache the `???` placeholder.
-pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
-    // One dereference for the walk (each through the handle checks it is
-    // live), ended before anything that can run a message.
-    let ml = &mut buffer.b_ml;
+pub(crate) fn fetch_line(buffer: Buf, lnum: LineNr, will_change: bool) {
+    // One edit of the buffer for the walk, ended before anything that is
+    // handed the buffer or can run a message.
+    let mut held = buffer.ml();
+    let ml = &mut *held;
     if !ml.is_open() {
         // There are no lines at all.
         ml.cache_placeholder(c"", LineNr::ZERO);
@@ -77,6 +78,7 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
     }
 
     if lnum > ml.ml_line_count {
+        drop(held);
         if ML_GET_RECURSIVE.get() == 0 {
             // Avoid giving this message for a recursive call, which
             // happens when the redraw it triggers reads the same line.
@@ -85,7 +87,7 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
             ML_GET_RECURSIVE.set(0);
         }
         ml_flush_line(buffer);
-        buffer.b_ml.cache_placeholder(c"???", lnum);
+        buffer.ml().cache_placeholder(c"???", lnum);
         return;
     }
 
@@ -94,55 +96,69 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
 
     // If it is the line handed out last time, it is already unpacked;
     // otherwise the one that was may need flushing first.
-    if ml.cached_lnum() != lnum {
-        // The common case, a run of reads through one block: the line is in
-        // the block already locked and nothing is waiting to be written
-        // back, so the flush below would only forget the cached line and
-        // the walk would only answer the locked block. Both are done here
-        // without the two calls.
-        if !ml.line_is_dirty()
-            && let Some(id) = ml.locked_id()
-            && ml.locked_low() <= lnum
-            && lnum <= ml.locked_high()
-        {
-            if ml.cached_lnum() != LineNr::ZERO {
-                ml.clear_cache();
-            }
-            let idx = (lnum - ml.locked_low()).cast_unsigned() as usize;
-            ml.cache_block_line(id, idx, lnum);
-            if will_change {
-                ml.locked_has_moved();
-                let text = buffer.b_ml.cached_bytes();
-                ml_add_deleted_len_buf(buffer, text, text.len());
-            }
-            return;
+    if ml.cached_lnum() == lnum {
+        if will_change {
+            ml.locked_has_moved();
+            drop(held);
+            book_deleted_line(buffer);
         }
-        ml_flush_line(buffer);
-
-        // Find the data block holding the line. This also fills the
-        // stack with the blocks from the root down and releases any
-        // block that was locked.
-        let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
-            line_not_found(buffer, lnum);
-            return;
-        };
-        let ml = &mut buffer.b_ml;
+        return;
+    }
+    // The common case, a run of reads through one block: the line is in
+    // the block already locked and nothing is waiting to be written back,
+    // so the flush below would only forget the cached line and the walk
+    // would only answer the locked block. Both are done here without the
+    // two calls.
+    if !ml.line_is_dirty()
+        && let Some(id) = ml.locked_id()
+        && ml.locked_low() <= lnum
+        && lnum <= ml.locked_high()
+    {
+        if ml.cached_lnum() != LineNr::ZERO {
+            ml.clear_cache();
+        }
         let idx = (lnum - ml.locked_low()).cast_unsigned() as usize;
         ml.cache_block_line(id, idx, lnum);
+        if will_change {
+            ml.locked_has_moved();
+            drop(held);
+            book_deleted_line(buffer);
+        }
+        return;
     }
+    drop(held);
+    ml_flush_line(buffer);
 
+    // Find the data block holding the line. This also fills the stack with
+    // the blocks from the root down and releases any block that was locked.
+    let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
+        line_not_found(buffer, lnum);
+        return;
+    };
+    let mut held = buffer.ml();
+    let ml = &mut *held;
+    let idx = (lnum - ml.locked_low()).cast_unsigned() as usize;
+    ml.cache_block_line(id, idx, lnum);
     if will_change {
-        buffer.b_ml.locked_has_moved();
-        let text = buffer.b_ml.cached_bytes();
-        ml_add_deleted_len_buf(buffer, text, text.len());
+        ml.locked_has_moved();
+        drop(held);
+        book_deleted_line(buffer);
     }
+}
+
+/// Book the cached line, which the caller is about to change, as deleted
+/// text (`ml_add_deleted_len_buf`).
+#[inline]
+fn book_deleted_line(buffer: Buf) {
+    let text = buffer.lend_cached_line();
+    ml_add_deleted_len_buf(buffer, text, text.len());
 }
 
 /// The tree has no block for line `lnum`, which the line count says it
 /// has: complain (once, not again from the redraw the complaint causes) and
 /// cache the `???` placeholder.
 #[cold]
-fn line_not_found(mut buffer: Buf, lnum: LineNr) {
+fn line_not_found(buffer: Buf, lnum: LineNr) {
     if ML_GET_RECURSIVE.get() == 0 {
         ML_GET_RECURSIVE.set(1);
         let mut name = trans_bufname(buffer);
@@ -153,11 +169,11 @@ fn line_not_found(mut buffer: Buf, lnum: LineNr) {
         siemsg!(
             "E316: ml_get: Cannot find line {}in buffer {} {name}",
             int64_t::from(lnum),
-            buffer.handle
+            buffer.handle()
         );
         ML_GET_RECURSIVE.set(0);
     }
-    buffer.b_ml.cache_placeholder(c"???", lnum);
+    buffer.ml().cache_placeholder(c"???", lnum);
 }
 
 /// Set while a line is being written back: the write can append and delete
@@ -167,33 +183,36 @@ static FLUSHING: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Write the line `ml_replace` left in the line cache back into its data
 /// block, and forget it.
-pub(crate) fn ml_flush_line(mut buffer: Buf) {
-    if buffer.b_ml.cached_lnum() == LineNr::ZERO || !buffer.b_ml.is_open() {
+pub(crate) fn ml_flush_line(buffer: Buf) {
+    let ml = buffer.ml();
+    let idle = ml.cached_lnum() == LineNr::ZERO || !ml.is_open();
+    drop(ml);
+    if idle {
         return; // nothing to do
     }
 
-    if buffer.b_ml.line_is_dirty() {
+    if buffer.ml().line_is_dirty() {
         if FLUSHING.get() {
             return;
         }
-        let lnum = buffer.b_ml.cached_lnum();
-        let len = usize::try_from(buffer.b_ml.cached_len()).unwrap_or(0);
-        let new_line = buffer.b_ml.take_replacement().unwrap_or_default();
+        let lnum = buffer.ml().cached_lnum();
+        let len = usize::try_from(buffer.ml().cached_len()).unwrap_or(0);
+        let new_line = buffer.ml().take_replacement().unwrap_or_default();
         ml_flush_text(buffer, lnum, &new_line[..len.min(new_line.len())]);
     }
 
-    buffer.b_ml.clear_cache();
+    buffer.ml().clear_cache();
 }
 
 /// Write `text` (its NUL included) over line `lnum` of `buffer`, as
 /// flushing the line cache does. The cache's line number and length are
 /// what the chunk index reads while it happens.
-pub(crate) fn ml_flush_text(mut buffer: Buf, lnum: LineNr, text: &[u8]) {
+pub(crate) fn ml_flush_text(buffer: Buf, lnum: LineNr, text: &[u8]) {
     if FLUSHING.get() {
         return;
     }
     FLUSHING.set(true);
-    buffer.flush_count += 1;
+    buffer.ml().flush_count += 1;
     ml_write_line(buffer, lnum, text);
     FLUSHING.set(false);
 }
@@ -208,10 +227,14 @@ fn ml_write_line(buffer: Buf, lnum: LineNr, new_line: &[u8]) {
 
 /// The body of [`ml_flush_line`] once the block is found: overwrite line
 /// `lnum` in block `id` with `new_line`, in place if the new text fits.
-fn ml_store_line(mut buffer: Buf, id: BlockId, lnum: LineNr, new_line: &[u8]) {
-    let idx = (lnum - buffer.b_ml.locked_low()).cast_unsigned() as usize;
-    let count = (buffer.b_ml.locked_high() - buffer.b_ml.locked_low() + 1).cast_unsigned() as usize;
-    let data = DataBlock(buffer.b_ml.page(id));
+fn ml_store_line(buffer: Buf, id: BlockId, lnum: LineNr, new_line: &[u8]) {
+    // One edit for the block's rewrite, ended before the calls that are
+    // handed the buffer.
+    let mut held = buffer.ml();
+    let ml = &mut *held;
+    let idx = (lnum - ml.locked_low()).cast_unsigned() as usize;
+    let count = (ml.locked_high() - ml.locked_low() + 1).cast_unsigned() as usize;
+    let data = DataBlock(ml.page(id));
     let start = data.line_start(idx);
     // The text of the previous line follows it, or the block ends.
     let old_len = data.line_end(idx).cast_signed() - start.cast_signed();
@@ -226,13 +249,14 @@ fn ml_store_line(mut buffer: Buf, id: BlockId, lnum: LineNr, new_line: &[u8]) {
         // buffer, which is trouble for a buffer that has only one. The
         // mark has to come along.
         let mark = if marked { ML_APPEND_MARK } else { 0 };
+        drop(held);
         let _ = ml_append_int(buffer, lnum, new_line, mark);
         let _ = ml_delete_int(buffer, lnum, 0);
         return;
     }
 
     let shift = extra.cast_unsigned();
-    let mut data = DataBlock(buffer.b_ml.page_mut(id));
+    let mut data = DataBlock(ml.page_mut(id));
     if extra != 0 && idx + 1 < count {
         // Move the text of the lines that follow, and adjust their
         // offsets. (Lines are stored back to front, so "following"
@@ -245,8 +269,9 @@ fn ml_store_line(mut buffer: Buf, id: BlockId, lnum: LineNr, new_line: &[u8]) {
     data.set_free(free.wrapping_sub(shift));
     data.set_txt_start(txt_start.wrapping_sub(shift));
     data.write(start.wrapping_sub(shift) as usize, new_line);
+    ml.locked_has_moved();
+    drop(held);
 
-    buffer.b_ml.locked_has_moved();
     // The `extra == 0` case is already covered by the insert and delete.
     if extra != 0 {
         buffer.update_line_chunks(lnum, extra, ML_CHNK_UPDLINE);
@@ -288,11 +313,11 @@ pub(crate) fn ml_new_ptr(memfile: &mut MemFile) -> BlockId {
 /// its parents ([`LockedBlock::lineadd`]) still have to be added to it.
 ///
 /// [`LockedBlock::lineadd`]: crate::memline::state::LockedBlock::lineadd
-pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Option<BlockId> {
-    // One dereference for the walk (each through the handle checks it is
-    // live, and this is every read's path), taken again only after a call
-    // that is handed the buffer, and ended before a message.
-    let mut ml = &mut buffer.b_ml;
+pub(crate) fn ml_find_line(buffer: Buf, lnum: LineNr, action: c_int) -> Option<BlockId> {
+    // One loan of the memline for the walk (this is every read's path),
+    // taken again only after a call that is handed the buffer, and ended
+    // before a message.
+    let mut ml = buffer.ml();
 
     // If a block is locked, see whether the wanted line is in it. Not
     // for ML_FLUSH (the point of which is to release it), and not for
@@ -314,8 +339,9 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
         if let Some(locked) = ml.unlock() {
             ml.memfile().put(locked.id, locked.dirty, locked.moved);
             if locked.lineadd != 0 {
+                drop(ml);
                 ml_lineadd(buffer, locked.lineadd);
-                ml = &mut buffer.b_ml;
+                ml = buffer.ml();
             }
         }
     }
@@ -371,8 +397,9 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
         // block goes back before the message, which may redraw.
         if !PointerBlock(ml.page(id)).is_pointer() {
             ml.put(id, false);
+            drop(ml);
             iemsg(gettext(c"E317: Pointer block id wrong"));
-            break;
+            return find_line_failed(buffer, action);
         }
 
         let top = ml.stack_push();
@@ -400,6 +427,7 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
             // Past the end: the tree disagrees with the line count.
             let line_count = ml.ml_line_count;
             ml.put(id, false);
+            drop(ml);
             if lnum > line_count {
                 siemsg!(
                     "E322: Line number out of range: {} past the end",
@@ -408,7 +436,7 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
             } else {
                 siemsg!("E323: Line count wrong in block {}", bnum);
             }
-            break;
+            return find_line_failed(buffer, action);
         }
 
         let entry = pointers.entry(idx);
@@ -439,22 +467,28 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
         ml.put(id, dirty);
     }
 
-    // The walk failed. For ML_DELETE/ML_INSERT the counts on the way
-    // down were already adjusted for a line that will not be
-    // inserted/deleted after all, so put them back.
+    drop(ml);
+    find_line_failed(buffer, action)
+}
+
+/// The walk failed. For ML_DELETE/ML_INSERT the counts on the way down were
+/// already adjusted for a line that will not be inserted/deleted after all,
+/// so put them back.
+#[cold]
+fn find_line_failed(buffer: Buf, action: c_int) -> Option<BlockId> {
     if action == ML_DELETE {
         ml_lineadd(buffer, 1);
     } else if action == ML_INSERT {
         ml_lineadd(buffer, -1);
     }
-    buffer.b_ml.stack_clear();
+    buffer.ml().stack_clear();
     None
 }
 
 /// Push an entry onto the info-pointer stack and return its index. The
 /// entry is left blank; every caller fills it in.
-pub(crate) fn ml_add_stack(mut b: Buf) -> usize {
-    b.b_ml.stack_push()
+pub(crate) fn ml_add_stack(b: Buf) -> usize {
+    b.ml().stack_push()
 }
 
 /// Add `count` (negative to subtract) to the line count of every pointer
@@ -463,7 +497,8 @@ pub(crate) fn ml_add_stack(mut b: Buf) -> usize {
 /// This is the repair path: when an insert or delete fails part way down,
 /// the pointer blocks have already been updated for it.
 pub(crate) fn ml_lineadd(buffer: Buf, count: c_int) {
-    ml_lineadd_depth(buffer, count, buffer.b_ml.stack_len());
+    let arg = buffer.ml().stack_len();
+    ml_lineadd_depth(buffer, count, arg);
 }
 
 /// [`ml_lineadd`] over the bottom `depth` entries of the stack only.
@@ -476,23 +511,27 @@ pub(crate) fn ml_lineadd(buffer: Buf, count: c_int) {
 ///
 /// # Panics
 /// When `depth` is more than the stack holds.
-pub(crate) fn ml_lineadd_depth(mut b: Buf, count: c_int, depth: usize) {
+pub(crate) fn ml_lineadd_depth(b: Buf, count: c_int, depth: usize) {
+    // One edit for the climb, ended before the message.
+    let mut held = b.ml();
+    let ml = &mut *held;
     let mut idx = depth;
     while idx > 0 {
         idx -= 1;
-        let ip = b.b_ml.stack_at(idx);
-        let Some(id) = b.b_ml.memfile().get(ip.ip_bnum, 1) else {
+        let ip = ml.stack_at(idx);
+        let Some(id) = ml.memfile().get(ip.ip_bnum, 1) else {
             break;
         };
         // Must be a pointer block: it is on the stack.
-        let mut pointers = PointerBlock(b.b_ml.page_mut(id));
+        let mut pointers = PointerBlock(ml.page_mut(id));
         if !pointers.is_pointer() {
-            b.b_ml.put(id, false);
+            ml.put(id, false);
+            drop(held);
             iemsg(gettext(c"E317: Pointer block id wrong 2"));
-            break;
+            return;
         }
         pointers.add_line_count(ip.ip_index.cast_unsigned() as usize, count);
-        b.b_ml.stack_add_high(idx, count);
-        b.b_ml.put(id, true);
+        ml.stack_add_high(idx, count);
+        ml.put(id, true);
     }
 }

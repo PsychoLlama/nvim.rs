@@ -132,7 +132,7 @@ pub(crate) fn draw_window_lines(
                 w.didline = true;
                 break;
             }
-            if w.lnum > buffer.b_ml.ml_line_count {
+            if w.lnum > buffer.line_count() {
                 w.eof = true;
                 break;
             }
@@ -155,7 +155,7 @@ pub(crate) fn draw_window_lines(
                 restart_for_statuscol(window);
                 continue 'restart;
             }
-            if w.lnum > buffer.b_ml.ml_line_count {
+            if w.lnum > buffer.line_count() {
                 w.eof = true;
                 break;
             }
@@ -187,7 +187,7 @@ pub(crate) fn draw_window_lines(
             if w.eof {
                 // Filler text below the last line. `win_line` recognises
                 // `ml_line_count + 1` and draws only the filler.
-                window.w_botline = buffer.b_ml.ml_line_count + 1;
+                window.w_botline = buffer.line_count() + 1;
                 let fill = win_get_fill(window, window.w_botline);
                 if fill > 0 && !window.w_botfill && w.row < window.w_view_height {
                     let mut zero_spv = SpellVars::default();
@@ -256,8 +256,8 @@ fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -> bool 
                     // A match at a fixed position may need redrawing when
                     // lines were inserted or deleted.
                     || (!window.w_matches.is_empty()
-                        && buffer.b_mod_set
-                        && buffer.b_mod_xlines != 0))))
+                        && buffer.b_mod_set()
+                        && buffer.b_mod_xlines() != 0))))
     {
         return true;
     }
@@ -377,7 +377,7 @@ fn draw_one_line(
             window.virt_lines(lastlnum.get(), (lastlnum + 1).get(), None, None, true) > 0;
         let mut last = lastlnum;
         while !virt_below
-            && last < LineNr::new(buffer.b_ml.ml_line_count.get())
+            && last < LineNr::new(buffer.line_count().get())
             && decor_conceal_line(window, last.get(), false)
         {
             virt_below = false;
@@ -594,8 +594,8 @@ fn skip_one_line(
     let numbers_moved = (window.w_onebuf_opt.wo_nu != 0
         && rg.mod_top != LineNr::ZERO
         && w.lnum >= rg.mod_bot
-        && buffer.b_mod_set
-        && buffer.b_mod_xlines != 0)
+        && buffer.b_mod_set()
+        && buffer.b_mod_xlines() != 0)
         || (window.w_onebuf_opt.wo_rnu != 0
             && window.w_last_cursor_lnum_rnu != window.w_cursor.lnum);
     if numbers_moved {
@@ -708,7 +708,7 @@ fn draw_end_of_buffer(window: Win, buffer: Buf, rg: &Regions, w: &Walk) {
     }
     // The change reached past the end of the buffer, so nothing below it
     // can be trusted.
-    if rg.mod_bot > buffer.b_ml.ml_line_count {
+    if rg.mod_bot > buffer.line_count() {
         lastline = 0;
     }
 

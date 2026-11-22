@@ -43,7 +43,7 @@ pub(crate) fn report_and_place(
     // With errors, writing the file requires ":w!".
     let bad_bytes = out.illegal_byte > LineNr::ZERO && bad_char != BAD_KEEP;
     if how.newfile && (out.error || out.conv_error != LineNr::ZERO || bad_bytes) {
-        Buf::current().b_p_ro = c_int::from(true);
+        Buf::current().set_b_p_ro(c_int::from(true));
     }
 
     u_clearline(Buf::current()); // "U" cannot be used after adding lines
@@ -60,10 +60,10 @@ pub(crate) fn report_and_place(
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // Set the '[ and '] marks to the newly read lines.
-        Buf::current().b_op_start.lnum = from + 1;
-        Buf::current().b_op_start.col = ColNr::ZERO;
-        Buf::current().b_op_end.lnum = from + out.linecnt;
-        Buf::current().b_op_end.col = ColNr::ZERO;
+        Buf::current().edit().b_op_start.lnum = from + 1;
+        Buf::current().edit().b_op_start.col = ColNr::ZERO;
+        Buf::current().edit().b_op_end.lnum = from + out.linecnt;
+        Buf::current().edit().b_op_end.col = ColNr::ZERO;
     }
 }
 
@@ -105,10 +105,13 @@ pub(crate) fn run_read_autocmds(
         sfname.map(XString::from_cstr),
     );
     apply_autocmds_exarg(ev, iofile, afile, false, buf, excmd);
-    if buf_read && !Buf::current().b_au_did_filetype && Buf::current().b_p_ft.first_byte() != 0 {
+    if buf_read
+        && !Buf::current().b_au_did_filetype()
+        && Buf::current().read().b_p_ft.first_byte() != 0
+    {
         // `CURBUF` is re-read because `BufReadPost` may have moved us.
-        let ft = Buf::current().b_p_ft.get();
-        let fname = Buf::current().name.shown().map(XString::from_cstr);
+        let ft = Buf::current().read().b_p_ft.get();
+        let fname = Buf::current().read().name.shown().map(XString::from_cstr);
         fire_autocmds_for(
             AutoEvent::FileType,
             Some(ft),

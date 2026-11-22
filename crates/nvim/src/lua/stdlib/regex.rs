@@ -120,7 +120,7 @@ fn loaded_buffer(bufnr: Handle) -> Option<Buf> {
     } else {
         Buf::current_or_none()
     };
-    buf.filter(|b| b.b_ml.ml_mfp.is_some())
+    buf.filter(|b| b.ml().ml_mfp.is_some())
 }
 
 /// `luaL_checkinteger` narrowed to an `int` as the C casts do: the low 32
@@ -164,7 +164,7 @@ fn regex_match_line(stack: &mut Stack) -> Result<c_int, Raise> {
         return Err(Raise::message("invalid buffer"));
     };
 
-    if rownr >= buf.b_ml.ml_line_count {
+    if rownr >= buf.line_count() {
         return Err(Raise::message("invalid row"));
     }
 

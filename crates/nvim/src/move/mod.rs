@@ -564,9 +564,9 @@ fn curs_rows(mut win: Win) {
             } else if wl.wl_lnum == lnum {
                 // Newly inserted lines below this row mean the folds have to
                 // be looked at again.
-                if !win.buffer().b_mod_set
+                if !win.buffer().b_mod_set()
                     || wl.wl_lastlnum < win.w_cursor.lnum
-                    || win.buffer().b_mod_top > wl.wl_lastlnum + 1
+                    || win.buffer().b_mod_top() > wl.wl_lastlnum + 1
                 {
                     valid = true;
                 }

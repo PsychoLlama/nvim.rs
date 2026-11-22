@@ -106,7 +106,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
     // A walk in progress may be about to match on this buffer number;
     // clear it rather than let it match a freed buffer.
     ACTIVE_WALK_BUFNRS.with_mut(|nrs| {
-        for nr in nrs.iter_mut().filter(|nr| **nr == buffer.handle.get()) {
+        for nr in nrs.iter_mut().filter(|nr| **nr == buffer.handle().get()) {
             *nr = 0;
         }
     });
@@ -120,7 +120,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
             for idx in 0..cmds.len() {
                 if cmds.cmds[idx]
                     .pat
-                    .is_some_and(|id| cmds.pat(id).buflocal_nr == buffer.handle.get())
+                    .is_some_and(|id| cmds.pat(id).buflocal_nr == buffer.handle().get())
                 {
                     cmds.delete(idx);
                     count += 1;
@@ -142,7 +142,7 @@ pub fn aubuflocal_remove(buffer: Buf) {
                 smsg!(
                     0,
                     "auto-removing autocommand: {arg0} <buffer={}>",
-                    buffer.handle
+                    buffer.handle()
                 );
                 verbose_leave();
             }
@@ -164,7 +164,7 @@ pub fn aupat_get_buflocal_nr(pat: &[u8]) -> ::core::ffi::c_int {
 
     // "<buffer>"
     if pat.len() == 8 {
-        return Buf::current().handle.get();
+        return Buf::current().handle().get();
     }
 
     if pat.len() > 9 && pat[7] == b'=' {
@@ -199,7 +199,7 @@ fn atoi_digits(digits: &[u8]) -> ::core::ffi::c_int {
 pub fn aupat_normalize_buflocal_pat(pat: &[u8], buflocal_nr: ::core::ffi::c_int) -> XString {
     debug_assert!(aupat_is_buflocal(pat));
     let nr = if buflocal_nr == 0 {
-        Buf::current().handle
+        Buf::current().handle()
     } else {
         Handle::new(buflocal_nr)
     };

@@ -40,6 +40,8 @@
 )]
 
 use crate::os::libc::{ptrdiff_t, uint64_t};
+use crate::slot::EditPart;
+use crate::types::Buffer;
 use core::ffi::c_int;
 
 use crate::buffer_updates::buf_updates_send_splice;
@@ -87,14 +89,14 @@ pub const EXTMARK_NOOP: ExtmarkOp = 0;
 
 impl Buf {
     /// `buf->b_marktree`, where this buffer's marks live.
-    fn marktree(&mut self) -> &mut MarkTree {
-        &mut self.b_marktree
+    fn marktree<'a>(self) -> EditPart<'a, Buffer, MarkTree> {
+        self.edit().map(|buffer| &mut buffer.b_marktree)
     }
 
     /// `buf->b_extmark_ns`: namespace id to the highest mark id handed out in
     /// it.
-    fn extmark_ns(&mut self) -> &mut ExtmarkNs {
-        &mut self.b_extmark_ns
+    fn extmark_ns<'a>(self) -> EditPart<'a, Buffer, ExtmarkNs> {
+        self.edit().map(|buffer| &mut buffer.b_extmark_ns)
     }
 }
 
@@ -309,11 +311,11 @@ impl Buf {
     /// The borrow is the closure's: the list is looked up through the buffer
     /// each time.
     fn with_undo_marks<R>(
-        mut self,
+        self,
         link: UndoLink,
         f: impl FnOnce(&mut Vec<ExtmarkUndoObject>) -> R,
     ) -> Option<R> {
-        self.header_mut(link).map(|uh| f(&mut uh.extmarks))
+        self.header_mut(link).map(|mut uh| f(&mut uh.extmarks))
     }
 }
 

@@ -203,7 +203,7 @@ fn smart_indent_backward(line: &XString, lead_len: c_int, mut newindent: c_int) 
     if lead_len == 0 && byte(&text, 0) == b'#' {
         let mut was_backslashed = false;
         while (byte(&text, 0) == b'#' || was_backslashed)
-            && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
+            && Win::current().w_cursor.lnum < Buf::current().line_count()
         {
             was_backslashed = text.last() == Some(&b'\\');
             Win::current().w_cursor.lnum += 1;

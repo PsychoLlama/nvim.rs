@@ -67,7 +67,7 @@ pub fn show_cursor_info_later(force: bool) {
         || wp.w_cursor != wp.w_stl_cursor
         || wp.w_virtcol != wp.w_stl_virtcol
         || wp.w_topline != wp.w_stl_topline
-        || wp.w_buffer.b_ml.ml_line_count != wp.w_stl_line_count
+        || wp.w_buffer.line_count() != wp.w_stl_line_count
         || wp.w_topfill != wp.w_stl_topfill
         || empty_line != wp.w_stl_empty
         || REG_RECORDING.get() != wp.w_stl_recording
@@ -91,7 +91,7 @@ pub fn show_cursor_info_later(force: bool) {
     wp.w_stl_virtcol = wp.w_virtcol;
     wp.w_stl_empty = empty_line;
     wp.w_stl_topline = wp.w_topline;
-    wp.w_stl_line_count = wp.w_buffer.b_ml.ml_line_count;
+    wp.w_stl_line_count = wp.w_buffer.line_count();
     wp.w_stl_topfill = wp.w_topfill;
     wp.w_stl_recording = REG_RECORDING.get().byte();
     wp.w_stl_state = state;
@@ -177,8 +177,8 @@ pub fn redraw_buf_later(buffer: Buf, redr_type: c_int) {
 pub fn redraw_buf_line_later(buffer: Buf, line: LineNr, force: bool) {
     for mut wp in winlayer::windows() {
         if wp.w_buffer == buffer {
-            redraw_win_line(wp, line.min(buffer.b_ml.ml_line_count));
-            if force && line > buffer.b_ml.ml_line_count {
+            redraw_win_line(wp, line.min(buffer.line_count()));
+            if force && line > buffer.line_count() {
                 wp.w_redraw_bot = line;
             }
         }

@@ -266,7 +266,7 @@ gains a `Cell` or a raw pointer fails to build.
 
 ### S5 — `Copy` object handles lending `&`/`&mut` (sound-by-convention)
 
-`Win`, `Buf`, ~~`TabPage`, `FrameRef`, `PosRef`~~, ~~`Live<T>`~~, `GridRef`, `Term`:
+`Win`, ~~`Buf`~~, ~~`TabPage`, `FrameRef`, `PosRef`~~, ~~`Live<T>`~~, `GridRef`, `Term`:
 `Deref`/`DerefMut` from a `Copy` value. Constructors are `unsafe` (or the
 registries, which check); every dereference after is safe and unchecked.
 Rows: the eight `Deref`/`DerefMut` pairs; `Win::syn_block`/~~`syn_block_mut`~~
@@ -467,6 +467,36 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   every site), counted reads only where a borrow outlives its statement,
   and budget it like S6b's read count (evalbench +1.8 % there):
   expect ≤ ~1 % on ml/scr/ed once hot walks take one guard per walk.
+- **Closed — `Buf` (both halves, checked):** ~~`Deref`~~ and ~~`DerefMut`~~
+  are gone. Each `Copy` field has a generated getter and setter
+  (`winlayer/deref/buf_fields.rs`, `slot_fields!`: one compare, a place
+  access through the raw address); every other field goes through
+  `Buf::read()` / `Buf::edit()` (`guarded_handles!`), and accessors that
+  lent a part of the buffer (`marktree()`, `extmark_ns()`, `header()`,
+  `header_mut()`, the update subscribers) return `slot::ReadPart` /
+  `EditPart`, a guard narrowed to the part. The guards take the handle by
+  value: the slot's own count keeps the buffer in place, so a guard may
+  outlive the handle it came from. The memline is a cell of its own,
+  `b_ml: RefCell<MemLine>`, lent for a walk by `Buf::ml()` (a counted
+  read of the buffer plus the cell's borrow): a line read fills the line
+  cache, and must not be refused by a read of another field held across
+  it. `line_count()`/`ml_flags()` refuse while a walk holds the cell; the
+  line text `Lines`/`HeldLines` lend is the line cache's loan (S5b), formed
+  from the raw place by `Buf::lend_cached_line*`. Hot walks (`fetch_line`,
+  `ml_find_line`, `ml_append_int`, `update_line_chunks`,
+  `find_line_or_offset`) take one `ml()` per stretch and end it before a
+  call handed the buffer or a message. The suites found the guards held
+  across user code: an autocommand fired with a read in its arguments
+  (`FileType`, `Syntax`, `SwapExists`, …), `if let` scrutinees, update
+  callbacks visited under the channel list's edit; each now copies out
+  first.
+- **Open — `SynBlockRef`:** `read()`/`edit()` replaced its `Deref`/
+  `DerefMut`, but both are `SynEdit`, checked against the owner's slot
+  (live, not lent to an edit) and not counted: the engine holds the
+  pattern list across matches that take a pattern's program out, so a
+  counted borrow refuses the engine itself. Closing it needs the program in
+  a cell of its own (`sp_prog`, `b_syn_linecont_prog`); then the block can
+  ride on the buffer's read/edit like any other field.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with
@@ -492,7 +522,7 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   (S1's tracker keyed by object). Order: ~~`GridRef` + `of_cell` (S)~~, ~~`Term`
   (S)~~, ~~`syn_block_mut` (13 sites, S)~~, ~~`held_line` (the matcher's line
   cursor, M)~~, ~~`Live<T>` users (M)~~, ~~`TabPage`/`FrameRef`/`PosRef`
-  (M)~~, then `Win`/`Buf` (XL; 553 files name them). **XL** overall.
+  (M)~~, then `Win`/~~`Buf`~~ (XL; 553 files name them). **XL** overall.
 
 ### ~~S6 — value-handle edits~~ (closed: check-always, and a type for partials)
 

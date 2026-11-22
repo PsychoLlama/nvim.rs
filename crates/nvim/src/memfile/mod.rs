@@ -892,9 +892,9 @@ fn pages_in_file(size: FileOffset, page_size: c_uint) -> BlockNr {
 ///
 /// `getlines` first pulls every line into memory — clumsy, but the blocks
 /// still in the file are about to become unreachable.
-pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
+pub(crate) fn mf_close_file(buffer: Buf, getlines: bool) {
     if buffer
-        .b_ml
+        .ml()
         .ml_mfp
         .as_ref()
         .is_none_or(|memfile| !memfile.has_file())
@@ -911,7 +911,8 @@ pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
         }
     }
 
-    let Some(memfile) = buffer.b_ml.ml_mfp.as_deref_mut() else {
+    let mut held = buffer.ml();
+    let Some(memfile) = held.ml_mfp.as_deref_mut() else {
         return;
     };
     if let Some(file) = memfile.file.take()
@@ -929,16 +930,17 @@ pub(crate) fn mf_close_file(mut buffer: Buf, getlines: bool) {
 /// Drop as many cached blocks as possible, for when memory has run out.
 /// Answers whether anything was released.
 pub(crate) fn mf_release_all() -> bool {
+    use crate::memfile::MemFile;
     let mut released = false;
-    for mut buf in buffers() {
-        let Some(memfile) = buf.b_ml.ml_mfp.as_deref() else {
+    for buf in buffers() {
+        let Some(has_file) = buf.ml().ml_mfp.as_deref().map(MemFile::has_file) else {
             continue;
         };
         // Nothing can be released without somewhere to put it.
-        if !memfile.has_file() && buf.b_may_swap {
+        if !has_file && buf.b_may_swap() {
             ml_open_file(buf);
         }
-        if let Some(memfile) = buf.b_ml.ml_mfp.as_deref_mut() {
+        if let Some(memfile) = buf.ml().ml_mfp.as_deref_mut() {
             released |= memfile.release_unlocked();
         }
     }

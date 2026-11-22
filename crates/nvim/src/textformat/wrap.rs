@@ -294,7 +294,7 @@ fn wrap_leader_len() -> i32 {
     let line = lines.line(Win::current().w_cursor.lnum);
     let mut leader_len = get_leader_len(line, false, true).0;
     if leader_len == 0
-        && Buf::current().b_p_cin != 0
+        && Buf::current().b_p_cin() != 0
         && let Some(comment_start) = check_linecomment(line)
     {
         leader_len = get_leader_len(&line[comment_start..], false, true).0;
@@ -343,7 +343,7 @@ pub fn internal_format(
     // With 'autoindent' off, a space under the cursor must not be
     // deleted; stand an `x` in for it and put it back at the end.
     let mut save_char = None;
-    if Buf::current().b_p_ai == 0 && STATE.get() & VREPLACE_FLAG == 0 {
+    if Buf::current().b_p_ai() == 0 && STATE.get() & VREPLACE_FLAG == 0 {
         let cc = gchar_cursor();
         if let Some(white) = u8::try_from(cc)
             .ok()

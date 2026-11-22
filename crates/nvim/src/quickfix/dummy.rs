@@ -74,7 +74,7 @@ pub(crate) fn load_dummy_buffer(
     // Need to open the memfile before putting the buffer in a window.
     if ml_open(newbuf).is_ok() {
         // Make sure this buffer isn't wiped out by autocommands.
-        newbuf.b_locked += 1;
+        newbuf.set_b_locked(newbuf.b_locked() + 1);
         // Set curwin/curbuf to buf and save a few things.
         let aco = AucmdBuf::enter(newbuf);
 
@@ -86,12 +86,12 @@ pub(crate) fn load_dummy_buffer(
 
         // Remove the "dummy" flag, otherwise autocommands may not
         // work.
-        Buf::current().b_flags.clear(BufFlags::DUMMY);
+        Buf::current().edit().b_flags.clear(BufFlags::DUMMY);
 
         let mut newbuf_to_wipe = BufRef::NONE;
         let read = read_dummy_file(fname);
-        newbuf.b_locked -= 1;
-        if read.is_ok() && !GOT_INT.get() && !Buf::current().b_flags.has(BufFlags::NEW) {
+        newbuf.set_b_locked(newbuf.b_locked() - 1);
+        if read.is_ok() && !GOT_INT.get() && !Buf::current().b_flags().has(BufFlags::NEW) {
             failed = false;
             if Buf::current_or_none() != Some(newbuf) {
                 // Bloody autocommands changed the buffer! Restore
@@ -112,7 +112,7 @@ pub(crate) fn load_dummy_buffer(
 
         // Add back the "dummy" flag, otherwise buflist_findname_file_id()
         // won't skip it.
-        newbuf.b_flags |= BufFlags::DUMMY;
+        newbuf.set_b_flags(newbuf.b_flags() | BufFlags::DUMMY);
     }
 
     // When autocommands/'autochdir' option changed directory: go back.
@@ -134,10 +134,10 @@ impl Buf {
     /// Wipe out the dummy buffer, closing every window that shows it first.
     /// When a window will not close, the buffer merely stops being a dummy and
     /// stays around as an ordinary one.
-    pub(crate) fn wipe_dummy(mut self, dirname_start: Option<&CStr>) {
+    pub(crate) fn wipe_dummy(self, dirname_start: Option<&CStr>) {
         // Note: `win_close` drops `b_nwindows` behind the handle.
         #[allow(clippy::while_immutable_condition)]
-        while self.b_nwindows > 0 {
+        while self.b_nwindows() > 0 {
             // Only close the window if it is not the last one, and only when
             // closing it actually worked — otherwise this would spin.
             let mut did_one = false;
@@ -148,12 +148,12 @@ impl Buf {
             }
             if !did_one {
                 // The buffer keeps a window; it can only stop being a dummy.
-                self.b_flags.clear(BufFlags::DUMMY);
+                self.edit().b_flags.clear(BufFlags::DUMMY);
                 return;
             }
         }
 
-        if Buf::current_or_none() != Some(self) && self.b_nwindows == 0 {
+        if Buf::current_or_none() != Some(self) && self.b_nwindows() == 0 {
             // Delete the buffer and its swap file. `wipe_buffer` calls
             // `close_buffer`, which may run autocommands, so a pending
             // exception or `:return` has to be parked over the call.
@@ -168,7 +168,7 @@ impl Buf {
             return;
         }
 
-        self.b_flags.clear(BufFlags::DUMMY);
+        self.edit().b_flags.clear(BufFlags::DUMMY);
     }
 }
 

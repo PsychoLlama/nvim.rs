@@ -72,24 +72,24 @@ fn add_mark(
 /// `l` — List to store marks
 pub fn get_buf_local_marks(buffer: Buf, l: &mut List) {
     let (buf, win, cur) = (buffer, Win::current(), Buf::current());
-    let handle = Some(buf.handle);
+    let handle = Some(buf.handle());
     let mut mname: [u8; 3] = *b"' \0";
     for i in 0..NMARKS {
         mname[1] = nth_name(b'a', i);
         let name = CStr::from_bytes_with_nul(&mname).expect("a two-byte mark name");
-        let _ = add_mark(l, name, buf.b_namedm[slot(i)].mark, handle, None);
+        let _ = add_mark(l, name, buf.read().b_namedm[slot(i)].mark, handle, None);
     }
     // The context mark is the WINDOW's and is reported against the CURRENT
     // buffer, which is why it is the one row here that does not use `handle`.
-    let _ = add_mark(l, c"''", win.w_pcmark, Some(cur.handle), None);
+    let _ = add_mark(l, c"''", win.w_pcmark, Some(cur.handle()), None);
     let positions: [(&CStr, Pos); 7] = [
-        (c"'\"", buf.b_last_cursor.mark),
-        (c"'[", buf.b_op_start),
-        (c"']", buf.b_op_end),
-        (c"'^", buf.b_last_insert.mark),
-        (c"'.", buf.b_last_change.mark),
-        (c"'<", buf.b_visual.vi_start),
-        (c"'>", buf.b_visual.vi_end),
+        (c"'\"", buf.read().b_last_cursor.mark),
+        (c"'[", buf.b_op_start()),
+        (c"']", buf.b_op_end()),
+        (c"'^", buf.read().b_last_insert.mark),
+        (c"'.", buf.read().b_last_change.mark),
+        (c"'<", buf.b_visual().vi_start),
+        (c"'>", buf.b_visual().vi_end),
     ];
     for (name, pos) in positions {
         let _ = add_mark(l, name, pos, handle, None);

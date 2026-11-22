@@ -319,7 +319,7 @@ fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
     // Move the cursor to the start of the match, so that we can use
     // "\=col('.')".
     Win::current().w_cursor.col = st.regmatch.startpos[0].col;
-    let line_count = Buf::current().b_ml.ml_line_count;
+    let line_count = Buf::current().line_count();
 
     // When the match included the "$" of the last line it may go beyond the
     // last line of the buffer.
@@ -408,7 +408,7 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
 
         // The match might be after the last line, for "\n\zs" matching at the
         // end of the last line.
-        if st.lnum > Buf::current().b_ml.ml_line_count {
+        if st.lnum > Buf::current().line_count() {
             break;
         }
         if st.old_line.is_none() {
@@ -528,13 +528,13 @@ fn substitute_range(st: &mut Sub, args: &SubArgs) {
 /// Report what happened, put the cursor and the marks where Vi would, and
 /// draw the preview if this was one.
 fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
-    Buf::current().deleted_bytes2 = 0 as size_t;
+    Buf::current().set_deleted_bytes2(0 as size_t);
 
     if st.first_line != LineNr::ZERO {
         // Subtract the number of added lines from "last_line" to get the line
         // number before the change (the same as adding the number of deleted
         // lines).
-        let added = Buf::current().b_ml.ml_line_count - args.old_line_count;
+        let added = Buf::current().line_count() - args.old_line_count;
         changed_lines(
             Buf::current(),
             st.first_line,
@@ -560,10 +560,11 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     if SUB_NSUBS.get() > args.start_nsubs {
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             // Set the '[ and '] marks.
-            Buf::current().b_op_start.lnum = args.range.0;
-            Buf::current().b_op_end.lnum = st.line2;
-            Buf::current().b_op_end.col = ColNr::ZERO;
-            Buf::current().b_op_start.col = Buf::current().b_op_end.col;
+            Buf::current().edit().b_op_start.lnum = args.range.0;
+            Buf::current().edit().b_op_end.lnum = st.line2;
+            Buf::current().edit().b_op_end.col = ColNr::ZERO;
+            let value = Buf::current().b_op_end().col;
+            Buf::current().edit().b_op_start.col = value;
         }
 
         if GLOBAL_BUSY.get() == 0 {
@@ -674,7 +675,7 @@ pub(crate) fn do_sub(
     }
     let start_nsubs = SUB_NSUBS.get();
     let keeppatterns = cmdmod_has(CmdModFlags::KEEPPATTERNS);
-    let (old_cursor, old_line_count) = (Win::current().w_cursor, Buf::current().b_ml.ml_line_count);
+    let (old_cursor, old_line_count) = (Win::current().w_cursor, Buf::current().line_count());
 
     let setup = match parse_sub(args, cmdpreview_ns, keeppatterns) {
         Ok(Some(setup)) => setup,

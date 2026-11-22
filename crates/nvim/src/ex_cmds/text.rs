@@ -227,10 +227,10 @@ pub fn ex_align(excmd: &mut ExArg) {
         width = if arg_width > 0 {
             arg_width
         } else {
-            number_as_int(Buf::current().b_p_tw.min(i64::from(TABSTOP_MAX)))
+            number_as_int(Buf::current().b_p_tw().min(i64::from(TABSTOP_MAX)))
         };
-        if width == 0 && Buf::current().b_p_wm > 0 {
-            width = Win::current().w_view_width - number_as_int(Buf::current().b_p_wm);
+        if width == 0 && Buf::current().b_p_wm() > 0 {
+            width = Win::current().w_view_width - number_as_int(Buf::current().b_p_wm());
         }
         if width <= 0 {
             width = 80;

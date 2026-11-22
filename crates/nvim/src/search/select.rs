@@ -101,7 +101,7 @@ fn search_around(
         } else {
             // Searching backwards, so start at the last line and col.
             let buf = Win::current().buffer();
-            let last = buf.b_ml.ml_line_count;
+            let last = buf.line_count();
             pos.lnum = last;
             pos.col = buf.lines().line_len(last);
         }

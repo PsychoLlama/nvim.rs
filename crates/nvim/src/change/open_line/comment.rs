@@ -267,7 +267,8 @@ pub(crate) fn plan_leader(
     let mut require_blank = false;
 
     let buffer = Buf::current();
-    let com = buffer.b_p_com.bytes();
+    let held = buffer.read();
+    let com = held.b_p_com.bytes();
     let mut p = lead_flags.offset();
     while at(com, p) != 0 && at(com, p) != b':' {
         let flag = at(com, p);
@@ -291,6 +292,7 @@ pub(crate) fn plan_leader(
         }
         p += 1;
     }
+    drop(held);
     plan
 }
 
@@ -511,7 +513,7 @@ pub(crate) fn build_leader(
         };
 
         // The indent may have changed with the leader.
-        if Buf::current().b_p_ai != 0 || do_si {
+        if Buf::current().b_p_ai() != 0 || do_si {
             newindent = Buf::current().indent_width(until_nul(&buf));
         }
 
@@ -584,7 +586,7 @@ pub(crate) fn indent_after_comment_end(
 ) -> c_int {
     if at(saved_line, comment_end) != b'*'
         || at(saved_line, comment_end + 1) != b'/'
-        || (Buf::current().b_p_ai == 0 && !do_si)
+        || (Buf::current().b_p_ai() == 0 && !do_si)
     {
         return newindent;
     }

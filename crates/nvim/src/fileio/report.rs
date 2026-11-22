@@ -160,7 +160,7 @@ pub(crate) fn report_read(sfname: Option<&CStr>, how: &How, out: &Outcome) {
     if u64::from(out.perm.cast_unsigned()) & S_IFMT == 0o140000 {
         note(&mut report, translate(c"[socket]"));
     }
-    if Buf::current().b_p_ro != 0 {
+    if Buf::current().b_p_ro() != 0 {
         let ro = if shortmess(ShmFlag::RO) {
             translate(c"[RO]")
         } else {

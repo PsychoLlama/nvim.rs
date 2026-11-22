@@ -90,9 +90,9 @@ pub(crate) fn qf_get_fnum(
     };
 
     let kind = qfl.kind;
-    let mut buf = buffer_for(bufname)?;
-    buf.b_has_qf_entry = has_entry_flag(kind);
-    Some(buf.handle)
+    let buf = buffer_for(bufname)?;
+    buf.set_b_has_qf_entry(has_entry_flag(kind));
+    Some(buf.handle())
 }
 
 impl DirStack {

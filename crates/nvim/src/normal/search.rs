@@ -302,7 +302,7 @@ pub(crate) fn nv_pcmark(cmd_arg: &mut CmdArg) {
         move_res = nv_mark_move_to(cmd_arg, flags, Some(fm));
     } else if cmd_arg.cmdchar.is('g') {
         // Three different reasons the change list had nothing.
-        if Buf::current().b_changelistlen == 0 {
+        if Buf::current().b_changelistlen() == 0 {
             emsg(gettext(E_CHANGELIST_IS_EMPTY));
         } else if cmd_arg.count1 < 0 {
             emsg(gettext(c"E662: At start of changelist"));

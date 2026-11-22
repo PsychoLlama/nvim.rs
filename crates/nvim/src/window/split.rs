@@ -769,10 +769,10 @@ pub fn win_init(newp: Win, oldp: Win, flags: c_int) {
 /// Make window `newp` a copy of window `oldp`, from `win_init()`.
 fn init(newp: Win, oldp: Win, flags: c_int) {
     let (mut newp, oldp) = (newp, oldp);
-    let mut buf = oldp.buffer();
+    let buf = oldp.buffer();
     newp.w_buffer = buf;
     newp.w_s = buf.syntax_block();
-    buf.b_nwindows += 1;
+    buf.set_b_nwindows(buf.b_nwindows() + 1);
     newp.w_cursor = oldp.w_cursor;
     newp.w_valid = WinValid::NONE;
     newp.w_curswant = oldp.w_curswant;

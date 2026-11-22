@@ -36,7 +36,7 @@ use crate::types::ColNr;
 ///
 /// `amount` is the caller's limit, `INT64_MAX` for "all of them".
 pub fn extmark_get(
-    mut buffer: Buf,
+    buffer: Buf,
     ns_id: uint32_t,
     l_row: c_int,
     l_col: ColNr,
@@ -54,7 +54,7 @@ pub fn extmark_get(
 
     if overlap {
         // Every mark overlapping the start position.
-        if !itr_get_overlap(buffer.marktree(), l_row, l_col.get(), &mut iter) {
+        if !itr_get_overlap(&mut buffer.marktree(), l_row, l_col.get(), &mut iter) {
             return array;
         }
 
@@ -62,7 +62,7 @@ pub fn extmark_get(
             // Invalid until `itr_step_overlap` writes it, which it does
             // whenever it answers true (upstream leaves it uninitialised).
             let mut pair = mtpair_from(MT_INVALID_KEY, MT_INVALID_KEY);
-            if !itr_step_overlap(buffer.marktree(), &mut iter, &mut pair) {
+            if !itr_step_overlap(&mut buffer.marktree(), &mut iter, &mut pair) {
                 break;
             }
             push_mark(&mut array, ns_id, type_filter, pair);
@@ -73,11 +73,11 @@ pub fn extmark_get(
             row: l_row,
             col: l_col.get(),
         };
-        itr_get_ext(buffer.marktree(), start, &mut iter);
+        itr_get_ext(&mut buffer.marktree(), start, &mut iter);
     }
 
     while under_limit(&array) {
-        let mark = itr_current(buffer.marktree(), &iter);
+        let mark = itr_current(&buffer.marktree(), &iter);
         if mark.pos.row < 0
             || mark.pos.row > u_row
             || (mark.pos.row == u_row && mark.pos.col > u_col.get())
@@ -85,10 +85,10 @@ pub fn extmark_get(
             break;
         }
         if !mt_end(mark) {
-            let end = tree_get_alt(buffer.marktree(), mark, None);
+            let end = tree_get_alt(&mut buffer.marktree(), mark, None);
             push_mark(&mut array, ns_id, type_filter, mtpair_from(mark, end));
         }
-        itr_next(buffer.marktree(), &mut iter);
+        itr_next(&mut buffer.marktree(), &mut iter);
     }
     array
 }
@@ -112,24 +112,24 @@ fn push_mark(array: &mut Vec<MTPair>, ns_id: uint32_t, type_filter: ExtmarkType,
 }
 
 /// The extmark `id` of namespace `ns_id`, paired with its end position.
-pub fn extmark_from_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> MTPair {
-    let mark = tree_lookup_ns(buffer.marktree(), ns_id, id, false, None);
+pub fn extmark_from_id(buffer: Buf, ns_id: uint32_t, id: uint32_t) -> MTPair {
+    let mark = tree_lookup_ns(&mut buffer.marktree(), ns_id, id, false, None);
     if mark.id == 0 {
         // Invalid.
         return mtpair_from(mark, mark);
     }
     debug_assert!(mark.pos.row >= 0, "mark.pos.row >= 0");
-    let end = tree_get_alt(buffer.marktree(), mark, None);
+    let end = tree_get_alt(&mut buffer.marktree(), mark, None);
 
     mtpair_from(mark, end)
 }
 
 /// Release every mark of a buffer, as it is freed.
-pub fn extmark_free_all(mut buffer: Buf) {
+pub fn extmark_free_all(buffer: Buf) {
     let mut iter = MarkTreeIter::default();
-    itr_get(buffer.marktree(), 0, 0, &mut iter);
+    itr_get(&mut buffer.marktree(), 0, 0, &mut iter);
     loop {
-        let mark = itr_current(buffer.marktree(), &iter);
+        let mark = itr_current(&buffer.marktree(), &iter);
         if mark.pos.row < 0 {
             break;
         }
@@ -139,13 +139,13 @@ pub fn extmark_free_all(mut buffer: Buf) {
             free_decor(mt_decor(mark));
         }
 
-        itr_next(buffer.marktree(), &mut iter);
+        itr_next(&mut buffer.marktree(), &mut iter);
     }
 
-    tree_clear(buffer.marktree());
+    tree_clear(&mut buffer.marktree());
 
-    buffer.b_signcols.max = 0;
-    buffer.b_signcols.count = [0; 9];
+    buffer.edit().b_signcols.max = 0;
+    buffer.edit().b_signcols.count = [0; 9];
 
-    ns_destroy(buffer.extmark_ns());
+    ns_destroy(&mut buffer.extmark_ns());
 }

@@ -488,18 +488,20 @@ fn normal_check_cursor_moved() {
 fn normal_check_text_changed() {
     if !FINISH_OP.get()
         && has_event(AutoEvent::TextChanged)
-        && Buf::current().b_last_changedtick != buf_get_changedtick(Buf::current())
+        && Buf::current().b_last_changedtick() != buf_get_changedtick(Buf::current())
     {
         fire_on_curbuf(AutoEvent::TextChanged);
-        Buf::current().b_last_changedtick = buf_get_changedtick(Buf::current());
+        Buf::current().set_b_last_changedtick(buf_get_changedtick(Buf::current()));
     }
 }
 
 fn normal_check_buffer_modified() {
-    if !FINISH_OP.get() && has_event(AutoEvent::BufModifiedSet) && Buf::current().b_changed_invalid
+    if !FINISH_OP.get()
+        && has_event(AutoEvent::BufModifiedSet)
+        && Buf::current().b_changed_invalid()
     {
         fire_on_curbuf(AutoEvent::BufModifiedSet);
-        Buf::current().b_changed_invalid = false;
+        Buf::current().set_b_changed_invalid(false);
     }
 }
 
@@ -531,7 +533,7 @@ fn normal_redraw() {
             showmode();
         }
     }
-    Buf::current().b_last_used = os_time_raw();
+    Buf::current().set_b_last_used(os_time_raw());
     // `msg` replaces the kept message, so it is handed a copy -- and the
     // message is not added to the history a second time.
     if let Some(copy) = KEEP_MSG.with(Clone::clone) {

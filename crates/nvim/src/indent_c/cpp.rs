@@ -314,14 +314,14 @@ pub(crate) fn get_baseclass_amount(col: c_int) -> c_int {
         let cursor_lnum = Win::current().w_cursor.lnum;
         let has_paren = find_last_paren(Lines::current().line(cursor_lnum), b'(', b')');
         if let Some(trypos) = has_paren
-            .then(|| find_match_paren(Buf::current().b_ind_maxparen))
+            .then(|| find_match_paren(Buf::current().b_ind_maxparen()))
             .flatten()
         {
             amount = get_indent_lnum(trypos.lnum);
         }
         let cursor_lnum = Win::current().w_cursor.lnum;
         if !ends_in(Lines::current().line(cursor_lnum), 0, b",") {
-            amount += Buf::current().b_ind_cpp_baseclass;
+            amount += Buf::current().b_ind_cpp_baseclass();
         }
         amount
     } else {
@@ -329,8 +329,8 @@ pub(crate) fn get_baseclass_amount(col: c_int) -> c_int {
         win.w_cursor.col = ColNr::new(col);
         win.vcol(win.cursor()).get()
     };
-    if amount < Buf::current().b_ind_cpp_baseclass {
-        amount = Buf::current().b_ind_cpp_baseclass;
+    if amount < Buf::current().b_ind_cpp_baseclass() {
+        amount = Buf::current().b_ind_cpp_baseclass();
     }
     amount
 }

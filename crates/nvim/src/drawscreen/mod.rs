@@ -282,17 +282,17 @@ fn update_buffer_state(redr_type: c_int, hl_changed: bool) {
     for wp in winlayer::windows() {
         update_window_hl(wp, redr_type >= UPD_NOT_VALID || hl_changed);
 
-        let mut buf = wp.buffer();
-        if !buf.b_mod_set {
+        let buf = wp.buffer();
+        if !buf.b_mod_set() {
             continue;
         }
-        if buf.b_mod_tick_syn < display_tick.get() && syntax_present(wp) {
+        if buf.b_mod_tick_syn() < display_tick.get() && syntax_present(wp) {
             syn_stack_apply_changes(buf);
-            buf.b_mod_tick_syn = display_tick.get();
+            buf.set_b_mod_tick_syn(display_tick.get());
         }
-        if buf.b_mod_tick_decor < display_tick.get() {
+        if buf.b_mod_tick_decor() < display_tick.get() {
             decor_providers_invoke_buf(buf);
-            buf.b_mod_tick_decor = display_tick.get();
+            buf.set_b_mod_tick_decor(display_tick.get());
         }
     }
 }
@@ -397,8 +397,8 @@ pub fn update_screen() -> Result<(), Failed> {
 
     // Reset `b_mod_set`. Going through the windows is probably faster than
     // going through every buffer.
-    for mut wp in winlayer::windows() {
-        wp.w_buffer.b_mod_set = false;
+    for wp in winlayer::windows() {
+        wp.w_buffer.set_b_mod_set(false);
     }
 
     UPDATING_SCREEN.set(false);
@@ -678,7 +678,7 @@ pub fn number_width(mut window: Win) -> c_int {
     let largest = if window.w_onebuf_opt.wo_rnu != 0 && window.w_onebuf_opt.wo_nu == 0 {
         LineNr::new(window.w_view_height)
     } else {
-        window.w_buffer.b_ml.ml_line_count
+        window.w_buffer.line_count()
     };
 
     if largest == window.w_nrwidth_line_count {

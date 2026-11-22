@@ -118,13 +118,14 @@ const PASTE_DEP_OPTS: [OptIndex; 10] = [
 pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
     if p_paste() {
         if !SAVED.with(|saved| saved.on) {
-            for mut buf in buffers() {
-                buf.b_p_tw_nopaste = buf.b_p_tw;
-                buf.b_p_wm_nopaste = buf.b_p_wm;
-                buf.b_p_sts_nopaste = buf.b_p_sts;
-                buf.b_p_ai_nopaste = buf.b_p_ai;
-                buf.b_p_et_nopaste = buf.b_p_et;
-                buf.b_p_vsts_nopaste = buf.b_p_vsts.clone();
+            for buf in buffers() {
+                buf.set_b_p_tw_nopaste(buf.b_p_tw());
+                buf.set_b_p_wm_nopaste(buf.b_p_wm());
+                buf.set_b_p_sts_nopaste(buf.b_p_sts());
+                buf.set_b_p_ai_nopaste(buf.b_p_ai());
+                buf.set_b_p_et_nopaste(buf.b_p_et());
+                let value = buf.read().b_p_vsts.clone();
+                buf.edit().b_p_vsts_nopaste = value;
             }
             // The stale save goes with the write.
             SAVED_VSTS.set((!P_VSTS.is_unset()).then(|| P_VSTS.get()));
@@ -142,14 +143,14 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
             });
         }
 
-        for mut buf in buffers() {
-            buf.b_p_tw = 0;
-            buf.b_p_wm = 0;
-            buf.b_p_sts = 0;
-            buf.b_p_ai = 0;
-            buf.b_p_et = 0;
-            buf.b_p_vsts = None;
-            buf.b_p_vsts_array = None;
+        for buf in buffers() {
+            buf.set_b_p_tw(0);
+            buf.set_b_p_wm(0);
+            buf.set_b_p_sts(0);
+            buf.set_b_p_ai(0);
+            buf.set_b_p_et(0);
+            buf.edit().b_p_vsts = None;
+            buf.edit().b_p_vsts_array = None;
         }
         P_SM.set(false);
         P_STA.set(false);
@@ -165,15 +166,18 @@ pub(crate) fn did_set_paste(_args: &mut OptSet) -> Result<(), OptError> {
         P_ET.set(false);
         P_VSTS.clear();
     } else if SAVED.with(|saved| saved.on) {
-        for mut buf in buffers() {
-            buf.b_p_tw = buf.b_p_tw_nopaste;
-            buf.b_p_wm = buf.b_p_wm_nopaste;
-            buf.b_p_sts = buf.b_p_sts_nopaste;
-            buf.b_p_ai = buf.b_p_ai_nopaste;
-            buf.b_p_et = buf.b_p_et_nopaste;
-            let vsts = buf.b_p_vsts_nopaste.clone();
-            replace_tabstop_array(&mut buf.b_p_vsts_array, vsts.as_ref().map(XString::as_cstr));
-            buf.b_p_vsts = vsts;
+        for buf in buffers() {
+            buf.set_b_p_tw(buf.b_p_tw_nopaste());
+            buf.set_b_p_wm(buf.b_p_wm_nopaste());
+            buf.set_b_p_sts(buf.b_p_sts_nopaste());
+            buf.set_b_p_ai(buf.b_p_ai_nopaste());
+            buf.set_b_p_et(buf.b_p_et_nopaste());
+            let vsts = buf.read().b_p_vsts_nopaste.clone();
+            replace_tabstop_array(
+                &mut buf.edit().b_p_vsts_array,
+                vsts.as_ref().map(XString::as_cstr),
+            );
+            buf.edit().b_p_vsts = vsts;
         }
         let saved = SAVED.with(PasteSave::clone);
         P_SM.set(saved.sm);

@@ -101,7 +101,7 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     // opened over, which is `prevwin` while the command-line window is
     // current.
     let win = prevwin_curwin();
-    let bvars = win.buffer().b_bufvar.di_tv.dict_handle();
+    let bvars = win.buffer().read().b_bufvar.di_tv.dict_handle();
     if let Some(key) = step(&BDONE, bvars) {
         return Some(cat_prefix_varname(b'b', &key));
     }
@@ -243,7 +243,7 @@ pub(crate) fn with_scope_entry<R>(
             Some(SCOPE_VIM.with_mut(|vim| f(&mut vim.entry)))
         }
         ScopeKind::Compat => None,
-        ScopeKind::Buffer => Some(f(&mut Buf::current().b_bufvar)),
+        ScopeKind::Buffer => Some(f(&mut Buf::current().edit().b_bufvar)),
         ScopeKind::Window => Some(f(&mut Win::current().w_winvar)),
         ScopeKind::Tab => Some(f(&mut TabPage::current().edit().tp_winvar)),
         ScopeKind::Script => {
@@ -265,7 +265,7 @@ pub(crate) fn scope_dict(kind: ScopeKind) -> Option<DictRef> {
     match kind {
         ScopeKind::Global => Some(globvar_dict()),
         ScopeKind::Vim | ScopeKind::Compat => Some(vimvar_dict()),
-        ScopeKind::Buffer => Buf::current().b_bufvar.di_tv.dict_handle(),
+        ScopeKind::Buffer => Buf::current().read().b_bufvar.di_tv.dict_handle(),
         ScopeKind::Window => Win::current().w_winvar.di_tv.dict_handle(),
         ScopeKind::Tab => TabPage::current().vars(),
         ScopeKind::Script => script_scope_dict(CURRENT_SCTX.get().sc_sid),

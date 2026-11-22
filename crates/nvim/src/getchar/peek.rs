@@ -304,7 +304,7 @@ fn read_from_typeahead(
             line_breakcheck();
         } else {
             // os_breakcheck() can call input_enqueue().
-            if (MAPPED_CTRL_C.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
+            if (MAPPED_CTRL_C.get() | Buf::current().b_mapped_ctrl_c()) & get_real_state() != 0 {
                 CTRL_C_INTERRUPTS.set(false);
             }
             os_breakcheck(); // check for CTRL-C

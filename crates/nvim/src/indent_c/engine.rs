@@ -119,7 +119,7 @@ fn c_indent(line: &Line) -> Option<c_int> {
     // A raw string wins over a comment only if it starts *earlier*; a raw
     // string inside a comment is just comment text.
     let mut comment_pos = ind_find_start_comment();
-    let raw_string = find_start_rawstring(Buf::current().b_ind_maxcomment);
+    let raw_string = find_start_rawstring(Buf::current().b_ind_maxcomment());
     if let Some(raw) = raw_string
         && comment_pos.is_none_or(|comment| lt(raw, comment))
     {
@@ -133,17 +133,17 @@ fn c_indent(line: &Line) -> Option<c_int> {
         && (line.whole().first() == Some(&b'#') || in_cinkeys(Key::ascii(b'#'), b' ', true))
         && {
             let directive = 1 + skip::white(&theline[1..]);
-            Buf::current().b_ind_pragma == 0 || !theline[directive..].starts_with(b"pragma")
+            Buf::current().b_ind_pragma() == 0 || !theline[directive..].starts_with(b"pragma")
         };
     if hash_at_left {
-        return Some(Buf::current().b_ind_hash_comment);
+        return Some(Buf::current().b_ind_hash_comment());
     }
 
     // A non-case label goes at the left margin too, unless the JS flag is
     // set or 'cinoptions' `L` is positive.
     if line.original_line_islabel
-        && Buf::current().b_ind_js == 0
-        && Buf::current().b_ind_jump_label < 0
+        && Buf::current().b_ind_js() == 0
+        && Buf::current().b_ind_jump_label() < 0
     {
         return Some(0);
     }
@@ -167,7 +167,7 @@ fn c_indent(line: &Line) -> Option<c_int> {
     // A `]` that has a match lines up with the line holding the `[`.
     let bracket = line
         .starts_with(b']')
-        .then(|| find_match_char(b'[', Buf::current().b_ind_maxparen))
+        .then(|| find_match_char(b'[', Buf::current().b_ind_maxparen()))
         .flatten();
     if let Some(trypos) = bracket {
         return Some(get_indent_lnum(trypos.lnum));
@@ -176,8 +176,8 @@ fn c_indent(line: &Line) -> Option<c_int> {
     // Inside parentheses or braces?  Upstream spells the test as
     // `(paren && !java) || (brace = find_start_brace()) || paren`, so the
     // brace search runs in every case but "a paren, and not Java".
-    let mut paren = find_match_paren(Buf::current().b_ind_maxparen);
-    let mut brace = if paren.is_some() && Buf::current().b_ind_java == 0 {
+    let mut paren = find_match_paren(Buf::current().b_ind_maxparen());
+    let mut brace = if paren.is_some() && Buf::current().b_ind_java() == 0 {
         None
     } else {
         find_start_brace()
@@ -204,11 +204,11 @@ fn c_indent(line: &Line) -> Option<c_int> {
 
     // Extra indent for a comment.
     if starts_comment(line.theline(), 0) {
-        amount += Buf::current().b_ind_comment;
+        amount += Buf::current().b_ind_comment();
     }
     // Take back the extra left shift jump labels get.
-    if Buf::current().b_ind_jump_label > 0 && line.original_line_islabel {
-        amount -= Buf::current().b_ind_jump_label;
+    if Buf::current().b_ind_jump_label() > 0 && line.original_line_islabel {
+        amount -= Buf::current().b_ind_jump_label();
     }
     Some(amount)
 }

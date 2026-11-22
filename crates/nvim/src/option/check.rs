@@ -97,14 +97,14 @@ pub(crate) fn did_set_title() {
 pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFlags) {
     let local = !opt_flags.has(OptionSetFlags::GLOBAL);
     let global = !opt_flags.has(OptionSetFlags::LOCAL);
-    let mut buf = Buf::current();
+    let buf = Buf::current();
     if newval {
         if !oldval {
             if local {
-                buf.b_p_tw_nobin = buf.b_p_tw;
-                buf.b_p_wm_nobin = buf.b_p_wm;
-                buf.b_p_ml_nobin = buf.b_p_ml;
-                buf.b_p_et_nobin = buf.b_p_et;
+                buf.set_b_p_tw_nobin(buf.b_p_tw());
+                buf.set_b_p_wm_nobin(buf.b_p_wm());
+                buf.set_b_p_ml_nobin(buf.b_p_ml());
+                buf.set_b_p_et_nobin(buf.b_p_et());
             }
             if global {
                 SAVED.set(BinSave {
@@ -116,10 +116,10 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
             }
         }
         if local {
-            buf.b_p_tw = 0;
-            buf.b_p_wm = 0;
-            buf.b_p_ml = 0;
-            buf.b_p_et = 0;
+            buf.set_b_p_tw(0);
+            buf.set_b_p_wm(0);
+            buf.set_b_p_ml(0);
+            buf.set_b_p_et(0);
         }
         if global {
             P_TW.set(0);
@@ -130,10 +130,10 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
         }
     } else if oldval {
         if local {
-            buf.b_p_tw = buf.b_p_tw_nobin;
-            buf.b_p_wm = buf.b_p_wm_nobin;
-            buf.b_p_ml = buf.b_p_ml_nobin;
-            buf.b_p_et = buf.b_p_et_nobin;
+            buf.set_b_p_tw(buf.b_p_tw_nobin());
+            buf.set_b_p_wm(buf.b_p_wm_nobin());
+            buf.set_b_p_ml(buf.b_p_ml_nobin());
+            buf.set_b_p_et(buf.b_p_et_nobin());
         }
         if global {
             let saved = SAVED.get();
@@ -155,7 +155,7 @@ pub(crate) fn didset_options() {
     didset_string_options();
     let _ = spell_check_msm();
     let _ = spell_check_sps();
-    let _ = compile_cap_prog(&mut Win::current().syntax());
+    let _ = compile_cap_prog(&mut Win::current().syntax().edit());
     let _ = did_set_spell_option();
     // The two callbacks these stand in for read no frame at all, and the
     // startup sweep has none to give.
@@ -172,11 +172,11 @@ pub(crate) fn didset_options2() {
     let _ = set_window_chars_option(win, FILLCHARS, true);
     let _ = set_window_chars_option(win, LISTCHARS, true);
     let _ = check_opt_wim();
-    let mut buf = Buf::current();
-    let vsts = buf.b_p_vsts.get();
-    replace_tabstop_array(&mut buf.b_p_vsts_array, Some(vsts.as_cstr()));
-    let vts = buf.b_p_vts.get();
-    replace_tabstop_array(&mut buf.b_p_vts_array, Some(vts.as_cstr()));
+    let buf = Buf::current();
+    let vsts = buf.read().b_p_vsts.get();
+    replace_tabstop_array(&mut buf.edit().b_p_vsts_array, Some(vsts.as_cstr()));
+    let vts = buf.read().b_p_vts.get();
+    replace_tabstop_array(&mut buf.edit().b_p_vts_array, Some(vts.as_cstr()));
 }
 
 /// Whether the option's current value was set from an untrusted place, so

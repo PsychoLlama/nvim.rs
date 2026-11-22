@@ -261,7 +261,7 @@ pub fn f_syn_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut id = 0;
     if !transerr
         && lnum >= LineNr::ONE
-        && lnum <= Buf::current().b_ml.ml_line_count
+        && lnum <= Buf::current().line_count()
         && col >= ColNr::ZERO
         && col < ml_get_len(lnum)
     {
@@ -295,7 +295,7 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     // Note the `<=`: unlike synID(), the position one past the end of
     // the line is in range here.
     if lnum >= LineNr::ONE
-        && lnum <= Buf::current().b_ml.ml_line_count
+        && lnum <= Buf::current().line_count()
         && col >= ColNr::ZERO
         && col <= ml_get_len(lnum)
         && Win::current().w_onebuf_opt.wo_cole > 0
@@ -338,7 +338,7 @@ pub fn f_synstack(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let col = number_as_col(arg_number(&args[1]).wrapping_sub(1));
 
     if lnum >= LineNr::ONE
-        && lnum <= Buf::current().b_ml.ml_line_count
+        && lnum <= Buf::current().line_count()
         && col >= ColNr::ZERO
         && col <= ml_get_len(lnum)
     {

@@ -112,7 +112,7 @@ fn may_close(win: Win, force: bool) -> Result<(), NotClosed> {
     if !win.w_floating && layout_locked(CmdIdx::close) {
         return Err(NotClosed);
     }
-    if win.w_locked || win.buffer_or_none().is_some_and(|buf| buf.b_locked > 0) {
+    if win.w_locked || win.buffer_or_none().is_some_and(|buf| buf.b_locked() > 0) {
         return Err(NotClosed); // window is already being closed
     }
     if is_autocmd_window(Some(win)) {
@@ -344,7 +344,7 @@ impl Closing {
 
         if FIRSTWIN.get() == LASTWIN.get()
             && Win::current().w_locked
-            && Buf::current().b_locked_split != 0
+            && Buf::current().b_locked_split() != 0
             && first_tab().next().is_some()
         {
             // The new `curwin` is the last window of the current tab page and
@@ -577,7 +577,7 @@ pub(crate) fn close_othertab(
     }
     // Get here with `win->w_buffer == NULL` when `close()` detects that the tab
     // page changed.
-    if win.w_locked || win.buffer_or_none().is_some_and(|buf| buf.b_locked > 0) {
+    if win.w_locked || win.buffer_or_none().is_some_and(|buf| buf.b_locked() > 0) {
         return Err(NotClosed); // window is already being closed
     }
     if is_autocmd_window(Some(win)) {

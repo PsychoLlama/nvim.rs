@@ -92,15 +92,15 @@ pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
 /// The `:syntax sync` half of the listing: how this buffer synchronises.
 fn list_sync_items() {
     let block = cur_syn_block();
-    if block.b_syn_sync_flags & SF_CCOMMENT != 0 {
+    if block.read().b_syn_sync_flags & SF_CCOMMENT != 0 {
         msg_str(gettext(c"syncing on C-style comments"));
         syn_lines_msg();
         syn_match_msg();
-    } else if block.b_syn_sync_flags & SF_MATCH != 0 {
+    } else if block.read().b_syn_sync_flags & SF_MATCH != 0 {
         msg_title(gettext(c"\n--- Syntax sync items ---"));
-        if block.b_syn_sync_minlines > 0
-            || block.b_syn_sync_maxlines > 0
-            || block.b_syn_sync_linebreaks > 0
+        if block.read().b_syn_sync_minlines > 0
+            || block.read().b_syn_sync_maxlines > 0
+            || block.read().b_syn_sync_linebreaks > 0
         {
             msg_str(gettext(c"\nsyncing on items"));
             syn_lines_msg();
@@ -111,14 +111,15 @@ fn list_sync_items() {
             syn_list_one(id, true, false);
             id += 1;
         }
-    } else if block.b_syn_sync_minlines == 0 {
+    } else if block.read().b_syn_sync_minlines == 0 {
         msg_str(gettext(c"no syncing"));
     } else {
-        if block.b_syn_sync_minlines == MAXLNUM.get() {
+        if block.read().b_syn_sync_minlines == MAXLNUM.get() {
             msg_str(gettext(c"syncing starts at the first line"));
         } else {
             msg_str(gettext(c"syncing starts "));
-            msg_outnum(block.b_syn_sync_minlines);
+            let arg = block.read().b_syn_sync_minlines;
+            msg_outnum(arg);
             msg_str(gettext(c" lines before top line"));
         }
         syn_match_msg();
@@ -128,31 +129,33 @@ fn list_sync_items() {
 /// "; minimal 5, maximal 10 lines before top line".
 fn syn_lines_msg() {
     let block = cur_syn_block();
-    if block.b_syn_sync_maxlines <= 0 && block.b_syn_sync_minlines <= 0 {
+    if block.read().b_syn_sync_maxlines <= 0 && block.read().b_syn_sync_minlines <= 0 {
         return;
     }
     msg_str(c"; ");
-    if block.b_syn_sync_minlines == MAXLNUM.get() {
+    if block.read().b_syn_sync_minlines == MAXLNUM.get() {
         msg_str(gettext(c"from the first line"));
         return;
     }
-    if block.b_syn_sync_minlines > 0 {
+    if block.read().b_syn_sync_minlines > 0 {
         msg_str(gettext(c"minimal "));
-        msg_outnum(block.b_syn_sync_minlines);
-        if block.b_syn_sync_maxlines != 0 {
+        let arg = block.read().b_syn_sync_minlines;
+        msg_outnum(arg);
+        if block.read().b_syn_sync_maxlines != 0 {
             msg_str(c", ");
         }
     }
-    if block.b_syn_sync_maxlines > 0 {
+    if block.read().b_syn_sync_maxlines > 0 {
         msg_str(gettext(c"maximal "));
-        msg_outnum(block.b_syn_sync_maxlines);
+        let arg = block.read().b_syn_sync_maxlines;
+        msg_outnum(arg);
     }
     msg_str(gettext(c" lines before top line"));
 }
 
 /// "; match 3 line breaks".
 fn syn_match_msg() {
-    let linebreaks = cur_syn_block().b_syn_sync_linebreaks;
+    let linebreaks = cur_syn_block().read().b_syn_sync_linebreaks;
     if linebreaks > 0 {
         msg_str(gettext(c"; match "));
         msg_outnum(linebreaks);
@@ -201,8 +204,8 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     // The keywords of `id`, from both tables.
     if !syncing {
         let block = cur_syn_block();
-        did_header = syn_list_keywords(id, &block.b_keywtab, false);
-        did_header = syn_list_keywords(id, &block.b_keywtab_ic, did_header);
+        did_header = syn_list_keywords(id, &block.read().b_keywtab, false);
+        did_header = syn_list_keywords(id, &block.read().b_keywtab_ic, did_header);
     }
 
     // The patterns of `id`. The item's options are read off its *first*
@@ -210,18 +213,21 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     // lists; `put_item_patterns` leaves `idx` on its last.
     let block = cur_syn_block();
     let mut idx = 0;
-    while idx < block.patterns().len() && !GOT_INT.get() {
+    while idx < block.read().patterns().len() && !GOT_INT.get() {
         let first = idx;
-        let spp = &block.patterns()[first];
+        let held = block.read();
+        let spp = &held.patterns()[first];
         if c_int::from(spp.sp_syn.id) != id || spp.sp_syncing != syncing {
             idx += 1;
             continue;
         }
+        drop(held);
         syn_list_header(did_header, 0, id, true);
         did_header = true;
         idx = put_item_patterns(first);
 
-        let spp = &block.patterns()[first];
+        let held = block.read();
+        let spp = &held.patterns()[first];
         syn_list_flags(&ITEM_FLAG_NAMES, spp.sp_flags, LIST_HL);
         if !spp.sp_cont_list.is_none() {
             put_id_list(c"contains", spp.sp_cont_list.ids(), LIST_HL);
@@ -236,6 +242,7 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
         if spp.sp_flags.has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE) {
             put_sync_group(spp.sp_flags, spp.sp_sync_idx);
         }
+        drop(held);
         idx += 1;
     }
 
@@ -257,7 +264,8 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
 fn put_item_patterns(mut idx: usize) -> usize {
     let mut last_matchgroup = 0;
     let block = cur_syn_block();
-    let pats = block.patterns();
+    let held = block.read();
+    let pats = held.patterns();
     let sp_type = |i: usize| c_int::from(pats[i].sp_type);
 
     if sp_type(idx) == SPTYPE_MATCH {
@@ -282,6 +290,7 @@ fn put_item_patterns(mut idx: usize) -> usize {
         idx -= 1;
         msg_put_ascii(b' ');
     }
+    drop(held);
     idx
 }
 
@@ -295,7 +304,7 @@ fn put_sync_group(flags: SynFlags, sync_idx: c_int) {
     msg_put_ascii(b' ');
     if sync_idx >= 0 {
         let block = cur_syn_block();
-        let target_id = c_int::from(block.patterns()[as_index(sync_idx)].sp_syn.id);
+        let target_id = c_int::from(block.read().patterns()[as_index(sync_idx)].sp_syn.id);
         msg_display(syn_id2name(target_id), 0, false);
     } else {
         msg_str(c"NONE");
@@ -308,7 +317,8 @@ fn syn_list_cluster(id: c_int) {
     // Slight hack: roughly duplicate the guts of `syn_list_header`.
     let mut endcol = 15;
     let block = cur_syn_block();
-    let cluster = &block.clusters()[as_index(id)];
+    let held = block.read();
+    let cluster = &held.clusters()[as_index(id)];
     msg_put_ascii(b'\n');
     msg_display(&cluster.scl_name, 0, false);
 
@@ -347,7 +357,8 @@ fn put_id_list(name: &CStr, ids: &[int16_t], hl_id: c_int) {
             msg_str(c"CONTAINED");
         } else if item >= SYNID_CLUSTER {
             let block = cur_syn_block();
-            let name = &block.clusters()[as_index(item - SYNID_CLUSTER)].scl_name;
+            let held = block.read();
+            let name = &held.clusters()[as_index(item - SYNID_CLUSTER)].scl_name;
             msg_put_ascii(b'@');
             msg_display(name, 0, false);
         } else {

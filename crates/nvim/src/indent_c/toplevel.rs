@@ -25,7 +25,7 @@ pub(crate) fn indent_at_top_level(line: &Line) -> c_int {
     // A line starting with an open brace forgets any prevailing indent
     // and looks like the start of a function.
     if line.starts_with(b'{') {
-        return Buf::current().b_ind_first_open;
+        return Buf::current().b_ind_first_open();
     }
 
     // If the NEXT line is a function declaration, this one is its type
@@ -36,7 +36,7 @@ pub(crate) fn indent_at_top_level(line: &Line) -> c_int {
     // guards it -- the chain is left whole so that it keeps doing so, and so
     // that the search only runs once the cheap text tests have passed.
     let theline = line.theline();
-    let is_func_type = line.cur_curpos.lnum < Buf::current().b_ml.ml_line_count
+    let is_func_type = line.cur_curpos.lnum < Buf::current().line_count()
         && !only_comment_left(theline, 0)
         && !theline.contains(&b'{')
         && !theline.contains(&b'}')
@@ -45,14 +45,14 @@ pub(crate) fn indent_at_top_level(line: &Line) -> c_int {
         && is_func_decl(line.cur_curpos.lnum + 1, line.cur_curpos.lnum + 1)
         && terminator(theline, 0, false, true) == 0;
     if is_func_type {
-        return Buf::current().b_ind_func_type;
+        return Buf::current().b_ind_func_type();
     }
 
     let mut amount = search_backwards(line);
 
     // Extra indent for a comment.
     if starts_comment(line.theline(), 0) {
-        amount += Buf::current().b_ind_comment;
+        amount += Buf::current().b_ind_comment();
     }
 
     // Extra indent when the previous line ended in a backslash:
@@ -67,7 +67,7 @@ pub(crate) fn indent_at_top_level(line: &Line) -> c_int {
         if continued {
             match equal_amount(above) {
                 n if n > 0 => amount = n,
-                0 => amount += Buf::current().b_ind_continuation,
+                0 => amount += Buf::current().b_ind_continuation(),
                 _ => {}
             }
         }
@@ -100,7 +100,7 @@ fn search_backwards(line: &Line) -> c_int {
 
         // The start of a C++ base-class declaration or constructor
         // initialisation?
-        if Buf::current().b_ind_cpp_baseclass != 0 && in_baseclass_list(&mut cache) {
+        if Buf::current().b_ind_cpp_baseclass() != 0 && in_baseclass_list(&mut cache) {
             return get_baseclass_amount(cache.lpos.col.get());
         }
         // Skip preprocessor directives and blank lines.  `preproc_start`
@@ -134,7 +134,7 @@ fn search_backwards(line: &Line) -> c_int {
             // when `find_last_paren` found one, as upstream has it.
             let has_paren = find_last_paren(Lines::current().line(cursor_lnum), b'(', b')');
             let opening = has_paren
-                .then(|| find_match_paren(Buf::current().b_ind_maxparen))
+                .then(|| find_match_paren(Buf::current().b_ind_maxparen()))
                 .flatten();
             if let Some(trypos) = opening {
                 Win::current().w_cursor = trypos;
@@ -159,7 +159,7 @@ fn search_backwards(line: &Line) -> c_int {
                 amount = first_id_amount();
             }
             if amount == 0 {
-                amount = Buf::current().b_ind_continuation;
+                amount = Buf::current().b_ind_continuation();
             }
             return amount;
         }
@@ -190,7 +190,7 @@ fn search_backwards(line: &Line) -> c_int {
             return amount;
         }
         if opens_array {
-            return get_indent() + Buf::current().b_ind_continuation;
+            return get_indent() + Buf::current().b_ind_continuation();
         }
 
         // A line holding only a semicolon that belongs to a previous line
@@ -225,7 +225,7 @@ fn search_backwards(line: &Line) -> c_int {
         // If the PREVIOUS line is a function declaration, this line (and
         // the ones after it) are parameters.
         if is_func_decl(Win::current().w_cursor.lnum, LineNr::ZERO) {
-            return Buf::current().b_ind_param;
+            return Buf::current().b_ind_param();
         }
 
         // A previous line ending in ';' whose own predecessor ends in ','
@@ -247,7 +247,7 @@ fn search_backwards(line: &Line) -> c_int {
         // rightmost paren first, so that matching it takes us to the
         // start of the line.  The borrow ends with the statement.
         find_last_paren(Lines::current().line(cursor_lnum), b'(', b')');
-        if let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen) {
+        if let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen()) {
             Win::current().w_cursor = trypos;
         }
         return get_indent();

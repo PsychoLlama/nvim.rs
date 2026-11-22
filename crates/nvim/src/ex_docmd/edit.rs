@@ -75,7 +75,7 @@ use crate::winlayer::{Buf, Win, windows};
 
 /// `:print`, `:number` and `:list`.
 pub(crate) fn ex_print(excmd: &mut ExArg) {
-    if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if Buf::current().ml_flags().has(MlFlags::EMPTY) {
         emsg(gettext(E_EMPTY_BUFFER));
     } else {
         let idx = excmd.cmdidx;
@@ -115,11 +115,9 @@ pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
         vtopline = LineNr::new(get_vtopline(Win::current()));
         for wp in windows() {
             if wp.w_onebuf_opt.wo_scb != 0 && !wp.w_buffer.is_null() {
-                let limit = LineNr::new(plines_m_win_fill(
-                    wp,
-                    LineNr::ONE,
-                    wp.w_buffer.b_ml.ml_line_count,
-                )) - number_as_lnum(get_scrolloff_value(Win::current()));
+                let limit =
+                    LineNr::new(plines_m_win_fill(wp, LineNr::ONE, wp.w_buffer.line_count()))
+                        - number_as_lnum(get_scrolloff_value(Win::current()));
                 vtopline = vtopline.min(LineNr::new(limit));
             }
         }
@@ -301,7 +299,7 @@ pub(crate) fn ex_copymove(excmd: &mut ExArg) {
     get_flags(excmd);
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".
-    if n == MAXLNUM || n < LineNr::ZERO || n > Buf::current().b_ml.ml_line_count {
+    if n == MAXLNUM || n < LineNr::ZERO || n > Buf::current().line_count() {
         emsg(gettext(E_INVRANGE));
         return;
     }
@@ -371,7 +369,7 @@ pub(crate) fn ex_join(excmd: &mut ExArg) {
         if excmd.addr_count >= 2 {
             return;
         }
-        if excmd.line2 == Buf::current().b_ml.ml_line_count {
+        if excmd.line2 == Buf::current().line_count() {
             beep_flush();
             return;
         }
@@ -437,15 +435,15 @@ pub(crate) fn ex_undo(excmd: &mut ExArg) {
         return;
     }
 
-    if step >= Buf::current().b_u_seq_cur {
+    if step >= Buf::current().b_u_seq_cur() {
         emsg(gettext(E_UNDOBANG_CANNOT_REDO_OR_MOVE_BRANCH));
         return;
     }
     // Count how many states back `step` is along this branch.
-    let start = if Buf::current().b_u_curhead.is_none() {
-        Buf::current().b_u_newhead
+    let start = if Buf::current().b_u_curhead().is_none() {
+        Buf::current().b_u_newhead()
     } else {
-        Buf::current().b_u_curhead
+        Buf::current().b_u_curhead()
     };
     let mut count = 0;
     let mut reached = None;

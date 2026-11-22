@@ -171,7 +171,7 @@ impl DoTag {
             old_idx: idx,
             prev_idx: idx,
             cur_match: 0,
-            cur_fnum: Some(Buf::current().handle),
+            cur_fnum: Some(Buf::current().handle()),
             error_cur_match: 0,
             new_tag: false,
             no_regexp: help,
@@ -186,7 +186,7 @@ impl DoTag {
                 view: FileMarkView::NONE,
                 extra: None,
             },
-            buf_ffname: Buf::current().name.full().map(XString::from_cstr),
+            buf_ffname: Buf::current().read().name.full().map(XString::from_cstr),
             prev_num_matches: match_count(),
         };
         drop(MISSING_FILE.take());
@@ -354,7 +354,7 @@ impl DoTag {
             return false;
         };
         self.saved_fmark = mark.clone();
-        if mark.fnum() != Some(Buf::current().handle) {
+        if mark.fnum() != Some(Buf::current().handle()) {
             // Another file. If it cannot be opened (it may have
             // changed) keep the original position on the stack.
             if buflist_getfile(mark.fnum(), mark.mark.lnum, GETF_SETMARK, self.forceit).is_err() {
@@ -440,7 +440,7 @@ impl DoTag {
             tag_emsg(c"E425: Cannot go before first matching tag");
             self.skip_msg = true;
             self.cur_match = 0;
-            self.cur_fnum = Some(Buf::current().handle);
+            self.cur_fnum = Some(Buf::current().handle());
         }
     }
 
@@ -451,7 +451,7 @@ impl DoTag {
         let (cur_match, cur_fnum) = (self.cur_match, self.cur_fnum);
         let cursor = Win::current().w_cursor;
         let view = mark_view_make(Win::current(), cursor);
-        let handle = Buf::current().handle;
+        let handle = Buf::current().handle();
         let saved = self.with_current(|entry| {
             let saved = entry.fmark.clone();
             if save_pos {
@@ -479,11 +479,11 @@ impl DoTag {
     /// Using a remembered `cur_match` only makes sense if the order the
     /// matches came out in is the same as it was then.
     fn set_priority_buffer(&mut self) {
-        if self.cur_fnum == Some(Buf::current().handle) {
+        if self.cur_fnum == Some(Buf::current().handle()) {
             return;
         }
         if let Some(buf) = find_buf(self.cur_fnum) {
-            self.buf_ffname = buf.name.full().map(XString::from_cstr);
+            self.buf_ffname = buf.read().name.full().map(XString::from_cstr);
         }
     }
 

@@ -51,7 +51,7 @@ impl Put {
         let mut totlen: size_t = 0;
 
         if visual_active() {
-            let visual = Buf::current().b_visual;
+            let visual = Buf::current().b_visual();
             end_lnum = visual.vi_end.lnum.max(visual.vi_start.lnum).get();
             if end_lnum > start_lnum.get() {
                 // `col` is only right for the first line; the others have
@@ -148,8 +148,8 @@ impl Put {
         }
 
         // `']` goes on the *first byte* of the last character put.
-        Buf::current().b_op_end = Win::current().w_cursor;
-        Buf::current().b_op_end.col -= first_byte_off;
+        Buf::current().set_b_op_end(Win::current().w_cursor);
+        Buf::current().edit().b_op_end.col -= first_byte_off;
 
         // `CTRL-O p` in Insert mode leaves the cursor after the last
         // character rather than on it.
@@ -214,9 +214,9 @@ impl Put {
         lendiff: c_int,
     ) {
         if self.kind == MotionType::LineWise {
-            Buf::current().b_op_start.col = ColNr::ZERO;
+            Buf::current().edit().b_op_start.col = ColNr::ZERO;
             if self.dir == FORWARD {
-                Buf::current().b_op_start.lnum += 1;
+                Buf::current().edit().b_op_start.lnum += 1;
             }
         }
 
@@ -227,7 +227,7 @@ impl Put {
         } else {
             EXTMARK_NOOP
         };
-        let from = Buf::current().b_op_start.lnum + i32::from(self.kind == MotionType::CharWise);
+        let from = Buf::current().b_op_start().lnum + i32::from(self.kind == MotionType::CharWise);
         mark_adjust(from, MAXLNUM, self.nr_lines, 0, kind);
 
         // The range is the lines the put just rewrote.
@@ -235,23 +235,24 @@ impl Put {
             let at = Win::current().w_cursor.lnum;
             changed_lines(Buf::current(), at, col, at + 1, self.nr_lines, true);
         } else {
-            let at = Buf::current().b_op_start.lnum;
+            let at = Buf::current().b_op_start().lnum;
             changed_lines(Buf::current(), at, ColNr::ZERO, at, self.nr_lines, true);
         }
 
         // `']` goes on the first byte of the last character put, its
         // column corrected for whatever the reindent above removed.
-        Buf::current().b_op_end.lnum = new_lnum;
+        Buf::current().edit().b_op_end.lnum = new_lnum;
         let last = self.lines.last().expect("a register holds a line");
         let col = (ColNr::from_index(last.len()) - lendiff).max(ColNr::ZERO);
         if col > ColNr::new(1) {
-            Buf::current().b_op_end.col = col - 1;
+            Buf::current().edit().b_op_end.col = col - 1;
             if !last.is_empty() {
                 let head = head_off(last, last.len() - 1);
-                Buf::current().b_op_end.col -= ColNr::try_from(head).unwrap_or(ColNr::ZERO).get();
+                Buf::current().edit().b_op_end.col -=
+                    ColNr::try_from(head).unwrap_or(ColNr::ZERO).get();
             }
         } else {
-            Buf::current().b_op_end.col = ColNr::ZERO;
+            Buf::current().edit().b_op_end.col = ColNr::ZERO;
         }
 
         if self.flags & PUT_CURSLINE != 0 {
@@ -261,8 +262,8 @@ impl Put {
         } else if self.flags & PUT_CURSEND != 0 {
             // The cursor goes after the inserted text.
             if self.kind == MotionType::LineWise {
-                Win::current().w_cursor.lnum = if lnum >= Buf::current().b_ml.ml_line_count {
-                    Buf::current().b_ml.ml_line_count
+                Win::current().w_cursor.lnum = if lnum >= Buf::current().line_count() {
+                    Buf::current().line_count()
                 } else {
                     lnum + 1
                 };
@@ -270,9 +271,9 @@ impl Put {
             } else {
                 Win::current().w_cursor.lnum = new_lnum;
                 Win::current().w_cursor.col = col;
-                Buf::current().b_op_end = Win::current().w_cursor;
+                Buf::current().set_b_op_end(Win::current().w_cursor);
                 if col > ColNr::new(1) {
-                    Buf::current().b_op_end.col = col - 1;
+                    Buf::current().edit().b_op_end.col = col - 1;
                 }
             }
         } else if self.kind == MotionType::LineWise {

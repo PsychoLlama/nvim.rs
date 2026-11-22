@@ -101,7 +101,7 @@ pub fn buf_put_decor_sh(buffer: Buf, idx: uint32_t, row1: c_int, row2: c_int) {
 ///
 /// When it was the last sign in the buffer the histogram is zeroed outright
 /// rather than decremented, because there is nothing left to count.
-pub fn buf_remove_decor_sh(mut buffer: Buf, row1: c_int, row2: c_int, idx: uint32_t) {
+pub fn buf_remove_decor_sh(buffer: Buf, row1: c_int, row2: c_int, idx: uint32_t) {
     if !with_decor_item(idx, |sh| sh.is_sign() && sh.has_text()) {
         return;
     }
@@ -109,8 +109,8 @@ pub fn buf_remove_decor_sh(mut buffer: Buf, row1: c_int, row2: c_int, idx: uint3
         buf_signcols_count(buffer, row1, row2, -1, SignCountHalf::Both);
     } else {
         may_force_numberwidth_recompute(buffer, true);
-        buffer.b_signcols.count[0] = 0;
-        buffer.b_signcols.max = 0;
+        buffer.edit().b_signcols.count[0] = 0;
+        buffer.edit().b_signcols.max = 0;
     }
 }
 
@@ -311,8 +311,8 @@ pub fn buf_signcols_count_range(
 /// widest row is `max`. `add` says what just happened to the range — 1 for an
 /// added sign, -1 for a deleted one, 0 for a range being counted from scratch
 /// — and `half` is which side of a marktree splice this call is doing.
-fn buf_signcols_count(mut buffer: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
-    if !buffer.b_signcols.autom || row2 < row1 || buffer.meta_total(MT_META_SIGN_TEXT) == 0 {
+fn buf_signcols_count(buffer: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
+    if !buffer.read().b_signcols.autom || row2 < row1 || buffer.meta_total(MT_META_SIGN_TEXT) == 0 {
         return;
     }
 
@@ -351,16 +351,16 @@ fn buf_signcols_count(mut buffer: Buf, row1: c_int, row2: c_int, add: c_int, hal
     for &rowcount in &count {
         let prevwidth = SIGN_SHOW_MAX.min(rowcount - add);
         if half != SignCountHalf::Add && prevwidth > 0 {
-            let slot = &mut buffer.b_signcols.count[width_index(prevwidth)];
+            let slot = &mut buffer.edit().b_signcols.count[width_index(prevwidth)];
             *slot -= 1;
             // TODO(bfredl): correct marktree splicing so that this doesn't fail
             debug_assert!(*slot >= 0);
         }
         let width = SIGN_SHOW_MAX.min(rowcount);
         if half != SignCountHalf::Subtract && width > 0 {
-            buffer.b_signcols.count[width_index(width)] += 1;
-            if width > buffer.b_signcols.max {
-                buffer.b_signcols.max = width;
+            buffer.edit().b_signcols.count[width_index(width)] += 1;
+            if width > buffer.read().b_signcols.max {
+                buffer.edit().b_signcols.max = width;
             }
         }
     }

@@ -157,13 +157,13 @@ impl Buf {
     /// The next buffer in the editor's buffer list, if any.
     #[inline(always)]
     pub fn next(self) -> Option<Self> {
-        self.b_next.and_then(BufId::get)
+        self.b_next().and_then(BufId::get)
     }
 
     /// The buffer before this one in the editor's buffer list, if any.
     #[inline(always)]
     pub fn prev(self) -> Option<Self> {
-        self.b_prev.and_then(BufId::get)
+        self.b_prev().and_then(BufId::get)
     }
 }
 

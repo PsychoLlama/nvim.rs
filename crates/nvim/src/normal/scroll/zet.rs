@@ -279,13 +279,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
                 clear_folding(win);
                 changed_window_setting(win);
             } else if foldmethod_is_marker(win) {
-                delete_fold(
-                    win,
-                    LineNr::ONE,
-                    Buf::current().b_ml.ml_line_count,
-                    1,
-                    false,
-                );
+                delete_fold(win, LineNr::ONE, Buf::current().line_count(), 1, false);
             } else {
                 let msg = c"E352: Cannot erase folds with current 'foldmethod'";
                 emsg(gettext(msg));
@@ -433,7 +427,7 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
     {
         setpcmark();
         let count0 = LineNr::new(cmd_arg.count0);
-        win.w_cursor.lnum = count0.min(Buf::current().b_ml.ml_line_count);
+        win.w_cursor.lnum = count0.min(Buf::current().line_count());
         check_cursor_col(win);
     }
 
@@ -457,7 +451,7 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
                 // window rather than from the cursor.
                 if cmd_arg.count0 == 0 {
                     validate_botline_win(win);
-                    win.w_cursor.lnum = win.w_botline.min(Buf::current().b_ml.ml_line_count);
+                    win.w_cursor.lnum = win.w_botline.min(Buf::current().line_count());
                 }
                 Some((Place::Top, true))
             }

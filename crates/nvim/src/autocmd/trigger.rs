@@ -124,7 +124,7 @@ pub fn ex_doautoall(excmd: &mut ExArg) {
     // it, and the body stops the walk when that buffer was deleted.
     for buf in buffers() {
         // Loaded buffers only, and the current one is done last.
-        if buf.b_ml.ml_mfp.is_some() && buf.raw() != Buf::current_raw() {
+        if buf.ml().ml_mfp.is_some() && buf.raw() != Buf::current_raw() {
             aucmd_prepbuf(&mut aco, buf);
             let bufref = BufRef::of(buf);
 
@@ -173,7 +173,7 @@ pub fn aucmd_defer(
 ) {
     let fname = fname.map(XString::from_cstr);
     let fname_io = fname_io.map(XString::from_cstr);
-    let handle: BufferHandle = buffer.handle;
+    let handle: BufferHandle = buffer.handle();
     let data = data.cloned();
     put_job_in(
         &DEFERRED_EVENTS,
@@ -320,7 +320,7 @@ pub fn do_autocmd_focusgained(gained: bool) {
 /// A nested `FileType` only fires when `force` says so; the *inner* one
 /// then does not `force` the autocommands themselves, which is what the
 /// `FT_RECURSIVE == 1` test says.
-pub fn do_filetype_autocmd(mut buffer: Buf, force: bool) -> bool {
+pub fn do_filetype_autocmd(buffer: Buf, force: bool) -> bool {
     if FT_RECURSIVE.get() > 0 && !force {
         return false;
     }
@@ -329,11 +329,13 @@ pub fn do_filetype_autocmd(mut buffer: Buf, force: bool) -> bool {
     SECURE.set(0);
     let ft_recursing = Depth::of(FT_RECURSIVE);
 
-    buffer.b_did_filetype = true;
+    buffer.set_b_did_filetype(true);
+    let arg0 = Some(buffer.read().b_p_ft.get());
+    let arg1 = buffer.read().name.shown().map(XString::from_cstr);
     let ret = apply_autocmds(
         AutoEvent::FileType,
-        Some(buffer.b_p_ft.get()),
-        buffer.name.shown().map(XString::from_cstr),
+        arg0,
+        arg1,
         force || FT_RECURSIVE.get() == 1,
         Some(buffer),
     );

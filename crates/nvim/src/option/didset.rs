@@ -166,9 +166,9 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Result<(), OptError> {
             changed_window_setting(win);
         }
         // SAFETY: a live window's buffer is live.
-        let mut buf = win.buffer();
-        buf.b_p_iminsert = B_IMODE_NONE;
-        buf.b_p_imsearch = B_IMODE_USE_INSERT;
+        let buf = win.buffer();
+        buf.set_b_p_iminsert(B_IMODE_NONE);
+        buf.set_b_p_imsearch(B_IMODE_USE_INSERT);
         return Ok(());
     }
 
@@ -203,7 +203,7 @@ pub(crate) fn did_set_autochdir(_args: &mut OptSet) -> Result<(), OptError> {
 /// 'binary': override four text options for as long as it is on.
 pub(crate) fn did_set_binary(args: &mut OptSet) -> Result<(), OptError> {
     let f = Frame::read(args);
-    let bin = f.buf.b_p_bin != 0;
+    let bin = f.buf.b_p_bin() != 0;
     set_options_bin(f.old_boolean() == Some(true), bin, f.flags);
     redraw_titles();
     Ok(())
@@ -212,8 +212,8 @@ pub(crate) fn did_set_binary(args: &mut OptSet) -> Result<(), OptError> {
 /// 'buflisted': entering or leaving the buffer list is an event.
 pub(crate) fn did_set_buflisted(args: &mut OptSet) -> Result<(), OptError> {
     let f = Frame::read(args);
-    if f.old_boolean() != Some(f.buf.b_p_bl != 0) {
-        let event = if f.buf.b_p_bl != 0 {
+    if f.old_boolean() != Some(f.buf.b_p_bl() != 0) {
+        let event = if f.buf.b_p_bl() != 0 {
             AutoEvent::BufAdd
         } else {
             AutoEvent::BufDelete
@@ -291,7 +291,7 @@ pub(crate) fn did_set_foldnestmax(args: &mut OptSet) -> Result<(), OptError> {
 /// short.
 pub(crate) fn did_set_helpheight(_args: &mut OptSet) -> Result<(), OptError> {
     if FIRSTWIN.get() != LASTWIN.get()
-        && Buf::current().b_help
+        && Buf::current().b_help()
         && OptInt::from(Win::current().w_height) < p_hh()
     {
         win_setheight(number_as_int(p_hh()));
@@ -402,12 +402,12 @@ pub(crate) fn did_set_modifiable(_args: &mut OptSet) -> Result<(), OptError> {
 /// 'modified': clearing it makes the buffer's current file format the one it
 /// will be written back in.
 pub(crate) fn did_set_modified(args: &mut OptSet) -> Result<(), OptError> {
-    let mut f = Frame::read(args);
+    let f = Frame::read(args);
     if f.new_boolean() == Some(false) {
         save_file_ff(f.buf);
     }
     redraw_titles();
-    f.buf.b_modified_was_set = f.new_boolean() != Some(false);
+    f.buf.set_b_modified_was_set(f.new_boolean() != Some(false));
     Ok(())
 }
 
@@ -457,12 +457,12 @@ pub(crate) fn did_set_pumblend(_args: &mut OptSet) -> Result<(), OptError> {
 /// 'readonly': clearing it globally also clears the `-R` command-line flag,
 /// and setting it re-arms the "changing a readonly file" warning.
 pub(crate) fn did_set_readonly(args: &mut OptSet) -> Result<(), OptError> {
-    let mut f = Frame::read(args);
-    if f.buf.b_p_ro == 0 && !f.flags.has(OptionSetFlags::LOCAL) {
+    let f = Frame::read(args);
+    if f.buf.b_p_ro() == 0 && !f.flags.has(OptionSetFlags::LOCAL) {
         READONLYMODE.set(false);
     }
-    if f.buf.b_p_ro != 0 {
-        f.buf.b_did_warn = false;
+    if f.buf.b_p_ro() != 0 {
+        f.buf.set_b_did_warn(false);
     }
     redraw_titles();
     Ok(())
@@ -497,7 +497,7 @@ pub(crate) fn did_set_shiftwidth_tabstop(args: &mut OptSet) -> Result<(), OptErr
     // A zero 'shiftwidth' means "use 'tabstop'", so 'tabstop' feeds the
     // C indent options too.
     let own_sw = OptSlot::from(Local::Buf(f.buf, field!(Buffer, b_p_sw)));
-    if f.varp == own_sw || f.buf.b_p_sw == 0 {
+    if f.varp == own_sw || f.buf.b_p_sw() == 0 {
         parse_cino(f.buf);
     }
     Ok(())
@@ -530,7 +530,7 @@ pub(crate) fn did_set_spell(args: &mut OptSet) -> Result<(), OptError> {
 /// 'swapfile': open or close the buffer's swap file to match.
 pub(crate) fn did_set_swapfile(args: &mut OptSet) -> Result<(), OptError> {
     let buf = Frame::read(args).buf;
-    if buf.b_p_swf != 0 && p_uc() != 0 {
+    if buf.b_p_swf() != 0 && p_uc() != 0 {
         ml_open_file(buf);
     } else {
         mf_close_file(buf, true);
@@ -566,7 +566,7 @@ pub(crate) fn did_set_titlelen(args: &mut OptSet) -> Result<(), OptError> {
 /// buffer it now applies to.
 pub(crate) fn did_set_undofile(args: &mut OptSet) -> Result<(), OptError> {
     let f = Frame::read(args);
-    if f.buf.b_p_udf == 0 && !p_udf() {
+    if f.buf.b_p_udf() == 0 && !p_udf() {
         return Ok(());
     }
     let mut hash: [uint8_t; 32] = [0; 32];
@@ -574,9 +574,10 @@ pub(crate) fn did_set_undofile(args: &mut OptSet) -> Result<(), OptError> {
         // A `:setlocal` only reaches its own buffer; `:set` and
         // `:setglobal` reach all of them.
         let reaches = bp == f.buf || f.flags.has(OptionSetFlags::GLOBAL) || f.flags.is_empty();
-        if reaches && !buf_is_changed(bp) && bp.b_ml.ml_mfp.is_some() {
+        if reaches && !buf_is_changed(bp) && bp.ml().ml_mfp.is_some() {
             u_compute_hash(bp, &mut hash);
-            u_read_undo(None, &hash, bp.name.shown());
+            let arg = bp.read().name.shown().map(CStr::to_owned);
+            u_read_undo(None, &hash, arg.as_deref());
         }
     }
     Ok(())
@@ -585,16 +586,16 @@ pub(crate) fn did_set_undofile(args: &mut OptSet) -> Result<(), OptError> {
 /// 'undolevels': the pending change has to be closed off under the *old*
 /// limit before the new one takes effect.
 pub(crate) fn did_set_undolevels(args: &mut OptSet) -> Result<(), OptError> {
-    let mut f = Frame::read(args);
+    let f = Frame::read(args);
     let (value, old_value) = (f.new_number(), f.old_number());
     if f.varp == option_var(OPT_UNDOLEVELS) {
         P_UL.set(old_value);
         u_sync(true);
         P_UL.set(value);
     } else if f.varp == OptSlot::from(Local::Buf(f.buf, field!(Buffer, b_p_ul))) {
-        f.buf.b_p_ul = old_value;
+        f.buf.set_b_p_ul(old_value);
         u_sync(true);
-        f.buf.b_p_ul = value;
+        f.buf.set_b_p_ul(value);
     }
     Ok(())
 }
@@ -688,15 +689,17 @@ pub(crate) fn did_set_xhistory(args: &mut OptSet) -> Result<(), OptError> {
 ///
 /// The recursion counter is what lets a syntax file set 'syntax' again (to
 /// include another one) without the outer pass being treated as a no-op.
-pub(crate) fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
+pub(crate) fn do_syntax_autocmd(buffer: Buf, value_changed: bool) {
     static SYN_RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
     let _syn_recursive = Depth::of(&SYN_RECURSIVE);
-    buffer.b_flags |= BufFlags::SYN_SET;
+    buffer.set_b_flags(buffer.b_flags() | BufFlags::SYN_SET);
+    let arg0 = Some(buffer.read().b_p_syn.get());
+    let arg1 = buffer.read().name.shown().map(XString::from_cstr);
     fire_autocmds_for(
         AutoEvent::Syntax,
-        Some(buffer.b_p_syn.get()),
-        buffer.name.shown().map(XString::from_cstr),
+        arg0,
+        arg1,
         value_changed || SYN_RECURSIVE.get() == 1,
         Some(buffer),
         None,
@@ -709,7 +712,7 @@ pub(crate) fn do_syntax_autocmd(mut buffer: Buf, value_changed: bool) {
 /// hyphens of it — the rest of the value is regions and file names.
 pub(crate) fn do_spelllang_source(win: Win) {
     // A copy: sourcing runs user code, which may set 'spelllang' again.
-    let value = win.syntax().b_p_spl.get();
+    let value = win.syntax().read().b_p_spl.get();
     // "cjk" is a modifier, not a language.
     let rest = value.strip_prefix(b"cjk,".as_slice()).unwrap_or(&value);
     let name_len = rest

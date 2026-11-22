@@ -114,8 +114,8 @@ pub(crate) fn ex_listdo(excmd: &mut ExArg) {
     let mut save_ei = None;
     if list.changes_buffer() {
         save_ei = Some(au_event_disable(c",Syntax"));
-        for mut buf in buffers() {
-            buf.b_flags.clear(BufFlags::SYN_SET);
+        for buf in buffers() {
+            buf.edit().b_flags.clear(BufFlags::SYN_SET);
         }
     }
 
@@ -199,9 +199,9 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
         ListDo::Buffers => {
             // Advance to the first listed buffer after "eap->line1".
             let mut cur = first_buffer();
-            let unlisted = |b: &Buf| b.handle.get() < excmd.number1 || b.b_p_bl == 0;
+            let unlisted = |b: &Buf| b.handle().get() < excmd.number1 || b.b_p_bl() == 0;
             while let Some(b) = cur.filter(unlisted) {
-                if b.handle.get() > excmd.number2 {
+                if b.handle().get() > excmd.number2 {
                     cur = None;
                     break;
                 }
@@ -209,7 +209,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
             }
             buf = cur;
             if let Some(first) = buf {
-                goto_buffer(excmd, DOBUF_FIRST, FORWARD as c_int, first.handle.get());
+                goto_buffer(excmd, DOBUF_FIRST, FORWARD as c_int, first.handle().get());
             }
         }
         ListDo::Quickfix { .. } => {
@@ -279,8 +279,8 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                 // Remember the number of the next listed buffer, in case
                 // ":bwipe" is used or autocommands do something strange.
                 next_fnum = core::iter::successors(Buf::current().next(), |b| b.next())
-                    .find(|b| b.b_p_bl != 0)
-                    .map_or(-1, |b| b.handle.get());
+                    .find(|b| b.b_p_bl() != 0)
+                    .map_or(-1, |b| b.handle().get());
             }
             ListDo::Quickfix { .. } => {}
         }
@@ -299,12 +299,12 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                     break;
                 }
                 // Does the buffer still exist?
-                if !buffers().any(|bp| bp.handle == Handle::new(next_fnum)) {
+                if !buffers().any(|bp| bp.handle() == Handle::new(next_fnum)) {
                     break;
                 }
                 goto_buffer(excmd, DOBUF_FIRST, FORWARD as c_int, next_fnum);
                 // If autocommands took us elsewhere, quit here.
-                if Buf::current().handle != Handle::new(next_fnum) {
+                if Buf::current().handle() != Handle::new(next_fnum) {
                     break;
                 }
             }
@@ -357,14 +357,14 @@ fn restore_syntax_events(save_ei: Option<XString>) {
     au_event_restore(save_ei);
 
     let mut cur = first_buffer();
-    while let Some(mut buf) = cur {
+    while let Some(buf) = cur {
         let mut bnext = buf.next();
-        if buf.b_nwindows > 0 && buf.b_flags.has(BufFlags::SYN_SET) {
-            buf.b_flags.clear(BufFlags::SYN_SET);
+        if buf.b_nwindows() > 0 && buf.b_flags().has(BufFlags::SYN_SET) {
+            buf.edit().b_flags.clear(BufFlags::SYN_SET);
             // Read before the switch: the autocommands may change either.
             let (syn, name) = (
-                Some(buf.b_p_syn.get()),
-                buf.name.shown().map(XString::from_cstr),
+                Some(buf.read().b_p_syn.get()),
+                buf.read().name.shown().map(XString::from_cstr),
             );
             if buf.raw() == Buf::current_raw() {
                 let current = Buf::current_or_none();

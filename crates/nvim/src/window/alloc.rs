@@ -328,7 +328,7 @@ pub fn win_alloc_aucmd_win(idx: c_int) {
         .flatten()
         .expect("the autocommand window");
     set_aucmd_window(usize::try_from(idx).expect("a slot index"), win);
-    win.buffer().b_nwindows -= 1;
+    win.buffer().set_b_nwindows(win.buffer().b_nwindows() - 1);
     win.w_onebuf_opt.wo_scb = 0;
     win.w_onebuf_opt.wo_crb = 0;
 }
@@ -340,14 +340,14 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
         None => {
             // Very first window: make a new empty buffer for it.
             let buf = buflist_new(None, None, LineNr::ONE, BLN_LISTED);
-            let Some(mut buf) = buf else {
+            let Some(buf) = buf else {
                 leave_curbuf();
                 return Err(Failed);
             };
             buf.make_current();
             win.w_buffer = buf;
             win.w_s = buf.syntax_block();
-            buf.b_nwindows = 1;
+            buf.set_b_nwindows(1);
             win.w_alist = ArgListId::GLOBAL;
             curwin_init();
         }
@@ -535,8 +535,8 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
 /// two entries that would then have no window: only the first such entry is
 /// ever used again.
 fn forget_wininfo(buffer: Buf, window: Win) {
-    let mut buffer = buffer;
-    let infos = &mut buffer.b_wininfo;
+    let buffer = buffer;
+    let infos = &mut buffer.edit().b_wininfo;
     let len = infos.len();
     let mut pos_wip = len;
     let mut pos_null = len;

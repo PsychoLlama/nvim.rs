@@ -113,7 +113,7 @@ impl Table {
     pub(crate) fn with<R>(self, f: impl FnOnce(&[UserCmd]) -> R) -> R {
         match self {
             Table::Global => USER_COMMANDS.with(|cmds| f(cmds)),
-            Table::Buffer(buf) => f(&buf.b_ucmds),
+            Table::Buffer(buf) => f(&buf.read().b_ucmds),
         }
     }
 
@@ -126,7 +126,7 @@ impl Table {
     fn with_mut<R>(self, f: impl FnOnce(&mut Vec<UserCmd>) -> R) -> R {
         match self {
             Table::Global => USER_COMMANDS.with_mut(f),
-            Table::Buffer(mut buf) => f(&mut buf.b_ucmds),
+            Table::Buffer(buf) => f(&mut buf.edit().b_ucmds),
         }
     }
 }

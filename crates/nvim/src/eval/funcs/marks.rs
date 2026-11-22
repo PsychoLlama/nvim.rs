@@ -34,7 +34,7 @@ use core::ffi::c_int;
 
 /// `changenr()` — the sequence number of the change the undo tree is at.
 pub fn f_changenr(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(VarNumber::from(Buf::current().b_u_seq_cur));
+    result.write_number(VarNumber::from(Buf::current().b_u_seq_cur()));
 }
 
 /// One `{lnum, col, coladd}` entry, for the caller to add to and push.
@@ -62,7 +62,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     let Some(buf) = buf else {
         return;
     };
-    let entries = tv_list_alloc(buf.b_changelistlen as isize);
+    let entries = tv_list_alloc(buf.b_changelistlen() as isize);
     out.push_list(Some(entries.clone()));
 
     // The index is this window's if it is showing the buffer, and
@@ -73,16 +73,17 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         Win::current().w_changelistidx
     } else {
         let here = Win::current_or_none().map(Win::id);
-        let changelistlen = buf.b_changelistlen;
-        buf.b_wininfo
+        let changelistlen = buf.b_changelistlen();
+        buf.read()
+            .b_wininfo
             .iter()
             .find(|entry| entry.wi_win == here)
             .map_or(changelistlen, |entry| entry.wi_changelistidx)
     };
     out.push_number(VarNumber::from(index));
 
-    for i in 0..buf.b_changelistlen {
-        let mark = buf.b_changelist[as_index(i)].mark;
+    for i in 0..buf.b_changelistlen() {
+        let mark = buf.read().b_changelist[as_index(i)].mark;
         if mark.lnum != LineNr::ZERO {
             entries.edit().push_dict(Some(mark_dict(mark)));
         }

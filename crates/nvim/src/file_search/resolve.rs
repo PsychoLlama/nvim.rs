@@ -40,7 +40,7 @@ pub(crate) fn find_nth_file_in_path(
 ) -> Option<XString> {
     let mut walk = PathWalk::new();
     // A copy: the search can run user code, which may rename the buffer.
-    let rel_fname = Buf::current().name.full().map(XString::from_cstr);
+    let rel_fname = Buf::current().read().name.full().map(XString::from_cstr);
     let rel_fname = rel_fname.as_ref().map(XString::as_cstr);
     let mut found = find_file_in_path(&mut walk, name, options, rel_fname);
     let mut n = nth;
@@ -66,7 +66,7 @@ pub(crate) fn find_file_in_path(
     options: FileNameOpts,
     rel_fname: Option<&CStr>,
 ) -> Option<XString> {
-    let suffixes = Buf::current().b_p_sua.get();
+    let suffixes = Buf::current().read().b_p_sua.get();
     walk.start(
         name,
         options,

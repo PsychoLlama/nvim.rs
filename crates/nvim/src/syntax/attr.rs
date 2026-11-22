@@ -99,12 +99,12 @@ impl SynState {
         if let Some(can_spell) = can_spell.as_deref_mut() {
             *can_spell = default_can_spell(block);
         }
-        if !block.b_sst.is_allocated() {
+        if !block.read().b_sst.is_allocated() {
             return 0; // out of memory
         }
 
         // After 'synmaxcol' the attribute is always zero.
-        let synmaxcol = self.buffer.b_p_smc;
+        let synmaxcol = self.buffer.b_p_smc();
         if synmaxcol > 0 && col >= number_as_col(synmaxcol) {
             self.clear_current_state();
             self.current.id = 0;
@@ -170,8 +170,8 @@ impl SynState {
         }
 
         // Only check for keywords when not syncing and there are some.
-        let do_keywords =
-            !syncing && (!block.b_keywtab.is_empty() || !block.b_keywtab_ic.is_empty());
+        let do_keywords = !syncing
+            && (!block.read().b_keywtab.is_empty() || !block.read().b_keywtab_ic.is_empty());
 
         // Zero-width matches with a nextlist already used here, so the same
         // one cannot match twice in this column and loop forever.
@@ -196,7 +196,7 @@ impl SynState {
             //    and patterns. Always look for contained items when some item
             //    has a `containedin=` (which costs extra time).
             cur_si = (self.state_len() != 0).then(|| self.top());
-            if block.b_syn_containedin != 0
+            if block.read().b_syn_containedin != 0
                 || cur_si.is_none_or(|si| !self.item(si).si_cont_list.is_none())
             {
                 // 2. A keyword, if we are on a keyword character after a
@@ -207,7 +207,7 @@ impl SynState {
                 }
 
                 // 3. A pattern, only if no keyword was found.
-                if !found_keyword && !block.patterns().is_empty() {
+                if !found_keyword && !block.read().patterns().is_empty() {
                     // If we have not looked yet, or we are past what we
                     // found, look for a match with any pattern.
                     if self.next_match.idx < 0 || self.next_match.col < self.col {
@@ -215,7 +215,8 @@ impl SynState {
                     }
                     // If we found a match at the current column, use it.
                     if self.next_match.idx >= 0 && self.next_match.col == self.col {
-                        let lspp = block.pattern(self.next_match.idx);
+                        let held = block.read();
+                        let lspp = held.pattern(self.next_match.idx);
                         if self.next_match.m_endpos.lnum == self.lnum
                             && self.next_match.m_endpos.col == self.col
                             && !lspp.sp_next_list.is_none()
@@ -232,6 +233,7 @@ impl SynState {
                         } else {
                             cur_si = Some(self.push_next_match());
                         }
+                        drop(held);
                         found_match = true;
                     }
                 }
@@ -382,11 +384,11 @@ impl SynState {
         cur_si: Option<c_int>,
         zero_width: &[c_int],
     ) {
-        let mut block = self.block();
+        let block = self.block();
         self.next_match.idx = 0; // no match in this line yet
         self.next_match.col = ColNr::MAX;
 
-        let mut idx = count_as_int(block.patterns().len());
+        let mut idx = count_as_int(block.read().patterns().len());
         while idx > 0 {
             idx -= 1;
             // Everything the loop needs is copied out first: `find_endpos`
@@ -401,13 +403,13 @@ impl SynState {
             if scan.line_id == self.line_id && scan.startcol >= self.next_match.col.get() {
                 continue;
             }
-            block.pattern_mut(idx).sp_line_id = self.line_id;
+            block.edit().pattern_mut(idx).sp_line_id = self.line_id;
 
             let lc_col = (self.col - scan.offsets.offsets[SPO_LC_OFF as usize]).max(ColNr::ZERO);
             let (matched, regmatch, captures) = self.run_pattern(idx, self.lnum, lc_col, None);
             if !matched {
                 // No match in this line; try another pattern.
-                block.pattern_mut(idx).sp_startcol = ColNr::MAX;
+                block.edit().pattern_mut(idx).sp_startcol = ColNr::MAX;
                 continue;
             }
 
@@ -416,13 +418,13 @@ impl SynState {
             if pos.lnum > self.lnum {
                 // Must have used the end of the match in a following line,
                 // which we cannot handle.
-                block.pattern_mut(idx).sp_startcol = ColNr::MAX;
+                block.edit().pattern_mut(idx).sp_startcol = ColNr::MAX;
                 continue;
             }
             let startcol = pos.col;
             // Remember the next column where this pattern matches in this
             // line.
-            block.pattern_mut(idx).sp_startcol = startcol;
+            block.edit().pattern_mut(idx).sp_startcol = startcol;
             // A previously found match starts earlier: keep that one.
             if startcol >= self.next_match.col {
                 continue;
@@ -526,7 +528,8 @@ impl SynState {
             return false;
         }
         let block = self.block();
-        let cont_in = &block.pattern(idx).sp_cont_in_list;
+        let held = block.read();
+        let cont_in = &held.pattern(idx).sp_cont_in_list;
         if !self.next_list.is_none() {
             // A pending `nextgroup=` admits only what it names.
             self.in_id_list(None, &self.next_list, spp.syn, cont_in, SynFlags::NONE)
@@ -594,25 +597,25 @@ impl SynState {
         let no_cont_in = &IdList::NONE;
         let contains = &self.item(sip).si_cont_list;
         let trans_id = self.current.trans_id;
-        if block.b_spell_cluster_id == 0 {
+        if block.read().b_spell_cluster_id == 0 {
             // There is no @Spell cluster: spell check items without a
             // @NoSpell cluster.
-            if block.b_nospell_cluster_id == 0 || trans_id == 0 {
-                return block.b_syn_spell != SYNSPL_NOTOP;
+            if block.read().b_nospell_cluster_id == 0 || trans_id == 0 {
+                return block.read().b_syn_spell != SYNSPL_NOTOP;
             }
-            sps.id = id16(block.b_nospell_cluster_id);
+            sps.id = id16(block.read().b_nospell_cluster_id);
             return !self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE);
         }
         // The @Spell cluster is defined: spell check in items carrying it,
         // but not when @NoSpell is there too. At the top level only spell
         // check when `:syntax spell toplevel` was used.
         if trans_id == 0 {
-            return block.b_syn_spell == SYNSPL_TOP;
+            return block.read().b_syn_spell == SYNSPL_TOP;
         }
-        sps.id = id16(block.b_spell_cluster_id);
+        sps.id = id16(block.read().b_spell_cluster_id);
         let mut can = self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE);
-        if block.b_nospell_cluster_id != 0 {
-            sps.id = id16(block.b_nospell_cluster_id);
+        if block.read().b_nospell_cluster_id != 0 {
+            sps.id = id16(block.read().b_nospell_cluster_id);
             if self.in_id_list(Some(sip), contains, sps, no_cont_in, SynFlags::NONE) {
                 can = false;
             }
@@ -648,10 +651,10 @@ fn word_char_at(line: &[u8], at: usize, buffer: Buf) -> bool {
 /// Whether spell checking is done outside every syntax item: only when there
 /// is no `@Spell` cluster, or when `:syntax spell toplevel` was used.
 fn default_can_spell(block: SynBlockRef) -> bool {
-    if block.b_syn_spell == SYNSPL_DEFAULT {
-        block.b_spell_cluster_id == 0
+    if block.read().b_syn_spell == SYNSPL_DEFAULT {
+        block.read().b_spell_cluster_id == 0
     } else {
-        block.b_syn_spell == SYNSPL_TOP
+        block.read().b_syn_spell == SYNSPL_TOP
     }
 }
 
@@ -672,7 +675,8 @@ struct PatScan {
 
 impl PatScan {
     fn of(block: SynBlockRef, idx: c_int) -> PatScan {
-        let spp = block.pattern(idx);
+        let held = block.read();
+        let spp = held.pattern(idx);
         PatScan {
             syncing: spp.sp_syncing,
             flags: spp.sp_flags,

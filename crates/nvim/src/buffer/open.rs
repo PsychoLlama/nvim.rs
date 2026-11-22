@@ -87,8 +87,8 @@ fn read_file(
 /// them while the reader holds what it was given.
 fn names_of(buffer: Buf) -> (Option<CString>, Option<CString>) {
     (
-        buffer.name.full().map(CStr::to_owned),
-        buffer.name.shown().map(CStr::to_owned),
+        buffer.read().name.full().map(CStr::to_owned),
+        buffer.read().name.shown().map(CStr::to_owned),
     )
 }
 
@@ -173,7 +173,7 @@ impl Buf {
     /// buffer's embedded NULs translated back from newlines. Line `start` is
     /// read even when it is past `end`.
     pub fn read_into(self, start: LineNr, end: LineNr, out: &mut Vec<u8>) {
-        if self.b_ml.ml_flags.has(MlFlags::EMPTY) {
+        if self.ml_flags().has(MlFlags::EMPTY) {
             return;
         }
         let mut lines = self.lines();
@@ -184,8 +184,9 @@ impl Buf {
             out.extend(line.iter().map(|&b| if b == b'\n' { b'\0' } else { b }));
             // Finished a line, add a NL, unless this line should not have one.
             if lnum != end
-                || self.b_p_bin == 0 && self.b_p_fixeol != 0
-                || lnum != self.b_no_eol_lnum && (lnum != self.line_count() || self.b_p_eol != 0)
+                || self.b_p_bin() == 0 && self.b_p_fixeol() != 0
+                || lnum != self.b_no_eol_lnum()
+                    && (lnum != self.line_count() || self.b_p_eol() != 0)
             {
                 out.push(b'\n');
             }
@@ -281,7 +282,7 @@ fn read_buffer(
 /// Ensure buffer `buffer` is loaded.
 ///
 pub fn buf_ensure_loaded(buffer: Buf) -> bool {
-    if buffer.b_ml.ml_mfp.is_some() {
+    if buffer.ml().ml_mfp.is_some() {
         // already open (common case)
         return true;
     }
@@ -311,16 +312,19 @@ fn open_buffer_inner(
 ) -> Result<Loaded, Failed> {
     let mut flags = flags_arg;
     let mut retval = Ok(Loaded::Read);
-    let old_tw: OptInt = Buf::current().b_p_tw;
+    let old_tw: OptInt = Buf::current().b_p_tw();
     let mut read_fifo = false;
     let silent = shortmess(ShmFlag::FILEINFO);
 
     // The 'readonly' flag is only set when BufFlags::NEVERLOADED is being reset.
     // When re-entering the same buffer, it should not change, because the
     // user may have reset the flag by hand.
-    let mut buf = Buf::current();
-    if READONLYMODE.get() && !buf.name.full().is_none() && buf.b_flags.has(BufFlags::NEVERLOADED) {
-        buf.b_p_ro = 1;
+    let buf = Buf::current();
+    if READONLYMODE.get()
+        && !buf.read().name.full().is_none()
+        && buf.b_flags().has(BufFlags::NEVERLOADED)
+    {
+        buf.set_b_p_ro(1);
     }
 
     if open_memline(buf).is_err() {
@@ -333,7 +337,7 @@ fn open_buffer_inner(
     // The autocommands in readfile() may change the buffer, but only AFTER
     // reading the file.
     let old_curbuf = BufRef::of(buf);
-    buf.b_modified_was_set = false;
+    buf.set_b_modified_was_set(false);
 
     // mark cursor position as being invalid
     Win::current().w_valid = WinValid::NONE;
@@ -345,9 +349,9 @@ fn open_buffer_inner(
     }
 
     // Read the file if there is one.
-    if !buf.name.full().is_none() {
-        let save_bin = buf.b_p_bin;
-        let perm = buf.name.full().map_or(-1, getperm);
+    if !buf.read().name.full().is_none() {
+        let save_bin = buf.b_p_bin();
+        let perm = buf.read().name.full().map_or(-1, getperm);
         // `S_ISFIFO(perm) || S_ISSOCK(perm)`; the literals stay literals so
         // that ffigen does not export them as new C declarations.
         if perm >= 0
@@ -357,7 +361,7 @@ fn open_buffer_inner(
             read_fifo = true;
         }
         if read_fifo {
-            buf.b_p_bin = 1;
+            buf.set_b_p_bin(1);
         }
         let fifo = ReadFlags::FIFO.when(read_fifo);
         let ((ffname, fname), last) = (names_of(buf), MAXLNUM);
@@ -373,7 +377,7 @@ fn open_buffer_inner(
             silent,
         );
         if read_fifo {
-            Buf::current().b_p_bin = save_bin;
+            Buf::current().set_b_p_bin(save_bin);
             if retval == Ok(Loaded::Read) {
                 // don't add READ_FIFO here, otherwise we won't be able to
                 // detect the encoding
@@ -385,12 +389,12 @@ fn open_buffer_inner(
             collect_local_additions();
         }
     } else if read_stdin {
-        let save_bin = buf.b_p_bin;
+        let save_bin = buf.b_p_bin();
 
         // First read the text in binary mode into the buffer.  Then read from
         // that same buffer and append at the end.  This makes it possible to
         // retry when 'fileformat' or 'fileencoding' was guessed wrong.
-        buf.b_p_bin = 1;
+        buf.set_b_p_bin(1);
         let read = flags | ReadFlags::NEW | ReadFlags::STDIN;
         retval = read_file(
             None,
@@ -402,7 +406,7 @@ fn open_buffer_inner(
             read,
             silent,
         );
-        Buf::current().b_p_bin = save_bin;
+        Buf::current().set_b_p_bin(save_bin);
         if retval == Ok(Loaded::Read) {
             retval = read_buffer(true, excmd, flags);
         }
@@ -415,7 +419,7 @@ fn open_buffer_inner(
     }
 
     // if first time loading this buffer, init b_chartab[]
-    if buf.b_flags.has(BufFlags::NEVERLOADED) {
+    if buf.b_flags().has(BufFlags::NEVERLOADED) {
         init_chartab(buf);
         parse_cindent_options(buf);
     }
@@ -428,7 +432,7 @@ fn open_buffer_inner(
     // changed flag.  Unless in readonly mode: "ls | nvim -R -".  When
     // interrupted and 'cpoptions' contains 'i' set changed flag.
     if GOT_INT.get() && cpo_has(CpoFlag::INTMOD)
-        || buf.b_modified_was_set
+        || buf.b_modified_was_set()
         || aborting_now() && cpo_has(CpoFlag::INTMOD)
     {
         set_changed(buf);
@@ -442,15 +446,15 @@ fn open_buffer_inner(
 
     // Set last_changedtick to avoid triggering a TextChanged autocommand right
     // after it was added.
-    let mut buf = Buf::current();
+    let buf = Buf::current();
     let tick = changedtick(buf);
-    buf.b_last_changedtick = tick;
-    buf.b_last_changedtick_i = tick;
-    buf.b_last_changedtick_pum = tick;
+    buf.set_b_last_changedtick(tick);
+    buf.set_b_last_changedtick_i(tick);
+    buf.set_b_last_changedtick_pum(tick);
 
     // require "!" to overwrite the file, because it wasn't read completely
     if aborting_now() {
-        Buf::current().b_flags |= BufFlags::READERR;
+        Buf::current().set_b_flags(Buf::current().b_flags() | BufFlags::READERR);
     }
 
     // Need to update automatic folding.  Do this before the autocommands, they
@@ -468,13 +472,14 @@ fn open_buffer_inner(
 
     // The autocommands may have changed the current buffer.  Apply the
     // modelines to the correct buffer, if it still exists and is loaded.
-    let Some(old) = old_curbuf.get().filter(|b| b.b_ml.ml_mfp.is_some()) else {
+    let Some(old) = old_curbuf.get().filter(|b| b.ml().ml_mfp.is_some()) else {
         return retval;
     };
     // Go to the buffer that was opened, make sure it is in a window.
     old.run_in(|| {
         do_modelines(OptionSetFlags::NONE);
         Buf::current()
+            .edit()
             .b_flags
             .clear(BufFlags::CHECK_RO | BufFlags::NEVERLOADED);
 
@@ -491,7 +496,7 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
     close_buffer(None, Buf::current(), 0, false, false);
 
     leave_curbuf();
-    if let Some(buf) = buffers().find(|b| b.b_ml.ml_mfp.is_some()) {
+    if let Some(buf) = buffers().find(|b| b.ml().ml_mfp.is_some()) {
         buf.make_current();
     }
 
@@ -507,7 +512,7 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
 
     err(c"E83: Cannot allocate buffer, using other one...");
     enter_buffer(Buf::current());
-    if old_tw != Buf::current().b_p_tw {
+    if old_tw != Buf::current().b_p_tw() {
         recheck_colorcolumn(Win::current());
     }
     Err(Failed)

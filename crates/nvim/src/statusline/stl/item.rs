@@ -588,14 +588,14 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
                     s.push(Kind::Separate, pos);
                 }
             } else if !env.is_statuscol() {
-                v.num = if env.buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
+                v.num = if env.buf.ml_flags().has(MlFlags::EMPTY) {
                     0
                 } else {
                     env.win.w_cursor.lnum.get()
                 };
             }
         }
-        StlOpt::NumLines => v.num = env.buf.b_ml.ml_line_count.get(),
+        StlOpt::NumLines => v.num = env.buf.line_count().get(),
         StlOpt::Column => {
             v.num = if !in_insert_mode() && env.empty_line {
                 0
@@ -629,14 +629,14 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
         }
         // The page number, which only printing ever sets.
         StlOpt::PageNum => v.num = 0,
-        StlOpt::BufNo => v.num = env.buf.handle.get(),
+        StlOpt::BufNo => v.num = env.buf.handle().get(),
         StlOpt::Offset | StlOpt::OffsetX => {
             if opt == StlOpt::OffsetX {
                 v.base = NUM_BASE_HEXADECIMAL;
             }
             let offset = env.line_offset().filter(|&l| l >= 0);
             v.num = match offset {
-                Some(l) if !env.buf.b_ml.ml_flags.has(MlFlags::EMPTY) => {
+                Some(l) if !env.buf.ml_flags().has(MlFlags::EMPTY) => {
                     l + 1
                         + if !in_insert_mode() && env.empty_line {
                             0
@@ -655,7 +655,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
         }
         StlOpt::RoFlag | StlOpt::RoFlagAlt => {
             v.itemisflag = true;
-            if env.buf.b_p_ro != 0 {
+            if env.buf.b_p_ro() != 0 {
                 if opt == StlOpt::RoFlagAlt {
                     text.extend_from_slice(b",RO");
                 } else {
@@ -665,7 +665,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
         }
         StlOpt::HelpFlag | StlOpt::HelpFlagAlt => {
             v.itemisflag = true;
-            if env.buf.b_help {
+            if env.buf.b_help() {
                 if opt == StlOpt::HelpFlagAlt {
                     text.extend_from_slice(b",HLP");
                 } else {
@@ -712,7 +712,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
             v.itemisflag = true;
             let alt = c_int::from(opt == StlOpt::ModifiedAlt);
             let modified = c_int::from(env.is_changed()) * 2;
-            let readonly = c_int::from(env.buf.b_p_ma == 0) * 4;
+            let readonly = c_int::from(env.buf.b_p_ma() == 0) * 4;
             let flag: &[u8] = match alt + modified + readonly {
                 2 => b"[+]",
                 3 => b",+",

@@ -144,7 +144,7 @@ fn buffer_patterns(opts: &Opts, has_buf: bool) -> Result<Array, Error> {
     };
     let buflocal = |handle: Integer| -> Result<Object, Error> {
         let b = find_buffer_by_handle(handle_arg(c"buffer", handle)?)?;
-        let pat = format!("<buffer={}>", b.map_or(Handle::NONE, |b| b.handle));
+        let pat = format!("<buffer={}>", b.map_or(Handle::NONE, |b| b.handle()));
         Ok(Object::string(ApiString::from_bytes(pat.as_bytes())))
     };
     if let Object::Integer(handle) | Object::Buffer(handle) = given {

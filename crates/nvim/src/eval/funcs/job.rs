@@ -490,14 +490,14 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             text_locked_msg();
             return;
         }
-        if Buf::current().b_changed != 0 {
+        if Buf::current().b_changed() != 0 {
             let msg = c"jobstart(...,{term=true}) requires unmodified buffer";
             emsg(gettext(msg));
             return;
         }
-        if !Buf::current().terminal.is_null() {
+        if !Buf::current().terminal().is_null() {
             if buf_terminal_running(Buf::current()) {
-                let handle = Buf::current().handle;
+                let handle = Buf::current().handle();
                 semsg!("Terminal already connected to buffer {}", handle);
                 return;
             }
@@ -561,9 +561,9 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// Give `{term: v:true}` job channel `id` the current buffer.
 fn attach_terminal(id: uint64_t, cwd: &CStr, cmd: &CStr) {
     let pid = with_job(id, |job| job.proc().pid).unwrap_or(0);
-    let mut buf = Buf::current();
-    buf.b_p_swf = 0;
-    if buf.b_ml.ml_mfp.is_none() && ml_open(buf).is_err() {
+    let buf = Buf::current();
+    buf.set_b_p_swf(0);
+    if buf.ml().ml_mfp.is_none() && ml_open(buf).is_err() {
         with_job(id, JobProc::stop);
         channel_decref(id);
         return;
@@ -605,10 +605,10 @@ fn attach_terminal(id: uint64_t, cwd: &CStr, cmd: &CStr) {
         if terminal_live(id) {
             // Locked so that the two variables cannot be swapped out
             // from under the terminal by a BufFilePost autocommand.
-            buf.b_locked += 1;
+            buf.set_b_locked(buf.b_locked() + 1);
             set_buf_var(buf, c"terminal_job_id", id.cast_signed());
             set_buf_var(buf, c"terminal_job_pid", Integer::from(pid));
-            buf.b_locked -= 1;
+            buf.set_b_locked(buf.b_locked() - 1);
 
             if let Some(term) = live_terminal(id) {
                 terminal_open(term, buf, &|| terminal_live(id));
@@ -635,7 +635,7 @@ fn terminal_live(id: uint64_t) -> bool {
 /// Set one buffer-local variable to an Integer, discarding any refusal.
 fn set_buf_var(buffer: Buf, name: &CStr, value: Integer) {
     let value = Object::Integer(value);
-    let vars = scope_vars(&buffer.b_bufvar);
+    let vars = scope_vars(&buffer.read().b_bufvar);
     let name = ApiString::from_cstr(name);
     drop(dict_set_var(&vars, &name, value, false, false));
 }

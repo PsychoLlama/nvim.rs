@@ -85,7 +85,7 @@ pub(super) fn switch_to_other_buffer(
 
     if !flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) {
         if !cmdmod_has(CmdModFlags::KEEPALT) {
-            Win::current().w_alt_fnum = Some(Buf::current().handle);
+            Win::current().w_alt_fnum = Some(Buf::current().handle());
         }
         if let Some(old) = oldwin.and_then(WinId::get) {
             buflist_altfpos(old);
@@ -113,7 +113,7 @@ pub(super) fn switch_to_other_buffer(
             BLN_LISTED | BLN_NOCURWIN,
         );
         if let Some(newbuf) = newbuf.filter(|_| flags.has(EcmdFlags::ALTBUF)) {
-            Win::current().w_alt_fnum = Some(newbuf.handle);
+            Win::current().w_alt_fnum = Some(newbuf.handle());
         }
         return Switch::Abandon;
     } else {
@@ -141,25 +141,27 @@ pub(super) fn switch_to_other_buffer(
     };
     // Autocommands try to edit a closing buffer, which -- like splitting --
     // can result in more windows displaying it; abort.
-    if buffer.b_locked_split != 0 {
+    if buffer.b_locked_split() != 0 {
         // The window was split, but is not editing the new buffer; reset
         // b_nwindows again.
         if oldwin.is_none()
             && !Win::current().w_buffer.is_null()
-            && Win::current().w_buffer.b_nwindows > 1
+            && Win::current().w_buffer.b_nwindows() > 1
         {
-            Win::current().w_buffer.b_nwindows -= 1;
+            Win::current()
+                .w_buffer
+                .set_b_nwindows(Win::current().w_buffer.b_nwindows() - 1);
         }
         emsg(gettext(E_CANNOT_SWITCH_TO_A_CLOSING_BUFFER));
         return Switch::Abandon;
     }
 
-    if Win::current().w_alt_fnum == Some(buffer.handle) && prev_alt_fnum.is_some() {
+    if Win::current().w_alt_fnum == Some(buffer.handle()) && prev_alt_fnum.is_some() {
         // reusing the buffer, keep the old alternate file
         Win::current().w_alt_fnum = prev_alt_fnum;
     }
 
-    if buffer.b_ml.ml_mfp.is_none() {
+    if buffer.ml().ml_mfp.is_none() {
         // No memfile yet.
         state.oldbuf = false;
     } else {
@@ -200,7 +202,7 @@ pub(super) fn switch_to_other_buffer(
 /// Fire BufLeave for the buffer being left, close it if it is no longer
 /// wanted, and make `buffer` the current window's.
 fn leave_for_buffer(
-    mut buffer: Buf,
+    buffer: Buf,
     args: &mut EcmdArgs<'_, '_>,
     oldwin: Option<WinId>,
     old_curbuf: &mut BufRef,
@@ -231,7 +233,7 @@ fn leave_for_buffer(
     // The buffer's name, kept for the message an autocommand that deletes it
     // earns.  Upstream `xstrdup`s it and frees it at five exits and inside
     // `delbuf_msg`; owning it is one `Drop`.
-    let new_name: Option<CString> = buffer.name.shown().map(CStr::to_owned);
+    let new_name: Option<CString> = buffer.read().name.shown().map(CStr::to_owned);
     let save_au_new_curbuf = AU_NEW_CURBUF.get();
     AU_NEW_CURBUF.set(BufRef::of(buffer).record());
     buf_autocmd(AutoEvent::BufLeave, Buf::current());
@@ -265,7 +267,7 @@ fn leave_for_buffer(
     // Set w_locked to avoid that autocommands close the window.  Set
     // b_locked for the same reason.
     Win::current().w_locked = true;
-    buffer.b_locked += 1;
+    buffer.set_b_locked(buffer.b_locked() + 1);
 
     if old_curbuf.is(Buf::current_or_none()) {
         buf_copy_options(buffer, BCO_ENTER);
@@ -285,7 +287,7 @@ fn leave_for_buffer(
     if let Some(mut win) = valid_win(the_curwin) {
         win.w_locked = false;
     }
-    buffer.b_locked -= 1;
+    buffer.set_b_locked(buffer.b_locked() - 1);
 
     // autocmds may abort script processing
     if aborting() && !Win::current().w_buffer.is_null() {
@@ -308,9 +310,9 @@ fn leave_for_buffer(
         // window count, increment it again here and restore w_buffer.
         if did_decrement
             && buf_valid(was_curbuf)
-            && let Some(mut buf) = was_curbuf.get()
+            && let Some(buf) = was_curbuf.get()
         {
-            buf.b_nwindows += 1;
+            buf.set_b_nwindows(buf.b_nwindows() + 1);
         }
         if let Some(mut old) = oldwin
             .filter(|&w| win_valid_any_tab(w))
@@ -332,7 +334,7 @@ fn leave_for_buffer(
 
         Win::current().w_buffer = buffer;
         buffer.make_current();
-        Buf::current().b_nwindows += 1;
+        Buf::current().set_b_nwindows(Buf::current().b_nwindows() + 1);
 
         // Set 'fileformat', 'binary' and 'fenc' when forced.
         if !state.oldbuf

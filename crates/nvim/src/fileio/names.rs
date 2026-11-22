@@ -35,26 +35,30 @@ use crate::regexp::{OwnedProg, RE_MAGIC};
 use crate::winlayer::buffers;
 
 /// Shorten `buffer`'s displayed file name to be relative to `dirname`.
-pub fn shorten_buf_fname(mut buffer: Buf, dirname: &[u8], force: bool) {
-    if buffer.name.is_unnamed()
+pub fn shorten_buf_fname(buffer: Buf, dirname: &[u8], force: bool) {
+    if buffer.read().name.is_unnamed()
         || buf_is_nofilename(Some(buffer))
         || buffer
+            .read()
             .name
             .shown()
             .is_some_and(|shown| path_with_url(shown) != 0)
-        || !(force || buffer.name.short().is_none_or(path_is_absolute))
+        || !(force || buffer.read().name.short().is_none_or(path_is_absolute))
     {
         return;
     }
-    buffer.name.drop_own_short();
-    let short = buffer
+    buffer.edit().name.drop_own_short();
+    let held = buffer.read();
+    let short = held
         .name
         .full()
-        .and_then(|full| path_shorten_fname(full, dirname));
-    match short.map(XString::from_cstr) {
+        .and_then(|full| path_shorten_fname(full, dirname))
+        .map(XString::from_cstr);
+    drop(held);
+    match short {
         // The one place in the tree that shows the *full* name.
-        None => buffer.name.show_full(),
-        Some(short) => buffer.name.set_short(Some(short)),
+        None => buffer.edit().name.show_full(),
+        Some(short) => buffer.edit().name.set_short(Some(short)),
     }
 }
 

@@ -46,7 +46,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     if !buf_is_prompt(Some(buf)) {
         return;
     }
-    let lnum: LineNr = (buf.b_prompt_start.mark.lnum - 1).max(LineNr::ZERO);
+    let lnum: LineNr = (buf.read().b_prompt_start.mark.lnum - 1).max(LineNr::ZERO);
     // A String argument that is glued onto the prompt line is replaced by
     // the joined text, which this local owns; a List argument is joined in
     // place, in the caller's own list.
@@ -54,7 +54,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
     let mut lines = &args[1];
     let list = lines.list_handle();
     let mut did_concat = false;
-    if !buf.b_prompt_append_new_line {
+    if !buf.b_prompt_append_new_line() {
         // The text so far on the prompt's last line, which the first item
         // of the new text is glued onto.
         let text = if lnum > LineNr::ZERO {
@@ -93,13 +93,13 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
                 set_buffer_lines(Some(buf), lnum, true, lines, result);
             }
         } else {
-            let fresh = buf.b_prompt_append_new_line;
+            let fresh = buf.b_prompt_append_new_line();
             set_buffer_lines(Some(buf), lnum, fresh, lines, result);
         }
     }
     if result.number_or_zero() == 0 {
-        let mut buf = buf;
-        buf.b_prompt_append_new_line = if lines.v_type() == VAR_LIST {
+        let buf = buf;
+        let value = if lines.v_type() == VAR_LIST {
             match list_items(lines.list_ref().as_deref()).last() {
                 Some(last) => ends_in_newline(numbuf3.bytes(&last.li_tv)),
                 None => false,
@@ -107,6 +107,7 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         } else {
             lines.v_type() == VAR_STRING && ends_in_newline(numbuf4.bytes(lines))
         };
+        buf.edit().b_prompt_append_new_line = value;
     }
 }
 
@@ -137,15 +138,15 @@ fn set_prompt_callback(args: &[TypVal], slot: PromptSlot) {
     if check_secure() {
         return;
     }
-    let Some(mut buf) = tv_get_buf(&args[0], 0) else {
+    let Some(buf) = tv_get_buf(&args[0], 0) else {
         return;
     };
     if callback_from_typval(&mut callback, &args[1]).is_err() {
         return;
     }
     let slot = match slot {
-        PromptSlot::Callback => &mut buf.b_prompt_callback,
-        PromptSlot::Interrupt => &mut buf.b_prompt_interrupt,
+        PromptSlot::Callback => &mut buf.edit().b_prompt_callback,
+        PromptSlot::Interrupt => &mut buf.edit().b_prompt_interrupt,
     };
     callback_free(slot);
     *slot = callback;
@@ -162,43 +163,45 @@ pub fn f_prompt_setprompt(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFunc
     if check_secure() {
         return;
     }
-    let Some(mut buf) = tv_get_buf(&args[0], 0) else {
+    let Some(buf) = tv_get_buf(&args[0], 0) else {
         return;
     };
     let new_prompt = ThinCString::from_cstr(numbuf.string(&args[1]));
     let new_prompt_len = len_as_int(new_prompt.as_bytes().len());
-    if buf_is_prompt(Some(buf)) && buf.b_ml.ml_mfp.is_some() {
+    if buf_is_prompt(Some(buf)) && buf.ml().ml_mfp.is_some() {
         rewrite_prompt_line(buf, new_prompt.as_bytes());
     }
     set_buf_prompt_text(buf, new_prompt);
-    buf.b_prompt_start.mark.col = ColNr::new(new_prompt_len);
+    buf.edit().b_prompt_start.mark.col = ColNr::new(new_prompt_len);
 }
 
 /// Put `new_prompt` in place of the old one on the buffer's prompt line;
 /// `buffer` is a loaded prompt buffer.
-fn rewrite_prompt_line(mut buffer: Buf, new_prompt: &[u8]) {
-    if buffer.b_prompt_start.mark.lnum < LineNr::ONE
-        || buffer.b_prompt_start.mark.lnum > Buf::current().line_count()
+fn rewrite_prompt_line(buffer: Buf, new_prompt: &[u8]) {
+    if buffer.read().b_prompt_start.mark.lnum < LineNr::ONE
+        || buffer.read().b_prompt_start.mark.lnum > Buf::current().line_count()
     {
         // MAX(1, MIN(lnum, line_count)); spelled with min-then-max
         // because an empty buffer makes the two bounds cross.
-        buffer.b_prompt_start.mark.lnum = buffer
+        let value = buffer
+            .read()
             .b_prompt_start
             .mark
             .lnum
             .min(buffer.line_count())
             .max(LineNr::ONE);
-        Buf::current().b_prompt_append_new_line = true;
+        buffer.edit().b_prompt_start.mark.lnum = value;
+        Buf::current().set_b_prompt_append_new_line(true);
     }
     let new_prompt_len = len_as_int(new_prompt.len());
-    let prompt_lno = buffer.b_prompt_start.mark.lnum;
+    let prompt_lno = buffer.read().b_prompt_start.mark.lnum;
     let old_prompt = buf_prompt_text_owned(buffer);
     let old_prompt = old_prompt.as_bytes();
     let old_line = Lines::in_buffer(buffer).line(prompt_lno).to_vec();
     let old_line_len = len_as_int(old_line.len());
     let old_prompt_len = len_as_int(old_prompt.len());
     let mut cursor_col = Win::current().w_cursor.col;
-    let prompt_col = buffer.b_prompt_start.mark.col;
+    let prompt_col = buffer.read().b_prompt_start.mark.col;
     // A byte offset into `old_line`. Every use is guarded by the
     // `prompt_col >= old_prompt_len` test below — `&&` short-circuits —
     // and a prompt is never longer than the line it sits on, so no

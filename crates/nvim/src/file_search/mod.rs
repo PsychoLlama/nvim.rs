@@ -456,11 +456,11 @@ impl FindContext {
     ) -> Result<Option<usize>, TooLong> {
         // Borrowed for the call: nothing below runs user code that could
         // set the option.
-        let buffer = Buf::current();
+        let held = Buf::current().read();
         let suffixes: &[u8] = if self.tagfile {
             b""
         } else {
-            buffer.b_p_sua.bytes()
+            held.b_p_sua.bytes()
         };
         let files = frame.files();
         for i in frame.files_cur..files.len() {

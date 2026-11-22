@@ -216,7 +216,7 @@ pub(crate) fn decor_providers_invoke_spell(
 /// Ask every `_on_conceal_line` callback about `row`.
 #[inline(never)]
 pub(crate) fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bool {
-    let keys = window.buffer().b_marktree.n_keys;
+    let keys = window.buffer().read().b_marktree.n_keys;
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state != DECOR_PROVIDER_DISABLED && p.conceal_line != LUA_NOREF {
@@ -230,7 +230,7 @@ pub(crate) fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bo
             decor_provider_invoke(idx, name, cb, args, true, None);
         }
     }
-    let now = window.buffer().b_marktree.n_keys;
+    let now = window.buffer().read().b_marktree.n_keys;
     now > keys
 }
 
@@ -302,7 +302,7 @@ pub(crate) fn decor_providers_invoke_win(window: Win) {
     if provider_count() > 0 {
         validate_botline_win(window);
     }
-    let botline: LineNr = window.w_botline.min(window.w_buffer.b_ml.ml_line_count);
+    let botline: LineNr = window.w_botline.min(window.w_buffer.line_count());
 
     for idx in 0..provider_count() {
         let p = with_provider(idx, |p| {
@@ -431,7 +431,7 @@ pub(crate) fn decor_providers_invoke_buf(buffer: Buf) {
         let p = provider(idx);
         if p.state == DECOR_PROVIDER_ACTIVE && p.redraw_buf != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
-            args.push(Object::buffer(buffer.handle));
+            args.push(Object::buffer(buffer.handle()));
             args.push(Object::integer(display_tick.get().cast_signed()));
             decor_provider_invoke(idx, c"buf", p.redraw_buf, args.array(), true, None);
         }

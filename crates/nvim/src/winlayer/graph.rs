@@ -490,7 +490,7 @@ pub(crate) fn alloc_unregistered_buffer() -> SlotBox<Buffer> {
         unsafe { (&raw mut (*at).b_wininfo).write(Vec::new()) };
         unsafe { (&raw mut (*at).b_p_cpt_cb).write(Vec::new()) };
         unsafe { (&raw mut (*at).b_s).write(crate::types::SynBlock::new()) };
-        unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
+        unsafe { (&raw mut (*at).b_ml).write(core::cell::RefCell::new(MemLine::closed())) };
         unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
         unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
         unsafe { (&raw mut (*at).additional_data).write(None) };
@@ -542,8 +542,8 @@ mod tests {
         assert_eq!(Buf::current(), buffer);
         Win::current().w_cursor.lnum = LineNr::new(5);
         assert_eq!(win.w_cursor.lnum, LineNr::new(5));
-        Buf::current().b_changed = 1;
-        assert_eq!(win.buffer().b_changed, 1);
+        Buf::current().set_b_changed(1);
+        assert_eq!(win.buffer().b_changed(), 1);
         saved.restore();
         assert_eq!(Win::current_or_none(), None);
         assert_eq!(Buf::current_or_none(), None);
@@ -585,10 +585,10 @@ mod tests {
         let owned = alloc_unregistered_buffer();
         let buffer = Buf::owned_by(&owned);
         assert!(!buffer.is_null() && buffer.try_id().is_none());
-        assert!(buffer.b_ucmds.is_empty() && buffer.b_wininfo.is_empty());
-        assert!(buffer.b_kmap_ga.is_empty() && buffer.b_p_cpt_cb.is_empty());
-        assert!(buffer.b_u_line.is_none() && buffer.additional_data.is_none());
-        assert!(buffer.b_p_vts_array.is_none() && buffer.b_p_vsts_array.is_none());
+        assert!(buffer.read().b_ucmds.is_empty() && buffer.read().b_wininfo.is_empty());
+        assert!(buffer.read().b_kmap_ga.is_empty() && buffer.read().b_p_cpt_cb.is_empty());
+        assert!(buffer.read().b_u_line.is_none() && buffer.read().additional_data.is_none());
+        assert!(buffer.read().b_p_vts_array.is_none() && buffer.read().b_p_vsts_array.is_none());
         drop(owned);
     }
 }

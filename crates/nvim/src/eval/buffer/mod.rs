@@ -151,6 +151,7 @@ fn find_win_for_curbuf() {
     // a window that has moved on, hence the second test.
     let buf = Buf::current();
     let found = buf
+        .read()
         .b_wininfo
         .iter()
         .filter_map(|entry| entry.window())

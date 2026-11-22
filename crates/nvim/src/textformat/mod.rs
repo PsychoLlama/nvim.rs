@@ -58,7 +58,7 @@ pub use self::wrap::*;
 /// carries. The dereference stays behind the `&&`: with 'paste' set the
 /// left half is what keeps the right one from running.
 pub(crate) fn has_format_option(x: FoFlag) -> bool {
-    !p_paste() && x.is_among(Buf::current().b_p_fo.bytes())
+    !p_paste() && x.is_among(Buf::current().read().b_p_fo.bytes())
 }
 
 /// `WHITECHAR` (`v0.12.4:textformat.c:50`): `cc` is white space, and the
@@ -94,9 +94,9 @@ fn composing_after_cursor() -> bool {
 /// the window width capped at 79.
 pub fn comp_textwidth(ff: bool) -> c_int {
     let win = Win::current();
-    let mut textwidth = c_int::try_from(Buf::current().b_p_tw).unwrap_or(c_int::MAX);
-    if textwidth == 0 && Buf::current().b_p_wm != 0 {
-        let margin = c_int::try_from(Buf::current().b_p_wm).unwrap_or(c_int::MAX);
+    let mut textwidth = c_int::try_from(Buf::current().b_p_tw()).unwrap_or(c_int::MAX);
+    if textwidth == 0 && Buf::current().b_p_wm() != 0 {
+        let margin = c_int::try_from(Buf::current().b_p_wm()).unwrap_or(c_int::MAX);
         textwidth = win.w_view_width - margin;
         if CMDWIN_BUF.get() == Buf::current_or_none().map(Buf::id) {
             textwidth -= 1;

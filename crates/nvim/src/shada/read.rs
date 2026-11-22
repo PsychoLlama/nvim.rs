@@ -309,7 +309,7 @@ impl Reading {
         let buf = buffer_for_fname(&mut self.fname_bufs, mark.fname.as_cstr().to_bytes());
         let fm = ShadaMark {
             mark: mark.mark,
-            fnum: buf.map(|b| b.handle),
+            fnum: buf.map(|b| b.handle()),
             timestamp,
             fname: buf.is_none().then_some(mark.fname),
             extra,
@@ -347,7 +347,7 @@ impl Reading {
         };
         let fm = ShadaMark {
             mark: mark.mark,
-            fnum: Some(buffer.handle),
+            fnum: Some(buffer.handle()),
             timestamp,
             fname: None,
             extra,
@@ -381,7 +381,7 @@ impl Reading {
                     .try_id()
                     .is_some_and(|id| self.cl_bufs.contains(&id))
                 {
-                    wp.w_changelistidx = wp.w_buffer.b_changelistlen;
+                    wp.w_changelistidx = wp.w_buffer.b_changelistlen();
                 }
             }
         }
@@ -394,13 +394,16 @@ fn apply_buffer_list(list: Vec<ShadaBufferListItem>) {
     for item in list {
         let fname = item.fname.as_cstr();
         let sfname = path_try_shorten_fname(fname);
-        let Some(mut buf) = buflist_new(Some(fname), Some(sfname), LineNr::ZERO, BLN_LISTED) else {
+        let Some(buf) = buflist_new(Some(fname), Some(sfname), LineNr::ZERO, BLN_LISTED) else {
             continue;
         };
         shada_restore_last_cursor(buf, item.pos);
-        let (lnum, col) = (buf.b_last_cursor.mark.lnum, buf.b_last_cursor.mark.col);
+        let (lnum, col) = (
+            buf.read().b_last_cursor.mark.lnum,
+            buf.read().b_last_cursor.mark.col,
+        );
         buflist_setfpos(buf, Some(Win::current()), lnum, col, false);
-        buf.additional_data = item.extra;
+        buf.edit().additional_data = item.extra;
     }
 }
 
@@ -412,7 +415,8 @@ fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: &[u8]) -> Option<Buf> {
         return memoised.and_then(BufId::get);
     }
     let found = buffers().find(|buf| {
-        buf.name
+        buf.read()
+            .name
             .full()
             .is_some_and(|full| path_fnamecmp(fname, full.to_bytes()) == 0)
     });

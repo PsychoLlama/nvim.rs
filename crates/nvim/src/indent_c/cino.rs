@@ -39,48 +39,48 @@ pub fn parse_cino(buffer: Buf) {
     let sw = get_sw_value(buffer);
     // A copy of the option: the fields below are written through the same
     // handle the value would be borrowed from.
-    let cino = buffer.b_p_cino.get();
-    let mut buffer = buffer;
+    let cino = buffer.read().b_p_cino.get();
+    let buffer = buffer;
 
     // The defaults.  A `sw` here means the option tracks 'shiftwidth'
     // unless 'cinoptions' overrides it.
-    buffer.b_ind_level = sw; // > the indent inside a block
-    buffer.b_ind_open_imag = 0; // e where a `{` ending a line is imagined
-    buffer.b_ind_no_brace = 0; // n extra when no `{` precedes the line
-    buffer.b_ind_first_open = 0; // f the column of a function's first `{`
-    buffer.b_ind_open_extra = 0; // { extra for a leftmost open brace
-    buffer.b_ind_close_extra = 0; // } extra for the matching close brace
-    buffer.b_ind_open_left_imag = 0; // ^ where a column-0 `{` is imagined
-    buffer.b_ind_jump_label = -1; // L shift for a jump label; <0 = column 1
-    buffer.b_ind_case = sw; // : `case xx` from the `switch`
-    buffer.b_ind_case_code = sw; // = the code from its `case xx:`
-    buffer.b_ind_case_break = 0; // b line a trailing `break` up with `case`
-    buffer.b_ind_scopedecl = sw; // g `private:` from the class declaration
-    buffer.b_ind_scopedecl_code = sw; // h the code from its `private:`
-    buffer.b_ind_param = sw; // p K&R-style parameters
-    buffer.b_ind_func_type = sw; // t a function's type specification
-    buffer.b_ind_cpp_baseclass = sw; // i a base class / constructor init
-    buffer.b_ind_continuation = sw; // + a continuation line
-    buffer.b_ind_unclosed = sw.saturating_mul(2); // ( from the line with the open paren
-    buffer.b_ind_unclosed2 = sw; // u for a paren that is itself unclosed
-    buffer.b_ind_unclosed_noignore = 0; // U do not ignore a leading `(`
-    buffer.b_ind_unclosed_wrapped = 0; // W a `(` last on its line
-    buffer.b_ind_unclosed_whiteok = 0; // w keep white space after a `(`
-    buffer.b_ind_matching_paren = 0; // m a `)` under its `(`'s line start
-    buffer.b_ind_paren_prev = 0; // M a `)` under the previous line
-    buffer.b_ind_comment = 0; // / extra for a comment
-    buffer.b_ind_in_comment = 3; // c from a comment opener with nothing after
-    buffer.b_ind_in_comment2 = 0; // C use `c` even when something follows
-    buffer.b_ind_maxparen = 20; // ) lines to search for an open paren
-    buffer.b_ind_maxcomment = 70; // * lines to search for an open comment
-    buffer.b_ind_java = 0; // j Java braces
-    buffer.b_ind_js = 0; // J JS object properties are not labels
-    buffer.b_ind_keep_case_label = 0; // l blocked `case` bodies
-    buffer.b_ind_cpp_namespace = 0; // N C++ `namespace`
-    buffer.b_ind_if_for_while = 0; // k conditions of if()/for()/while()
-    buffer.b_ind_hash_comment = 0; // # `#` comments
-    buffer.b_ind_cpp_extern_c = 0; // E C++ `extern "C"`
-    buffer.b_ind_pragma = 0; // P `#pragma` directives
+    buffer.edit().b_ind_level = sw; // > the indent inside a block
+    buffer.edit().b_ind_open_imag = 0; // e where a `{` ending a line is imagined
+    buffer.edit().b_ind_no_brace = 0; // n extra when no `{` precedes the line
+    buffer.edit().b_ind_first_open = 0; // f the column of a function's first `{`
+    buffer.edit().b_ind_open_extra = 0; // { extra for a leftmost open brace
+    buffer.edit().b_ind_close_extra = 0; // } extra for the matching close brace
+    buffer.edit().b_ind_open_left_imag = 0; // ^ where a column-0 `{` is imagined
+    buffer.edit().b_ind_jump_label = -1; // L shift for a jump label; <0 = column 1
+    buffer.edit().b_ind_case = sw; // : `case xx` from the `switch`
+    buffer.edit().b_ind_case_code = sw; // = the code from its `case xx:`
+    buffer.edit().b_ind_case_break = 0; // b line a trailing `break` up with `case`
+    buffer.edit().b_ind_scopedecl = sw; // g `private:` from the class declaration
+    buffer.edit().b_ind_scopedecl_code = sw; // h the code from its `private:`
+    buffer.edit().b_ind_param = sw; // p K&R-style parameters
+    buffer.edit().b_ind_func_type = sw; // t a function's type specification
+    buffer.edit().b_ind_cpp_baseclass = sw; // i a base class / constructor init
+    buffer.edit().b_ind_continuation = sw; // + a continuation line
+    buffer.edit().b_ind_unclosed = sw.saturating_mul(2); // ( from the line with the open paren
+    buffer.edit().b_ind_unclosed2 = sw; // u for a paren that is itself unclosed
+    buffer.edit().b_ind_unclosed_noignore = 0; // U do not ignore a leading `(`
+    buffer.edit().b_ind_unclosed_wrapped = 0; // W a `(` last on its line
+    buffer.edit().b_ind_unclosed_whiteok = 0; // w keep white space after a `(`
+    buffer.edit().b_ind_matching_paren = 0; // m a `)` under its `(`'s line start
+    buffer.edit().b_ind_paren_prev = 0; // M a `)` under the previous line
+    buffer.edit().b_ind_comment = 0; // / extra for a comment
+    buffer.edit().b_ind_in_comment = 3; // c from a comment opener with nothing after
+    buffer.edit().b_ind_in_comment2 = 0; // C use `c` even when something follows
+    buffer.edit().b_ind_maxparen = 20; // ) lines to search for an open paren
+    buffer.edit().b_ind_maxcomment = 70; // * lines to search for an open comment
+    buffer.edit().b_ind_java = 0; // j Java braces
+    buffer.edit().b_ind_js = 0; // J JS object properties are not labels
+    buffer.edit().b_ind_keep_case_label = 0; // l blocked `case` bodies
+    buffer.edit().b_ind_cpp_namespace = 0; // N C++ `namespace`
+    buffer.edit().b_ind_if_for_while = 0; // k conditions of if()/for()/while()
+    buffer.edit().b_ind_hash_comment = 0; // # `#` comments
+    buffer.edit().b_ind_cpp_extern_c = 0; // E C++ `extern "C"`
+    buffer.edit().b_ind_pragma = 0; // P `#pragma` directives
 
     let cino: &[u8] = &cino;
 
@@ -131,48 +131,48 @@ pub fn parse_cino(buffer: Buf) {
 
         // When adding an entry here, also update the default 'cinoptions'
         // in doc/indent.txt, and add an explanation for it.
-        let field: Option<&mut c_int> = match byte_at(cino, letter) {
-            b'>' => Some(&mut buffer.b_ind_level),
-            b'e' => Some(&mut buffer.b_ind_open_imag),
-            b'n' => Some(&mut buffer.b_ind_no_brace),
-            b'f' => Some(&mut buffer.b_ind_first_open),
-            b'{' => Some(&mut buffer.b_ind_open_extra),
-            b'}' => Some(&mut buffer.b_ind_close_extra),
-            b'^' => Some(&mut buffer.b_ind_open_left_imag),
-            b'L' => Some(&mut buffer.b_ind_jump_label),
-            b':' => Some(&mut buffer.b_ind_case),
-            b'=' => Some(&mut buffer.b_ind_case_code),
-            b'b' => Some(&mut buffer.b_ind_case_break),
-            b'p' => Some(&mut buffer.b_ind_param),
-            b't' => Some(&mut buffer.b_ind_func_type),
-            b'/' => Some(&mut buffer.b_ind_comment),
-            b'c' => Some(&mut buffer.b_ind_in_comment),
-            b'C' => Some(&mut buffer.b_ind_in_comment2),
-            b'i' => Some(&mut buffer.b_ind_cpp_baseclass),
-            b'+' => Some(&mut buffer.b_ind_continuation),
-            b'(' => Some(&mut buffer.b_ind_unclosed),
-            b'u' => Some(&mut buffer.b_ind_unclosed2),
-            b'U' => Some(&mut buffer.b_ind_unclosed_noignore),
-            b'W' => Some(&mut buffer.b_ind_unclosed_wrapped),
-            b'w' => Some(&mut buffer.b_ind_unclosed_whiteok),
-            b'm' => Some(&mut buffer.b_ind_matching_paren),
-            b'M' => Some(&mut buffer.b_ind_paren_prev),
-            b')' => Some(&mut buffer.b_ind_maxparen),
-            b'*' => Some(&mut buffer.b_ind_maxcomment),
-            b'g' => Some(&mut buffer.b_ind_scopedecl),
-            b'h' => Some(&mut buffer.b_ind_scopedecl_code),
-            b'j' => Some(&mut buffer.b_ind_java),
-            b'J' => Some(&mut buffer.b_ind_js),
-            b'l' => Some(&mut buffer.b_ind_keep_case_label),
-            b'#' => Some(&mut buffer.b_ind_hash_comment),
-            b'N' => Some(&mut buffer.b_ind_cpp_namespace),
-            b'k' => Some(&mut buffer.b_ind_if_for_while),
-            b'E' => Some(&mut buffer.b_ind_cpp_extern_c),
-            b'P' => Some(&mut buffer.b_ind_pragma),
+        let set: Option<fn(Buf, c_int)> = match byte_at(cino, letter) {
+            b'>' => Some(Buf::set_b_ind_level as fn(Buf, c_int)),
+            b'e' => Some(Buf::set_b_ind_open_imag as fn(Buf, c_int)),
+            b'n' => Some(Buf::set_b_ind_no_brace as fn(Buf, c_int)),
+            b'f' => Some(Buf::set_b_ind_first_open as fn(Buf, c_int)),
+            b'{' => Some(Buf::set_b_ind_open_extra as fn(Buf, c_int)),
+            b'}' => Some(Buf::set_b_ind_close_extra as fn(Buf, c_int)),
+            b'^' => Some(Buf::set_b_ind_open_left_imag as fn(Buf, c_int)),
+            b'L' => Some(Buf::set_b_ind_jump_label as fn(Buf, c_int)),
+            b':' => Some(Buf::set_b_ind_case as fn(Buf, c_int)),
+            b'=' => Some(Buf::set_b_ind_case_code as fn(Buf, c_int)),
+            b'b' => Some(Buf::set_b_ind_case_break as fn(Buf, c_int)),
+            b'p' => Some(Buf::set_b_ind_param as fn(Buf, c_int)),
+            b't' => Some(Buf::set_b_ind_func_type as fn(Buf, c_int)),
+            b'/' => Some(Buf::set_b_ind_comment as fn(Buf, c_int)),
+            b'c' => Some(Buf::set_b_ind_in_comment as fn(Buf, c_int)),
+            b'C' => Some(Buf::set_b_ind_in_comment2 as fn(Buf, c_int)),
+            b'i' => Some(Buf::set_b_ind_cpp_baseclass as fn(Buf, c_int)),
+            b'+' => Some(Buf::set_b_ind_continuation as fn(Buf, c_int)),
+            b'(' => Some(Buf::set_b_ind_unclosed as fn(Buf, c_int)),
+            b'u' => Some(Buf::set_b_ind_unclosed2 as fn(Buf, c_int)),
+            b'U' => Some(Buf::set_b_ind_unclosed_noignore as fn(Buf, c_int)),
+            b'W' => Some(Buf::set_b_ind_unclosed_wrapped as fn(Buf, c_int)),
+            b'w' => Some(Buf::set_b_ind_unclosed_whiteok as fn(Buf, c_int)),
+            b'm' => Some(Buf::set_b_ind_matching_paren as fn(Buf, c_int)),
+            b'M' => Some(Buf::set_b_ind_paren_prev as fn(Buf, c_int)),
+            b')' => Some(Buf::set_b_ind_maxparen as fn(Buf, c_int)),
+            b'*' => Some(Buf::set_b_ind_maxcomment as fn(Buf, c_int)),
+            b'g' => Some(Buf::set_b_ind_scopedecl as fn(Buf, c_int)),
+            b'h' => Some(Buf::set_b_ind_scopedecl_code as fn(Buf, c_int)),
+            b'j' => Some(Buf::set_b_ind_java as fn(Buf, c_int)),
+            b'J' => Some(Buf::set_b_ind_js as fn(Buf, c_int)),
+            b'l' => Some(Buf::set_b_ind_keep_case_label as fn(Buf, c_int)),
+            b'#' => Some(Buf::set_b_ind_hash_comment as fn(Buf, c_int)),
+            b'N' => Some(Buf::set_b_ind_cpp_namespace as fn(Buf, c_int)),
+            b'k' => Some(Buf::set_b_ind_if_for_while as fn(Buf, c_int)),
+            b'E' => Some(Buf::set_b_ind_cpp_extern_c as fn(Buf, c_int)),
+            b'P' => Some(Buf::set_b_ind_pragma as fn(Buf, c_int)),
             _ => None,
         };
-        if let Some(field) = field {
-            *field = n;
+        if let Some(set) = set {
+            set(buffer, n);
         }
 
         if byte_at(cino, i) == b',' {

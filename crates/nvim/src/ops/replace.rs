@@ -87,7 +87,7 @@ fn replace_character(c: Key) {
 /// `CTRL-V <CR>`/`CTRL-V <NL>` spellings that mean the literal byte rather
 /// than a line split. `op` describes a region of the current buffer.
 pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
-    if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) || op.empty {
+    if Buf::current().ml_flags().has(MlFlags::EMPTY) || op.empty {
         return Ok(());
     }
 
@@ -118,8 +118,8 @@ pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
     changed_lines(Buf::current(), lnum, col, last, 0, true);
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        Buf::current().b_op_start = op.start;
-        Buf::current().b_op_end = op.end;
+        Buf::current().set_b_op_start(op.start);
+        Buf::current().set_b_op_end(op.end);
     }
     Ok(())
 }

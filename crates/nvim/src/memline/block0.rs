@@ -84,22 +84,24 @@ pub(crate) fn ml_check_b0_strings<P: AsRef<[u8]>>(b0: &ZeroBlock<P>) -> bool {
 /// Bring block zero up to date with the buffer: either the file name and
 /// timestamp ([`UB_FNAME`]), or the "swap file is beside the file" flag
 /// ([`UB_SAME_DIR`]).
-pub(crate) fn ml_upd_block0(mut buffer: Buf, what: UpdBlock0) {
-    let Some(memfile) = buffer.b_ml.ml_mfp.as_deref_mut() else {
-        return;
-    };
-    let Some(id) = memfile.get(0, 1) else {
+pub(crate) fn ml_upd_block0(buffer: Buf, what: UpdBlock0) {
+    let Some(id) = buffer
+        .ml()
+        .ml_mfp
+        .as_deref_mut()
+        .and_then(|memfile| memfile.get(0, 1))
+    else {
         return;
     };
 
-    if !ml_check_b0_id(&ZeroBlock(buffer.b_ml.page(id))) {
+    if !ml_check_b0_id(&ZeroBlock(buffer.ml().page(id))) {
         iemsg(gettext(c"E304: ml_upd_block0(): Didn't get block 0??"));
     } else if what == UB_FNAME {
         set_b0_fname(buffer, id);
     } else {
         set_b0_dir_flag(buffer, id);
     }
-    buffer.b_ml.put(id, true);
+    buffer.ml().put(id, true);
 }
 
 /// The name block zero records for a file whose full name is `full`: with a
@@ -132,10 +134,10 @@ fn b0_name(full: &CStr) -> Vec<u8> {
 
 /// Write the file's name, timestamp and inode into block zero (block `id` of
 /// `buffer`'s memfile), and set `buffer.b_mtime` from the same `stat`.
-pub(crate) fn set_b0_fname(mut buffer: Buf, id: BlockId) {
+pub(crate) fn set_b0_fname(buffer: Buf, id: BlockId) {
     // A copy: the name is read before the block is written, and the block
     // is the buffer's own.
-    let full = buffer.name.full().map(CStr::to_owned);
+    let full = buffer.read().name.full().map(CStr::to_owned);
     if let Some(full) = full {
         let name = b0_name(&full);
         let info = file_info(&full);
@@ -143,7 +145,8 @@ pub(crate) fn set_b0_fname(mut buffer: Buf, id: BlockId) {
             Some(info) => (info.stat.st_mtim.tv_sec, info.stat.st_ino.cast_signed()),
             None => (0, 0),
         };
-        let mut b0 = ZeroBlock(buffer.b_ml.page_mut(id));
+        let mut held = buffer.ml();
+        let mut b0 = ZeroBlock(held.page_mut(id));
         // The name, terminated; what lies past the terminator in the field
         // is left as it was, as the C string copy left it.
         let field = b0.fname_mut();
@@ -151,46 +154,47 @@ pub(crate) fn set_b0_fname(mut buffer: Buf, id: BlockId) {
         field[name.len()] = 0;
         b0.set_mtime(mtime);
         b0.set_ino(ino);
+        drop(held);
         match info {
             Some(info) => {
                 buf_store_file_info(buffer, &info);
-                buffer.b_mtime_read = buffer.b_mtime;
-                buffer.b_mtime_read_ns = buffer.b_mtime_ns;
+                buffer.set_b_mtime_read(buffer.b_mtime());
+                buffer.set_b_mtime_read_ns(buffer.b_mtime_ns());
             }
             None => {
-                buffer.b_mtime = 0;
-                buffer.b_mtime_ns = 0;
-                buffer.b_mtime_read = 0;
-                buffer.b_mtime_read_ns = 0;
-                buffer.b_orig_size = 0;
-                buffer.b_orig_mode = 0;
+                buffer.set_b_mtime(0);
+                buffer.set_b_mtime_ns(0);
+                buffer.set_b_mtime_read(0);
+                buffer.set_b_mtime_read_ns(0);
+                buffer.set_b_orig_size(0);
+                buffer.set_b_orig_mode(0);
             }
         }
     } else {
-        ZeroBlock(buffer.b_ml.page_mut(id)).fname_mut()[0] = 0;
+        ZeroBlock(buffer.ml().page_mut(id)).fname_mut()[0] = 0;
     }
 
     // Upstream passes `CURBUF` here, not `buffer`. Preserved: the two are
     // the same for every reachable caller.
-    let fenc = Buf::current().b_p_fenc.bytes().to_vec();
-    add_b0_fenc(&mut ZeroBlock(buffer.b_ml.page_mut(id)), &fenc);
+    let fenc = Buf::current().read().b_p_fenc.bytes().to_vec();
+    add_b0_fenc(&mut ZeroBlock(buffer.ml().page_mut(id)), &fenc);
 }
 
 /// Record whether the file and its swap file are in the same directory.
 ///
 /// Fail safe: anything short of proof leaves the flag clear.
-pub(crate) fn set_b0_dir_flag(mut buffer: Buf, id: BlockId) {
+pub(crate) fn set_b0_dir_flag(buffer: Buf, id: BlockId) {
     let swap_name = buffer
-        .b_ml
+        .ml()
         .ml_mfp
         .as_ref()
         .and_then(|memfile| memfile.fname())
         .map(CStr::to_owned);
-    let same = match (swap_name, buffer.name.full()) {
+    let same = match (swap_name, buffer.read().name.full()) {
         (Some(swap_name), Some(full)) => same_directory(&swap_name, full),
         _ => false,
     };
-    ZeroBlock(buffer.b_ml.page_mut(id)).set_flag(B0_SAME_DIR, same);
+    ZeroBlock(buffer.ml().page_mut(id)).set_flag(B0_SAME_DIR, same);
 }
 
 /// Append `fenc`, a `'fileencoding'`, to block zero, if it fits.
@@ -410,7 +414,8 @@ pub(crate) fn swapfile_is_for_other_file(buffer: Buf, fname: &CStr) -> bool {
     // different mount points — so only the tails are compared.
     let stored = cstr::until_nul(b0.fname());
     let stored_tail = &stored[tail_index(stored)..];
-    let full = buffer.name.full();
+    let held = buffer.read();
+    let full = held.name.full();
     if b0.flags() & B0_SAME_DIR != 0
         && full.is_some_and(|full| {
             path_fnamecmp(path_tail(full).to_bytes(), stored_tail) == 0
@@ -498,11 +503,11 @@ pub(crate) fn files_differ(
 /// Update the flags block zero carries about the buffer — whether it has
 /// unsaved changes, its `'fileformat'` and its `'fileencoding'` — and push
 /// block zero alone to disk.
-pub fn ml_setflags(mut buffer: Buf) {
+pub fn ml_setflags(buffer: Buf) {
     // Only if block zero is already in memory; there is nothing here
     // worth a read for.
     let Some(id) = buffer
-        .b_ml
+        .ml()
         .ml_mfp
         .as_ref()
         .and_then(|memfile| memfile.find(0))
@@ -510,16 +515,19 @@ pub fn ml_setflags(mut buffer: Buf) {
         return;
     };
 
-    let changed = buffer.b_changed != 0;
+    let changed = buffer.b_changed() != 0;
     // 'fileformat' + 1: zero to three.
     let fileformat = get_fileformat(buffer) + 1;
-    let fenc = buffer.b_p_fenc.bytes().to_vec();
-    let mut b0 = ZeroBlock(buffer.b_ml.page_mut(id));
+    let fenc = buffer.read().b_p_fenc.bytes().to_vec();
+    let mut held = buffer.ml();
+    let mut b0 = ZeroBlock(held.page_mut(id));
     b0.set_dirty(changed);
     let flags = b0.flags() & !B0_FF_MASK | fileformat;
     b0.set_flags(flags);
     add_b0_fenc(&mut b0, &fenc);
-    let memfile = buffer.b_ml.memfile();
+    drop(held);
+    let mut held = buffer.ml();
+    let memfile = held.memfile();
     memfile.mark_dirty(id);
     // Best effort: a swap file that cannot take block zero is reported
     // where it is created, and there is nothing to do about it here.

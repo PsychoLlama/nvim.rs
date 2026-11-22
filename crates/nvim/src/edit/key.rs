@@ -490,7 +490,7 @@ fn key_eol(s: &mut InsertState) -> Next {
 /// CTRL-X submode is running, in which case there is nothing to complete
 /// with and the key is inserted.
 fn key_complete(s: &mut InsertState) -> Next {
-    if c_int::from(Buf::current().b_p_cpt.first_byte()) == 0
+    if c_int::from(Buf::current().read().b_p_cpt.first_byte()) == 0
         && (ctrl_x_mode_normal() || ctrl_x_mode_whole_line())
         && !compl_status_local()
     {
@@ -549,7 +549,7 @@ fn check_pum(s: &mut InsertState) {
         pum_ext_want_done();
     }
 
-    if Buf::current().b_u_synced {
+    if Buf::current().b_u_synced() {
         INS_NEED_UNDO.set(true);
     }
 }

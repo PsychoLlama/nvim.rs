@@ -425,7 +425,7 @@ fn tokenize_and_diff(dp: &mut DiffBlock, slots: &DiffSlots) {
         dio.diff.hunks.clear();
         let Some(buf) = slots[i]
             .and_then(BufId::get)
-            .filter(|b| b.b_ml.ml_mfp.is_some())
+            .filter(|b| b.ml().ml_mfp.is_some())
         else {
             continue; // not loaded
         };
@@ -443,7 +443,7 @@ fn tokenize_and_diff(dp: &mut DiffBlock, slots: &DiffSlots) {
         out.clear();
         // Deliberately the *first* buffer's 'iskeyword', so that
         // every buffer is segmented the same way.
-        let chartab = used_slot(&slots, file1_idx).b_chartab;
+        let chartab = used_slot(&slots, file1_idx).b_chartab();
         let mut lines = buf.lines();
         for off in 0..dp.df_count[i] {
             let line = lines.line(dp.df_lnum[i] + off);

@@ -414,7 +414,8 @@ impl FindTags {
         // For CTRL-] in a help file prefer a match in the same
         // language: a help file for language xx is named "*.xxx".
         let buffer = Buf::current();
-        let fname = buffer.name.shown().map_or(&[][..], CStr::to_bytes);
+        let held = buffer.read();
+        let fname = held.name.shown().map_or(&[][..], CStr::to_bytes);
         let flen = fname.len();
         if self.flags & TAG_KEEP_LANG != 0
             && self.help_lang_find.is_none()
@@ -426,6 +427,7 @@ impl FindTags {
             self.help_pri = 0;
             return true;
         }
+        drop(held);
 
         // Otherwise the position in 'helplang' is the priority.
         self.help_pri = 1;
@@ -459,7 +461,7 @@ impl FindTags {
     fn apply_tagfunc(&mut self, pat: &CStr, buf_ffname: Option<&CStr>) -> Option<bool> {
         if self.flags & TAG_NO_TAGFUNC != 0
             || TAGFUNC_RUNNING.get()
-            || Buf::current().b_p_tfu.first_byte() == 0
+            || Buf::current().read().b_p_tfu.first_byte() == 0
         {
             return None;
         }
@@ -486,7 +488,7 @@ impl FindTags {
         let mut margs = MatchArgs::new(self.flags);
 
         // A help tags file for another language is skipped entirely.
-        if Buf::current().b_help && !self.in_help_init() {
+        if Buf::current().b_help() && !self.in_help_init() {
             return;
         }
 
@@ -663,7 +665,7 @@ fn search(
 
     let save_p_ic = p_ic();
     // 'tagcase' decides how case is treated for this search.
-    let tagcase = match Buf::current().b_tc_flags {
+    let tagcase = match Buf::current().b_tc_flags() {
         0 => TC_FLAGS.get(),
         local => local,
     };
@@ -682,14 +684,14 @@ fn search(
         );
     }
 
-    let help_save = Buf::current().b_help;
+    let help_save = Buf::current().b_help();
     if flags & TAG_HELP != 0 {
-        Buf::current().b_help = true;
+        Buf::current().set_b_help(true);
     }
 
     // In a help buffer a trailing "@xx" names the language wanted.
     let bytes: &[u8] = &pattern;
-    let (searched, help_lang_find) = if Buf::current().b_help
+    let (searched, help_lang_find) = if Buf::current().b_help()
         && let [.., b'@', a, b] = bytes
         && a.is_ascii_alphabetic()
         && b.is_ascii_alphabetic()
@@ -726,7 +728,8 @@ fn search(
             // A ".txt" help file keeps "en" as its language.
             if flags & TAG_KEEP_LANG != 0 && st.help_lang_find.is_none() {
                 let buffer = Buf::current();
-                let fname = buffer.name.shown().map_or(&[][..], CStr::to_bytes);
+                let held = buffer.read();
+                let fname = held.name.shown().map_or(&[][..], CStr::to_bytes);
                 st.is_txt =
                     fname.len() > 4 && fname[fname.len() - 4..].eq_ignore_ascii_case(b".txt");
             }
@@ -767,7 +770,7 @@ fn search(
 
     let found = searched.then(|| st.into_found());
 
-    Buf::current().b_help = help_save;
+    Buf::current().set_b_help(help_save);
     P_IC.set(save_p_ic);
     found
 }

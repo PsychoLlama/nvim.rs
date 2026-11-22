@@ -78,18 +78,18 @@ pub fn did_set_backspace(args: &mut OptSet) -> Result<(), OptError> {
 /// 'backupcopy' has to name exactly one of "yes", "no" and "auto"; the
 /// other words only qualify that choice.
 pub fn did_set_backupcopy(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
+    let (buf, opt_flags) = (args.os_buf, args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // The variable being set is the buffer's own copy for `:setlocal` and
     // the global one otherwise -- which is the value the frame holds.
     let value = new_bytes(args);
     if !local && !opt_flags.has(OptionSetFlags::GLOBAL) {
         // A plain `:set` drops the buffer's own answer.
-        buf.b_bkc_flags = 0 as c_uint;
+        buf.set_b_bkc_flags(0 as c_uint);
     }
-    let mut store = |mask: c_uint| {
+    let store = |mask: c_uint| {
         if local {
-            buf.b_bkc_flags = mask;
+            buf.set_b_bkc_flags(mask);
         } else {
             BKC_FLAGS.set(mask);
         }
@@ -131,21 +131,23 @@ pub fn did_set_backupext_or_patchmode(_args: &mut OptSet) -> Result<(), OptError
 
 /// 'bufhidden' is checked as the buffer holds it, whichever copy was set.
 pub fn did_set_bufhidden(args: &mut OptSet) -> Result<(), OptError> {
-    did_set_opt_flags(args.os_buf.b_p_bh.bytes(), &OPT_BH_VALUES, false)
+    let arg = args.os_buf.read().b_p_bh.bytes().to_vec();
+    did_set_opt_flags(&arg, &OPT_BH_VALUES, false)
 }
 
 /// 'buftype' cannot be changed into or out of "terminal": that is decided
 /// by whether the buffer actually has a terminal attached.
 pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut buf, mut wp) = (args.os_buf, win(args));
+    let (buf, mut wp) = (args.os_buf, win(args));
     // Checked as the buffer holds it, whichever copy was set. Only the first
     // letter is ever distinguishing.
     let (first, listed) = {
-        let value = buf.b_p_bt.bytes();
+        let held = buf.read();
+        let value = held.b_p_bt.bytes();
         let first = value.first().copied().unwrap_or(0);
         (first, opt_strings_ok(value, &OPT_BT_VALUES, false))
     };
-    let has_terminal = !buf.terminal.is_null();
+    let has_terminal = !buf.terminal().is_null();
     if has_terminal != (first == b't') || !listed {
         return invalid();
     }
@@ -160,18 +162,18 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
             SID_NONE,
         );
         let next_prompt = Pos {
-            lnum: buf.b_ml.ml_line_count,
-            col: buf.b_prompt_start.mark.col,
+            lnum: buf.line_count(),
+            col: buf.read().b_prompt_start.mark.col,
             coladd: 0,
         };
-        buf.b_prompt_start = FileMark::fresh(next_prompt, None, FileMarkView::NONE);
+        buf.edit().b_prompt_start = FileMark::fresh(next_prompt, None, FileMarkView::NONE);
     }
 
     if wp.w_status_height != 0 || global_stl_height() != 0 {
         wp.w_redr_status = true;
         redraw_later(wp, UPD_VALID);
     }
-    buf.b_help = first == b'h';
+    buf.set_b_help(first == b'h');
     redraw_titles();
     Ok(())
 }
@@ -266,7 +268,7 @@ pub fn did_set_encoding(args: &mut OptSet) -> Result<(), OptError> {
     // 'fileencoding' is the buffer-local one of the three; the other two
     // ('encoding' and 'makeencoding') are global and skip this block.
     if idx == OPT_FILEENCODING {
-        if buf.b_p_ma == 0 && opt_flags != OptionSetFlags::GLOBAL {
+        if buf.b_p_ma() == 0 && opt_flags != OptionSetFlags::GLOBAL {
             return Err((E_MODIFIABLE).into());
         }
         // 'fileencoding' is one encoding, not a list.
@@ -298,7 +300,7 @@ pub fn did_set_eventignore(args: &mut OptSet) -> Result<(), OptError> {
 pub fn did_set_fileformat(args: &mut OptSet) -> Result<(), OptError> {
     let (buf, opt_flags) = (args.os_buf, args.os_flags);
     // Changing a buffer's line endings changes its text.
-    if buf.b_p_ma == 0 && !opt_flags.has(OptionSetFlags::GLOBAL) {
+    if buf.b_p_ma() == 0 && !opt_flags.has(OptionSetFlags::GLOBAL) {
         return Err((E_MODIFIABLE).into());
     }
     did_set_str_generic(args)?;
@@ -406,7 +408,7 @@ pub fn did_set_isopt(args: &mut OptSet) -> Result<(), OptError> {
 /// The keymap file is sourced, which is why 'secure' is lifted for the
 /// duration: the file is part of the runtime, not user input.
 pub fn did_set_keymap(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut buf, opt_flags) = (args.os_buf, args.os_flags);
+    let (buf, opt_flags) = (args.os_buf, args.os_flags);
     if !valid_filetype(new_value(args).as_cstr()) {
         return invalid();
     }
@@ -419,19 +421,19 @@ pub fn did_set_keymap(args: &mut OptSet) -> Result<(), OptError> {
     args.os_value_checked = true;
     errmsg?;
 
-    if !buf.b_p_keymap.bytes().is_empty() {
-        buf.b_p_iminsert = B_IMODE_LMAP;
+    if !buf.read().b_p_keymap.bytes().is_empty() {
+        buf.set_b_p_iminsert(B_IMODE_LMAP);
         // 'imsearch' at -1 means "follow 'iminsert'", and stays that
         // way.
-        if buf.b_p_imsearch != B_IMODE_USE_INSERT {
-            buf.b_p_imsearch = B_IMODE_LMAP;
+        if buf.b_p_imsearch() != B_IMODE_USE_INSERT {
+            buf.set_b_p_imsearch(B_IMODE_LMAP);
         }
     } else {
-        if buf.b_p_iminsert == B_IMODE_LMAP {
-            buf.b_p_iminsert = B_IMODE_NONE;
+        if buf.b_p_iminsert() == B_IMODE_LMAP {
+            buf.set_b_p_iminsert(B_IMODE_NONE);
         }
-        if buf.b_p_imsearch == B_IMODE_LMAP {
-            buf.b_p_imsearch = B_IMODE_USE_INSERT;
+        if buf.b_p_imsearch() == B_IMODE_LMAP {
+            buf.set_b_p_imsearch(B_IMODE_USE_INSERT);
         }
     }
     if !opt_flags.has(OptionSetFlags::LOCAL) {
@@ -506,10 +508,10 @@ pub fn did_set_vartabstop(args: &mut OptSet) -> Result<(), OptError> {
 /// rather than replacing it. The array is reached after the parse, which
 /// may report, so nothing holds the buffer while it does.
 fn did_set_vartabs(args: &OptSet, array: Field<Buffer, TabStopArray>) -> Result<(), OptError> {
-    let mut buf = args.os_buf;
+    let buf = args.os_buf;
     let value = new_bytes(args);
     if value.is_empty() || value == b"0" {
-        replace_tabstop_array(array.of(&mut buf), None);
+        replace_tabstop_array(array.of(&mut buf.edit()), None);
         return Ok(());
     }
     // Digits and separating commas only; no empty item, and no leading
@@ -525,6 +527,6 @@ fn did_set_vartabs(args: &OptSet, array: Field<Buffer, TabStopArray>) -> Result<
     let Ok(stops) = tabstop_set(value) else {
         return invalid();
     };
-    *array.of(&mut buf) = stops;
+    *array.of(&mut buf.edit()) = stops;
     Ok(())
 }

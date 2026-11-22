@@ -94,6 +94,7 @@ fn scl_name2id(name: &CStr) -> c_int {
     let name_u = upper(name);
     let block = cur_syn_block();
     match block
+        .read()
         .clusters()
         .iter()
         .rposition(|c| c.scl_name_u == name_u)
@@ -126,22 +127,22 @@ pub(crate) fn syn_check_cluster(name: &[u8]) -> Result<c_int, Failed> {
 
 /// Add a cluster with no members, answering its id.
 fn syn_add_cluster(name: CString) -> Result<c_int, SyntaxError> {
-    let mut block = cur_syn_block();
-    let len = len_as_int(block.clusters().len());
+    let block = cur_syn_block();
+    let len = len_as_int(block.read().clusters().len());
     if len >= MAX_CLUSTER_ID {
         return Err(SyntaxError::TooManyClusters);
     }
 
     // The two clusters the spell checker asks about by id.
     if name.to_bytes().eq_ignore_ascii_case(b"Spell") {
-        block.b_spell_cluster_id = len + SYNID_CLUSTER;
+        block.edit().b_spell_cluster_id = len + SYNID_CLUSTER;
     }
     if name.to_bytes().eq_ignore_ascii_case(b"NoSpell") {
-        block.b_nospell_cluster_id = len + SYNID_CLUSTER;
+        block.edit().b_nospell_cluster_id = len + SYNID_CLUSTER;
     }
 
     let scl_name_u = upper(&name);
-    block.clusters_mut().push(SynCluster {
+    block.edit().clusters_mut().push(SynCluster {
         scl_name: name,
         scl_name_u,
         scl_list: IdList::NONE,
@@ -211,9 +212,11 @@ pub(crate) fn syn_cmd_cluster(args: &mut ExArg, _syncing: c_int) {
                     break;
                 }
             }
-            let mut block = cur_syn_block();
-            let list = &mut block.clusters_mut()[as_index(scl_id)].scl_list;
+            let block = cur_syn_block();
+            let mut held = block.edit();
+            let list = &mut held.clusters_mut()[as_index(scl_id)].scl_list;
             syn_combine_list(list, clstr_list, list_op);
+            drop(held);
             got_clstr = true;
         }
 

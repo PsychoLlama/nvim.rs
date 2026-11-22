@@ -99,7 +99,7 @@ pub(crate) fn set_option_sctx(
     // The scope index the table gives is in range of the per-scope array.
     if option_has_scope(opt_idx, OPT_SCOPE_BUF) {
         let at = option_scope_idx(opt_idx, OPT_SCOPE_BUF).cast_unsigned();
-        Buf::current().b_p_script_ctx[at] = script_ctx;
+        Buf::current().edit().b_p_script_ctx[at] = script_ctx;
     } else if option_has_scope(opt_idx, OPT_SCOPE_WIN) {
         let at = option_scope_idx(opt_idx, OPT_SCOPE_WIN).cast_unsigned();
         Win::current().w_onebuf_opt.wo_script_ctx[at] = script_ctx;

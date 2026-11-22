@@ -182,8 +182,8 @@ impl Put {
     ) -> Result<(), Stopped> {
         // Pasting past the end of the buffer appends empty lines.
         let mut lines_appended = 0;
-        if Win::current().w_cursor.lnum > Buf::current().b_ml.ml_line_count {
-            let last = Buf::current().b_ml.ml_line_count;
+        if Win::current().w_cursor.lnum > Buf::current().line_count() {
+            let last = Buf::current().line_count();
             ml_append_cstr(last, c"").map_err(|_| Stopped::NoLine)?;
             self.nr_lines += 1;
             lines_appended = 1;
@@ -277,19 +277,19 @@ impl Put {
             }
         }
 
-        let to = Buf::current().b_op_start.lnum + len_as_int(self.lines.len()) - self.nr_lines;
+        let to = Buf::current().b_op_start().lnum + len_as_int(self.lines.len()) - self.nr_lines;
         // The range is the lines the put rewrote.
         changed_lines(Buf::current(), lnum, ColNr::ZERO, to, self.nr_lines, true);
 
-        Buf::current().b_op_start = Win::current().w_cursor;
-        Buf::current().b_op_start.lnum = lnum;
+        Buf::current().set_b_op_start(Win::current().w_cursor);
+        Buf::current().edit().b_op_start.lnum = lnum;
 
-        Buf::current().b_op_end.lnum = Win::current().w_cursor.lnum - 1;
-        Buf::current().b_op_end.col = (textcol + len_as_int(totlen) - 1).max(ColNr::ZERO);
-        Buf::current().b_op_end.coladd = 0;
+        Buf::current().edit().b_op_end.lnum = Win::current().w_cursor.lnum - 1;
+        Buf::current().edit().b_op_end.col = (textcol + len_as_int(totlen) - 1).max(ColNr::ZERO);
+        Buf::current().edit().b_op_end.coladd = 0;
 
         if self.flags & PUT_CURSEND != 0 {
-            Win::current().w_cursor = Buf::current().b_op_end;
+            Win::current().w_cursor = Buf::current().b_op_end();
             Win::current().w_cursor.col += 1;
             // In Insert mode the cursor may be past the NUL.
             let len = get_cursor_line_len();

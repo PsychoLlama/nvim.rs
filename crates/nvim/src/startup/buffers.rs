@@ -150,12 +150,12 @@ pub(crate) fn read_stdin() {
     NO_WAIT_RETURN.set(1);
     let save_msg_didany = MSG_DIDANY.get();
 
-    if !Buf::current().name.full().is_none() {
+    if !Buf::current().read().name.full().is_none() {
         let Some(stdin_buf) = buflist_add_name(None, LineNr::ZERO, BLN_LISTED) else {
             semsg!("Failed to create buffer for stdin");
             return;
         };
-        let initial_buf_handle: Handle = Buf::current().handle;
+        let initial_buf_handle: Handle = Buf::current().handle();
         set_curbuf(stdin_buf, 0, false);
         let flags = ReadFlags::NEW | ReadFlags::STDIN;
         let _ = readfile_named(
@@ -168,7 +168,7 @@ pub(crate) fn read_stdin() {
             flags,
             true,
         );
-        let stdin_buf_handle: Handle = stdin_buf.handle;
+        let stdin_buf_handle: Handle = stdin_buf.handle();
         let stdin_buf_empty = buf_is_empty(Buf::current());
 
         // Done as commands rather than calls so the autocommands and the
@@ -182,7 +182,7 @@ pub(crate) fn read_stdin() {
     } else {
         set_buflisted(1);
         let _ = open_buffer(true, None, ReadFlags::NONE);
-        if buf_is_empty(Buf::current()) && Buf::current().b_next.is_some() {
+        if buf_is_empty(Buf::current()) && Buf::current().b_next().is_some() {
             let _ = do_cmdline_cmd(c"silent! bnext");
             let _ = do_cmdline_cmd(c"silent! bwipeout 1");
         }
@@ -238,7 +238,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
     if RECOVERYMODE.get() {
         MSG_SCROLL.set(1);
         ml_recover(true);
-        if Buf::current().b_ml.ml_mfp.is_none() {
+        if Buf::current().ml().ml_mfp.is_none() {
             // Recovery failed; there is nothing to edit.
             getout(1);
         }
@@ -275,7 +275,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
         dorewind = false;
         Win::current().buffer().make_current();
 
-        if Buf::current().b_ml.ml_mfp.is_none() {
+        if Buf::current().ml().ml_mfp.is_none() {
             if p_fdls() >= 0 as OptInt {
                 Win::current().w_onebuf_opt.wo_fdl = p_fdls();
             }
@@ -370,7 +370,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
 
         // Only load a file into a window that is still showing the first
         // window's buffer, or an unnamed one.
-        if first_win().w_buffer.is_current() || Buf::current().name.full().is_none() {
+        if first_win().w_buffer.is_current() || Buf::current().read().name.full().is_none() {
             Win::current().w_arg_idx = arg_idx;
             SWAP_EXISTS_DID_QUIT.set(false);
             // A copy: the edit's autocommands may change the argument list.

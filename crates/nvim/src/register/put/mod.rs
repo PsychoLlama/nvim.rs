@@ -138,8 +138,7 @@ fn put_last_insert(dir: Direction, mut count: c_int, flags: PutFlags, ve_flags: 
             });
             let ve_allows =
                 ve_flags == OPT_VE_FLAG_ALL as c_uint || ve_flags == OPT_VE_FLAG_ONEMORE as c_uint;
-            let eof =
-                Buf::current().b_ml.ml_line_count == Win::current().w_cursor.lnum && one_past_line;
+            let eof = Buf::current().line_count() == Win::current().w_cursor.lnum && one_past_line;
             if ve_allows || !(eol || eof) {
                 stuff_readbuf_char(Key::ascii(b'l'));
             }
@@ -247,7 +246,7 @@ impl Put {
     fn save_for_undo(&self) -> bool {
         if self.kind == MotionType::BlockWise {
             let mut lnum = Win::current().w_cursor.lnum + len_as_int(self.lines.len()) + 1;
-            lnum = lnum.min(Buf::current().b_ml.ml_line_count + 1);
+            lnum = lnum.min(Buf::current().line_count() + 1);
             // `lnum` is capped at one past the last line.
             return u_save(Win::current().w_cursor.lnum - 1, lnum).is_ok();
         }
@@ -281,7 +280,7 @@ impl Put {
             return false;
         }
         Win::current().w_cursor.lnum = if self.dir == FORWARD { lnum - 1 } else { lnum };
-        Buf::current().b_op_start = Win::current().w_cursor; // for mark_adjust()
+        Buf::current().edit().b_op_start = Win::current().w_cursor; // for mark_adjust()
         true
     }
 
@@ -318,7 +317,7 @@ impl Put {
     /// message already out) when there is nothing to put or the line could
     /// not be split or saved for undo.
     fn run(&mut self, regname: RegName) {
-        if !Buf::current().terminal.is_null() {
+        if !Buf::current().terminal().is_null() {
             terminal_paste(&self.lines, self.count);
             return;
         }
@@ -330,11 +329,11 @@ impl Put {
             }
             if self.flags & PUT_LINE_FORWARD != 0 {
                 // `p` over a Visual block puts the lines below the block.
-                Win::current().w_cursor = Buf::current().b_visual.vi_end;
+                Win::current().w_cursor = Buf::current().b_visual().vi_end;
                 self.dir = FORWARD;
             }
-            Buf::current().b_op_start = Win::current().w_cursor;
-            Buf::current().b_op_end = Win::current().w_cursor;
+            Buf::current().set_b_op_start(Win::current().w_cursor);
+            Buf::current().set_b_op_end(Win::current().w_cursor);
         }
 
         if self.flags & PUT_LINE != 0 {
@@ -373,10 +372,10 @@ impl Put {
                     col += bytelen.get();
                     if !self.lines[0].is_empty() {
                         Win::current().w_cursor.col += bytelen.get();
-                        Buf::current().b_op_end.col += bytelen.get();
+                        Buf::current().edit().b_op_end.col += bytelen.get();
                     }
                 }
-                Buf::current().b_op_start = Win::current().w_cursor;
+                Buf::current().set_b_op_start(Win::current().w_cursor);
             } else if self.dir == BACKWARD {
                 // Linewise: BACKWARD is FORWARD on the previous line.
                 lnum -= 1;
@@ -431,8 +430,8 @@ pub fn do_put(
     count: c_int,
     flags: PutFlags,
 ) {
-    let orig_start = Buf::current().b_op_start;
-    let orig_end = Buf::current().b_op_end;
+    let orig_start = Buf::current().b_op_start();
+    let orig_end = Buf::current().b_op_end();
     let ve_flags = get_ve_flags(Win::current());
 
     // Remove any preinserted completion text (vim/vim#19329).
@@ -441,8 +440,8 @@ pub fn do_put(
     }
 
     // Defaults for the `'[` and `']` marks.
-    Buf::current().b_op_start = Win::current().w_cursor;
-    Buf::current().b_op_end = Win::current().w_cursor;
+    Buf::current().set_b_op_start(Win::current().w_cursor);
+    Buf::current().set_b_op_end(Win::current().w_cursor);
 
     if regname == b'.' && reg.is_none() {
         put_last_insert(dir, count, flags, ve_flags);
@@ -467,7 +466,7 @@ pub fn do_put(
         },
     };
 
-    if Buf::current().terminal.is_null() {
+    if Buf::current().terminal().is_null() {
         // Saving for undo can run autocommands, which may write the register,
         // so it happens before the register is read.
         let lnum = Win::current().w_cursor.lnum;
@@ -510,11 +509,11 @@ pub fn do_put(
     put.run(regname);
 
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
-        Buf::current().b_op_start = orig_start;
-        Buf::current().b_op_end = orig_end;
+        Buf::current().set_b_op_start(orig_start);
+        Buf::current().set_b_op_end(orig_end);
     }
 
-    if Buf::current().terminal.is_null() {
+    if Buf::current().terminal().is_null() {
         set_visual_active(false);
     }
 

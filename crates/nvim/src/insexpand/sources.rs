@@ -59,7 +59,7 @@ pub(crate) fn ins_compl_dictionaries(dict_start: &[u8], pat: &CStr, flags: c_int
 
     // If 'infercase' is set, don't use 'smartcase' here.
     let save_p_scs = p_scs();
-    if Buf::current().b_p_inf != 0 {
+    if Buf::current().b_p_inf() != 0 {
         P_SCS.set(false);
     }
     complete_from_dictionaries(dict, pat, flags, thesaurus, &mut regmatch, &mut dir);
@@ -312,7 +312,7 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: u8) -> Buf {
             wp.set(Some(at.id()));
             // Stop if we're back at the start, or found an unscanned
             // buffer in a focusable window.
-            if at.is_current() || (!at.buffer().b_scanned && at.w_config.focusable) {
+            if at.is_current() || (!at.buffer().b_scanned() && at.w_config.focusable) {
                 break;
             }
         }
@@ -332,12 +332,12 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: u8) -> Buf {
                 break;
             }
             let skip_buffer = if flag == b'U' {
-                buffer.b_p_bl != 0
+                buffer.b_p_bl() != 0
             } else {
-                buffer.b_p_bl == 0 || buffer.b_ml.ml_mfp.is_none() != (flag == b'u')
+                buffer.b_p_bl() == 0 || buffer.ml().ml_mfp.is_none() != (flag == b'u')
             };
             // Stop if we found a buffer that matches our criteria.
-            if !skip_buffer && !buffer.b_scanned {
+            if !skip_buffer && !buffer.b_scanned() {
                 break;
             }
         }
@@ -361,7 +361,7 @@ impl Buf {
     pub(crate) fn next_word_or_line(self, pos: Pos, out: &mut Vec<u8>) -> Option<(usize, bool)> {
         let mut lines = Lines::in_buffer(self);
         let (lnum, col) = (pos.lnum, usize::try_from(pos.col).unwrap_or(usize::MAX));
-        let line_count = self.b_ml.ml_line_count;
+        let line_count = self.line_count();
         let typed_len = usize::try_from(COMPL_LENGTH.get()).unwrap_or(usize::MAX);
         out.clear();
 
@@ -456,7 +456,7 @@ impl Buf {
             start_pos
         } else {
             Pos {
-                lnum: self.b_ml.ml_line_count,
+                lnum: self.line_count(),
                 col: ColNr::ZERO,
                 coladd: 0,
             }
@@ -475,7 +475,7 @@ impl Buf {
             {
                 return None;
             }
-            if current_pos.lnum >= LineNr::ONE && current_pos.lnum <= self.b_ml.ml_line_count {
+            if current_pos.lnum >= LineNr::ONE && current_pos.lnum <= self.line_count() {
                 let at = if whole_line {
                     0
                 } else {
@@ -514,7 +514,7 @@ impl Buf {
 
             // On to the next line, or round to the far end of the buffer
             // if `'wrapscan'` allows it.
-            let last = self.b_ml.ml_line_count;
+            let last = self.line_count();
             current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
             if !(LineNr::ONE..=last).contains(&current_pos.lnum) {
                 if !p_ws() {
@@ -557,7 +557,7 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
 
     // If 'infercase' is set, don't use 'smartcase' here.
     let save_p_scs = p_scs();
-    if ins_buf.b_p_inf != 0 {
+    if ins_buf.b_p_inf() != 0 {
         P_SCS.set(false);
     }
 
@@ -673,10 +673,11 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
         let fname = if in_curbuf {
             None
         } else {
-            ins_buf.name.short()
+            ins_buf.read().name.short().map(CStr::to_owned)
         };
         let (ic, dir) = (p_ic(), None);
-        let add_r = ins_compl_add_infercase(&found, len, ic, fname, dir, cont_s_ipos, score);
+        let add_r =
+            ins_compl_add_infercase(&found, len, ic, fname.as_deref(), dir, cont_s_ipos, score);
         if add_r != Added::Duplicate {
             if in_fuzzy_collect && best_score_is(score) {
                 COMPL_NUM_BESTS.set(COMPL_NUM_BESTS.get() + 1);

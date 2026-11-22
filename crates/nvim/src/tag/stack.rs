@@ -243,7 +243,7 @@ pub fn do_tags(_excmd: &mut ExArg) {
         );
         row.push(0);
         msg_display(cstr::in_bytes(&row), 0, false);
-        let hl = if item.fmark.fnum() == Some(Buf::current().handle) {
+        let hl = if item.fmark.fnum() == Some(Buf::current().handle()) {
             HLF_D
         } else {
             0
@@ -298,7 +298,8 @@ pub fn get_tagstack(window: Win, retdict: &mut Dict) {
     for entry in stack.entries() {
         let d = tv_dict_alloc();
         items.edit().push_dict(Some(d.clone()));
-        tag_details(entry, &mut d.edit());
+        let arg = &mut d.edit();
+        tag_details(entry, arg);
     }
 }
 

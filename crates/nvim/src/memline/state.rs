@@ -291,6 +291,9 @@ pub struct MemLine {
     /// The chunk index that keeps a byte-offset lookup from walking every
     /// block.
     pub(crate) ml_chunks: MlChunks,
+    /// How many times the cached line was written back: a debug counter
+    /// `nvim__buf_stats` reports.
+    pub(crate) flush_count: core::ffi::c_int,
 }
 
 impl MemLine {
@@ -309,6 +312,7 @@ impl MemLine {
             ml_line: LineCache::default(),
             ml_locked: None,
             ml_chunks: MlChunks::default(),
+            flush_count: 0,
         }
     }
 

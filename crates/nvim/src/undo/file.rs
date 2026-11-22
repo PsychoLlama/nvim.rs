@@ -43,7 +43,7 @@ use crate::os::fs::{dir_exists, mkdir_recurse, path_exists};
 /// that is no longer there.
 pub fn u_compute_hash(buffer: Buf, hash: &mut [u8; UNDO_HASH_SIZE as usize]) {
     let mut ctx = Sha256::new();
-    for lnum in 1..=buffer.b_ml.ml_line_count.get() {
+    for lnum in 1..=buffer.line_count().get() {
         let mut lines = buffer.lines();
         ctx.update(lines.line(LineNr::new(lnum)));
         // The terminating NUL goes in too, as a line separator.
@@ -179,24 +179,26 @@ pub(crate) fn serialize_header(bi: &mut BufInfo, hash: &[u8; UNDO_HASH_SIZE as u
     if !bi.write(hash) {
         return false;
     }
-    bi.write_int(buf.b_ml.ml_line_count.get(), 4);
+    bi.write_int(buf.line_count().get(), 4);
 
-    let line: &[u8] = buf.b_u_line.as_deref().unwrap_or_default();
+    let held = buf.read();
+    let line: &[u8] = held.b_u_line.as_deref().unwrap_or_default();
     bi.write_len(line.len());
     if !line.is_empty() && !bi.write(line) {
         return false;
     }
-    bi.write_int(buf.b_u_line_lnum.get(), 4);
-    bi.write_int(buf.b_u_line_colnr.get(), 4);
+    drop(held);
+    bi.write_int(buf.b_u_line_lnum().get(), 4);
+    bi.write_int(buf.b_u_line_colnr().get(), 4);
 
-    bi.put_header_link(buf.b_u_oldhead);
-    bi.put_header_link(buf.b_u_newhead);
-    bi.put_header_link(buf.b_u_curhead);
-    bi.write_int(buf.b_u_numhead, 4);
-    bi.write_int(buf.b_u_seq_last, 4);
-    bi.write_int(buf.b_u_seq_cur, 4);
-    bi.put_time(buf.b_u_time_cur);
-    bi.put_optional_field(UF_LAST_SAVE_NR, buf.b_u_save_nr_last);
+    bi.put_header_link(buf.b_u_oldhead());
+    bi.put_header_link(buf.b_u_newhead());
+    bi.put_header_link(buf.b_u_curhead());
+    bi.write_int(buf.b_u_numhead(), 4);
+    bi.write_int(buf.b_u_seq_last(), 4);
+    bi.write_int(buf.b_u_seq_cur(), 4);
+    bi.put_time(buf.b_u_time_cur());
+    bi.put_optional_field(UF_LAST_SAVE_NR, buf.b_u_save_nr_last());
     true
 }
 

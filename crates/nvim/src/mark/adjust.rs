@@ -224,7 +224,7 @@ pub fn mark_adjust_nofold(
 }
 
 pub fn mark_adjust_buf(
-    mut buffer: Buf,
+    buffer: Buf,
     line1: LineNr,
     line2: LineNr,
     amount: i32,
@@ -240,7 +240,7 @@ pub fn mark_adjust_buf(
         return;
     }
 
-    let fnum = buffer.handle;
+    let fnum = buffer.handle();
     let shift = LineShift {
         line1,
         line2,
@@ -262,7 +262,8 @@ pub fn mark_adjust_buf(
             }
         });
         let prompt = buf_is_prompt(Some(buffer));
-        let b: &mut Buffer = &mut buffer;
+        let mut edit = buffer.edit();
+        let b: &mut Buffer = &mut edit;
         for mark in &mut b.b_namedm {
             shift.mark(mark);
         }
@@ -273,7 +274,7 @@ pub fn mark_adjust_buf(
         // for a terminal buffer, while it names the last line, which the
         // terminal is about to rewrite anyway.
         if !equalpos(b.b_last_cursor.mark, INIT_POS)
-            && (!by_term || b.b_last_cursor.mark.lnum < b.b_ml.ml_line_count)
+            && (!by_term || b.b_last_cursor.mark.lnum < b.b_ml.get_mut().ml_line_count)
         {
             shift.mark(&mut b.b_last_cursor);
         }
@@ -286,12 +287,13 @@ pub fn mark_adjust_buf(
         }
         shift.line_nodel(&mut b.b_visual.vi_start.lnum);
         shift.line_nodel(&mut b.b_visual.vi_end.lnum);
+        drop(edit);
 
         // The quickfix list is asked once for the buffer and then once per
         // window for that window's location list; a buffer with no surviving
         // entry in either loses the corresponding flag.
         if !buffer.adjust_quickfix_entries(None, line1, line2, amount, amount_after) {
-            buffer.b_has_qf_entry &= !BUF_HAS_QF_ENTRY;
+            buffer.set_b_has_qf_entry(buffer.b_has_qf_entry() & !BUF_HAS_QF_ENTRY);
         }
         let mut found_one = false;
         for win in tab_windows() {
@@ -299,7 +301,7 @@ pub fn mark_adjust_buf(
                 buffer.adjust_quickfix_entries(Some(win), line1, line2, amount, amount_after);
         }
         if !found_one {
-            buffer.b_has_qf_entry &= !BUF_HAS_LL_ENTRY;
+            buffer.set_b_has_qf_entry(buffer.b_has_qf_entry() & !BUF_HAS_LL_ENTRY);
         }
     }
 
@@ -389,8 +391,8 @@ pub fn mark_adjust_buf(
 
     // The per-window remembered cursor of every window that has ever shown
     // this buffer, including ones that no longer exist.
-    let line_count = buffer.b_ml.ml_line_count;
-    for info in &mut buffer.b_wininfo {
+    let line_count = buffer.line_count();
+    for info in &mut buffer.edit().b_wininfo {
         let pos = &mut info.wi_mark.mark;
         if !by_term || pos.lnum < line_count {
             shift.cursor(pos);
@@ -405,7 +407,7 @@ pub fn mark_adjust_buf(
 /// already on `buffer`'s last line.
 fn follows(win: Win, by_term: bool, buffer: Buf) -> bool {
     if by_term {
-        win.w_cursor.lnum < buffer.b_ml.ml_line_count
+        win.w_cursor.lnum < buffer.line_count()
     } else {
         !win.is_current()
     }
@@ -435,8 +437,8 @@ pub fn mark_col_adjust(
         return;
     }
 
-    let (mut buf, mut cur) = (Buf::current(), Win::current());
-    let fnum = buf.handle;
+    let (buf, mut cur) = (Buf::current(), Win::current());
+    let fnum = buf.handle();
     let shift = ColShift {
         lnum,
         mincol,
@@ -451,7 +453,8 @@ pub fn mark_col_adjust(
         }
     });
     let prompt = buf_is_prompt(Some(buf));
-    let b: &mut Buffer = &mut buf;
+    let mut edit = buf.edit();
+    let b: &mut Buffer = &mut edit;
     for mark in &mut b.b_namedm {
         shift.mark(mark);
     }
@@ -466,6 +469,7 @@ pub fn mark_col_adjust(
     }
     shift.col(&mut b.b_visual.vi_start);
     shift.col(&mut b.b_visual.vi_end);
+    drop(edit);
     shift.col(&mut cur.w_pcmark);
     shift.col(&mut cur.w_prev_pcmark);
     let mut saved = SAVED_CURSOR.get();

@@ -158,12 +158,12 @@ pub(crate) fn compl_shows_dir_backward() -> bool {
 pub fn check_compl_option(dict_opt: bool) -> bool {
     let buffer = Buf::current();
     let empty = if dict_opt {
-        let unset = buffer.b_p_dict.bytes().is_empty() && p_dict(CStr::is_empty);
+        let unset = buffer.read().b_p_dict.bytes().is_empty() && p_dict(CStr::is_empty);
         unset && Win::current().w_onebuf_opt.wo_spell == 0
     } else {
-        buffer.b_p_tsr.bytes().is_empty()
+        buffer.read().b_p_tsr.bytes().is_empty()
             && p_tsr(CStr::is_empty)
-            && buffer.b_p_tsrfu.bytes().is_empty()
+            && buffer.read().b_p_tsrfu.bytes().is_empty()
             && p_tsrfu(CStr::is_empty)
     };
     if !empty {
@@ -364,7 +364,7 @@ pub(crate) fn ins_compl_long_shown_match() -> bool {
 /// With no current buffer (a lib test drives the match list without one)
 /// the global value answers alone; the editor always has one.
 pub(crate) fn completeopt_flags() -> c_uint {
-    let local = Buf::current_or_none().map_or(0, |buf| buf.b_cot_flags);
+    let local = Buf::current_or_none().map_or(0, |buf| buf.b_cot_flags());
     if local != 0 { local } else { COT_FLAGS.get() }
 }
 
@@ -445,7 +445,7 @@ pub(crate) fn ins_compl_need_restart() -> bool {
 
 /// `'autocomplete'`, buffer-local value first (`-1` means "unset").
 pub(crate) fn ins_compl_has_autocomplete() -> bool {
-    let local = Buf::current().b_p_ac;
+    let local = Buf::current().b_p_ac();
     if local >= 0 { local != 0 } else { p_ac() }
 }
 

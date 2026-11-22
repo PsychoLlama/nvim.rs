@@ -236,7 +236,7 @@ fn ignored_in_every_window(event: AutoEvent, buffer: Option<Buf>) -> bool {
     if buffer == Buf::current_or_none() {
         return event_ignored(event, Win::current().w_onebuf_opt.wo_eiw.bytes(), true);
     }
-    if !buffer.is_some_and(|b| b.b_nwindows > 0) {
+    if !buffer.is_some_and(|b| b.b_nwindows() > 0) {
         return false;
     }
     tab_windows()
@@ -275,7 +275,7 @@ pub fn apply_autocmds_group(
         aubuflocal_remove(buffer);
     }
     if retval && event == AutoEvent::FileType {
-        Buf::current().b_au_did_filetype = true;
+        Buf::current().set_b_au_did_filetype(true);
     }
 
     retval
@@ -370,7 +370,7 @@ fn publish_names(
     {
         Some(name.clone())
     } else {
-        buffer.and_then(|b| b.name.full().map(XString::from_cstr))
+        buffer.and_then(|b| b.read().name.full().map(XString::from_cstr))
     };
     // The unexpanded `<afile>` is kept for the API's `file` field; the
     // expansion's copy is cut at MAXPATHL, as upstream's is: `eval_vars`
@@ -383,18 +383,21 @@ fn publish_names(
     AUTOCMD_FNAME_FULL.set(false);
 
     // `<abuf>`.
-    AUTOCMD_BUFNR.set(buffer.map_or(0, |b| b.handle.get()));
+    AUTOCMD_BUFNR.set(buffer.map_or(0, |b| b.handle().get()));
 
     // The name to match the patterns against.
     let mut sfname: Option<XString> = None;
     let fname: XString = match pattern.filter(|name| !name.is_empty()) {
         None => match (buffer, event) {
             (None, _) => XString::new(),
-            (Some(b), AutoEvent::Syntax) => b.b_p_syn.get(),
-            (Some(b), AutoEvent::FileType) => b.b_p_ft.get(),
+            (Some(b), AutoEvent::Syntax) => b.read().b_p_syn.get(),
+            (Some(b), AutoEvent::FileType) => b.read().b_p_ft.get(),
             (Some(b), _) => {
-                sfname = b.name.short().map(XString::from_cstr);
-                b.name.full().map_or_else(XString::new, XString::from_cstr)
+                sfname = b.read().name.short().map(XString::from_cstr);
+                b.read()
+                    .name
+                    .full()
+                    .map_or_else(XString::new, XString::from_cstr)
             }
         },
         Some(name) => {
@@ -443,7 +446,7 @@ fn fire(
     let save_autocmd_match = AUTOCMD_MATCH.take();
     let save_autocmd_busy = AUTOCMD_BUSY.get();
     let save_autocmd_nested = AUTOCMD_NESTED.get();
-    let save_changed = Buf::current().b_changed != 0;
+    let save_changed = Buf::current().b_changed() != 0;
     let old_curbuf = Buf::current_raw();
 
     let names = publish_names(event, pattern, afile, buffer);
@@ -479,7 +482,7 @@ fn fire(
             save_redobuff(&mut save_redo);
             did_save_redobuff = true;
         }
-        Buf::current().b_did_filetype = Buf::current().b_keep_filetype;
+        Buf::current().set_b_did_filetype(Buf::current().b_keep_filetype());
     }
 
     // Some commands need to know autocommands are running.
@@ -490,8 +493,8 @@ fn fire(
     // Remembered for `did_filetype()` and `:setfiletype`, but only once
     // 'filetype' is set: a FileType for an empty one (`:set ft=`) must
     // not stop a later `:setf` from detecting the real type.
-    if event == AutoEvent::FileType && Buf::current().b_p_ft.first_byte() != 0 {
-        Buf::current().b_did_filetype = true;
+    if event == AutoEvent::FileType && Buf::current().read().b_p_ft.first_byte() != 0 {
+        Buf::current().set_b_did_filetype(true);
     }
 
     let tail = names.fname.len() - path_tail(names.fname.as_cstr()).count_bytes();
@@ -551,16 +554,16 @@ fn fire(
         if did_save_redobuff {
             restore_redobuff(&mut save_redo);
         }
-        Buf::current().b_did_filetype = false;
+        Buf::current().set_b_did_filetype(false);
         free_deferred();
     }
 
     // Only if we are still in the same buffer.
     if Buf::current_raw() == old_curbuf && keeps_changed_flag(event) {
-        if Buf::current().b_changed != ::core::ffi::c_int::from(save_changed) {
+        if Buf::current().b_changed() != ::core::ffi::c_int::from(save_changed) {
             NEED_MAKETITLE.set(true);
         }
-        Buf::current().b_changed = ::core::ffi::c_int::from(save_changed);
+        Buf::current().set_b_changed(::core::ffi::c_int::from(save_changed));
     }
 
     // The patterns and commands marked deleted can really go now.

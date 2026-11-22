@@ -253,7 +253,7 @@ impl SpellScan {
             self.buf[line_len] = 0;
             skip::white(line) == line.len()
         };
-        if lnum < window.w_buffer.b_ml.ml_line_count {
+        if lnum < window.w_buffer.line_count() {
             let next = lines.line(lnum + 1);
             spell_cat_line(&mut self.buf[line_len..], next, MAXWLEN);
         }
@@ -347,7 +347,7 @@ impl SpellScan {
         if self.lnum == start && self.wrapped {
             return false;
         }
-        let line_count = window.w_buffer.b_ml.ml_line_count;
+        let line_count = window.w_buffer.line_count();
 
         if self.dir == BACKWARD {
             if self.lnum > LineNr::ONE {

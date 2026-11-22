@@ -161,7 +161,7 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
     }
     let entry_fnum = entry_fnum(cur_alist(), argn);
     let refused = !is_split_cmd
-        && entry_fnum != Some(Buf::current().handle)
+        && entry_fnum != Some(Buf::current().handle())
         && check_can_set_curbuf_forceit(excmd.forceit).is_err();
     if refused {
         return;
@@ -285,8 +285,8 @@ pub fn ex_argedit(excmd: &mut ExArg) {
         return;
     }
     maketitle();
-    let empty_curbuf = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY)
-        && (Buf::current().name.full().is_none() || curbuf_is_reusable);
+    let empty_curbuf = Buf::current().ml_flags().has(MlFlags::EMPTY)
+        && (Buf::current().read().name.full().is_none() || curbuf_is_reusable);
     if cur_arg_idx() == 0 && empty_curbuf {
         argn = 0;
     }

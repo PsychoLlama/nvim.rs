@@ -47,10 +47,12 @@ pub fn win_execute_before(args: &mut WinExecute, window: Win, tabpage: TabPage) 
         // window is entered; `apply_acd` records that it has already
         // landed where the saved one says, so the restore can skip it.
         let buf = Buf::current();
-        let short = buf.name.short();
-        if short.is_some() && buf.name.shown().map(CStr::as_ptr) == short.map(CStr::as_ptr) {
+        let held = buf.read();
+        let short = held.name.short();
+        if short.is_some() && buf.read().name.shown().map(CStr::as_ptr) == short.map(CStr::as_ptr) {
             args.save_sfname = short.map(XString::from_cstr);
         }
+        drop(held);
         do_autochdir();
         if let Some(autocwd) = current_dir() {
             args.apply_acd = cwd.as_cstr() == autocwd.as_cstr();
@@ -75,7 +77,7 @@ pub fn win_execute_after(args: &mut WinExecute) {
         // As upstream, a directory gone meanwhile is left behind quietly.
         let _ = os_chdir(cwd.as_cstr());
         if let Some(short) = args.save_sfname.take() {
-            Buf::current().name.set_short(Some(short));
+            Buf::current().edit().name.set_short(Some(short));
         }
     }
     // `valid_win` re-checks the saved window, because the code that ran may

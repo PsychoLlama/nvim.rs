@@ -107,10 +107,11 @@ pub fn canon_props(name: &[u8]) -> EncProps {
 /// is not writing one.
 pub fn bomb_size() -> c_int {
     let buf = Buf::current();
-    if buf.b_p_bomb == 0 || buf.b_p_bin != 0 {
+    if buf.b_p_bomb() == 0 || buf.b_p_bin() != 0 {
         return 0;
     }
-    let fenc = buf.b_p_fenc.bytes();
+    let held = buf.read();
+    let fenc = held.b_p_fenc.bytes();
     if fenc.is_empty() || fenc == b"utf-8" {
         3
     } else if fenc.starts_with(b"ucs-2") || fenc.starts_with(b"utf-16") {

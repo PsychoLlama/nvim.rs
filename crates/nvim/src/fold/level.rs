@@ -157,7 +157,7 @@ impl Win {
         let mut lvl = level;
         let mut startlnum2 = startlnum;
         let firstlnum = line.lnum;
-        let linecount = line.win.buffer().b_ml.ml_line_count - line.off;
+        let linecount = line.win.buffer().line_count() - line.off;
         let mut finish = false;
         line.lnum_save = line.lnum;
         while !GOT_INT.get() {
@@ -319,7 +319,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     }
     if win.w_foldinvalid {
         top = LineNr::ONE;
-        bot = win.buffer().b_ml.ml_line_count;
+        bot = win.buffer().line_count();
         win.w_foldinvalid = false;
         win.with_folds(|folds| forget_small_flags(folds));
     }
@@ -328,7 +328,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
         top = (top - DIFF_CONTEXT.get()).max(LineNr::ONE);
         bot += DIFF_CONTEXT.get();
     }
-    top = top.min(win.buffer().b_ml.ml_line_count);
+    top = top.min(win.buffer().line_count());
     let mut line = FoldLine {
         win,
         lnum: LineNr::ZERO,
@@ -425,7 +425,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     let mut end = bot;
     // Re-read rather than kept: 'foldexpr' is user code, and it can change
     // the buffer under this loop.
-    let line_count = || win.buffer().b_ml.ml_line_count;
+    let line_count = || win.buffer().line_count();
     if start > end && end < line_count() {
         end = start;
     }
@@ -864,7 +864,7 @@ pub(super) fn foldlevel_indent(line: &mut FoldLine) {
     // A blank line, or one starting with a 'foldignore' character, takes
     // its level from its neighbours.
     if first == 0 || has_char(win.w_onebuf_opt.wo_fdi.cstr(), Codepoint::from(first)) {
-        line.lvl = if lnum == LineNr::ONE || lnum == buf.b_ml.ml_line_count {
+        line.lvl = if lnum == LineNr::ONE || lnum == buf.line_count() {
             0
         } else {
             -1
@@ -953,7 +953,7 @@ pub(super) fn foldlevel_expr(line: &mut FoldLine) {
             line.lvl = 0;
             line.lvl_next = 0;
         }
-        if lnum == Buf::current().b_ml.ml_line_count {
+        if lnum == Buf::current().line_count() {
             line.lvl_next = 0;
         }
     }
@@ -966,7 +966,7 @@ pub(super) fn foldlevel_syntax(line: &mut FoldLine) {
     let lnum = line.lnum + line.off;
     line.lvl = syn_get_foldlevel(line.win, lnum);
     line.start = 0;
-    if lnum < line.win.buffer().b_ml.ml_line_count {
+    if lnum < line.win.buffer().line_count() {
         // A fold that starts on the next line starts here as far as the
         // tree is concerned, so the syntax item's first line is inside.
         let n = syn_get_foldlevel(line.win, lnum + 1);

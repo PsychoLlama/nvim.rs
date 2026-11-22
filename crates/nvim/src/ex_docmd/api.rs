@@ -367,9 +367,9 @@ fn report(excmd: &mut ExArg, ran: Result<c_int, CmdError>) -> c_int {
 fn execute_checked(excmd: &mut ExArg, preview: bool) -> Result<c_int, CmdError> {
     let refuse = |msg: &'static CStr| Err(CmdError::Message(ex_msg(msg)));
     // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
-    if Buf::current().b_p_ma == 0
+    if Buf::current().b_p_ma() == 0
         && excmd.argt.has(ExArgt::MODIFY)
-        && !(!Buf::current().terminal.is_null()
+        && !(!Buf::current().terminal().is_null()
             && (excmd.cmdidx == CmdIdx::put || excmd.cmdidx == CmdIdx::iput))
     {
         return refuse(E_MODIFIABLE);

@@ -231,7 +231,7 @@ fn virtual_column(rex: Rex) -> uint32_t {
     };
     // A string match has no line numbers, and a multi-line match may be
     // running over a line that has since been deleted.
-    if rex.multi() && (lnum <= LineNr::ZERO || lnum > wp.buffer().b_ml.ml_line_count) {
+    if rex.multi() && (lnum <= LineNr::ZERO || lnum > wp.buffer().line_count()) {
         lnum = LineNr::ONE;
     }
     win_linetabsize(wp, lnum, rex.line(), rex.col()).cast_unsigned()

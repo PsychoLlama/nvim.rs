@@ -66,7 +66,7 @@ pub(crate) fn compute_buffer_local_count(addr_type: CmdAddr, lnum: LineNr, offse
     let loaded_only = addr_type == CmdAddr::LoadedBuffers;
     let mut count = offset;
     let mut buf = head();
-    while LineNr::new(buf.handle.get()) < lnum {
+    while LineNr::new(buf.handle().get()) < lnum {
         let Some(next) = buf.next() else { break };
         buf = next;
     }
@@ -76,7 +76,7 @@ pub(crate) fn compute_buffer_local_count(addr_type: CmdAddr, lnum: LineNr, offse
         let Some(next) = step(buf) else { break };
         buf = next;
         if loaded_only {
-            while buf.b_ml.ml_mfp.is_none() {
+            while buf.ml().ml_mfp.is_none() {
                 let Some(next) = step(buf) else { break };
                 buf = next;
             }
@@ -86,13 +86,13 @@ pub(crate) fn compute_buffer_local_count(addr_type: CmdAddr, lnum: LineNr, offse
     // gives up at the end of the list. Back out in the *opposite*
     // direction to the one the offset asked for.
     if loaded_only {
-        while buf.b_ml.ml_mfp.is_none() {
+        while buf.ml().ml_mfp.is_none() {
             let next = if offset >= 0 { buf.prev() } else { buf.next() };
             let Some(next) = next else { break };
             buf = next;
         }
     }
-    buf.handle.get()
+    buf.handle().get()
 }
 
 /// The head of the buffer list, which upstream dereferences here without
@@ -247,19 +247,19 @@ fn whole_range(excmd: &mut ExArg) -> Result<(), CmdError> {
     match excmd.addr_type {
         CmdAddr::Lines => {
             excmd.line1 = LineNr::ONE;
-            excmd.line2 = Buf::current().b_ml.ml_line_count;
+            excmd.line2 = Buf::current().line_count();
         }
         // `%` over an "other" kind still means every line of the buffer.
         CmdAddr::Other => {
             excmd.number1 = 1;
-            excmd.number2 = Buf::current().b_ml.ml_line_count.get();
+            excmd.number2 = Buf::current().line_count().get();
         }
         CmdAddr::LoadedBuffers => {
             (excmd.number1, excmd.number2) = loaded_buffer_range();
         }
         CmdAddr::Buffers => {
-            excmd.number1 = head().handle.get();
-            excmd.number2 = tail().handle.get();
+            excmd.number1 = head().handle().get();
+            excmd.number2 = tail().handle().get();
         }
         CmdAddr::Windows | CmdAddr::Tabs => {
             // Only a *user* command may say `%` over windows or tab
@@ -479,7 +479,7 @@ fn mark_address(
     let found = mark_get(Buf::current(), Win::current(), flag, name);
     *cmd += 1;
     match &found {
-        Some(fm) if fm.fnum() != Some(Buf::current().handle) => {
+        Some(fm) if fm.fnum() != Some(Buf::current().handle()) => {
             mark_move_to(Some(fm), 0 as MarkMove);
             Ok(Some(Win::current().w_cursor.lnum))
         }
@@ -516,7 +516,7 @@ fn search_address(
     }
     let pos = Win::current().w_cursor;
     if lnum > LineNr::ZERO && lnum != MAXLNUM {
-        Win::current().w_cursor.lnum = lnum.min(Buf::current().b_ml.ml_line_count);
+        Win::current().w_cursor.lnum = lnum.min(Buf::current().line_count());
     }
     Win::current().w_cursor.col = if delim == b'/' && Win::current().w_cursor.lnum > LineNr::ZERO {
         ColNr::MAX
@@ -678,7 +678,7 @@ fn dot_lnum(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
         CmdAddr::Lines | CmdAddr::Other => Win::current().w_cursor.lnum,
         CmdAddr::Windows => LineNr::new(current_win_nr(Win::current_or_none())),
         CmdAddr::Arguments => LineNr::new(Win::current().w_arg_idx + 1),
-        CmdAddr::LoadedBuffers | CmdAddr::Buffers => LineNr::new(Buf::current().handle.get()),
+        CmdAddr::LoadedBuffers | CmdAddr::Buffers => LineNr::new(Buf::current().handle().get()),
         CmdAddr::Tabs => LineNr::new(current_tab_nr(TabPage::current_or_none())),
         CmdAddr::Quickfix => LineNr::new(len_as_int(qf_get_cur_idx(quickfix()))),
         CmdAddr::QuickfixValid => LineNr::new(qf_get_cur_valid_idx(quickfix())),
@@ -694,11 +694,11 @@ fn last_lnum(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
     // As [`dot_lnum`].
     let quickfix = || cmdidx.expect("a quickfix address is asked by a quickfix command");
     Addr::At(match addr_type {
-        CmdAddr::Lines | CmdAddr::Other => Buf::current().b_ml.ml_line_count,
+        CmdAddr::Lines | CmdAddr::Other => Buf::current().line_count(),
         CmdAddr::Windows => LineNr::new(current_win_nr(None)),
         CmdAddr::Arguments => LineNr::new(arglist_len()),
         CmdAddr::LoadedBuffers => LineNr::new(loaded_buffer_range().1),
-        CmdAddr::Buffers => LineNr::new(tail().handle.get()),
+        CmdAddr::Buffers => LineNr::new(tail().handle().get()),
         CmdAddr::Tabs => LineNr::new(current_tab_nr(None)),
         // An empty quickfix list still has a last entry, numbered 1.
         CmdAddr::Quickfix => LineNr::new(len_as_int(qf_get_size(quickfix()))).max(LineNr::ONE),
@@ -739,7 +739,7 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Result<(), CmdError> {
             // may add a line there.
             let extra =
                 c_int::from(excmd.cmdidx == CmdIdx::diffget || excmd.cmdidx == CmdIdx::diffput);
-            if excmd.line2 > Buf::current().b_ml.ml_line_count + extra {
+            if excmd.line2 > Buf::current().line_count() + extra {
                 return invrange();
             }
         }
@@ -758,23 +758,23 @@ pub(crate) fn invalid_range(excmd: &mut ExArg) -> Result<(), CmdError> {
         }
         CmdAddr::LoadedBuffers => {
             let mut buf = head();
-            while buf.b_ml.ml_mfp.is_none() {
+            while buf.ml().ml_mfp.is_none() {
                 let Some(next) = buf.next() else {
                     return invrange();
                 };
                 buf = next;
             }
-            if excmd.number1 < buf.handle.get() {
+            if excmd.number1 < buf.handle().get() {
                 return invrange();
             }
             let mut buf = tail();
-            while buf.b_ml.ml_mfp.is_none() {
+            while buf.ml().ml_mfp.is_none() {
                 let Some(prev) = buf.prev() else {
                     return invrange();
                 };
                 buf = prev;
             }
-            if excmd.number2 > buf.handle.get() {
+            if excmd.number2 > buf.handle().get() {
                 return invrange();
             }
         }

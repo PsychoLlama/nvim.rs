@@ -190,7 +190,7 @@ impl PreviewBuf {
 
     /// Put `"|lnum| line"` into the scratch and append it to the preview.
     fn add_line(&mut self, orig_buf: Buf, lnum: LineNr) {
-        let line = if lnum == orig_buf.b_ml.ml_line_count + 1 {
+        let line = if lnum == orig_buf.line_count() + 1 {
             Vec::new()
         } else {
             let line = Lines::in_buffer(orig_buf).line(lnum).to_vec();

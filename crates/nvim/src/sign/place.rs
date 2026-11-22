@@ -373,12 +373,14 @@ pub(crate) fn sign_jump(id: c_int, group: Option<&[u8]>, buffer: Buf) -> Result<
         check_cursor_lnum(win);
         beginline(BeginlineOpts::WHITE);
     } else {
-        let Some(name) = buffer.name.shown() else {
+        let held = buffer.read();
+        let Some(name) = held.name.shown() else {
             return Err(SignError::NoBufferName);
         };
         let mut cmd = format!("e +{lnum} ").into_bytes();
         cmd.extend_from_slice(name.to_bytes());
         let cmd = CString::new(cmd).expect("a buffer name is a C string");
+        drop(held);
         let _ = do_cmdline_cmd(&cmd);
     }
 

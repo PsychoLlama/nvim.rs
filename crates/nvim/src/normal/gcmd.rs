@@ -193,8 +193,8 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
 /// shorter.
 pub(crate) fn nv_gi_cmd(cmd_arg: &mut CmdArg) {
     let mut win = Win::current();
-    if Buf::current().b_last_insert.mark.lnum != LineNr::ZERO {
-        win.w_cursor = Buf::current().b_last_insert.mark;
+    if Buf::current().read().b_last_insert.mark.lnum != LineNr::ZERO {
+        win.w_cursor = Buf::current().read().b_last_insert.mark;
         check_cursor_lnum(win);
         let len = get_cursor_line_len();
         if win.w_cursor.col > len {

@@ -134,9 +134,9 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     Win::current().w_cursor = SAVED_CURSOR.get();
     SAVED_CURSOR.set(SAVED_CURSOR.get().with_lnum(LineNr::ZERO));
 
-    if Win::current().w_cursor.lnum > Buf::current().b_ml.ml_line_count {
+    if Win::current().w_cursor.lnum > Buf::current().line_count() {
         // "cannot happen"
-        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+        Win::current().w_cursor.lnum = Buf::current().line_count();
         coladvance(Win::current(), ColNr::MAX);
     } else {
         check_cursor_col(Win::current());

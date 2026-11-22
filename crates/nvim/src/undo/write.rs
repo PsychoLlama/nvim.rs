@@ -41,7 +41,7 @@ pub fn u_write_undo(
     let file_name: &CStr = match name {
         Some(name) => name,
         None => {
-            let full = buffer.name.full().map(XString::from_cstr);
+            let full = buffer.read().name.full().map(XString::from_cstr);
             match u_get_undo_file_name(full.as_ref().map(XString::as_cstr), false) {
                 Some(found) => {
                     picked = found;
@@ -86,7 +86,7 @@ fn write_undo_file(
         }
         os_remove(file_name);
     }
-    if buffer.b_u_numhead == 0 && buffer.b_u_line.is_none() {
+    if buffer.b_u_numhead() == 0 && buffer.read().b_u_line.is_none() {
         if p_verbose() > 0 {
             verb_msg(gettext(c"Skipping undo file write, nothing to undo"));
         }
@@ -96,7 +96,7 @@ fn write_undo_file(
     // The undo file inherits the edited file's permissions, minus
     // anything but read/write: it holds the same text. A copy of the name:
     // the write below syncs undo, which reaches the editor.
-    let edited = buffer.name.full().map(XString::from_cstr);
+    let edited = buffer.read().name.full().map(XString::from_cstr);
     let perm = edited
         .as_ref()
         .map_or(0o600, |name| match getperm(name.as_cstr()) {
@@ -203,13 +203,13 @@ fn write_tree(bi: &mut BufInfo, buffer: Buf, hash: &[u8; UNDO_HASH_SIZE as usize
     // reaches them: the links are sequence numbers, so the reader does
     // not care which order they arrive in. One stamp does for both of the
     // walk's marks, because "reached" is the whole question here.
-    let tree = buffer.tree_walk(buffer.b_u_oldhead, Marks::next_once());
+    let tree = buffer.tree_walk(buffer.b_u_oldhead(), Marks::next_once());
     for visit in tree {
         if !visit.first {
             continue;
         }
         if let Some(uh) = buffer.header(visit.link)
-            && !serialize_uhp(bi, uh)
+            && !serialize_uhp(bi, &uh)
         {
             return false;
         }
@@ -217,8 +217,8 @@ fn write_tree(bi: &mut BufInfo, buffer: Buf, hash: &[u8; UNDO_HASH_SIZE as usize
     let mut write_ok = bi.write_bytes(UF_HEADER_END_MAGIC as uintmax_t, 2);
     // 'fsync' asks for the bytes to be on the disk before we call the
     // write done.
-    let fsync_wanted = if buffer.b_p_fs >= 0 {
-        buffer.b_p_fs != 0
+    let fsync_wanted = if buffer.b_p_fs() >= 0 {
+        buffer.b_p_fs() != 0
     } else {
         p_fs()
     };

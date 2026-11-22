@@ -418,7 +418,10 @@ impl BufName {
 #[derive(Debug)]
 pub struct Buffer {
     pub handle: Handle,
-    pub b_ml: MemLine,
+    /// The lines. A cell of its own inside the buffer: a line read fills the
+    /// line cache, which a read of the buffer (another field held across it)
+    /// must not refuse. [`crate::winlayer::Buf::ml`] lends it for a walk.
+    pub b_ml: core::cell::RefCell<MemLine>,
     /// The buffer list, `FIRSTBUF`..`LASTBUF`. A handle rather than an
     /// address: the registry resolves it, so a link can never outlive what
     /// it names, and the buffer stays movable. `winlayer::Buf::next`/`prev`
@@ -698,7 +701,6 @@ pub struct Buffer {
     pub deleted_bytes2: size_t,
     pub deleted_codepoints: size_t,
     pub deleted_codeunits: size_t,
-    pub flush_count: ::core::ffi::c_int,
 }
 #[derive(Debug)]
 pub struct file_buffer_b_signcols {

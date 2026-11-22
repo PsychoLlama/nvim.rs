@@ -93,9 +93,9 @@ pub(crate) fn ins_del() {
             // Adjust `ORIG_LINE_COUNT` when more lines were deleted than
             // added, so a later `open_line` can still reach every line.
             if STATE.get() & VREPLACE_FLAG != 0
-                && ORIG_LINE_COUNT.get() > Buf::current().b_ml.ml_line_count
+                && ORIG_LINE_COUNT.get() > Buf::current().line_count()
             {
-                ORIG_LINE_COUNT.set(Buf::current().b_ml.ml_line_count);
+                ORIG_LINE_COUNT.set(Buf::current().line_count());
             }
         }
     } else if delete_one_char().is_err() {
@@ -194,7 +194,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
         // is one before the cursor.
         let mut mincol: ColNr = ColNr::ZERO;
         if mode == Backspace::Line
-            && (Buf::current().b_p_ai != 0 || cindent_on())
+            && (Buf::current().b_p_ai() != 0 || cindent_on())
             && !REVINS_ON.get()
         {
             let save_col = Win::current().w_cursor.col;
@@ -322,7 +322,7 @@ fn bs_join_line() -> bool {
                 })
             });
             if let Some(newp) = shorter {
-                Buf::current().b_ml.swap_cached_text(newp);
+                Buf::current().ml().swap_cached_text(newp);
             }
         }
 

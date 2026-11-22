@@ -210,7 +210,7 @@ impl MapTable {
     pub(crate) fn with<R>(self, f: impl FnOnce(&MapTables) -> R) -> R {
         match self {
             MapTable::Global => GLOBAL_MAPS.with(f),
-            MapTable::Buffer(buf) => match buf.b_maps.as_deref() {
+            MapTable::Buffer(buf) => match buf.read().b_maps.as_deref() {
                 Some(tables) => f(tables),
                 // A buffer that never had a local mapping.
                 None => f(&MapTables::new()),
@@ -222,7 +222,7 @@ impl MapTable {
     pub(crate) fn with_mut<R>(self, f: impl FnOnce(&mut MapTables) -> R) -> R {
         match self {
             MapTable::Global => GLOBAL_MAPS.with_mut(f),
-            MapTable::Buffer(mut buf) => f(buf.b_maps.get_or_insert_with(Box::default)),
+            MapTable::Buffer(buf) => f(buf.edit().b_maps.get_or_insert_with(Box::default)),
         }
     }
 }
@@ -294,7 +294,8 @@ pub(crate) fn with_maphash_lists<R>(
     let hash = map_hash(state, c);
     let buf = Buf::current();
     GLOBAL_MAPS.with(|global| {
-        let local = buf
+        let held = buf.read();
+        let local = held
             .b_maps
             .as_deref()
             .map_or(&[][..], |tables| tables.list(hash, false));
@@ -356,7 +357,7 @@ pub(crate) fn map_add(
     // If CTRL-C has been mapped, don't always use it for Interrupting.
     if keys.first() == Some(&CTRL_C) {
         match table {
-            MapTable::Buffer(mut buf) => buf.b_mapped_ctrl_c |= mode,
+            MapTable::Buffer(buf) => buf.edit().b_mapped_ctrl_c |= mode,
             MapTable::Global => MAPPED_CTRL_C.set(MAPPED_CTRL_C.get() | mode),
         }
     }
@@ -374,7 +375,7 @@ pub(crate) fn map_add(
 /// it with no mode at all, and re-hashed when the bits that are left move it
 /// to another bucket.
 pub fn map_clear_mode(buffer: Buf, mode: c_int, local: bool, abbr: bool) {
-    if local && buffer.b_maps.is_none() {
+    if local && buffer.read().b_maps.is_none() {
         return; // never had a local mapping
     }
     MapTable::of(local, buffer).with_mut(|tables| {

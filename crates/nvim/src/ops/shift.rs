@@ -114,11 +114,11 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        Buf::current().b_op_start = op.start;
-        Buf::current().b_op_end.lnum = op.end.lnum;
-        Buf::current().b_op_end.col = Lines::current().line_len(op.end.lnum);
-        if Buf::current().b_op_end.col > ColNr::ZERO {
-            Buf::current().b_op_end.col -= 1;
+        Buf::current().set_b_op_start(op.start);
+        Buf::current().edit().b_op_end.lnum = op.end.lnum;
+        Buf::current().edit().b_op_end.col = Lines::current().line_len(op.end.lnum);
+        if Buf::current().b_op_end().col > ColNr::ZERO {
+            Buf::current().edit().b_op_end.col -= 1;
         }
     }
 
@@ -252,8 +252,8 @@ fn get_new_vts_indent(
 /// `round` is 'shiftround'. `call_changed_bytes` is false only for the callers
 /// that report the change themselves.
 pub fn shift_line(left: bool, round: bool, amount: c_int, call_changed_bytes: bool) {
-    let sw_val = Buf::current().b_p_sw;
-    let ts_val = Buf::current().b_p_ts;
+    let sw_val = Buf::current().b_p_sw();
+    let ts_val = Buf::current().b_p_ts();
     let now = int64_t::from(get_indent());
 
     let amount = int64_t::from(amount);
@@ -398,7 +398,7 @@ fn shift_block_right(bd: &mut BlockDef, old: &[u8], mut total: c_int) -> Shifted
     let rest = text_at + at;
     bd.start_vcol = ColNr::new(vcol);
 
-    let (tabs, spaces) = if Buf::current().b_p_et == 0 {
+    let (tabs, spaces) = if Buf::current().b_p_et() == 0 {
         Buf::current().tab_fill(ws_vcol, ws_vcol + total)
     } else {
         (0, total)

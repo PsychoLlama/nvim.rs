@@ -78,7 +78,7 @@ pub fn ui_mouse_has(mode: u8) -> bool {
             match flag {
                 // `a` is every mode but the hit-return prompt.
                 b'a' => MOUSE_A.to_bytes().contains(&mode),
-                MOUSE_HELP => mode != MOUSE_RETURN && Buf::current().b_help,
+                MOUSE_HELP => mode != MOUSE_RETURN && Buf::current().b_help(),
                 _ => mode == flag,
             }
         })

@@ -116,7 +116,7 @@ impl CptScan {
 /// `'thesaurusfunc'` is set.
 pub(crate) fn thesaurus_func_complete(type_0: CtrlXMode) -> bool {
     type_0 == CtrlXMode::Thesaurus
-        && (Buf::current().b_p_tsrfu.first_byte() != 0 || P_TSRFU.first_byte() != 0)
+        && (Buf::current().read().b_p_tsrfu.first_byte() != 0 || P_TSRFU.first_byte() != 0)
 }
 
 /// Is there another `'complete'` entry in `rest`, so the source index should
@@ -150,7 +150,10 @@ pub(crate) fn process_next_cpt_value(
     st.cpt.skip_separators();
 
     let flag = st.cpt.at();
-    if flag == b'.' && !Buf::current().b_scanned && !skip_source && !COMPL_TIME_SLICE_EXPIRED.get()
+    if flag == b'.'
+        && !Buf::current().b_scanned()
+        && !skip_source
+        && !COMPL_TIME_SLICE_EXPIRED.get()
     {
         scan_current_buffer(st, start_match_pos, fuzzy_collect);
         return CptValue::ready(CtrlXMode::Normal);
@@ -245,7 +248,7 @@ fn scan_other_buffer(st: &mut InsComplNextState) -> Option<CtrlXMode> {
         .ins_buf
         .and_then(BufId::get)
         .expect("ins_compl_next_buf answered a live buffer");
-    if buf.b_ml.ml_mfp.is_some() {
+    if buf.ml().ml_mfp.is_some() {
         // Loaded buffer.
         COMPL_STARTED.set(true);
         st.first_match_pos.col = ColNr::ZERO;
@@ -256,20 +259,24 @@ fn scan_other_buffer(st: &mut InsComplNextState) -> Option<CtrlXMode> {
     } else {
         // Unloaded buffer: scan it like a dictionary.
         st.found_all = true;
-        let name = buf.name.shown()?;
+        let held = buf.read();
+        let name = held.name.shown()?;
         compl_type = CtrlXMode::Dictionary;
         // A copy: the progress message below can run Lua, and that
         // can wipe the buffer the name belongs to.
         st.dict = Some(XString::from_cstr(name));
+        drop(held);
         st.dict_f = DICT_EXACT;
     }
     if !shortmess(ShmFlag::COMPLETIONSCAN) && !COMPL_AUTOCOMPLETE.get() {
-        let name = if buf.name.is_unnamed() {
-            buf_spname(&buf)
-        } else if buf.name.short().is_none() {
-            buf.name.shown()
+        let held = buf.read();
+        let special = held.name.is_unnamed().then(|| buf_spname(&buf)).flatten();
+        let name = if held.name.is_unnamed() {
+            special.as_deref()
+        } else if held.name.short().is_none() {
+            held.name.shown()
         } else {
-            buf.name.short()
+            held.name.short()
         };
         // Upstream formats into `IObuff`, which cuts it there. The
         // name is copied into the message before anything runs.
@@ -374,9 +381,9 @@ pub(crate) fn get_next_dict_tsr_completion(
     let flags = if dict.is_none() { 0 } else { dict_f };
     let files = dict.unwrap_or_else(|| {
         if thesaurus {
-            local_or_global(&Buf::current().b_p_tsr, P_TSR).get()
+            local_or_global(&Buf::current().read().b_p_tsr, P_TSR).get()
         } else {
-            local_or_global(&Buf::current().b_p_dict, P_DICT).get()
+            local_or_global(&Buf::current().read().b_p_dict, P_DICT).get()
         }
     });
     // A copy: the scan checks for typed keys, and what that runs can reset
@@ -400,7 +407,7 @@ pub(crate) fn get_next_tag_completion() {
     }
     // Copies: the search checks for typed keys and may call 'tagfunc'.
     let pattern = compl_pattern().to_owned();
-    let fname = Buf::current().name.full().map(XString::from_cstr);
+    let fname = Buf::current().read().name.full().map(XString::from_cstr);
     let fname = fname.as_ref().map(XString::as_cstr);
     if let Some(matches) = find_tag_names(pattern.as_bytes(), flags, TAG_MANY, fname) {
         ins_compl_add_match_list(&matches, p_ic());
@@ -649,8 +656,8 @@ fn collect_matches(st: &mut InsComplNextState, ini: Pos) -> Option<c_int> {
 fn start_scan(st: &mut InsComplNextState, ini: Pos) -> Pos {
     let mut start_pos = ini;
     if !COMPL_STARTED.get() {
-        for mut buf in buffers() {
-            buf.b_scanned = false;
+        for buf in buffers() {
+            buf.set_b_scanned(false);
         }
         st.found_all = false;
         st.ins_buf = Some(Buf::current().id());
@@ -658,7 +665,7 @@ fn start_scan(st: &mut InsComplNextState, ini: Pos) -> Pos {
         if COMPL_CONT_STATUS.get() & CONT_LOCAL != 0 {
             st.cpt.restart(b".");
         } else {
-            st.cpt.restart(Buf::current().b_p_cpt.bytes());
+            st.cpt.restart(Buf::current().read().b_p_cpt.bytes());
         }
 
         if COMPL_AUTOCOMPLETE.get() && is_nearest_active() {
@@ -785,9 +792,9 @@ fn scan_sources(st: &mut InsComplNextState, start_pos: Pos, normal_mode_strict: 
             if matches!(
                 compl_type,
                 Some(CtrlXMode::Normal | CtrlXMode::PathPatterns)
-            ) && let Some(mut buf) = st.ins_buf.and_then(BufId::get)
+            ) && let Some(buf) = st.ins_buf.and_then(BufId::get)
             {
-                buf.b_scanned = true;
+                buf.set_b_scanned(true);
             }
             COMPL_STARTED.set(false);
         }

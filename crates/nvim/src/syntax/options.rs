@@ -186,7 +186,7 @@ pub(crate) fn read_item_options(
     conceal_char: &mut c_int,
     skip: bool,
 ) -> Result<usize, SyntaxError> {
-    if cur_syn_block().b_syn_conceal != 0 {
+    if cur_syn_block().read().b_syn_conceal != 0 {
         opt.flags |= SynFlags::CONCEAL;
     }
 
@@ -264,7 +264,7 @@ fn read_sync_group(line: &[u8], at: usize, opt: &mut SynOptArg) -> Result<usize,
         // SAFETY: an owned NUL-terminated copy of the name.
         let syn_id = syn_name2id(&owned);
         let block = cur_syn_block();
-        let found = block.patterns().iter().rposition(|spp| {
+        let found = block.read().patterns().iter().rposition(|spp| {
             c_int::from(spp.sp_syn.id) == syn_id && c_int::from(spp.sp_type) == SPTYPE_START
         });
         match found {
@@ -522,7 +522,8 @@ impl SynState {
             // si_idx is -1 for keywords, which never contain anything.
             let si_idx = self.item(si).si_idx;
             if si_idx >= 0 {
-                let spp = block.pattern(si_idx);
+                let held = block.read();
+                let spp = held.pattern(si_idx);
                 if id_list_has(block, cont_in_list, spp.sp_syn, spp.sp_flags, 0) {
                     return true;
                 }
@@ -593,7 +594,8 @@ fn id_list_has(
             return retval;
         }
         if c_int::from(item) >= SYNID_CLUSTER {
-            let scl_list = &block.clusters()[as_index(c_int::from(item) - SYNID_CLUSTER)].scl_list;
+            let held = block.read();
+            let scl_list = &held.clusters()[as_index(c_int::from(item) - SYNID_CLUSTER)].scl_list;
             if !scl_list.is_none()
                 && depth < 30
                 && id_list_has(block, scl_list, ssp, flags, depth + 1)

@@ -179,7 +179,7 @@ fn do_ft_buf(
     };
     // A dummy buffer of no name, which owns everything it holds.
     let made = buflist_new(None, None, LineNr::ONE, BLN_DUMMY);
-    let Some(mut ftbuf) = made else {
+    let Some(ftbuf) = made else {
         let why = Error::exception(c"Could not create internal buffer");
         return (None, Err(why));
     };
@@ -205,9 +205,9 @@ fn do_ft_buf(
         SID_NONE,
     );
     debug_assert!(ftbuf.swap_file_closed(), "ftbuf->b_ml.ml_mfp->mf_fd < 0");
-    ftbuf.b_p_swf = 0;
-    ftbuf.b_p_ml = 0;
-    ftbuf.b_p_ft = Some(XString::from_cstr(filetype));
+    ftbuf.set_b_p_swf(0);
+    ftbuf.set_b_p_ml(0);
+    ftbuf.edit().b_p_ft = Some(XString::from_cstr(filetype));
     // SAFETY: the autocommand tables are the editor's own.
     if !has_event(AutoEvent::FileType) {
         return (Some(ftbuf), Ok(()));
@@ -237,15 +237,15 @@ fn static_option(text: &'static CStr) -> OptVal {
 }
 
 /// Take the scratch buffer `do_ft_buf` made back out of existence.
-fn wipe_ft_buf(mut buffer: Buf) {
+fn wipe_ft_buf(buffer: Buf) {
     block_autocmds();
     let bufref = BufRef::of(buffer);
     close_windows(buffer, false);
-    if bufref.valid() && buffer != Buf::current() && buffer.b_nwindows == 0 {
+    if bufref.valid() && buffer != Buf::current() && buffer.b_nwindows() == 0 {
         wipe_buffer(buffer, false);
     }
     if bufref.valid() {
-        buffer.b_flags.clear(BufFlags::DUMMY);
+        buffer.edit().b_flags.clear(BufFlags::DUMMY);
     }
     unblock_autocmds();
 }

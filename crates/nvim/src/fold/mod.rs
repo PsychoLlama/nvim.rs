@@ -270,7 +270,7 @@ impl Win {
 /// `terminal` through [`Win::buffer`] leans on -- as the C does.
 pub fn has_any_folding(win: Win) -> c_int {
     c_int::from(
-        win.buffer().terminal.is_null()
+        win.buffer().terminal().is_null()
             && win.w_onebuf_opt.wo_fen != 0
             && (!foldmethod_is_manual(win) || !win.w_folds.is_empty()),
     )
@@ -377,7 +377,7 @@ impl Win {
             }
             return false;
         }
-        last = last.min(self.buffer().b_ml.ml_line_count);
+        last = last.min(self.buffer().line_count());
         if let Some(lastp) = lastp {
             *lastp = last;
         }

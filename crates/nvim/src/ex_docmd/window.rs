@@ -255,7 +255,7 @@ fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
         && !old.w_buffer.is_current()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        old.w_alt_fnum = Some(Buf::current().handle);
+        old.w_alt_fnum = Some(Buf::current().handle());
     }
 }
 
@@ -399,7 +399,8 @@ fn list_tab_windows(tabpage: TabPage, lastused_win: Option<Win>) {
 fn fill_name(buffer: Buf) -> XString {
     match buf_spname_owned(buffer) {
         None => {
-            let fname = buffer.name.shown().unwrap_or(c"");
+            let held = buffer.read();
+            let fname = held.name.shown().unwrap_or(c"");
             home_to_tilde(Some(buffer), fname, IOSIZE as usize, true)
         }
         Some(special) => {

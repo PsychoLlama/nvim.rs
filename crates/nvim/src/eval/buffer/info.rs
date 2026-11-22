@@ -27,9 +27,11 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
         let _ = dict.edit().add_list(key.to_bytes(), value);
     };
 
-    nr(c"bufnr", VarNumber::from(buffer.handle));
-    let name = buffer.name.full().unwrap_or(c"");
+    nr(c"bufnr", VarNumber::from(buffer.handle()));
+    let held = buffer.read();
+    let name = held.name.full().unwrap_or(c"");
     let _ = dict.edit().add_str(b"name", Some(name));
+    drop(held);
     // The *current* buffer's line is the cursor's; any other's is the one it
     // will be entered at.
     let lnum = if buffer.is_current() {
@@ -39,20 +41,20 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     };
     nr(c"lnum", VarNumber::from(lnum));
     nr(c"linecount", VarNumber::from(buffer.line_count()));
-    nr(c"loaded", VarNumber::from(buffer.b_ml.ml_mfp.is_some()));
-    nr(c"listed", VarNumber::from(buffer.b_p_bl));
+    nr(c"loaded", VarNumber::from(buffer.ml().ml_mfp.is_some()));
+    nr(c"listed", VarNumber::from(buffer.b_p_bl()));
     nr(c"changed", VarNumber::from(buf_is_changed(buffer)));
     nr(c"changedtick", buf_get_changedtick(buffer));
     nr(
         c"hidden",
-        VarNumber::from(buffer.b_ml.ml_mfp.is_some() && buffer.b_nwindows == 0),
+        VarNumber::from(buffer.ml().ml_mfp.is_some() && buffer.b_nwindows() == 0),
     );
     nr(
         c"command",
         VarNumber::from(CMDWIN_BUF.get() == Some(buffer.id())),
     );
     // The buffer's own `b:` scope; the answer takes a reference.
-    let vars = buffer.b_bufvar.di_tv.dict_handle();
+    let vars = buffer.read().b_bufvar.di_tv.dict_handle();
     let _ = dict.edit().add_dict(b"variables", vars);
 
     // The windows displaying this buffer.
@@ -65,7 +67,7 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     if buf_has_signs(buffer) {
         list(c"signs", Some(get_buffer_signs(buffer)));
     }
-    nr(c"lastused", buffer.b_last_used);
+    nr(c"lastused", buffer.b_last_used());
     dict
 }
 
@@ -120,8 +122,8 @@ impl Filter {
     /// Whether `buffer` fails one of the selectors that is switched on.
     fn rejects(&self, buffer: Buf) -> bool {
         self.on
-            && (self.bufloaded && buffer.b_ml.ml_mfp.is_none()
-                || self.buflisted && buffer.b_p_bl == 0
-                || self.bufmodified && buffer.b_changed == 0)
+            && (self.bufloaded && buffer.ml().ml_mfp.is_none()
+                || self.buflisted && buffer.b_p_bl() == 0
+                || self.bufmodified && buffer.b_changed() == 0)
     }
 }

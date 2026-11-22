@@ -328,7 +328,7 @@ pub(crate) fn parse_shortname_mode(mode: &ApiString) -> (c_int, bool, usize) {
 /// global ones.
 pub fn keymap_array(mode: ApiString, buffer: Option<Buf>) -> Array {
     let (int_mode, is_abbrev, _) = parse_shortname_mode(&mode);
-    let buffer_value = buffer.map_or(0, |buf| buf.handle.get());
+    let buffer_value = buffer.map_or(0, |buf| buf.handle().get());
     let table = match buffer {
         Some(buf) => MapTable::Buffer(buf),
         None => MapTable::Global,

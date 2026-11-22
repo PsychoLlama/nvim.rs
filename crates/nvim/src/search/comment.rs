@@ -77,7 +77,7 @@ pub fn check_linecomment(line: &[u8]) -> Option<usize> {
     // `at` scans from the start; a byte read past the end is the line's own
     // terminator, which stops every test below.
     let mut at = 0usize;
-    if Buf::current().b_p_lisp != 0 {
+    if Buf::current().b_p_lisp() != 0 {
         // Skip Lispish one-line comments.
         if !line.contains(&b';') {
             return None; // there are no comments

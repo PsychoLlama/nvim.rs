@@ -48,7 +48,8 @@ impl ComFlags {
     /// has since become shorter than the offset.
     pub(crate) fn with_rest<R>(self, f: impl FnOnce(&[u8]) -> R) -> R {
         let buffer = Buf::current();
-        let com = buffer.b_p_com.bytes();
+        let held = buffer.read();
+        let com = held.b_p_com.bytes();
         f(com.get(self.0..).unwrap_or_default())
     }
 
@@ -198,7 +199,8 @@ pub fn get_leader_len(
     include_space: bool,
 ) -> (c_int, Option<ComFlags>) {
     let buffer = Buf::current();
-    let com = buffer.b_p_com.bytes();
+    let held = buffer.read();
+    let com = held.b_p_com.bytes();
     let mut flags = None;
     let mut got_com = false;
     let mut item = ComItem::new();
@@ -288,6 +290,7 @@ pub fn get_leader_len(
             break;
         }
     }
+    drop(held);
     (len_as_int(result), flags)
 }
 
@@ -306,7 +309,8 @@ pub fn get_last_leader_offset(line: &[u8]) -> (c_int, Option<ComFlags>) {
     // copied out of the option once rather than once per byte.
     let items = {
         let buffer = Buf::current();
-        let com = buffer.b_p_com.bytes();
+        let held = buffer.read();
+        let com = held.b_p_com.bytes();
         let mut list = com;
         let mut items = Vec::new();
         while !list.is_empty() {
@@ -315,6 +319,7 @@ pub fn get_last_leader_offset(line: &[u8]) -> (c_int, Option<ComFlags>) {
             let has_colon = item.take(&mut list);
             items.push((at, item, has_colon));
         }
+        drop(held);
         items
     };
     let mut result = -1;

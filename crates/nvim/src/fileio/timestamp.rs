@@ -142,7 +142,7 @@ pub fn check_timestamps(focus: bool) {
         || GLOBAL_BUSY.get() != 0
         || typeahead().maplen() != 0
         || AUTOCMD_BUSY.get()
-        || Buf::current().b_ro_locked > 0
+        || Buf::current().b_ro_locked() > 0
         || ALLBUF_LOCK.get() > 0
     {
         NEED_CHECK_TIMESTAMPS.set(true); // check later
@@ -157,7 +157,7 @@ pub fn check_timestamps(focus: bool) {
     let mut cur = first_buffer();
     while let Some(buf) = cur {
         // Only check buffers in a window.
-        if buf.b_nwindows > 0 {
+        if buf.b_nwindows() > 0 {
             let bufref = BufRef::of(buf);
             let n = buf_check_timestamp(buf);
             didit = didit.max(n);
@@ -205,7 +205,7 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> Result<(), LineError> {
 
     // Copy the lines in "frombuf" to "tobuf".
     let mut lnum = LineNr::ONE;
-    while lnum <= frombuf.b_ml.ml_line_count {
+    while lnum <= frombuf.line_count() {
         // Copied out: `ml_append` writes into the *other* buffer, and the
         // line came from this one's cache.
         let mut line = frombuf.lines().line(lnum).to_vec();
@@ -221,7 +221,7 @@ fn move_lines(frombuf: Buf, tobuf: Buf) -> Result<(), LineError> {
     // Delete all the lines in "frombuf".
     if retval.is_ok() {
         frombuf.make_current();
-        let mut lnum = Buf::current().b_ml.ml_line_count;
+        let mut lnum = Buf::current().line_count();
         while lnum > LineNr::ZERO {
             let deleted = ml_delete(lnum);
             if deleted.is_err() {
@@ -251,7 +251,7 @@ fn file_changed_shell(buffer: Buf, bufref: BufRef, reason: Reason) -> Fcs {
     set_vim_var_string(Vv::FcsReason, Some(name.to_bytes()));
     set_vim_var_string(Vv::FcsChoice, Some(b""));
     let locked = Lock::all_buffers();
-    let fname = buffer.name.shown().map(XString::from_cstr);
+    let fname = buffer.read().name.shown().map(XString::from_cstr);
     let event = AutoEvent::FileChangedShell;
     let handled = fire_autocmds_for(event, fname.clone(), fname, false, Some(buffer), None);
     drop(locked);
@@ -285,7 +285,8 @@ fn file_changed_shell(buffer: Buf, bufref: BufRef, reason: Reason) -> Fcs {
 ///
 /// Safe: [`Buf`] carries the whole of the promise this needs.
 fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Reload, bool) {
-    let shown = buffer.name.shown().unwrap_or_default();
+    let shown = buffer.read().name.shown().unwrap_or_default().to_owned();
+    let shown = shown.as_c_str();
     let path = home_to_tilde(Some(buffer), shown, shown.count_bytes() + 3, true);
     // +2 for either '\n' or "; " and +1 for NUL.
     let size = path.len() + mesg.count_bytes() + mesg2.count_bytes() + 3;
@@ -356,20 +357,20 @@ fn warn_changed(buffer: Buf, mesg: &CStr, mesg2: &CStr, can_reload: bool) -> (Re
 /// The autocommands this fires may wipe `buffer`: the `bufref` it takes
 /// guards the calls it makes afterwards, but not every field it reads --
 /// which is no promise a caller could make for it, and so no contract.
-pub(crate) fn buf_check_timestamp(mut buffer: Buf) -> TimestampCheck {
-    let orig_size = buffer.b_orig_size;
-    let orig_mode = buffer.b_orig_mode;
+pub(crate) fn buf_check_timestamp(buffer: Buf) -> TimestampCheck {
+    let orig_size = buffer.b_orig_size();
+    let orig_mode = buffer.b_orig_mode();
 
     let bufref = BufRef::of(buffer);
 
     // If it's a terminal, there is no file name, the buffer is not
     // loaded, 'buftype' is set, we are in the middle of a save, or we are
     // being called recursively: ignore this buffer.
-    if !buffer.terminal.is_null()
-        || buffer.name.full().is_none()
-        || buffer.b_ml.ml_mfp.is_none()
+    if !buffer.terminal().is_null()
+        || buffer.read().name.full().is_none()
+        || buffer.ml().ml_mfp.is_none()
         || !buf_is_normal(Some(buffer))
-        || buffer.b_saving
+        || buffer.b_saving()
         || BUSY.get()
     {
         return TimestampCheck::Unchanged;
@@ -385,17 +386,17 @@ pub(crate) fn buf_check_timestamp(mut buffer: Buf) -> TimestampCheck {
 
     let mut file_info = FileInfo::default();
     let mut file_info_ok = false;
-    let differs = !buffer.b_flags.has(BufFlags::NOTEDITED) && buffer.b_mtime != 0 && {
-        let found = buffer.name.full().and_then(crate::os::fs::file_info);
+    let differs = !buffer.b_flags().has(BufFlags::NOTEDITED) && buffer.b_mtime() != 0 && {
+        let found = buffer.read().name.full().and_then(crate::os::fs::file_info);
         file_info_ok = found.is_some();
         file_info = found.unwrap_or_default();
         !file_info_ok
-            || time_differs(&file_info, buffer.b_mtime, buffer.b_mtime_ns)
-            || file_info.mode() != buffer.b_orig_mode
+            || time_differs(&file_info, buffer.b_mtime(), buffer.b_mtime_ns())
+            || file_info.mode() != buffer.b_orig_mode()
     };
 
     if differs {
-        let prev_b_mtime = buffer.b_mtime;
+        let prev_b_mtime = buffer.b_mtime();
         retval = TimestampCheck::Changed;
 
         // Set b_mtime to stop further warnings, e.g. while executing a
@@ -404,17 +405,17 @@ pub(crate) fn buf_check_timestamp(mut buffer: Buf) -> TimestampCheck {
             buf_store_file_info(buffer, &file_info);
         } else {
             // Check the file again later to see if it re-appears.
-            buffer.b_mtime = -1;
-            buffer.b_orig_size = 0;
-            buffer.b_orig_mode = 0;
+            buffer.set_b_mtime(-1);
+            buffer.set_b_orig_size(0);
+            buffer.set_b_orig_mode(0);
         }
 
         // Don't do anything for a directory. It might contain the file
         // explorer.
-        if buffer.name.shown().is_some_and(dir_exists) {
+        if buffer.read().name.shown().is_some_and(dir_exists) {
             // Nothing to do.
-        } else if (if buffer.b_p_ar >= 0 {
-            buffer.b_p_ar != 0
+        } else if (if buffer.b_p_ar() >= 0 {
+            buffer.b_p_ar() != 0
         } else {
             p_ar()
         }) && !buf_is_changed(buffer)
@@ -429,9 +430,9 @@ pub(crate) fn buf_check_timestamp(mut buffer: Buf) -> TimestampCheck {
                 Reason::Deleted
             } else if buf_is_changed(buffer) {
                 Reason::Conflict
-            } else if orig_size != buffer.b_orig_size || buf_contents_changed(buffer) {
+            } else if orig_size != buffer.b_orig_size() || buf_contents_changed(buffer) {
                 Reason::Changed
-            } else if orig_mode != buffer.b_orig_mode {
+            } else if orig_mode != buffer.b_orig_mode() {
                 Reason::Mode
             } else {
                 Reason::Time
@@ -471,8 +472,8 @@ pub(crate) fn buf_check_timestamp(mut buffer: Buf) -> TimestampCheck {
                                 _ => {
                                     // Only the timestamp changed. Store it, to
                                     // avoid a warning in check_mtime() later.
-                                    buffer.b_mtime_read = buffer.b_mtime;
-                                    buffer.b_mtime_read_ns = buffer.b_mtime_ns;
+                                    buffer.set_b_mtime_read(buffer.b_mtime());
+                                    buffer.set_b_mtime_read_ns(buffer.b_mtime_ns());
                                 }
                             }
                         }
@@ -480,15 +481,15 @@ pub(crate) fn buf_check_timestamp(mut buffer: Buf) -> TimestampCheck {
                 }
             }
         }
-    } else if buffer.b_flags.has(BufFlags::NEW)
-        && !buffer.b_flags.has(BufFlags::NEW_W)
-        && buffer.name.full().is_some_and(path_exists)
+    } else if buffer.b_flags().has(BufFlags::NEW)
+        && !buffer.b_flags().has(BufFlags::NEW_W)
+        && buffer.read().name.full().is_some_and(path_exists)
     {
         retval = TimestampCheck::Changed;
         mesg = Some(translate!(
             c"W13: Warning: File \"%s\" has been created after editing started",
         ));
-        buffer.b_flags |= BufFlags::NEW_W;
+        buffer.set_b_flags(buffer.b_flags() | BufFlags::NEW_W);
         can_reload = true;
     }
 
@@ -504,7 +505,7 @@ pub(crate) fn buf_check_timestamp(mut buffer: Buf) -> TimestampCheck {
 
     if reload != Reload::No {
         buf_reload(buffer, orig_mode, reload == Reload::Detect);
-        if bufref.valid() && buffer.b_p_udf != 0 && !buffer.name.full().is_none() {
+        if bufref.valid() && buffer.b_p_udf() != 0 && !buffer.read().name.full().is_none() {
             // Any existing undo file is unusable, write it now.
             let mut hash = [0u8; UNDO_HASH_SIZE as usize];
             u_compute_hash(buffer, &mut hash);
@@ -514,7 +515,7 @@ pub(crate) fn buf_check_timestamp(mut buffer: Buf) -> TimestampCheck {
 
     // Trigger FileChangedShellPost when the file was changed in any way.
     if bufref.valid() && retval != TimestampCheck::Unchanged {
-        let fname = buffer.name.shown().map(XString::from_cstr);
+        let fname = buffer.read().name.shown().map(XString::from_cstr);
         let post = AutoEvent::FileChangedShellPost;
         fire_autocmds_for(post, fname.clone(), fname, false, Some(buffer), None);
     }
@@ -535,7 +536,7 @@ pub(crate) fn buf_check_timestamp(mut buffer: Buf) -> TimestampCheck {
 /// after the read reaches it through a reference taken before, and does
 /// nothing to a buffer that is gone.
 pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
-    let old_ro = buffer.b_p_ro;
+    let old_ro = buffer.b_p_ro();
     let mut saved = Ok(());
     let mut flags = ReadFlags::NEW;
 
@@ -554,14 +555,14 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     let old_cursor = Win::current().w_cursor;
     let old_topline = Win::current().w_topline;
 
-    if p_ur() < 0 || i64::from(Buf::current().b_ml.ml_line_count) <= p_ur() {
+    if p_ur() < 0 || i64::from(Buf::current().line_count()) <= p_ur() {
         // Save all the text, so that the reload can be undone. Sync first
         // so that this is a separate undo-able action.
         u_sync(false);
         saved = u_savecommon(
             Buf::current(),
             LineNr::ZERO,
-            Buf::current().b_ml.ml_line_count + 1,
+            Buf::current().line_count() + 1,
             LineNr::ZERO,
             true,
         );
@@ -592,18 +593,20 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
             || buffer.raw() != Buf::current_raw()
             || savebuf.is_none_or(|scratch| move_lines(buffer, scratch).is_err())
         {
-            let fname = msg_bytes(buffer.name.shown().map_or(&[][..], CStr::to_bytes));
+            let held = buffer.read();
+            let fname = msg_bytes(held.name.shown().map_or(&[][..], CStr::to_bytes)).to_string();
+            drop(held);
             semsg!("E462: Could not prepare for reloading \"{fname}\"");
             saved = Err(Failed);
         }
     }
 
     if saved.is_ok() {
-        Buf::current().b_flags |= BufFlags::CHECK_RO; // check for RO again
-        Buf::current().b_keep_filetype = true; // don't detect 'filetype'
+        Buf::current().edit().b_flags |= BufFlags::CHECK_RO; // check for RO again
+        Buf::current().edit().b_keep_filetype = true; // don't detect 'filetype'
         // Copies: the read's autocommands may rename or wipe the buffer.
-        let ffname = buffer.name.full().map(CStr::to_owned);
-        let fname = buffer.name.shown().map(CStr::to_owned);
+        let ffname = buffer.read().name.full().map(CStr::to_owned);
+        let fname = buffer.read().name.shown().map(CStr::to_owned);
         let target = BufRef::of(buffer);
         let quiet = shortmess(ShmFlag::FILEINFO);
         let read = readfile_named(
@@ -622,7 +625,7 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
             if !aborting() {
                 let shown = target
                     .get()
-                    .map_or(fname, |b| b.name.shown().map(CStr::to_owned));
+                    .map_or(fname, |b| b.read().name.shown().map(CStr::to_owned));
                 let fname = msg_bytes(shown.as_deref().map_or(&[][..], CStr::to_bytes));
                 semsg!("E321: Could not reload \"{fname}\"");
             }
@@ -634,7 +637,7 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                 // Put the text back from the save buffer. First delete any
                 // lines that readfile() added.
                 while !buf_is_empty(Buf::current()) {
-                    if ml_delete(buffer.b_ml.ml_line_count).is_err() {
+                    if ml_delete(buffer.line_count()).is_err() {
                         break;
                     }
                 }
@@ -652,7 +655,7 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                 u_unchanged(Buf::current());
             }
             buf_updates_unload(Buf::current(), true);
-            Buf::current().b_mod_set = true;
+            Buf::current().set_b_mod_set(true);
         }
     }
 
@@ -665,11 +668,11 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
 
     // Restore the topline and cursor position and check them; lines may
     // have been removed.
-    Win::current().w_topline = old_topline.min(Buf::current().b_ml.ml_line_count);
+    Win::current().w_topline = old_topline.min(Buf::current().line_count());
     Win::current().w_cursor = old_cursor;
     check_cursor(Win::current());
     update_topline(Win::current());
-    Buf::current().b_keep_filetype = false;
+    Buf::current().set_b_keep_filetype(false);
 
     // Update folds unless they are defined manually.
     for wp in tab_windows() {
@@ -681,8 +684,8 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     // If the mode didn't change and 'readonly' was set, keep the old
     // value; the user probably used the ":view" command. But don't reset
     // it, there might have been a read error.
-    if orig_mode == Buf::current().b_orig_mode {
-        Buf::current().b_p_ro |= old_ro;
+    if orig_mode == Buf::current().b_orig_mode() {
+        Buf::current().set_b_p_ro(Buf::current().b_p_ro() | old_ro);
     }
 
     // Modelines must override settings done by autocommands.
@@ -695,19 +698,19 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
 
 /// Record the file's size, mode and modification time on the buffer, so that
 /// a later change to any of them can be noticed.
-pub fn buf_store_file_info(mut buffer: Buf, file_info: &FileInfo) {
-    buffer.b_mtime = file_info.stat.st_mtim.tv_sec;
-    buffer.b_mtime_ns = file_info.stat.st_mtim.tv_nsec;
-    buffer.b_orig_size = file_info.stat.st_size;
-    buffer.b_orig_mode = file_info.mode();
+pub fn buf_store_file_info(buffer: Buf, file_info: &FileInfo) {
+    buffer.set_b_mtime(file_info.stat.st_mtim.tv_sec);
+    buffer.set_b_mtime_ns(file_info.stat.st_mtim.tv_nsec);
+    buffer.set_b_orig_size(file_info.stat.st_size);
+    buffer.set_b_orig_mode(file_info.mode());
 }
 
 /// Adjust the line with a missing end-of-line, used for the next write.
 ///
 /// Needed by `do_filter()`, where the input lines for the filter are deleted.
 pub fn write_lnum_adjust(offset: i32) {
-    if Buf::current().b_no_eol_lnum != LineNr::ZERO {
+    if Buf::current().b_no_eol_lnum() != LineNr::ZERO {
         // Only if there is a missing end-of-line.
-        Buf::current().b_no_eol_lnum += offset;
+        Buf::current().set_b_no_eol_lnum(Buf::current().b_no_eol_lnum() + offset);
     }
 }

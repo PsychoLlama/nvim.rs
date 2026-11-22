@@ -262,7 +262,7 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
     Win::current().w_cursor.lnum = lnum;
     let has_paren = find_last_paren(Lines::current().line(lnum), b'(', b')');
     let opening = if has_paren {
-        find_match_paren(Buf::current().b_ind_maxparen)
+        find_match_paren(Buf::current().b_ind_maxparen())
     } else {
         None
     };
@@ -348,13 +348,13 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
                 break;
             }
             Stopped::Continues { comma } => {
-                while lnum < Buf::current().b_ml.ml_line_count {
+                while lnum < Buf::current().line_count() {
                     lnum += 1;
                     if !is_preproc(lines.line(lnum)) {
                         break;
                     }
                 }
-                if lnum >= Buf::current().b_ml.ml_line_count {
+                if lnum >= Buf::current().line_count() {
                     break;
                 }
                 // Require a comma at the end of this line, or a comma or

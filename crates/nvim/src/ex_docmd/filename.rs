@@ -82,9 +82,9 @@ pub fn replace_makeprg(excmd: &mut ExArg) -> bool {
 
     let buf = Buf::current();
     let (local, global) = if is_grep {
-        (&buf.b_p_gp, P_GP)
+        (&buf.read().b_p_gp, P_GP)
     } else {
-        (&buf.b_p_mp, P_MP)
+        (&buf.read().b_p_mp, P_MP)
     };
     let program = local_or_global(local, global).get();
 
@@ -417,7 +417,7 @@ impl Named {
 
     /// `buffer`'s name as shown, or no name at all.
     fn of_buffer(buffer: Buf) -> Self {
-        match buffer.name.shown() {
+        match buffer.read().name.shown() {
             None => Self {
                 valid: 0,
                 ..Self::path(CString::default())

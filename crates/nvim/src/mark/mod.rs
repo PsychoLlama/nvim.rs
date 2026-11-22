@@ -130,7 +130,7 @@ pub(crate) static NAMEDFM: GlobalCell<[XFileMark; 36]> = GlobalCell::new([XFileM
 pub fn setmark(c: u8) -> Result<(), Failed> {
     let (win, buf) = (Win::current(), Buf::current());
     let view = mark_view_make_at(win, win.w_cursor);
-    setmark_pos(c, win.w_cursor, true, Some(buf.handle), view)
+    setmark_pos(c, win.w_cursor, true, Some(buf.handle()), view)
 }
 
 /// Schedules "MarkSet" event.
@@ -196,33 +196,33 @@ fn setmark_pos(
         }
         return Ok(());
     }
-    let Some(mut buf) = find_buf(fnum) else {
+    let Some(buf) = find_buf(fnum) else {
         return Err(Failed);
     };
-    let handle = buf.handle;
+    let handle = buf.handle();
 
     // The tick family and the Visual range are not adjusted and not saved, so
     // they are stored as bare positions rather than as marks.
     if c == b'[' {
-        buf.b_op_start = at;
+        buf.set_b_op_start(at);
     } else if c == b']' {
-        buf.b_op_end = at;
+        buf.set_b_op_end(at);
     } else if c == b'<' || c == b'>' {
         if c == b'<' {
-            buf.b_visual.vi_start = at;
+            buf.edit().b_visual.vi_start = at;
         } else {
-            buf.b_visual.vi_end = at;
+            buf.edit().b_visual.vi_end = at;
         }
-        if buf.b_visual.vi_mode == 0 {
-            buf.b_visual.vi_mode = c_int::from(b'v');
+        if buf.b_visual().vi_mode == 0 {
+            buf.edit().b_visual.vi_mode = c_int::from(b'v');
         }
     } else if c == b'"' {
-        buf.b_last_cursor = FileMark::fresh(at, Some(handle), view);
+        buf.edit().b_last_cursor = FileMark::fresh(at, Some(handle), view);
     } else if c == b':' {
         if !buf_is_prompt(Some(buf)) {
             return Err(Failed);
         }
-        buf.b_prompt_start = FileMark::fresh(at, Some(handle), view);
+        buf.edit().b_prompt_start = FileMark::fresh(at, Some(handle), view);
         // The prompt mark is the one store that does NOT announce itself:
         // it moves on every prompt redraw, and a MarkSet per keystroke is
         // not what the event is for.
@@ -230,7 +230,7 @@ fn setmark_pos(
     } else if c.is_ascii_lowercase() {
         // A buffer-local mark keeps the *caller's* `fnum` rather than the
         // buffer's own handle. The two agree everywhere but `nvim_buf_set_mark`.
-        buf.b_namedm[usize::from(c - b'a')] = FileMark::fresh(at, fnum, view);
+        buf.edit().b_namedm[usize::from(c - b'a')] = FileMark::fresh(at, fnum, view);
     } else if c.is_ascii_uppercase() || c.is_ascii_digit() {
         let idx = slot(lookup::mark_global_index(mark_name(c)));
         store::set_global_mark(
@@ -290,7 +290,7 @@ impl Win {
 pub fn pos_to_mark(buffer: Buf, pos: Pos) -> FileMark {
     FileMark {
         mark: pos,
-        in_buffer: buffer.handle,
+        in_buffer: buffer.handle(),
         ..FileMark::UNSET
     }
 }
@@ -382,10 +382,11 @@ pub(super) fn fname2fnum(fname: &CStr) {
 /// May replace the name with an fnum.
 /// Used for marks that come from the .shada file.
 pub fn fmarks_check_names(buffer: Buf) {
-    let Some(name) = buffer.name.full() else {
+    let held = buffer.read();
+    let Some(name) = held.name.full() else {
         return;
     };
-    let (name, handle) = (name.to_bytes(), buffer.handle);
+    let (name, handle) = (name.to_bytes(), buffer.handle());
     NAMEDFM.with_mut(|table| {
         for mark in table.iter_mut() {
             fmarks_check_one(mark, name, handle);
@@ -438,7 +439,7 @@ pub(crate) fn mark_check(fm: Option<&FileMark>, errormsg: &mut Option<CString>) 
         return false;
     }
     let buf = Buf::current();
-    !fm.is_in(buf.handle) || mark_check_line_bounds(Some(buf), fm, errormsg)
+    !fm.is_in(buf.handle()) || mark_check_line_bounds(Some(buf), fm, errormsg)
 }
 
 /// Check if a mark line number is greater than the buffer line count, and set e_markinval.
@@ -456,7 +457,7 @@ pub(crate) fn mark_check_line_bounds(
     let Some(buf) = buffer else {
         return true;
     };
-    if fm.mark.lnum <= buf.b_ml.ml_line_count {
+    if fm.mark.lnum <= buf.line_count() {
         return true;
     }
     *errormsg = Some(ex_msg(E_MARKINVAL));
@@ -470,8 +471,9 @@ pub(crate) fn mark_check_line_bounds(
 /// Does not trigger "MarkSet" event.
 ///
 /// `buffer` — Buffer to clear marks in.
-pub fn clrallmarks(mut buffer: Buf, timestamp: Timestamp) {
-    let b: &mut Buffer = &mut buffer;
+pub fn clrallmarks(buffer: Buf, timestamp: Timestamp) {
+    let mut edit = buffer.edit();
+    let b: &mut Buffer = &mut edit;
     for mark in &mut b.b_namedm {
         mark.clear(timestamp);
     }
@@ -492,12 +494,12 @@ pub fn clrallmarks(mut buffer: Buf, timestamp: Timestamp) {
 }
 
 pub fn set_last_cursor(win: Win) {
-    let Some(mut buf) = win.buffer_or_none() else {
+    let Some(buf) = win.buffer_or_none() else {
         return;
     };
     // `fnum` 0, not the buffer's handle: this mark is written when the buffer
     // is left, and the shada writer is what fills the file name in.
-    buf.b_last_cursor = FileMark::fresh(win.w_cursor, None, FileMarkView::NONE);
+    buf.edit().b_last_cursor = FileMark::fresh(win.w_cursor, None, FileMarkView::NONE);
 }
 
 /// Adjust position to point to the first byte of a multi-byte character

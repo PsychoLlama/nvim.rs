@@ -81,11 +81,11 @@ fn ui_ext_tabline_update() {
     }
 
     // Unlisted buffers are left out of the event.
-    let listed = || buffers().filter(|buf| buf.b_p_bl != 0);
+    let listed = || buffers().filter(|buf| buf.b_p_bl() != 0);
     let mut bufs = Vec::with_capacity(listed().count());
     for buf in listed() {
         let mut info = DictBuilder::with_capacity(2);
-        put(&mut info, c"buffer", Object::buffer(buf.handle));
+        put(&mut info, c"buffer", Object::buffer(buf.handle()));
         let name = trans_bufname(buf);
         put(
             &mut info,
@@ -97,7 +97,7 @@ fn ui_ext_tabline_update() {
 
     let (tab, buf) = (
         TabPage::current().handle() as TabpageHandle,
-        Buf::current().handle as BufferHandle,
+        Buf::current().handle() as BufferHandle,
     );
     ui_call_tabline_update(tab, tab_infos.into(), buf, bufs.into());
 }

@@ -169,24 +169,25 @@ impl<'a> Walk<'a> {
 
 /// Whether the `:ls` flags in `arg` say to skip this buffer.
 fn skip(buffer: Buf, arg: &CStr, forceit: c_int) -> bool {
-    let is_terminal = !buffer.terminal.is_null();
+    let is_terminal = !buffer.terminal().is_null();
     let job_running = buf_terminal_running(buffer);
-    let loaded = buffer.b_ml.ml_mfp.is_some();
+    let loaded = buffer.ml().ml_mfp.is_some();
     let alt_fnum = current_win().w_alt_fnum;
 
-    buffer.b_p_bl == 0 && forceit == 0 && !has_flag(arg, b'u')
-        || has_flag(arg, b'u') && buffer.b_p_bl != 0
-        || has_flag(arg, b'+') && (buffer.b_flags.has(BufFlags::READERR) || !buf_is_changed(buffer))
-        || has_flag(arg, b'a') && (!loaded || buffer.b_nwindows == 0)
-        || has_flag(arg, b'h') && (!loaded || buffer.b_nwindows != 0)
+    buffer.b_p_bl() == 0 && forceit == 0 && !has_flag(arg, b'u')
+        || has_flag(arg, b'u') && buffer.b_p_bl() != 0
+        || has_flag(arg, b'+')
+            && (buffer.b_flags().has(BufFlags::READERR) || !buf_is_changed(buffer))
+        || has_flag(arg, b'a') && (!loaded || buffer.b_nwindows() == 0)
+        || has_flag(arg, b'h') && (!loaded || buffer.b_nwindows() != 0)
         || has_flag(arg, b'R') && (!is_terminal || !job_running)
         || has_flag(arg, b'F') && (!is_terminal || job_running)
-        || has_flag(arg, b'-') && buffer.b_p_ma != 0
-        || has_flag(arg, b'=') && buffer.b_p_ro == 0
-        || has_flag(arg, b'x') && !buffer.b_flags.has(BufFlags::READERR)
+        || has_flag(arg, b'-') && buffer.b_p_ma() != 0
+        || has_flag(arg, b'=') && buffer.b_p_ro() == 0
+        || has_flag(arg, b'x') && !buffer.b_flags().has(BufFlags::READERR)
         || has_flag(arg, b'%') && buffer.raw() != Buf::current_raw()
         || has_flag(arg, b'#')
-            && (buffer.raw() == Buf::current_raw() || alt_fnum != Some(buffer.handle))
+            && (buffer.raw() == Buf::current_raw() || alt_fnum != Some(buffer.handle()))
 }
 
 /// The name to show for `buffer`, as upstream cut it into `NameBuff`.
@@ -195,28 +196,29 @@ fn fill_name(buffer: Buf) -> XString {
         let special = special.to_bytes();
         return XString::from_bytes(&special[..special.len().min(MAXPATHL as usize - 1)]);
     }
-    let fname = buffer.name.shown().unwrap_or(c"");
+    let held = buffer.read();
+    let fname = held.name.shown().unwrap_or(c"");
     home_to_tilde(Some(buffer), fname, MAXPATHL as usize, true)
 }
 
 /// Print one buffer's line: the number, the flag column, the name padded to
 /// column 40, and the line number or the time it was last used.
 fn show(buffer: Buf, by_time: bool, name: &XString) {
-    let changed_char = if buffer.b_flags.has(BufFlags::READERR) {
+    let changed_char = if buffer.b_flags().has(BufFlags::READERR) {
         b'x'
     } else if buf_is_changed(buffer) {
         b'+'
     } else {
         b' '
     };
-    let mut ro_char = if buffer.b_p_ma == 0 {
+    let mut ro_char = if buffer.b_p_ma() == 0 {
         b'-'
-    } else if buffer.b_p_ro != 0 {
+    } else if buffer.b_p_ro() != 0 {
         b'='
     } else {
         b' '
     };
-    if !buffer.terminal.is_null() {
+    if !buffer.terminal().is_null() {
         ro_char = if buf_terminal_running(buffer) {
             b'R'
         } else {
@@ -228,17 +230,17 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
         msg_put_ascii(b'\n');
     }
 
-    let listed = if buffer.b_p_bl != 0 { b' ' } else { b'u' };
+    let listed = if buffer.b_p_bl() != 0 { b' ' } else { b'u' };
     let current = if buffer.raw() == Buf::current_raw() {
         b'%'
-    } else if current_win().w_alt_fnum == Some(buffer.handle) {
+    } else if current_win().w_alt_fnum == Some(buffer.handle()) {
         b'#'
     } else {
         b' '
     };
-    let state = if buffer.b_ml.ml_mfp.is_none() {
+    let state = if buffer.ml().ml_mfp.is_none() {
         b' '
-    } else if buffer.b_nwindows == 0 {
+    } else if buffer.b_nwindows() == 0 {
         b'h'
     } else {
         b'a'
@@ -248,10 +250,10 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
     } else {
         buflist_findlnum(buffer)
     };
-    let last_used = buffer.b_last_used;
+    let last_used = buffer.b_last_used();
 
     // `%3d%c%c%c%c%c "%s"`, cut where upstream's `IOSIZE - 20` bytes cut it.
-    let mut line = format!("{:3}", buffer.handle).into_bytes();
+    let mut line = format!("{:3}", buffer.handle()).into_bytes();
     line.extend_from_slice(&[listed, current, state, ro_char, changed_char, b' ', b'"']);
     line.extend_from_slice(name.as_cstr().to_bytes());
     line.push(b'"');
@@ -288,17 +290,18 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
 
     if fullname > 1 {
         // 2 CTRL-G: include the buffer number.
-        out.push_fmt(c"buf %d: ", &[buf.handle.into()]);
+        out.push_fmt(c"buf %d: ", &[buf.handle().into()]);
     }
     out.push(b"\"");
 
     if let Some(name) = buf_spname(&buf) {
         out.push(name.to_bytes());
     } else {
-        let name = if fullname == 0 && !buf.name.is_unnamed() {
-            buf.name.shown()
+        let held = buf.read();
+        let name = if fullname == 0 && !held.name.is_unnamed() {
+            held.name.shown()
         } else {
-            buf.name.full()
+            held.name.full()
         };
         // Only a help buffer's name is shortened against the buffer's own
         // directory; every other name is shortened against `$HOME` alone.
@@ -321,12 +324,12 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
             c" "
         },
         note(
-            buf.b_flags.has(BufFlags::NOTEDITED) && !dontwrite,
+            buf.b_flags().has(BufFlags::NOTEDITED) && !dontwrite,
             c"[Not edited]",
         ),
-        note(buf.b_flags.has(BufFlags::NEW) && !dontwrite, c"[New]"),
-        note(buf.b_flags.has(BufFlags::READERR), c"[Read errors]"),
-        if buf.b_p_ro != 0 {
+        note(buf.b_flags().has(BufFlags::NEW) && !dontwrite, c"[New]"),
+        note(buf.b_flags().has(BufFlags::READERR), c"[Read errors]"),
+        if buf.b_p_ro() != 0 {
             if shortmess(ShmFlag::RO) {
                 gettext(c"[RO]")
             } else {
@@ -335,7 +338,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         } else {
             c""
         },
-        if modified || buf.b_flags.has(BufFlags::WRITE_MASK) || buf.b_p_ro != 0 {
+        if modified || buf.b_flags().has(BufFlags::WRITE_MASK) || buf.b_p_ro() != 0 {
             c" "
         } else {
             c""
@@ -345,9 +348,9 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     out.push_fmt(c"\"%s%s%s%s%s%s", &args);
 
     let win = current_win();
-    let lines = buf.b_ml.ml_line_count;
+    let lines = buf.line_count();
     let cursor = win.w_cursor.lnum;
-    if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if buf.ml_flags().has(MlFlags::EMPTY) {
         out.push(gettext(NO_LINES_MSG).to_bytes());
     } else if p_ru() {
         // The current line and column are already on the screen -- webb
@@ -487,10 +490,12 @@ fn build_stl(fmt: &[u8], opt: OptIndex, maxlen: c_int) -> Vec<u8> {
 /// character boundary.
 fn default_icon() -> Vec<u8> {
     let buf = Buf::current();
-    let name = match buf_spname(&buf) {
+    let special = buf_spname(&buf);
+    let held = buf.read();
+    let name = match &special {
         Some(name) => name.to_bytes(),
         // `buf_spname` answered `None`, so the buffer has a name.
-        None => buf.name.full().map_or(c"", path_tail).to_bytes(),
+        None => held.name.full().map_or(c"", path_tail).to_bytes(),
     };
     let mut start = 0;
     if name.len() > 100 {
@@ -549,7 +554,7 @@ pub fn get_rel_pos(window: Win, room: usize) -> Vec<u8> {
         above = LineNr::ZERO;
     }
     // The number of lines below it.
-    let below = win.buffer().b_ml.ml_line_count - win.w_botline + 1;
+    let below = win.buffer().line_count() - win.w_botline + 1;
     if below <= 0 {
         let all_or_bot = if above == LineNr::ZERO {
             gettext(c"All")

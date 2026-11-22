@@ -160,7 +160,7 @@ pub fn do_exmode() {
         let moved = prev_line != Win::current().w_cursor.lnum
             || changedtick != buf_get_changedtick(Buf::current());
         if moved && !EX_NO_REPRINT.get() {
-            if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+            if Buf::current().ml_flags().has(MlFlags::EMPTY) {
                 emsg(gettext(E_EMPTY_BUFFER));
             } else {
                 // A bare Return already scrolled; print over that line
@@ -178,7 +178,7 @@ pub fn do_exmode() {
             }
         } else if EX_PRESSEDRETURN.get() && !EX_NO_REPRINT.get() {
             // Return on the last line: there is nothing to print.
-            if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+            if Buf::current().ml_flags().has(MlFlags::EMPTY) {
                 emsg(gettext(E_EMPTY_BUFFER));
             } else {
                 emsg(gettext(c"E501: At end-of-file"));

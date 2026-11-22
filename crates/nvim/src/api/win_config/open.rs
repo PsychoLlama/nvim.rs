@@ -136,7 +136,7 @@ impl Opening {
         raised: &mut Option<Error>,
     ) -> Result<Option<Win>, Error> {
         if !self.is_split {
-            let locked = Win::current().buffer().b_locked_split != 0;
+            let locked = Win::current().buffer().b_locked_split() != 0;
             if locked {
                 let why = c"E1159: Cannot open a float when closing the buffer";
                 return Err(Error::exception(why));

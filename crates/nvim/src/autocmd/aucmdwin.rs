@@ -85,7 +85,7 @@ pub(crate) fn is_aucmd_win(win: Win) -> bool {
 
 /// Make `buffer` the current buffer for the duration of an autocommand,
 /// saving what it takes to undo that in `aco`.
-pub fn aucmd_prepbuf(aco: &mut AcoSave, mut buffer: Buf) {
+pub fn aucmd_prepbuf(aco: &mut AcoSave, buffer: Buf) {
     let same_buffer = buffer == Buf::current();
 
     // A window already showing `buffer` is preferred: making it current
@@ -131,7 +131,7 @@ pub fn aucmd_prepbuf(aco: &mut AcoSave, mut buffer: Buf) {
     aco.save_curwin_handle = Win::current().handle;
     aco.save_prevwin_handle = PREVWIN.get().map_or(Handle::NONE, WinId::handle);
     if buf_is_prompt(current_buf()) {
-        aco.save_prompt_insert = Buf::current().b_prompt_insert;
+        aco.save_prompt_insert = Buf::current().b_prompt_insert();
     }
 
     if let Some(win) = win {
@@ -145,7 +145,7 @@ pub fn aucmd_prepbuf(aco: &mut AcoSave, mut buffer: Buf) {
         let mut auc = auc_win.expect("the slot was given a window above");
         auc.w_buffer = buffer;
         auc.w_s = buffer.syntax_block();
-        buffer.b_nwindows += 1;
+        buffer.set_b_nwindows(buffer.b_nwindows() + 1);
         win_init_empty(auc);
 
         // `w_localdir`, `tp_localdir` and `globaldir` all have to be
@@ -215,7 +215,7 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
             }
         }
 
-        Buf::current().b_nwindows -= 1;
+        Buf::current().set_b_nwindows(Buf::current().b_nwindows() - 1);
         win_remove(Win::current(), None);
         // The autocommand window, held as an address across its own
         // deregistration: it is still current and still perfectly alive, but
@@ -249,7 +249,7 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
         }
         entering_window(Win::current());
         if buf_is_prompt(current_buf()) {
-            Buf::current().b_prompt_insert = aco.save_prompt_insert;
+            Buf::current().set_b_prompt_insert(aco.save_prompt_insert);
         }
 
         PREVWIN.set(win_find_by_handle(aco.save_prevwin_handle).map(Win::id));
@@ -270,8 +270,8 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
         // The buffer's contents may have changed under the cursor.
         set_visual_active(aco.save_visual_active);
         check_cursor(Win::current());
-        if Win::current().w_topline > Buf::current().b_ml.ml_line_count {
-            Win::current().w_topline = Buf::current().b_ml.ml_line_count;
+        if Win::current().w_topline > Buf::current().line_count() {
+            Win::current().w_topline = Buf::current().line_count();
             Win::current().w_topfill = 0;
         }
     } else {
@@ -285,15 +285,15 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
             if Win::current().handle == aco.new_curwin_handle
                 && !new_curbuf.is(Buf::current_or_none())
                 && let Some(new_curbuf) = new_curbuf.get()
-                && new_curbuf.b_ml.ml_mfp.is_some()
+                && new_curbuf.ml().ml_mfp.is_some()
             {
                 if Win::current().w_s == Buf::current().syntax_block() {
                     Win::current().w_s = new_curbuf.syntax_block();
                 }
-                Buf::current().b_nwindows -= 1;
+                Buf::current().set_b_nwindows(Buf::current().b_nwindows() - 1);
                 new_curbuf.make_current();
                 Win::current().w_buffer = new_curbuf;
-                Buf::current().b_nwindows += 1;
+                Buf::current().set_b_nwindows(Buf::current().b_nwindows() + 1);
             }
 
             save_curwin.make_current();

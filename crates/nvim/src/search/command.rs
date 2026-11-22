@@ -349,7 +349,7 @@ fn back_off_start(pos: &mut Pos, off: i64) {
         }
         if c != 0 {
             // At the end of the buffer.
-            pos.lnum = Buf::current().b_ml.ml_line_count + 1;
+            pos.lnum = Buf::current().line_count() + 1;
             pos.col = ColNr::ZERO;
         }
     }
@@ -362,7 +362,7 @@ fn add_offset(pos: &mut Pos, off: SearchOffset) -> Hit {
     if off.line {
         // Add the offset to the line number.
         let lnum = i64::from(pos.lnum) + off.off;
-        let last = Buf::current().b_ml.ml_line_count;
+        let last = Buf::current().line_count();
         pos.lnum = if lnum < 1 {
             LineNr::ONE
         } else if lnum > i64::from(last) {
@@ -774,7 +774,8 @@ fn search_leg(
 fn mps_shows_match(c: c_int) -> bool {
     let rightleft = (Win::current().w_onebuf_opt.wo_rl != 0) ^ p_ri();
     let buf = Buf::current();
-    let mps = buf.b_p_mps.bytes();
+    let held = buf.read();
+    let mps = held.b_p_mps.bytes();
     // The walk reads the value as the C string it is: the end is a NUL.
     let char_from = |i: usize| char_at(mps.get(i..).unwrap_or_default());
     let len_from = |i: usize| c_cluster_len(mps.get(i..).unwrap_or_default());
@@ -793,6 +794,7 @@ fn mps_shows_match(c: c_int) -> bool {
         }
         i += 1;
     }
+    drop(held);
     false
 }
 

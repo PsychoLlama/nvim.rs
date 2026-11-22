@@ -57,7 +57,7 @@ pub(crate) fn jump_to_help_window(
     } else {
         qf_find_help_win()
     };
-    if let Some(wp) = wp.filter(|wp| wp.w_buffer.b_nwindows > 0) {
+    if let Some(wp) = wp.filter(|wp| wp.w_buffer.b_nwindows() > 0) {
         win_enter(wp, true);
         RESTART_EDIT.set(Key::NUL);
         return Ok(());
@@ -93,7 +93,7 @@ pub(crate) fn jump_to_help_window(
 fn qf_goto_tabwin_with_file(fnum: Option<Handle>) -> bool {
     for tp in tabs() {
         for wp in windows_in_tab(tp) {
-            if Some(wp.buffer().handle) == fnum {
+            if Some(wp.buffer().handle()) == fnum {
                 goto_tabpage_win(tp, wp);
                 return true;
             }
@@ -133,7 +133,7 @@ fn qf_open_new_file_win(ll_ref: Option<QfId>) -> Result<(), Failed> {
 /// buffer.
 fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: Option<Handle>, ll_ref: Option<QfId>) {
     let win = use_win
-        .or_else(|| find_win(|wp| Some(wp.buffer().handle) == qf_fnum))
+        .or_else(|| find_win(|wp| Some(wp.buffer().handle()) == qf_fnum))
         .unwrap_or_else(|| {
             // Walk backwards from here, wrapping at the top, for a window
             // holding an ordinary buffer.
@@ -175,7 +175,7 @@ fn prev_window(window: Win) -> Win {
 fn qf_goto_win_with_qfl_file(qf_fnum: Option<Handle>) {
     let mut win = Win::current();
     let mut altwin: Option<Win> = None;
-    while Some(win.buffer().handle) != qf_fnum {
+    while Some(win.buffer().handle()) != qf_fnum {
         win = prev_window(win);
         if win.is_quickfix_window() {
             let last = crate::winlayer::prev_window()

@@ -192,21 +192,21 @@ pub const KEYMAP_INIT: ::core::ffi::c_short = 1;
 pub fn buf_get_changedtick(buffer: Buf) -> VarNumber {
     // `b:changedtick`'s dict item is always a `VAR_NUMBER`, so the tag test
     // inside the accessor never answers the zero.
-    buffer.changedtick_di.di_tv.number_or_zero()
+    buffer.read().changedtick_di.di_tv.number_or_zero()
 }
 static BUF_FREE_COUNT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static TOP_FILE_NUM: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
 
 /// Run `b:undo_ftplugin` with the buffer and the window pinned, so that what
 /// it does cannot close either out from under the caller.
-pub(crate) fn trigger_undo_ftplugin(mut buffer: Buf, mut win: Win) {
+pub(crate) fn trigger_undo_ftplugin(buffer: Buf, mut win: Win) {
     let win_was_locked: bool = win.w_locked;
     layout_lock();
-    buffer.b_locked += 1;
+    buffer.set_b_locked(buffer.b_locked() + 1);
     win.w_locked = true;
     // b:undo_ftplugin may be set, undo it
     run_cmdline(c"if exists('b:undo_ftplugin') | exe b:undo_ftplugin | endif");
-    buffer.b_locked -= 1;
+    buffer.set_b_locked(buffer.b_locked() - 1);
     win.w_locked = win_was_locked;
     layout_unlock();
 }
@@ -251,7 +251,7 @@ impl BufRef {
     /// was. Only walks the list when the free counter has moved.
     pub(crate) fn valid(self) -> bool {
         self.0.br_buf_free_count == BUF_FREE_COUNT.get()
-            || buffers_back().any(|b| b == self.0.br_buf && b.handle == self.0.br_buf.handle())
+            || buffers_back().any(|b| b == self.0.br_buf && b.handle() == self.0.br_buf.handle())
     }
 
     /// The buffer, if it is still the one that was remembered.
@@ -303,7 +303,7 @@ pub(crate) const DOBUF_LAST: DoBufStart = 2;
 /// The buffer's running total of one kind of extmark metadata, kept at the
 /// root of its marktree. `buffer.h` had this as a `static inline`.
 pub fn buf_meta_total(b: Buf, m: MetaIndex) -> uint32_t {
-    b.b_marktree.meta_root[m as usize]
+    b.read().b_marktree.meta_root[m as usize]
 }
 
 // ---------------------------------------------------------------------------
@@ -352,7 +352,7 @@ pub(crate) fn fire(event: AutoEvent, buffer: Buf) -> bool {
 /// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form
 /// the unload/delete/wipe events take.
 pub(crate) fn fire_named(event: AutoEvent, buffer: Buf) -> bool {
-    let name = buffer.name.shown().map(XString::from_cstr);
+    let name = buffer.read().name.shown().map(XString::from_cstr);
     apply_autocmds_exarg(event, name.clone(), name, false, Some(buffer), None)
 }
 

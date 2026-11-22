@@ -293,9 +293,9 @@ pub fn prompt_get_input(buffer: Option<Buf>) -> Option<ThinCString> {
     if !buf_is_prompt(Some(buffer)) {
         return None;
     }
-    let lnum_start = buffer.b_prompt_start.mark.lnum;
+    let lnum_start = buffer.read().b_prompt_start.mark.lnum;
     let lnum_last = buffer.line_count();
-    let col = buffer.b_prompt_start.mark.col;
+    let col = buffer.read().b_prompt_start.mark.col;
 
     let mut lines = Lines::in_buffer(buffer);
     let first = lines.line(lnum_start);
@@ -322,30 +322,31 @@ pub fn prompt_invoke_callback() {
     appended_lines_mark(lnum, 1);
     Win::current().w_cursor.lnum = lnum + 1;
     Win::current().w_cursor.col = ColNr::ZERO;
-    Buf::current().b_prompt_start.mark.lnum = lnum + 1;
+    Buf::current().edit().b_prompt_start.mark.lnum = lnum + 1;
 
-    if !Buf::current().b_prompt_callback.is_set() {
+    if !Buf::current().read().b_prompt_callback.is_set() {
         drop(user_input);
     } else {
         let mut rettv = TV_INITIAL_VALUE;
         // The array takes the input over and frees it.
         let argv = [TypVal::string(Some(user_input))];
         // A copy: the callback may replace itself, or wipe the buffer.
-        let callback = Buf::current().b_prompt_callback.duplicate();
+        let callback = Buf::current().read().b_prompt_callback.duplicate();
         let _ = callback_call(&callback, &argv, &mut rettv);
         drop(argv);
         clear_local(&mut rettv);
     }
 
     u_clearallandblockfree(Buf::current());
-    Buf::current().b_prompt_start.mark.lnum = Buf::current().line_count();
-    Buf::current().b_prompt_append_new_line = true;
+    let value = Buf::current().line_count();
+    Buf::current().edit().b_prompt_start.mark.lnum = value;
+    Buf::current().set_b_prompt_append_new_line(true);
 }
 
 /// CTRL-C in a prompt buffer. Answers whether the buffer had an interrupt
 /// callback at all.
 pub fn invoke_prompt_interrupt() -> bool {
-    if !Buf::current().b_prompt_interrupt.is_set() {
+    if !Buf::current().read().b_prompt_interrupt.is_set() {
         return false;
     }
     let mut rettv = TV_INITIAL_VALUE;
@@ -353,7 +354,7 @@ pub fn invoke_prompt_interrupt() -> bool {
     // about it.
     GOT_INT.set(false);
     // A copy: the callback may replace itself, or wipe the buffer.
-    let callback = Buf::current().b_prompt_interrupt.duplicate();
+    let callback = Buf::current().read().b_prompt_interrupt.duplicate();
     let called = callback_call(&callback, &[], &mut rettv) == Ok(true);
     clear_local(&mut rettv);
     called

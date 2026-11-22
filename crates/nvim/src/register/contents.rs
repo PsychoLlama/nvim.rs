@@ -436,7 +436,7 @@ pub fn write_reg_contents_ex(
                 .and_then(find_buf)
         };
         if let Some(buf) = buf {
-            Win::current().w_alt_fnum = Some(buf.handle);
+            Win::current().w_alt_fnum = Some(buf.handle());
         }
         return;
     }

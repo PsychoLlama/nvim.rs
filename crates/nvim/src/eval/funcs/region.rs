@@ -197,7 +197,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
     } else {
         Buf::current_or_none()
     };
-    let loaded = findbuf.filter(|b| b.b_ml.ml_mfp.is_some());
+    let loaded = findbuf.filter(|b| b.ml().ml_mfp.is_some());
     let Some(findbuf) = loaded else {
         return Err(Unresolved::NotLoaded);
     };
@@ -287,7 +287,7 @@ fn parse_type(spec: &CStr) -> Result<(MotionType, c_int), Unresolved> {
 /// Validate one corner against the buffer, resolving `MAXCOL` to the end of
 /// its line.
 fn check_corner(buffer: Buf, p: &mut Pos) -> Result<(), Unresolved> {
-    if p.lnum < LineNr::ONE || p.lnum > buffer.b_ml.ml_line_count {
+    if p.lnum < LineNr::ONE || p.lnum > buffer.line_count() {
         return Err(Unresolved::Line(p.lnum));
     }
     let len = ml_get_buf_len(buffer, p.lnum);
@@ -505,7 +505,7 @@ fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
     for p in [p1, p2] {
         let pos = tv_list_alloc(4);
         let mut l = pos.edit();
-        l.push_number(VarNumber::from(Buf::current().handle.get()));
+        l.push_number(VarNumber::from(Buf::current().handle().get()));
         l.push_number(i64::from(p.lnum));
         l.push_number(i64::from(p.col));
         l.push_number(VarNumber::from(p.coladd));

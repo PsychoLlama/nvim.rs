@@ -128,7 +128,7 @@ fn quoted_span(
     vis_bef_curs: bool,
 ) -> Option<(c_int, c_int)> {
     // 'quoteescape', copied: the walks below read it per byte.
-    let qe = Buf::current().b_p_qe.get();
+    let qe = Buf::current().read().b_p_qe.get();
     let qe = Some(&qe[..]);
     let next = |col| find_next_quote(line, col, quotechar, None);
     let next_esc = |col| find_next_quote(line, col, quotechar, qe);

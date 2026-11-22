@@ -129,7 +129,7 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
         }
         AI_COL.set(ColNr::ZERO);
         if STATE.get() & VREPLACE_FLAG != 0 {
-            ORIG_LINE_COUNT.set(Buf::current().b_ml.ml_line_count);
+            ORIG_LINE_COUNT.set(Buf::current().line_count());
             VR_LINES_CHANGED.set(1);
         }
         reset_redobuff();
@@ -228,7 +228,7 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
             && (esc
                 || (!cpo_has(CpoFlag::INDENT)
                     && Win::current().w_cursor.lnum != end_insert_pos.pos().lnum))
-            && end_insert_pos.pos().lnum <= Buf::current().b_ml.ml_line_count
+            && end_insert_pos.pos().lnum <= Buf::current().line_count()
         {
             let mut tpos = Win::current().w_cursor;
             let prev_col = end_insert_pos.pos().col;
@@ -272,9 +272,9 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
     // Set `'[` and `']` to the inserted text.  A null `end_insert_pos`
     // means a different buffer is current now.
     if let Some(end_insert_pos) = end_insert_pos {
-        Buf::current().b_op_start = INSSTART.get();
-        Buf::current().b_op_start_orig = INSSTART_ORIG.get();
-        Buf::current().b_op_end = end_insert_pos.pos();
+        Buf::current().set_b_op_start(INSSTART.get());
+        Buf::current().set_b_op_start_orig(INSSTART_ORIG.get());
+        Buf::current().set_b_op_end(end_insert_pos.pos());
     }
 }
 

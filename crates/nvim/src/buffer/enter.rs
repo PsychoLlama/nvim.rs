@@ -160,12 +160,12 @@ fn set_spelllang(win: Win) {
 /// Whether the window's `'spelllang'` is set. It lives in the syntax block
 /// the window shares with its buffer.
 fn has_spelllang(win: Win) -> bool {
-    c_int::from(win.syntax().b_p_spl.first_byte()) != 0
+    c_int::from(win.syntax().read().b_p_spl.first_byte()) != 0
 }
 
 /// Whether the job behind terminal buffer `buffer` is still running.
 fn job_running(buffer: Buf) -> bool {
-    channel_job_running(buffer.b_p_channel.cast_unsigned())
+    channel_job_running(buffer.b_p_channel().cast_unsigned())
 }
 
 /// Recompute every buffer's short file name against the new directory.
@@ -183,7 +183,7 @@ fn reshorten_fnames() {
 /// With `update_jumplist` the position being left joins the jump list.
 pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     let unload = action == DOBUF_UNLOAD || action == DOBUF_DEL || action == DOBUF_WIPE;
-    let old_tw: OptInt = Buf::current().b_p_tw;
+    let old_tw: OptInt = Buf::current().b_p_tw();
     let winid_before = last_winid();
 
     if update_jumplist {
@@ -192,7 +192,7 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
 
     let mut win = Win::current();
     if !cmdmod_has(CmdModFlags::KEEPALT) {
-        win.w_alt_fnum = Some(Buf::current().handle); // remember alternate file
+        win.w_alt_fnum = Some(Buf::current().handle()); // remember alternate file
     }
     remember_altfpos(win); // remember curpos
 
@@ -203,7 +203,7 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     let prevbuf = Buf::current();
     let prevbufref = BufRef::of(prevbuf);
     let newbufref = BufRef::of(buffer);
-    let prev_nwindows = prevbuf.b_nwindows;
+    let prev_nwindows = prevbuf.b_nwindows();
 
     // Autocommands may delete the current buffer and/or the buffer we want to
     // go to.  In those cases don't close the buffer.
@@ -226,8 +226,8 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     {
         // autocommands changed curbuf and we will move to another buffer soon,
         // so decrement curbuf->b_nwindows
-        if let Some(mut cur) = current_buf().filter(|c| *c != prevbuf) {
-            cur.b_nwindows -= 1;
+        if let Some(cur) = current_buf().filter(|c| *c != prevbuf) {
+            cur.set_b_nwindows(cur.b_nwindows() - 1);
         }
         // If the buffer is not valid but curwin->w_buffer is NULL we must enter
         // some buffer.  Using the last one is hopefully OK.
@@ -236,7 +236,7 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
         } else {
             last_buf().expect("the buffer list is never empty")
         });
-        if old_tw != Buf::current().b_p_tw {
+        if old_tw != Buf::current().b_p_tw() {
             recheck_colorcolumn(Win::current());
         }
     }
@@ -283,7 +283,7 @@ fn leave_prevbuf(
     // Do not sync when in Insert mode and the buffer is open in another
     // window, might be a timer doing something in another window.
     if prevbuf.raw() == Buf::current_raw()
-        && (STATE.get() & MODE_INSERT == 0 || Buf::current().b_nwindows <= 1)
+        && (STATE.get() & MODE_INSERT == 0 || Buf::current().b_nwindows() <= 1)
     {
         sync_undo();
     }
@@ -310,7 +310,7 @@ fn leave_prevbuf(
 ///
 /// The old `CURBUF` must have been abandoned already -- which also means it
 /// may be pointing at freed memory, so nothing here reads it.
-pub(crate) fn enter_buffer(mut buffer: Buf) {
+pub(crate) fn enter_buffer(buffer: Buf) {
     // when closing the current buffer stop Visual mode
     if visual_active() {
         end_visual();
@@ -320,11 +320,11 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     let mut win = Win::current();
     win.w_buffer = buffer;
     buffer.make_current();
-    buffer.b_nwindows += 1;
+    buffer.set_b_nwindows(buffer.b_nwindows() + 1);
 
     // Copy buffer and window local option values.  Not for a help buffer.
     copy_options_into(buffer, BCO_ENTER | BCO_NOHELP);
-    if !buffer.b_help {
+    if !buffer.b_help() {
         restore_winopts(buffer);
     } else {
         // Remove all folds in the window.
@@ -350,14 +350,14 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     win.w_valid = WinValid::NONE;
 
     // Make sure the buffer is loaded.
-    if buffer.b_ml.ml_mfp.is_none() {
+    if buffer.ml().ml_mfp.is_none() {
         // need to load the file
         //
         // If there is no filetype, allow for detecting one.  Esp. useful for
         // ":ball" used in an autocommand.  If there already is a filetype we
         // might prefer to keep it.
-        if buffer.b_p_ft.first_byte() == 0 {
-            buffer.b_did_filetype = false;
+        if buffer.read().b_p_ft.first_byte() == 0 {
+            buffer.set_b_did_filetype(false);
         }
         load_current_buffer();
     } else {
@@ -390,16 +390,16 @@ pub(crate) fn enter_buffer(mut buffer: Buf) {
     // Change directories when the 'acd' option is set.
     do_autochdir_now();
 
-    if Buf::current().b_kmap_state & KEYMAP_INIT != 0 {
+    if Buf::current().b_kmap_state() & KEYMAP_INIT != 0 {
         init_keymap();
     }
     // May need to set the spell language.  Can only do this after the buffer
     // has been properly setup.
     let (buf, win) = (Buf::current(), Win::current());
-    if !buf.b_help && win.w_onebuf_opt.wo_spell != 0 && has_spelllang(win) {
+    if !buf.b_help() && win.w_onebuf_opt.wo_spell != 0 && has_spelllang(win) {
         set_spelllang(win);
     }
-    Buf::current().b_last_used = os_time_raw();
+    Buf::current().set_b_last_used(os_time_raw());
 
     check_buf_terminal_size(Buf::current());
 
@@ -416,7 +416,7 @@ fn do_autochdir_now() {
         return;
     }
     // A copy: changing directory fires `DirChanged`.
-    let fname = Buf::current().name.full().map(XString::from_cstr);
+    let fname = Buf::current().read().name.full().map(XString::from_cstr);
     if starting.get() == 0
         && let Some(fname) = fname
         && vim_chdirfile(fname.as_cstr(), CD_CAUSE_AUTO).is_ok()
@@ -430,17 +430,17 @@ fn do_autochdir_now() {
 // "No write since last change"
 
 pub fn no_write_message_buf(buffer: Buf) {
-    if !buffer.terminal.is_null() && job_running(buffer) {
+    if !buffer.terminal().is_null() && job_running(buffer) {
         err_static(E_JOB_STILL_RUNNING_ADD_BANG_TO_END_THE_JOB);
     } else {
-        let nr = buffer.handle.get();
+        let nr = buffer.handle().get();
         semsg!("E89: No write since last change for buffer {nr} (add ! to override)");
     }
 }
 
 pub fn no_write_message() {
     let buf = Buf::current();
-    if !buf.terminal.is_null() && job_running(buf) {
+    if !buf.terminal().is_null() && job_running(buf) {
         err_static(E_JOB_STILL_RUNNING_ADD_BANG_TO_END_THE_JOB);
     } else {
         err_static(E_NO_WRITE_SINCE_LAST_CHANGE_ADD_BANG_TO_OVERRIDE);
@@ -448,7 +448,7 @@ pub fn no_write_message() {
 }
 
 pub fn no_write_message_nobang(buffer: Buf) {
-    if !buffer.terminal.is_null() && job_running(buffer) {
+    if !buffer.terminal().is_null() && job_running(buffer) {
         err_static(E_JOB_STILL_RUNNING);
     } else {
         err_static(E_NO_WRITE_SINCE_LAST_CHANGE);
@@ -464,13 +464,14 @@ fn err_static(msg: &'static CStr) {
 // b:changedtick
 
 /// Initialise `b:changedtick` and its `changedtick_val` attribute.
-pub(crate) fn buf_init_changedtick(mut buffer: Buf) {
-    buffer.changedtick_di = DictItem {
+pub(crate) fn buf_init_changedtick(buffer: Buf) {
+    let value = DictItem {
         di_tv: TypVal::Number(buf_get_changedtick(buffer)),
         di_lock: VarLock::Fixed,
         // Must not include DI_FLAGS_ALLOC.
         di_flags: DI_FLAGS_RO | DI_FLAGS_FIX,
         di_key: DictKey::new(b"changedtick"),
     };
+    buffer.edit().changedtick_di = value;
     link_buf_changedtick(buffer);
 }

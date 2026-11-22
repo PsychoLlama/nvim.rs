@@ -140,7 +140,7 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
                 let n = line_end!();
                 if win.w_curswant + width2 < ColNr::new(n) && !folded(win, win.w_cursor.lnum) {
                     win.w_curswant += width2;
-                } else if win.w_cursor.lnum >= win.buffer().b_ml.ml_line_count {
+                } else if win.w_cursor.lnum >= win.buffer().line_count() {
                     retval = false;
                     break;
                 } else {
@@ -237,7 +237,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
             validate_botline_win(wp);
             let half = (win.w_view_height - win.w_empty_rows + 1) / 2;
             n = 0;
-            while (win.w_topline + n) < Buf::current().b_ml.ml_line_count {
+            while (win.w_topline + n) < Buf::current().line_count() {
                 if n > 0 && used + win_get_fill(wp, win.w_topline + n) / 2 >= half {
                     n -= 1;
                     break;
@@ -275,7 +275,7 @@ pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
                 n = (lnum - win.w_topline) as c_int;
             }
         }
-        win.w_cursor.lnum = (win.w_topline + n).min(Buf::current().b_ml.ml_line_count);
+        win.w_cursor.lnum = (win.w_topline + n).min(Buf::current().line_count());
     }
     if op.op_type == OpType::Nop {
         cursor_correct(wp);
@@ -324,7 +324,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
         if at_end {
             if wrap_flag != 0
                 && p_ww(|value| value.to_bytes().contains(&wrap_flag))
-                && win.w_cursor.lnum < Buf::current().b_ml.ml_line_count
+                && win.w_cursor.lnum < Buf::current().line_count()
             {
                 // A pending exclusive operator eats the line break by
                 // becoming inclusive instead of moving.
@@ -466,7 +466,7 @@ pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
             return;
         }
         if buf_is_prompt(current_buf())
-            && Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count
+            && Win::current().w_cursor.lnum == Buf::current().line_count()
         {
             prompt_invoke_callback();
             if RESTART_EDIT.get().is_nul() {
@@ -571,7 +571,7 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
         } else {
             op.motion_type = MotionType::LineWise;
             setpcmark();
-            let line_count = Buf::current().b_ml.ml_line_count;
+            let line_count = Buf::current().line_count();
             let count = line_count.get();
             // Divide first for a file long enough that `count * 100`
             // would not fit.
@@ -742,7 +742,7 @@ pub(crate) fn nv_beginline(cmd_arg: &mut CmdArg) {
 
 /// `gg` and `G`: to the first or last line, or to the count'th.
 pub(crate) fn nv_goto(cmd_arg: &mut CmdArg) {
-    let last = Buf::current().b_ml.ml_line_count;
+    let last = Buf::current().line_count();
     let mut lnum = if cmd_arg.arg != 0 { last } else { LineNr::ONE };
     cmd_arg.op().motion_type = MotionType::LineWise;
     setpcmark();

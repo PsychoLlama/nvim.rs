@@ -227,18 +227,18 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        Buf::current().b_op_start = region.start;
-        Buf::current().b_op_end = region.end;
+        Buf::current().set_b_op_start(region.start);
+        Buf::current().set_b_op_end(region.end);
         if yank_type == MotionType::LineWise {
-            Buf::current().b_op_start.col = ColNr::ZERO;
-            Buf::current().b_op_end.col = ColNr::MAX;
+            Buf::current().edit().b_op_start.col = ColNr::ZERO;
+            Buf::current().edit().b_op_end.col = ColNr::MAX;
         }
         if yank_type != MotionType::LineWise && !region.inclusive {
             // An exclusive region's `']` is the character *before* the end.
             // Stepped on a copy: `decl` reads the current buffer itself.
-            let mut end = Buf::current().b_op_end;
+            let mut end = Buf::current().b_op_end();
             decl(&mut end);
-            Buf::current().b_op_end = end;
+            Buf::current().set_b_op_end(end);
         }
     }
 }

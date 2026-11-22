@@ -95,18 +95,26 @@ impl SynState {
         if col > ml_get_buf_len(self.buffer, lnum) {
             return (false, regmatch, None);
         }
-        let mut block = self.block();
-        let spp = block.pattern_mut(idx);
+        let block = self.block();
+        // The program and the timing are taken out for the match, which
+        // reads the buffer (whose block this may be), and put back after.
+        let mut held = block.edit();
+        let spp = held.pattern_mut(idx);
         regmatch.rmm_ic = spp.sp_ic;
         regmatch.regprog = spp.sp_prog.take();
-        let time = &mut spp.sp_time;
+        let mut time = spp.sp_time;
+        drop(held);
         let mut captures = None;
         let io = ExtMatchIo {
             input: ext,
             output: Some(&mut captures),
         };
-        let matched = self.syn_regexec(&mut regmatch, lnum, col, time, io);
-        block.pattern_mut(idx).sp_prog = regmatch.regprog.take();
+        let matched = self.syn_regexec(&mut regmatch, lnum, col, &mut time, io);
+        let mut held = block.edit();
+        let spp = held.pattern_mut(idx);
+        spp.sp_prog = regmatch.regprog.take();
+        spp.sp_time = time;
+        drop(held);
         (matched, regmatch, captures)
     }
 
@@ -133,7 +141,7 @@ impl SynState {
         // that continues to the next line because it contained a region.
         // Upstream answers `hl_endpos = startpos` here, which no caller reads:
         // both test `m_endpos.lnum` first, and it is 0.
-        if c_int::from(self.block().pattern(idx).sp_type) != SPTYPE_START {
+        if c_int::from(self.block().read().pattern(idx).sp_type) != SPTYPE_START {
             let mut end = RegionEnd::none();
             end.hl_endpos = startpos;
             return end;
@@ -142,10 +150,10 @@ impl SynState {
         // Find the SKIP or first END pattern after the last START pattern. The
         // patterns of one `:syntax region` are stored consecutively, START(s)
         // then an optional SKIP then the ENDs.
-        while c_int::from(self.block().pattern(idx).sp_type) == SPTYPE_START {
+        while c_int::from(self.block().read().pattern(idx).sp_type) == SPTYPE_START {
             idx += 1;
         }
-        let skip_idx = if c_int::from(self.block().pattern(idx).sp_type) == SPTYPE_SKIP {
+        let skip_idx = if c_int::from(self.block().read().pattern(idx).sp_type) == SPTYPE_SKIP {
             idx += 1;
             Some(idx - 1)
         } else {
@@ -206,9 +214,10 @@ impl SynState {
     ) -> Option<(c_int, RegMMatch)> {
         let mut best: Option<(c_int, RegMMatch)> = None;
         let mut idx = start_idx;
-        while idx < count_as_int(self.block().patterns().len()) {
+        while idx < count_as_int(self.block().read().patterns().len()) {
             let spp = self.block();
-            let spp = spp.pattern(idx);
+            let held = spp.read();
+            let spp = held.pattern(idx);
             if c_int::from(spp.sp_type) != SPTYPE_END {
                 break; // past the last END pattern of this region
             }
@@ -217,6 +226,7 @@ impl SynState {
             let (matched, regmatch, _) =
                 self.run_pattern(idx, startpos.lnum, ColNr::new(lc_col), ext);
             let col = regmatch.startpos[0].col;
+            drop(held);
             if matched && best.as_ref().is_none_or(|(_, b)| col < b.startpos[0].col) {
                 best = Some((idx, regmatch));
             }
@@ -247,7 +257,7 @@ impl SynState {
         matchcol: ColNr,
         ext: Option<&ExtMatch>,
     ) -> Skipped {
-        let offsets = self.block().pattern(skip_idx).offsets();
+        let offsets = self.block().read().pattern(skip_idx).offsets();
         let lc_col = (matchcol.get() - offsets.offsets[SPO_LC_OFF as usize]).max(0);
         let (matched, regmatch, _) =
             self.run_pattern(skip_idx, startpos.lnum, ColNr::new(lc_col), ext);
@@ -288,7 +298,8 @@ impl SynState {
     /// Turn the winning END match into the four positions the caller wants.
     fn end_positions(&self, best_idx: c_int, best: &RegMMatch, startpos: LPos) -> RegionEnd {
         let block = self.block();
-        let spp = block.pattern(best_idx);
+        let held = block.read();
+        let spp = held.pattern(best_idx);
         let offsets = spp.offsets();
 
         // Match from the start pattern to the end pattern, corrected for the
@@ -515,7 +526,7 @@ impl SynState {
         // The window and buffer the parser was started for -- the window may
         // have gone, the buffer never has once the parse has begun.
         let (win, buf) = (self.win.and_then(WinId::get), self.buffer);
-        regmatch.rmm_maxcol = number_as_col(buf.b_p_smc);
+        regmatch.rmm_maxcol = number_as_col(buf.b_p_smc());
         let mut timed_out = false;
         let tm = self.deadline.as_ref();
         let r = vim_regexec_syntax(regmatch, win, buf, lnum, col, tm, Some(&mut timed_out), io);
@@ -534,10 +545,10 @@ impl SynState {
             }
         }
         if timed_out
-            && let Some(mut block) = win.map(Win::syntax)
-            && !block.b_syn_slow
+            && let Some(block) = win.map(Win::syntax)
+            && !block.read().b_syn_slow
         {
-            block.b_syn_slow = true;
+            block.edit().b_syn_slow = true;
             msg(
                 gettext(c"'redrawtime' exceeded, syntax highlighting disabled"),
                 0,
@@ -597,14 +608,14 @@ impl SynState {
         }
         let keyword = &text[..kwlen];
 
-        let block = self.block();
+        let held = self.block().read();
         let mut found = None;
-        if !block.b_keywtab.is_empty() {
-            found = self.match_keyword(block.b_keywtab.lookup(keyword), cur_si);
+        if !held.b_keywtab.is_empty() {
+            found = self.match_keyword(held.b_keywtab.lookup(keyword), cur_si);
         }
-        if found.is_none() && !block.b_keywtab_ic.is_empty() {
+        if found.is_none() && !held.b_keywtab_ic.is_empty() {
             let folded = foldcase(keyword, Some(MAXKEYWLEN as usize + 1));
-            found = self.match_keyword(block.b_keywtab_ic.lookup(&folded), cur_si);
+            found = self.match_keyword(held.b_keywtab_ic.lookup(&folded), cur_si);
         }
         let entry = found?;
         Some(KeywordMatch {

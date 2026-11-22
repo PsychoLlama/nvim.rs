@@ -124,7 +124,7 @@ pub(crate) fn check_scrollbind(vtopline_diff: i32, leftcol_diff: c_int) {
                     // so that scrolling back lines up again.
                     win.w_scbind_pos += vtopline_diff as c_int;
                     let curr_vtopline = get_vtopline(win);
-                    let last = Buf::current().b_ml.ml_line_count;
+                    let last = Buf::current().line_count();
                     let filled = plines_m_win_fill(win, win.w_topline + 1, last);
                     let max_vtopline = curr_vtopline + win.w_topfill + filled;
                     let new_vtopline = win.w_scbind_pos.min(max_vtopline).max(1);

@@ -69,8 +69,8 @@ impl BlockScan<'_> {
         {
             self.amount = self.scope_amount;
             if self.line.starts_with(b'{') {
-                self.amount += Buf::current().b_ind_open_extra;
-                self.added_to_amount = Buf::current().b_ind_open_extra;
+                self.amount += Buf::current().b_ind_open_extra();
+                self.added_to_amount = Buf::current().b_ind_open_extra();
             }
         }
 
@@ -97,11 +97,11 @@ impl BlockScan<'_> {
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
             if opens_namespace(l, 0) {
-                self.amount += Buf::current().b_ind_cpp_namespace - self.added_to_amount;
+                self.amount += Buf::current().b_ind_cpp_namespace() - self.added_to_amount;
                 return Step::Done;
             }
             if opens_extern_c(l, 0) {
-                self.amount += Buf::current().b_ind_cpp_extern_c - self.added_to_amount;
+                self.amount += Buf::current().b_ind_cpp_extern_c() - self.added_to_amount;
                 return Step::Done;
             }
             if only_comment_left(l, 0) {
@@ -121,12 +121,12 @@ impl BlockScan<'_> {
     /// ```
     fn at_scope_start_enum_or_init(&mut self) -> Step {
         let lnum = Win::current().w_cursor.lnum;
-        if lnum == LineNr::ZERO || lnum < self.ourscope - Buf::current().b_ind_maxparen {
+        if lnum == LineNr::ZERO || lnum < self.ourscope - Buf::current().b_ind_maxparen() {
             // Nothing found (abusing `b_ind_maxparen` as the limit):
             // assume a terminated line, i.e. a variable initialisation.
             if self.cont_amount > 0 {
                 self.amount = self.cont_amount;
-            } else if Buf::current().b_ind_js == 0 {
+            } else if Buf::current().b_ind_js() == 0 {
                 self.amount += self.ind_continuation;
             }
             return Step::Done;
@@ -179,7 +179,7 @@ impl BlockScan<'_> {
             // The borrow ends with the statement; the match runs only when a
             // paren was found, as upstream has it.
             if find_last_paren(Lines::current().line(cursor_lnum), b'(', b')') {
-                trypos = find_match_paren(Buf::current().b_ind_maxparen);
+                trypos = find_match_paren(Buf::current().b_ind_maxparen());
             }
             let cursor_lnum = Win::current().w_cursor.lnum;
             if trypos.is_none() && find_last_paren(Lines::current().line(cursor_lnum), b'{', b'}') {
@@ -232,7 +232,7 @@ impl BlockScan<'_> {
         }
 
         // Ignore jump labels with nothing after them.
-        if Buf::current().b_ind_js == 0 && is_jump_label() {
+        if Buf::current().b_ind_js() == 0 && is_jump_label() {
             // `is_jump_label` may have unlocked the line, so it is read again.
             let cursor_lnum = Win::current().w_cursor.lnum;
             let mut lines = Lines::current();
@@ -258,7 +258,7 @@ impl BlockScan<'_> {
         // The start of a C++ base-class declaration or constructor
         // initialisation?
         let mut is_baseclass = false;
-        if self.lookfor != LOOKFOR_TERM && Buf::current().b_ind_cpp_baseclass > 0 {
+        if self.lookfor != LOOKFOR_TERM && Buf::current().b_ind_cpp_baseclass() > 0 {
             is_baseclass = in_baseclass_list(&mut self.cache);
         }
         if is_baseclass {
@@ -297,7 +297,7 @@ impl BlockScan<'_> {
 
         if self.js_cur_has_key {
             self.js_cur_has_key = false; // only check the first line
-            if Buf::current().b_ind_js != 0 && terminated == b',' {
+            if Buf::current().b_ind_js() != 0 && terminated == b',' {
                 // Inside a Javascript object:
                 //   key: something,  <- align with this
                 //   key: something
@@ -406,9 +406,9 @@ impl BlockScan<'_> {
                 after_label(text).is_some_and(|after| starts_with_cinword(&text[after..]));
             if cinword {
                 self.amount += if self.line.starts_with(b'{') {
-                    Buf::current().b_ind_open_extra
+                    Buf::current().b_ind_open_extra()
                 } else {
-                    Buf::current().b_ind_level + Buf::current().b_ind_no_brace
+                    Buf::current().b_ind_level() + Buf::current().b_ind_no_brace()
                 };
             }
             return Step::Done;
@@ -421,11 +421,11 @@ impl BlockScan<'_> {
         // ->   y = 1;
         self.scope_amount = get_indent()
             + if iscase {
-                Buf::current().b_ind_case_code
+                Buf::current().b_ind_case_code()
             } else {
-                Buf::current().b_ind_scopedecl_code
+                Buf::current().b_ind_scopedecl_code()
             };
-        self.lookfor = if Buf::current().b_ind_case_break != 0 {
+        self.lookfor = if Buf::current().b_ind_case_break() != 0 {
             LOOKFOR_NOBREAK
         } else {
             LOOKFOR_ANY
@@ -449,7 +449,7 @@ impl BlockScan<'_> {
             self.lookfor = LOOKFOR_TERM;
             self.amount = get_indent();
             if self.line.starts_with(b'{') {
-                self.amount += Buf::current().b_ind_open_extra;
+                self.amount += Buf::current().b_ind_open_extra();
             }
         }
         self.whilelevel += 1;
@@ -522,7 +522,7 @@ impl BlockScan<'_> {
             // paren was found, as upstream has it.
             let cursor_lnum = Win::current().w_cursor.lnum;
             if find_last_paren(Lines::current().line(cursor_lnum), b'(', b')') {
-                let trypos = find_match_paren(Buf::current().b_ind_maxparen);
+                let trypos = find_match_paren(Buf::current().b_ind_maxparen());
                 if let Some(trypos) = trypos {
                     // Check whether we are on a case label now; that is
                     // handled above.
@@ -551,14 +551,14 @@ impl BlockScan<'_> {
             //        stat;
             // }
             let cursor_lnum = Win::current().w_cursor.lnum;
-            let iscase = Buf::current().b_ind_keep_case_label != 0
+            let iscase = Buf::current().b_ind_keep_case_label() != 0
                 && is_case_label(Lines::current().line(cursor_lnum), 0, false);
 
             // The indent of the current line, ignoring any jump label.
             let (amount, at) = skip_label(cursor_lnum);
             self.amount = amount;
             if self.line.starts_with(b'{') {
-                self.amount += Buf::current().b_ind_open_extra;
+                self.amount += Buf::current().b_ind_open_extra();
             }
             // See the remark above: only add `b_ind_open_extra` when the
             // line does not itself start with a '{'.
@@ -572,7 +572,7 @@ impl BlockScan<'_> {
                 )
             };
             if opens_brace {
-                self.amount -= Buf::current().b_ind_open_extra;
+                self.amount -= Buf::current().b_ind_open_extra();
             }
             self.lookfor = if iscase { LOOKFOR_ANY } else { LOOKFOR_TERM };
 
@@ -690,7 +690,7 @@ impl BlockScan<'_> {
         // The indent and the offset of the current line's text, ignoring
         // any jump label.
         let cursor_lnum = Win::current().w_cursor.lnum;
-        let at = if Buf::current().b_ind_js != 0 {
+        let at = if Buf::current().b_ind_js() != 0 {
             self.cur_amount = get_indent();
             0
         } else {
@@ -717,9 +717,9 @@ impl BlockScan<'_> {
                 byte_at(l, at + skip::white(&l[at.min(l.len())..])) == b'{'
             };
             if !opens_brace {
-                self.amount += Buf::current().b_ind_open_extra;
+                self.amount += Buf::current().b_ind_open_extra();
             }
-            if Buf::current().b_ind_cpp_baseclass != 0 && Buf::current().b_ind_js == 0 {
+            if Buf::current().b_ind_cpp_baseclass() != 0 && Buf::current().b_ind_js() == 0 {
                 // Have to look back for a cpp base-class declaration or
                 // initialisation.
                 self.lookfor = LOOKFOR_CPP_BASECLASS;
@@ -766,10 +766,10 @@ impl BlockScan<'_> {
         // ->     here;
         self.amount = self.cur_amount;
         if self.line.starts_with(b'{') {
-            self.amount += Buf::current().b_ind_open_extra;
+            self.amount += Buf::current().b_ind_open_extra();
         }
         if self.lookfor != LOOKFOR_TERM {
-            self.amount += Buf::current().b_ind_level + Buf::current().b_ind_no_brace;
+            self.amount += Buf::current().b_ind_level() + Buf::current().b_ind_no_brace();
             return Step::Done;
         }
 
@@ -832,7 +832,7 @@ impl BlockScan<'_> {
             // check for a cpp base-class declaration first, if this is an
             // opening brace or we are only looking for enums.
             if terminated == b',' {
-                if Buf::current().b_ind_cpp_baseclass == 0 {
+                if Buf::current().b_ind_cpp_baseclass() == 0 {
                     return Step::Done;
                 }
                 self.lookfor = LOOKFOR_CPP_BASECLASS;
@@ -850,7 +850,7 @@ impl BlockScan<'_> {
         let cursor_lnum = Win::current().w_cursor.lnum;
         self.amount = self.cur_amount;
 
-        let ends_in_bracket = Buf::current().b_ind_js != 0 && terminated == b',' && {
+        let ends_in_bracket = Buf::current().b_ind_js() != 0 && terminated == b',' && {
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
             // Upstream reads `l[strlen(l) - 2]`, the byte before the last.
@@ -870,7 +870,7 @@ impl BlockScan<'_> {
         // -- or in an ordinary continuation line.  Only when no other
         // statement has been found yet.
         if self.lookfor == LOOKFOR_INITIAL && terminated == b',' {
-            if Buf::current().b_ind_js == 0 {
+            if Buf::current().b_ind_js() == 0 {
                 self.lookfor = LOOKFOR_ENUM_OR_INIT;
                 self.cont_amount = first_id_amount();
                 return Step::Again;
@@ -894,7 +894,7 @@ impl BlockScan<'_> {
                 return Step::Done;
             }
             self.lookfor = LOOKFOR_COMMA;
-            if let Some(trypos) = find_match_char(b'[', Buf::current().b_ind_maxparen) {
+            if let Some(trypos) = find_match_char(b'[', Buf::current().b_ind_maxparen()) {
                 if trypos.lnum == Win::current().w_cursor.lnum - 1 {
                     // The current line is the first inside [], so line up
                     // with it.

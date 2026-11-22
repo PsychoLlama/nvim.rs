@@ -43,7 +43,7 @@ impl Buf {
     /// iteration -- as with every other edit of the tree, a walk over it starts
     /// again after one.
     pub fn set_extmark(
-        mut self,
+        self,
         ns_id: uint32_t,
         idp: Option<&mut uint32_t>,
         row: c_int,
@@ -59,17 +59,17 @@ impl Buf {
     ) {
         // Registers the namespace at 0 if it had none, which `extmark_clear`
         // reads as "this buffer has marks in it".
-        ns_counter(self.extmark_ns(), ns_id);
+        ns_counter(&mut self.extmark_ns(), ns_id);
         let mut id = idp.as_deref().copied().unwrap_or(0);
 
         let flags = mt_flags(right_gravity, no_undo, invalidate, decor.is_ext()) | decor_flags;
         let mut revised = false;
         if id == 0 {
-            id = ns_counter(self.extmark_ns(), ns_id) + 1;
-            ns_set_counter(self.extmark_ns(), ns_id, id);
+            id = ns_counter(&mut self.extmark_ns(), ns_id) + 1;
+            ns_set_counter(&mut self.extmark_ns(), ns_id, id);
         } else {
             let mut iter = MarkTreeIter::default();
-            let old_mark = tree_lookup_ns(self.marktree(), ns_id, id, false, Some(&mut iter));
+            let old_mark = tree_lookup_ns(&mut self.marktree(), ns_id, id, false, Some(&mut iter));
             if old_mark.id != 0 {
                 if mt_paired(old_mark) || end_row > -1 {
                     del_id(self, ns_id, id);
@@ -78,17 +78,17 @@ impl Buf {
                     if old_mark.pos.row == row && old_mark.pos.col == col.get() {
                         // Not paired: the key can be revised where it lies.
                         if !mt_invalid(old_mark) && mt_decor_any(old_mark) {
-                            itr_rawkey(self.marktree(), &iter)
+                            itr_rawkey(&mut self.marktree(), &iter)
                                 .flags
                                 .clear(MtFlags::EXTERNAL_MASK);
                             decor_remove(self, row, row, col.get(), mt_decor(old_mark), true);
                         }
-                        itr_rawkey(self.marktree(), &iter).flags |= flags;
-                        itr_rawkey(self.marktree(), &iter).decor_data = decor;
-                        tree_revise_meta(self.marktree(), &mut iter, old_mark);
+                        itr_rawkey(&mut self.marktree(), &iter).flags |= flags;
+                        itr_rawkey(&mut self.marktree(), &iter).decor_data = decor;
+                        tree_revise_meta(&mut self.marktree(), &mut iter, old_mark);
                         revised = true;
                     } else {
-                        tree_del_itr(self.marktree(), &mut iter, false);
+                        tree_del_itr(&mut self.marktree(), &mut iter, false);
                         if !mt_invalid(old_mark) {
                             decor_remove(
                                 self,
@@ -102,8 +102,8 @@ impl Buf {
                     }
                 }
             } else {
-                let highest = ns_counter(self.extmark_ns(), ns_id).max(id);
-                ns_set_counter(self.extmark_ns(), ns_id, highest);
+                let highest = ns_counter(&mut self.extmark_ns(), ns_id).max(id);
+                ns_set_counter(&mut self.extmark_ns(), ns_id, highest);
             }
         }
 
@@ -119,7 +119,7 @@ impl Buf {
                 decor_data: decor,
             };
             tree_put(
-                self.marktree(),
+                &mut self.marktree(),
                 mark,
                 end_row,
                 end_col.get(),
@@ -144,15 +144,9 @@ impl Buf {
 ///
 /// `static` upstream; only [`extmark_apply_undo`](super::extmark_apply_undo)
 /// reaches it.
-pub(crate) fn extmark_setraw(
-    mut buffer: Buf,
-    mark: uint64_t,
-    row: c_int,
-    col: ColNr,
-    invalid: bool,
-) {
+pub(crate) fn extmark_setraw(buffer: Buf, mark: uint64_t, row: c_int, col: ColNr, invalid: bool) {
     let mut iter = MarkTreeIter::default();
-    let key = tree_lookup(buffer.marktree(), mark, Some(&mut iter));
+    let key = tree_lookup(&mut buffer.marktree(), mark, Some(&mut iter));
     let move_0 = key.pos.row != row || key.pos.col != col.get();
     if key.pos.row < 0 || (!move_0 && !invalid) {
         // The mark was deleted, or nothing has to change.
@@ -168,13 +162,13 @@ pub(crate) fn extmark_setraw(
     let mut row1 = 0;
     let mut row2 = 0;
     let mut alt_iter = iter.clone();
-    let alt = tree_get_alt(buffer.marktree(), key, Some(&mut alt_iter));
+    let alt = tree_get_alt(&mut buffer.marktree(), key, Some(&mut alt_iter));
 
     if invalid {
-        itr_rawkey(buffer.marktree(), &iter)
+        itr_rawkey(&mut buffer.marktree(), &iter)
             .flags
             .clear(MtFlags::INVALID);
-        itr_rawkey(buffer.marktree(), &alt_iter)
+        itr_rawkey(&mut buffer.marktree(), &alt_iter)
             .flags
             .clear(MtFlags::INVALID);
         let (revised, old) = if mt_end(key) {
@@ -182,8 +176,10 @@ pub(crate) fn extmark_setraw(
         } else {
             (&mut iter, key)
         };
-        tree_revise_meta(buffer.marktree(), revised, old);
-    } else if !mt_invalid(key) && key.flags.has(MtFlags::DECOR_SIGNTEXT) && buffer.b_signcols.autom
+        tree_revise_meta(&mut buffer.marktree(), revised, old);
+    } else if !mt_invalid(key)
+        && key.flags.has(MtFlags::DECOR_SIGNTEXT)
+        && buffer.read().b_signcols.autom
     {
         row1 = alt.pos.row.min(key.pos.row.min(row));
         row2 = alt.pos.row.max(key.pos.row.max(row));
@@ -197,7 +193,7 @@ pub(crate) fn extmark_setraw(
     }
 
     if move_0 {
-        tree_move(buffer.marktree(), &mut iter, row, col.get());
+        tree_move(&mut buffer.marktree(), &mut iter, row, col.get());
     }
 
     if invalid {
@@ -207,7 +203,9 @@ pub(crate) fn extmark_setraw(
             row.min(alt.pos.row),
             row.max(alt.pos.row),
         );
-    } else if !mt_invalid(key) && key.flags.has(MtFlags::DECOR_SIGNTEXT) && buffer.b_signcols.autom
+    } else if !mt_invalid(key)
+        && key.flags.has(MtFlags::DECOR_SIGNTEXT)
+        && buffer.read().b_signcols.autom
     {
         signcols_count_range(buffer, row1, last_line().min(row2), 0, SignCountHalf::Add);
     }
@@ -217,5 +215,5 @@ pub(crate) fn extmark_setraw(
 /// which upstream reads here even though every other line in
 /// [`extmark_setraw`] is about `buffer`.
 fn last_line() -> c_int {
-    (current_buf().b_ml.ml_line_count - 1).get()
+    (current_buf().line_count() - 1).get()
 }

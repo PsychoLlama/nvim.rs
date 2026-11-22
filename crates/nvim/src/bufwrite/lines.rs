@@ -123,9 +123,9 @@ impl Buf {
             // Write failed, or the last line has no end-of-line: stop here.
             if end == LineNr::ZERO
                 || (lnum == end
-                    && (write_bin || self.b_p_fixeol == 0)
-                    && ((write_bin && lnum == self.b_no_eol_lnum)
-                        || (lnum == self.b_ml.ml_line_count && self.b_p_eol == 0)))
+                    && (write_bin || self.b_p_fixeol() == 0)
+                    && ((write_bin && lnum == self.b_no_eol_lnum())
+                        || (lnum == self.line_count() && self.b_p_eol() == 0)))
             {
                 lnum += 1; // written the line, count it
                 no_eol = true;
@@ -174,7 +174,7 @@ impl Buf {
             writer.conv_error_lnum = end;
             end = LineNr::ZERO;
         }
-        if self.b_p_fixeol == 0 && self.b_p_eof != 0 {
+        if self.b_p_fixeol() == 0 && self.b_p_eof() != 0 {
             // Write the trailing CTRL-Z that 'endoffile' asks for.
             writer.write_raw(b"\x1a");
         }

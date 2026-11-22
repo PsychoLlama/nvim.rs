@@ -93,7 +93,7 @@ impl Listed {
         {
             let name = match &entry.fname {
                 Some(own) => Some(own.to_vec()),
-                None => buf.name.shown().map(|name| name.to_bytes().to_vec()),
+                None => buf.read().name.shown().map(|name| name.to_bytes().to_vec()),
             };
             // :helpgrep entries name the help file only.
             fname = name.map(|name| {

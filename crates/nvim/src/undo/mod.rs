@@ -207,7 +207,7 @@ pub fn u_inssub(lnum: LineNr) -> Result<(), Failed> {
 ///
 /// Safe: as [`u_save`].
 pub fn u_savedel(lnum: LineNr, nlines: i32) -> Result<(), Failed> {
-    let whole_buffer = nlines == Buf::current().b_ml.ml_line_count.get();
+    let whole_buffer = nlines == Buf::current().line_count().get();
     u_savecommon(
         Buf::current(),
         lnum - 1,
@@ -221,7 +221,7 @@ pub fn u_savedel(lnum: LineNr, nlines: i32) -> Result<(), Failed> {
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
 pub(crate) fn undo_allowed(buffer: Buf) -> Result<(), UndoError> {
-    if buffer.b_p_ma == 0 {
+    if buffer.b_p_ma() == 0 {
         return Err(UndoError::NotModifiable);
     }
     if SANDBOX.get() != 0 {
@@ -237,7 +237,7 @@ pub(crate) fn undo_allowed(buffer: Buf) -> Result<(), UndoError> {
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
 fn get_undolevel(buffer: Buf) -> OptInt {
-    let local = buffer.b_p_ul;
+    let local = buffer.b_p_ul();
     if local == OptInt::from(NO_LOCAL_UNDOLEVEL) {
         return p_ul();
     }
@@ -288,7 +288,7 @@ pub fn u_savecommon(
         }
     }
     let size: i32 = bot - top - 1;
-    if b.b_u_synced {
+    if b.b_u_synced() {
         // A boundary: this change starts an undo header of its own.
         if !start_new_header(b) {
             return Ok(());
@@ -310,8 +310,8 @@ pub fn u_savecommon(
 ///
 /// Answers whether there is a header now: undo turned off for this buffer
 /// makes none, and the branch the cursor was on goes instead.
-fn start_new_header(mut b: Buf) -> bool {
-    b.b_new_change = true;
+fn start_new_header(b: Buf) -> bool {
+    b.set_b_new_change(true);
 
     // The sequence number is the header's name, so it has to be handed out
     // and the header handed to the store *before* anything can link to it.
@@ -319,9 +319,9 @@ fn start_new_header(mut b: Buf) -> bool {
         // `.max(0)`: a sequence number is a header's name and 0 means "no
         // link", so it has to be positive. `b_u_seq_last` comes out of the
         // undo file unvalidated and a corrupt one can make it negative.
-        b.b_u_seq_last = b.b_u_seq_last.max(0) + 1;
+        b.set_b_u_seq_last(b.b_u_seq_last().max(0) + 1);
         let header = Box::new(UndoHeader {
-            seq: b.b_u_seq_last,
+            seq: b.b_u_seq_last(),
             ..Default::default()
         });
         Some(b.adopt_header(header)).filter(|link| link.is_some())
@@ -329,16 +329,16 @@ fn start_new_header(mut b: Buf) -> bool {
         None
     };
 
-    let mut old_curhead = b.b_u_curhead;
+    let mut old_curhead = b.b_u_curhead();
     if let Some(next) = b.header(old_curhead).map(|uh| uh.next) {
         // We were somewhere up the branch; the change forks from here.
-        b.b_u_newhead = next;
-        b.b_u_curhead = UndoLink::NONE;
+        b.set_b_u_newhead(next);
+        b.set_b_u_curhead(UndoLink::NONE);
     }
     // Every header freed here is one the tree still holds; `old_curhead` is
     // cleared for us if it goes.
-    while OptInt::from(b.b_u_numhead) > get_undolevel(b) {
-        let oldest = b.b_u_oldhead;
+    while OptInt::from(b.b_u_numhead()) > get_undolevel(b) {
+        let oldest = b.b_u_oldhead();
         let Some(alt_next) = b.header(oldest).map(|uh| uh.alt_next) else {
             break;
         };
@@ -362,31 +362,31 @@ fn start_new_header(mut b: Buf) -> bool {
         if b.has_header(old_curhead) {
             b.free_undo_branch(old_curhead, None);
         }
-        b.b_u_synced = false;
+        b.set_b_u_synced(false);
         return false;
     };
 
-    let next = b.b_u_newhead;
+    let next = b.b_u_newhead();
     let mut alt_prev = UndoLink::NONE;
-    if let Some(old_cur) = b.header(old_curhead) {
+    if let Some(old_alt_prev) = b.header(old_curhead).map(|uh| uh.alt_prev) {
         // The new header joins the run of alternates in front of the one we
         // forked from.
-        alt_prev = old_cur.alt_prev;
-        if let Some(before) = b.header_mut(alt_prev) {
+        alt_prev = old_alt_prev;
+        if let Some(mut before) = b.header_mut(alt_prev) {
             before.alt_next = link;
         }
-        if let Some(old_cur) = b.header_mut(old_curhead) {
+        if let Some(mut old_cur) = b.header_mut(old_curhead) {
             old_cur.alt_prev = link;
         }
-        if b.b_u_oldhead == old_curhead {
-            b.b_u_oldhead = link;
+        if b.b_u_oldhead() == old_curhead {
+            b.set_b_u_oldhead(link);
         }
     }
-    if let Some(newhead) = b.header_mut(next) {
+    if let Some(mut newhead) = b.header_mut(next) {
         newhead.prev = link;
     }
-    let seq = b.b_u_seq_last;
-    b.b_u_seq_cur = seq;
+    let seq = b.b_u_seq_last();
+    b.set_b_u_seq_cur(seq);
     let win = Win::current();
     let now = os_time_raw();
     let cursor_vcol = if virtual_active(win) && win.w_cursor.coladd > 0 {
@@ -394,17 +394,17 @@ fn start_new_header(mut b: Buf) -> bool {
     } else {
         ColNr::NONE
     };
-    b.b_u_time_cur = now + 1;
-    let flags = if b.b_changed != 0 { UH_CHANGED } else { 0 }
-        | if b.b_ml.ml_flags.has(MlFlags::EMPTY) {
+    b.set_b_u_time_cur(now + 1);
+    let flags = if b.b_changed() != 0 { UH_CHANGED } else { 0 }
+        | if b.ml_flags().has(MlFlags::EMPTY) {
             UH_EMPTYBUF
         } else {
             0
         };
-    drop_named_mark_extras(&mut b.b_namedm);
-    let named_marks = b.b_namedm.each_ref().map(SavedMark::of);
-    let visual = b.b_visual;
-    if let Some(uh) = b.header_mut(link) {
+    drop_named_mark_extras(&mut b.edit().b_namedm);
+    let named_marks = b.read().b_namedm.each_ref().map(SavedMark::of);
+    let visual = b.b_visual();
+    if let Some(mut uh) = b.header_mut(link) {
         uh.next = next;
         uh.alt_next = old_curhead;
         uh.alt_prev = alt_prev;
@@ -415,11 +415,11 @@ fn start_new_header(mut b: Buf) -> bool {
         uh.named_marks = named_marks;
         uh.visual = visual;
     }
-    b.b_u_newhead = link;
-    if b.b_u_oldhead.is_none() {
-        b.b_u_oldhead = link;
+    b.set_b_u_newhead(link);
+    if b.b_u_oldhead().is_none() {
+        b.set_b_u_oldhead(link);
     }
-    b.b_u_numhead += 1;
+    b.set_b_u_numhead(b.b_u_numhead() + 1);
     true
 }
 
@@ -428,11 +428,11 @@ fn start_new_header(mut b: Buf) -> bool {
 ///
 /// Only the ten newest entries are looked at: this is a fast path for typing,
 /// not a search.
-fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bool {
+fn extend_last_entry(b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bool {
     if !u_get_headentry(b) {
         return false;
     }
-    let newhead = b.b_u_newhead;
+    let newhead = b.b_u_newhead();
     let line_count = b.line_count();
     let Some(uh) = b.header(newhead) else {
         return false;
@@ -459,13 +459,14 @@ fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bo
             return false;
         }
         if entry.size() == 1 && entry.top == top {
+            drop(uh);
             if i > 0 {
                 // Move it to the front of the list, so the next change to
                 // the same line finds it first.
                 u_getbot(b);
-                b.b_u_synced = false;
+                b.set_b_u_synced(false);
             }
-            let Some(uh) = b.header_mut(newhead) else {
+            let Some(mut uh) = b.header_mut(newhead) else {
                 return true;
             };
             let mut at = at;
@@ -480,7 +481,7 @@ fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bo
                 });
                 at = last;
             }
-            set_entry_bottom(uh, at, line_count, bot, newbot);
+            set_entry_bottom(&mut uh, at, line_count, bot, newbot);
             return true;
         }
     }
@@ -519,14 +520,14 @@ fn set_entry_bottom(
 /// during the copy leaves the header as it was; upstream had already pointed
 /// `uh_getbot_entry` at the entry it then freed.
 fn record_entry(
-    mut b: Buf,
+    b: Buf,
     top: LineNr,
     size: i32,
     bot: LineNr,
     newbot: LineNr,
     reload: bool,
 ) -> Result<(), Failed> {
-    let newhead = b.b_u_newhead;
+    let newhead = b.b_u_newhead();
     let mut lines = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
     for i in 0..size {
         fast_breakcheck();
@@ -541,7 +542,7 @@ fn record_entry(
         ..Default::default()
     };
     let line_count = b.line_count();
-    let uh = b
+    let mut uh = b
         .header_mut(newhead)
         .expect("the newest header is the one this change is recorded against");
     uh.entries.push(entry);
@@ -549,8 +550,9 @@ fn record_entry(
         uh.flags |= UH_RELOAD;
     }
     let at = uh.entries.len() - 1;
-    set_entry_bottom(uh, at, line_count, bot, newbot);
-    b.b_u_synced = false;
+    set_entry_bottom(&mut uh, at, line_count, bot, newbot);
+    drop(uh);
+    b.set_b_u_synced(false);
     UNDO_UNDOES.set(false);
     Ok(())
 }
@@ -591,56 +593,56 @@ pub(crate) fn undo_time_text(tt: time_t, room: usize) -> XString {
 ///
 /// Safe: `CURBUF` is set from startup to exit.
 pub fn u_sync(force: bool) {
-    let mut b = Buf::current();
-    if b.b_u_synced || (!force && NO_U_SYNC.get() > 0) {
+    let b = Buf::current();
+    if b.b_u_synced() || (!force && NO_U_SYNC.get() > 0) {
         return;
     }
     if get_undolevel(b) < 0 {
-        b.b_u_synced = true;
+        b.set_b_u_synced(true);
         return;
     }
     u_getbot(b);
-    b.b_u_curhead = UndoLink::NONE;
+    b.set_b_u_curhead(UndoLink::NONE);
 }
 
 /// `:undojoin` — fold the next change into the header the last one made.
 pub fn ex_undojoin(_excmd: &mut ExArg) {
-    let mut b = Buf::current();
-    if b.b_u_newhead.is_none() {
+    let b = Buf::current();
+    if b.b_u_newhead().is_none() {
         return;
     }
-    if b.b_u_curhead.is_some() {
+    if b.b_u_curhead().is_some() {
         emsg(gettext(c"E790: undojoin is not allowed after undo"));
         return;
     }
-    if !b.b_u_synced || get_undolevel(b) < 0 {
+    if !b.b_u_synced() || get_undolevel(b) < 0 {
         return;
     }
-    b.b_u_synced = false;
+    b.set_b_u_synced(false);
 }
 
 /// Marks the whole tree as describing an unchanged buffer, which is what
 /// writing the file out makes true.
-pub fn u_unchanged(mut buffer: Buf) {
-    u_unch_branch(buffer, buffer.b_u_oldhead);
-    buffer.b_did_warn = false;
+pub fn u_unchanged(buffer: Buf) {
+    u_unch_branch(buffer, buffer.b_u_oldhead());
+    buffer.set_b_did_warn(false);
 }
 
 /// Moves the newest header's cursor to the first line that actually differs
 /// from what it saved, so that undoing lands where the change was.
 pub fn u_find_first_changed() {
-    let mut b = Buf::current();
-    let newhead = b.b_u_newhead;
-    if b.b_u_curhead.is_some() {
+    let b = Buf::current();
+    let newhead = b.b_u_newhead();
+    if b.b_u_curhead().is_some() {
         return;
     }
     // The head of upstream's entry list: the newest entry.
-    let Some(size) = b
-        .header(newhead)
-        .and_then(|uh| uh.entries.last())
-        .filter(|entry| entry.top == LineNr::ZERO && entry.bot == LineNr::ZERO)
-        .map(UndoEntry::size)
-    else {
+    let Some(size) = b.header(newhead).and_then(|uh| {
+        uh.entries
+            .last()
+            .filter(|entry| entry.top == LineNr::ZERO && entry.bot == LineNr::ZERO)
+            .map(UndoEntry::size)
+    }) else {
         // No entry, or not a whole-buffer one: nothing to line up against.
         return;
     };
@@ -649,10 +651,14 @@ pub fn u_find_first_changed() {
     while lnum < b.line_count() && lnum <= LineNr::new(size) {
         let at = usize::try_from(lnum - 1).expect("the loop counts up from one");
         let mut lines = b.lines();
-        let differs = b
-            .header(newhead)
-            .and_then(|uh| uh.entries.last())
-            .is_some_and(|entry| *lines.line(lnum) != *entry.lines[at]);
+        // The line first: reading it fills the buffer's line cache, which
+        // the header's read would refuse.
+        let text = lines.line(lnum);
+        let differs = b.header(newhead).is_some_and(|uh| {
+            uh.entries
+                .last()
+                .is_some_and(|entry| *text != *entry.lines[at])
+        });
         if differs {
             found = true;
             break;
@@ -660,7 +666,7 @@ pub fn u_find_first_changed() {
         lnum += 1;
     }
     if (found || b.line_count() != LineNr::new(size))
-        && let Some(uh) = b.header_mut(newhead)
+        && let Some(mut uh) = b.header_mut(newhead)
     {
         clearpos(&mut uh.cursor);
         uh.cursor.lnum = lnum;
@@ -670,16 +676,16 @@ pub fn u_find_first_changed() {
 /// Numbers the change the buffer currently sits on as the Nth file write, so
 /// that `:earlier 1f` can find it again.
 pub fn u_update_save_nr(buffer: Buf) {
-    let mut b = buffer;
-    b.b_u_save_nr_last += 1;
-    b.b_u_save_nr_cur = b.b_u_save_nr_last;
-    let above = if b.has_header(b.b_u_curhead) {
-        b.header_link(b.b_u_curhead, |uh| uh.next)
+    let b = buffer;
+    b.set_b_u_save_nr_last(b.b_u_save_nr_last() + 1);
+    b.set_b_u_save_nr_cur(b.b_u_save_nr_last());
+    let above = if b.has_header(b.b_u_curhead()) {
+        b.header_link(b.b_u_curhead(), |uh| uh.next)
     } else {
-        b.b_u_newhead
+        b.b_u_newhead()
     };
-    let save_nr = b.b_u_save_nr_last;
-    if let Some(uh) = b.header_mut(above) {
+    let save_nr = b.b_u_save_nr_last();
+    if let Some(mut uh) = b.header_mut(above) {
         uh.save_nr = save_nr;
     }
 }
@@ -689,9 +695,9 @@ pub fn u_update_save_nr(buffer: Buf) {
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
 pub fn buf_is_changed(buffer: Buf) -> bool {
     if buf_is_prompt(Some(buffer)) {
-        return buffer.b_modified_was_set;
+        return buffer.b_modified_was_set();
     }
-    !buf_is_dontwrite(Some(buffer)) && (buffer.b_changed != 0 || file_ff_differs(buffer, true))
+    !buf_is_dontwrite(Some(buffer)) && (buffer.b_changed() != 0 || file_ff_differs(buffer, true))
 }
 
 /// Whether any buffer at all holds unsaved changes.

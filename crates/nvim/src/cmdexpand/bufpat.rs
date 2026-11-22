@@ -262,7 +262,7 @@ pub(crate) fn expand_pattern_in_buf(pat: &CStr, dir: Direction) -> Option<Vec<XS
 
         // searchit() can return line number +1 past the last line when
         // searching for "foo\n" if "foo" is at end of buffer.
-        if end_match_pos.lnum > Buf::current().b_ml.ml_line_count {
+        if end_match_pos.lnum > Buf::current().line_count() {
             cur_match_pos = Pos {
                 lnum: LineNr::ONE,
                 col: ColNr::ZERO,

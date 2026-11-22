@@ -53,7 +53,7 @@ pub fn nvim_win_get_buf(win: WindowHandle) -> Result<BufferHandle, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Handle::NONE);
     };
-    Ok(w.buffer().handle as BufferHandle)
+    Ok(w.buffer().handle() as BufferHandle)
 }
 
 /// Show `buf` in `win`.

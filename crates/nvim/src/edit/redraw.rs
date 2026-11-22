@@ -90,11 +90,11 @@ pub(crate) fn ins_redraw(ready: bool) {
         // The tick is the buffer's the insert is in, which the autocommand
         // may have left: it is written through the handle, not held.
         let tick = buf_get_changedtick(Buf::current());
-        let mut buf = buf;
+        let buf = buf;
         if popup {
-            buf.b_last_changedtick_pum = tick;
+            buf.set_b_last_changedtick_pum(tick);
         } else {
-            buf.b_last_changedtick_i = tick;
+            buf.set_b_last_changedtick_i(tick);
         }
         if before != tick {
             // See `ins_apply_autocmds`: the autocommand's change belongs
@@ -109,14 +109,14 @@ pub(crate) fn ins_redraw(ready: bool) {
     if ready
         && has_event(AutoEvent::TextChangedI)
         && !pum_visible()
-        && buf.b_last_changedtick_i != buf_get_changedtick(Buf::current())
+        && buf.b_last_changedtick_i() != buf_get_changedtick(Buf::current())
     {
         fire_text_changed(AutoEvent::TextChangedI, false);
     }
     if ready
         && has_event(AutoEvent::TextChangedP)
         && pum_visible()
-        && buf.b_last_changedtick_pum != buf_get_changedtick(Buf::current())
+        && buf.b_last_changedtick_pum() != buf_get_changedtick(Buf::current())
     {
         fire_text_changed(AutoEvent::TextChangedP, true);
     }
@@ -128,12 +128,12 @@ pub(crate) fn ins_redraw(ready: bool) {
     // BufModified, if b_changed_invalid is set.
     if ready
         && has_event(AutoEvent::BufModifiedSet)
-        && Buf::current().b_changed_invalid
+        && Buf::current().b_changed_invalid()
         && !pum_visible()
     {
         let __hoisted_0 = Buf::current_or_none();
         apply_autocmds(AutoEvent::BufModifiedSet, None, None, false, __hoisted_0);
-        Buf::current().b_changed_invalid = false;
+        Buf::current().set_b_changed_invalid(false);
     }
 
     // SafeState, if nothing is pending.
@@ -266,10 +266,8 @@ pub(crate) fn undisplay_dollar() {
 /// contains `L`, which says the option should be honoured after all.
 pub(crate) fn get_nolist_virtcol() -> ColNr {
     let mut win = Win::current();
-    if win.w_buffer.is_null()
-        || win.buffer().b_ml.ml_mfp.is_none()
-        || win.w_cursor.lnum > win.buffer().b_ml.ml_line_count
-    {
+    let unloaded = win.w_buffer.is_null() || win.buffer().ml().ml_mfp.is_none();
+    if unloaded || win.w_cursor.lnum > win.buffer().line_count() {
         return ColNr::ZERO;
     }
     if win.w_onebuf_opt.wo_list != 0 && !cpo_has(CpoFlag::LISTWM) {

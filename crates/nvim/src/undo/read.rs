@@ -46,7 +46,7 @@ pub fn u_read_undo(
     let file_name: &CStr = match name {
         Some(name) => name,
         None => {
-            let full = Buf::current().name.full().map(XString::from_cstr);
+            let full = Buf::current().read().name.full().map(XString::from_cstr);
             let Some(found) = u_get_undo_file_name(full.as_ref().map(XString::as_cstr), true)
             else {
                 return;
@@ -130,7 +130,7 @@ fn read_undo_file(
     let line_count = LineNr::new(bi.read_4c());
     // The tree describes text; a buffer holding different text cannot
     // have it applied.
-    if *hash != read_hash || line_count != Buf::current().b_ml.ml_line_count {
+    if *hash != read_hash || line_count != Buf::current().line_count() {
         return Err(UndoFileError::ContentsChanged);
     }
 
@@ -280,30 +280,30 @@ fn graft(mut headers: Vec<UndoHeader>, header: FileHeader) -> Result<(), UndoFil
         return Err(UndoFileError::Corrupt(Corruption::TreeShape));
     }
 
-    let mut buf = Buf::current();
+    let buf = Buf::current();
     u_blockfree(buf);
     // The links already name these headers; the store is what turns a
     // name back into one.
     for uh in headers {
         buf.adopt_header(Box::new(uh));
     }
-    buf.b_u_oldhead = head(header.old_head);
-    buf.b_u_newhead = head(header.new_head);
-    buf.b_u_curhead = head(header.cur_head);
-    buf.b_u_line = header.line;
-    buf.b_u_line_lnum = header.line_lnum;
-    buf.b_u_line_colnr = header.line_colnr;
-    buf.b_u_numhead = header.num_head;
+    buf.set_b_u_oldhead(head(header.old_head));
+    buf.set_b_u_newhead(head(header.new_head));
+    buf.set_b_u_curhead(head(header.cur_head));
+    buf.edit().b_u_line = header.line;
+    buf.set_b_u_line_lnum(header.line_lnum);
+    buf.set_b_u_line_colnr(header.line_colnr);
+    buf.set_b_u_numhead(header.num_head);
     // Every header the file carried has already been handed out, so the
     // next sequence number must come after them all. A well-formed file
     // says so itself; a corrupt one would otherwise hand out a number
     // some header already has.
-    buf.b_u_seq_last = header.seq_last.max(seqs.iter().copied().max().unwrap_or(0));
-    buf.b_u_seq_cur = header.seq_cur;
-    buf.b_u_time_cur = header.seq_time;
-    buf.b_u_save_nr_last = header.last_save_nr;
-    buf.b_u_save_nr_cur = header.last_save_nr;
-    buf.b_u_synced = true;
+    buf.set_b_u_seq_last(header.seq_last.max(seqs.iter().copied().max().unwrap_or(0)));
+    buf.set_b_u_seq_cur(header.seq_cur);
+    buf.set_b_u_time_cur(header.seq_time);
+    buf.set_b_u_save_nr_last(header.last_save_nr);
+    buf.set_b_u_save_nr_cur(header.last_save_nr);
+    buf.set_b_u_synced(true);
     Ok(())
 }
 

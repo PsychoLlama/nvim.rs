@@ -20,6 +20,7 @@
 
 use crate::winlayer::Buf;
 use crate::winlayer::BufId;
+use crate::winlayer::MlRef;
 use core::ffi::c_int;
 
 use super::*;
@@ -48,10 +49,12 @@ impl Buf {
     pub(crate) fn update_line_chunks(self, line: LineNr, len_arg: c_int, updtype: c_int) {
         // SAFETY: the caller's buffer, reached through a handle that
         // borrows it for the one access that asked and no longer.
-        let mut b = self;
-        // One dereference for the update (each through the handle checks it
-        // is live): this runs once per line a file read appends.
-        let ml = &mut b.b_ml;
+        let b = self;
+        // One loan of the memline for the update: this runs once per line a
+        // file read appends. Ended before the calls that are handed the
+        // buffer.
+        let mut held = b.ml();
+        let ml = &mut *held;
         let mut curline = ML_UPD_LASTCURLINE.get();
         let mut curix = ML_UPD_LASTCURIX.get();
 
@@ -97,13 +100,15 @@ impl Buf {
         ml.ml_chunks.add_size(curix, len);
 
         if updtype == ML_CHNK_ADDLINE {
-            if !ml_chunk_addline(self, line, curline, curix) {
+            if !ml_chunk_addline(held, self, line, curline, curix) {
                 return;
             }
         } else if updtype == ML_CHNK_DELLINE {
             ML_UPD_LASTBUF.set(None); // force a recalc
-            b.b_ml.ml_chunks.delete_line(curix, MLCS_MINL);
+            ml.ml_chunks.delete_line(curix, MLCS_MINL);
             return;
+        } else {
+            drop(held);
         }
 
         ML_UPD_LASTBUF.set(key);
@@ -119,12 +124,21 @@ impl Buf {
 ///
 /// # Panics
 /// When the chunk index has no chunk `curix`.
-fn ml_chunk_addline(mut b: Buf, line: LineNr, curline: LineNr, curix: usize) -> bool {
-    // One dereference until the calls that take the buffer.
-    let ml = &mut b.b_ml;
+///
+/// `held` is the caller's loan of `b`'s memline, carried on until the calls
+/// that take the buffer.
+fn ml_chunk_addline(
+    mut held: MlRef<'_>,
+    b: Buf,
+    line: LineNr,
+    curline: LineNr,
+    curix: usize,
+) -> bool {
+    let ml = &mut *held;
     ml.ml_chunks.add_lines(curix, 1);
 
     if ml.ml_chunks.lines(curix) >= MLCS_MAXL {
+        drop(held);
         return ml_chunk_split(b, curix, curline);
     }
 
@@ -139,11 +153,13 @@ fn ml_chunk_addline(mut b: Buf, line: LineNr, curline: LineNr, curix: usize) -> 
             // The line is just before the last one, so move the last
             // line's size over. This is the common case while loading a
             // file.
-            let Some(id) = ml_find_line(b, b.b_ml.ml_line_count, ML_FIND) else {
-                b.b_ml.ml_chunks.switch_off();
+            drop(held);
+            let Some(id) = ml_find_line(b, b.line_count(), ML_FIND) else {
+                b.ml().ml_chunks.switch_off();
                 return false;
             };
-            let data = DataBlock(b.b_ml.page(id));
+            let held = b.ml();
+            let data = DataBlock(held.page(id));
             let rest = if data.line_count() == 1 {
                 data.txt_end().wrapping_sub(data.txt_start()).cast_signed()
             } else {
@@ -151,9 +167,12 @@ fn ml_chunk_addline(mut b: Buf, line: LineNr, curline: LineNr, curix: usize) -> 
                     usize::try_from(data.line_count() - 2).expect("two lines or more");
                 data.line_start(last_but_one).cast_signed() - data.txt_start().cast_signed()
             };
-            b.b_ml.ml_chunks.set(curix + 1, 1, rest);
-            b.b_ml.ml_chunks.add_size(curix, -rest);
-            b.b_ml.ml_chunks.add_lines(curix, -1);
+            drop(held);
+            let mut held = b.ml();
+            let chunks = &mut held.ml_chunks;
+            chunks.set(curix + 1, 1, rest);
+            chunks.add_size(curix, -rest);
+            chunks.add_lines(curix, -1);
         }
     }
     true
@@ -168,21 +187,23 @@ fn ml_chunk_addline(mut b: Buf, line: LineNr, curline: LineNr, curix: usize) -> 
 ///
 /// # Panics
 /// When the chunk index has no chunk `curix`.
-fn ml_chunk_split(mut b: Buf, curix: usize, curline_arg: LineNr) -> bool {
-    b.b_ml.ml_chunks.split_at(curix);
+fn ml_chunk_split(b: Buf, curix: usize, curline_arg: LineNr) -> bool {
+    b.ml().ml_chunks.split_at(curix);
 
     // Total size of the first MLCS_MINL lines of the chunk.
     let mut curline = curline_arg;
     let mut size = 0;
     let mut linecnt = 0;
-    while curline < b.b_ml.ml_line_count && linecnt < MLCS_MINL {
+    while curline < b.line_count() && linecnt < MLCS_MINL {
         let Some(id) = ml_find_line(b, curline, ML_FIND) else {
-            b.b_ml.ml_chunks.switch_off();
+            b.ml().ml_chunks.switch_off();
             return false;
         };
-        let count = b.b_ml.locked_high() - b.b_ml.locked_low() + 1;
-        let idx = curline - b.b_ml.locked_low();
-        curline = b.b_ml.locked_high() + 1;
+        let ml = b.ml();
+        let count = ml.locked_high() - ml.locked_low() + 1;
+        let idx = curline - ml.locked_low();
+        curline = ml.locked_high() + 1;
+        drop(ml);
 
         // Index of the last line of this block that still counts.
         let rest = count - idx;
@@ -196,7 +217,8 @@ fn ml_chunk_split(mut b: Buf, curix: usize, curline_arg: LineNr) -> bool {
         };
 
         // First line in the block has its text at the end of it.
-        let data = DataBlock(b.b_ml.page(id));
+        let held = b.ml();
+        let data = DataBlock(held.page(id));
         let text_end = data.line_end(idx.cast_unsigned() as usize).cast_signed();
         size += text_end
             - data
@@ -204,9 +226,9 @@ fn ml_chunk_split(mut b: Buf, curix: usize, curline_arg: LineNr) -> bool {
                 .cast_signed();
     }
 
-    b.b_ml.ml_chunks.add_lines(curix + 1, -linecnt);
-    b.b_ml.ml_chunks.add_size(curix + 1, -size);
-    b.b_ml.ml_chunks.set(curix, linecnt, size);
+    b.ml().ml_chunks.add_lines(curix + 1, -linecnt);
+    b.ml().ml_chunks.add_size(curix + 1, -size);
+    b.ml().ml_chunks.set(curix, linecnt, size);
     ML_UPD_LASTBUF.set(None); // force a recalc
     false
 }
@@ -238,7 +260,7 @@ impl Buf {
         mut offp: Option<&mut c_int>,
         no_ff: bool,
     ) -> Option<c_int> {
-        let mut b = self;
+        let b = self;
         let ffdos = Wide::from(!no_ff && get_fileformat(b) == EOL_DOS);
         let mut extra: i32 = 0;
 
@@ -250,20 +272,24 @@ impl Buf {
         // Caching does not work with 'fileformat', which is no problem for
         // byte tracking (it ignores 'fileformat'), but a line2byte() call
         // does invalidate the cache for the time being.
-        let can_cache = lnum != LineNr::ZERO && ffdos == 0 && b.b_ml.cached_lnum() == lnum;
-        if lnum == LineNr::ZERO || b.b_ml.cached_lnum() < lnum || !no_ff {
+        let can_cache = lnum != LineNr::ZERO && ffdos == 0 && b.ml().cached_lnum() == lnum;
+        if lnum == LineNr::ZERO || b.ml().cached_lnum() < lnum || !no_ff {
             ml_flush_line(Buf::current());
-        } else if can_cache && b.b_ml.cached_offset() > 0 {
+        } else if can_cache && b.ml().cached_offset() > 0 {
             // Cut to the callers' `int`, as below.
             return Some(
-                low32(i64::try_from(b.b_ml.cached_offset()).unwrap_or(i64::MAX)).cast_signed(),
+                low32(i64::try_from(b.ml().cached_offset()).unwrap_or(i64::MAX)).cast_signed(),
             );
         }
 
-        if b.b_ml.ml_chunks.is_off() || !b.b_ml.ml_chunks.is_built() || lnum < LineNr::ZERO {
+        let unbuilt = {
+            let ml = b.ml();
+            ml.ml_chunks.is_off() || !ml.ml_chunks.is_built()
+        };
+        if unbuilt || lnum < LineNr::ZERO {
             // The memline is empty. If it is open at all it still behaves as
             // though it held one empty line.
-            if no_ff && b.b_ml.is_open() && (lnum == LineNr::ONE || lnum == LineNr::new(2)) {
+            if no_ff && b.ml().is_open() && (lnum == LineNr::ONE || lnum == LineNr::new(2)) {
                 return Some((lnum - 1).get());
             }
             return None;
@@ -277,7 +303,8 @@ impl Buf {
 
         // Skip whole chunks, up to but not including the one the answer is
         // in. The last chunk is special: it never qualifies.
-        let chunks = &self.b_ml.ml_chunks;
+        let held = self.ml();
+        let chunks = &held.ml_chunks;
         let lines_in = |at: usize| Wide::from(chunks.lines(at));
         let size_of_chunk = |at: usize| Wide::from(chunks.size(at));
         let mut curline: LineNr = LineNr::ONE;
@@ -294,11 +321,12 @@ impl Buf {
             }
             curix += 1;
         }
+        drop(held);
 
         // Then walk the data blocks of that chunk line by line. A find
         // changes no line count, so the bound is read once; each block is
         // read through one borrow of the memline, taken after the find.
-        let line_count = b.b_ml.ml_line_count;
+        let line_count = b.line_count();
         while lnum != LineNr::ZERO && curline < lnum || offset != 0 && size < offset {
             // The bounds test has to come first: ml_find_line complains about
             // a line past the end.
@@ -306,7 +334,7 @@ impl Buf {
                 return None;
             }
             let id = ml_find_line(self, curline, ML_FIND)?;
-            let ml = &self.b_ml;
+            let ml = &self.ml();
             let (locked_low, locked_high) = (ml.locked_low(), ml.locked_high());
             let count = locked_high - locked_low + 1;
             let start_idx = curline - locked_low;
@@ -371,16 +399,16 @@ impl Buf {
             }
             // Do not count the last line break with 'noeol' and either 'bin'
             // or 'nofixeol'.
-            if (b.b_p_fixeol == 0 || b.b_p_bin != 0)
-                && b.b_p_eol == 0
-                && lnum > b.b_ml.ml_line_count
+            if (b.b_p_fixeol() == 0 || b.b_p_bin() != 0)
+                && b.b_p_eol() == 0
+                && lnum > b.line_count()
             {
                 size -= ffdos + 1;
             }
         }
 
         if can_cache && size > 0 {
-            b.b_ml
+            b.ml()
                 .set_cached_offset(usize::try_from(size).expect("checked positive"));
         }
         // Cut to the callers' `int`, wrapping as upstream's arithmetic did.
@@ -407,7 +435,7 @@ pub fn goto_byte(cnt: c_int) {
         Win::current().w_set_curswant = true;
     } else {
         // Past the end.
-        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+        Win::current().w_cursor.lnum = Buf::current().line_count();
         Win::current().w_curswant = ColNr::MAX;
         coladvance(Win::current(), ColNr::MAX);
     }

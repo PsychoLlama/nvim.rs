@@ -64,7 +64,7 @@ impl Buf {
 
     /// [`Buf::splice_delete_extmarks`] for the callers that already hold a [`Buf`].
     pub(crate) fn splice_delete(
-        mut self,
+        self,
         lo: MTPos,
         hi: MTPos,
         mut saved: Option<&mut Vec<ExtmarkUndoObject>>,
@@ -73,9 +73,9 @@ impl Buf {
     ) {
         let mut iter = MarkTreeIter::default();
 
-        itr_get(self.marktree(), lo.row, lo.col, &mut iter);
+        itr_get(&mut self.marktree(), lo.row, lo.col, &mut iter);
         loop {
-            let mark = itr_current(self.marktree(), &iter);
+            let mark = itr_current(&self.marktree(), &iter);
             if mark.pos.row < 0 || mark.pos.row > hi.row {
                 break;
             }
@@ -97,7 +97,7 @@ impl Buf {
             let mut invalidated = false;
             if !only_copy && !mt_invalid(mark) && mt_invalidate(mark) && !mt_end(mark) {
                 let mut end_iter = iter.clone();
-                let endpos = tree_get_altpos(self.marktree(), mark, Some(&mut end_iter));
+                let endpos = tree_get_altpos(&mut self.marktree(), mark, Some(&mut end_iter));
                 // Invalidate unpaired marks in deleted lines, and paired marks
                 // whose entire range has been deleted.
                 let unpaired_gone = !mt_paired(mark) && mark.pos.row < hi.row;
@@ -112,9 +112,9 @@ impl Buf {
                     }
                     copy = true;
                     invalidated = true;
-                    itr_rawkey(self.marktree(), &iter).flags |= MtFlags::INVALID;
-                    itr_rawkey(self.marktree(), &end_iter).flags |= MtFlags::INVALID;
-                    tree_revise_meta(self.marktree(), &mut iter, mark);
+                    itr_rawkey(&mut self.marktree(), &iter).flags |= MtFlags::INVALID;
+                    itr_rawkey(&mut self.marktree(), &end_iter).flags |= MtFlags::INVALID;
+                    tree_revise_meta(&mut self.marktree(), &mut iter, mark);
                     decor_remove(
                         self,
                         mark.pos.row,
@@ -143,7 +143,7 @@ impl Buf {
                 saved.push(ExtmarkUndoObject::SavePos(pos));
             }
 
-            itr_next(self.marktree(), &mut iter);
+            itr_next(&mut self.marktree(), &mut iter);
         }
     }
 }

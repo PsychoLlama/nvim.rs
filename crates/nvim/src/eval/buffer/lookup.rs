@@ -32,7 +32,7 @@ pub fn find_buffer(avar: &TypVal) -> Option<Buf> {
             // buffer — is not in the name index, so it is matched
             // literally instead.
             buffers().find(|b| {
-                b.name.shown().is_some_and(|shown| {
+                b.read().name.shown().is_some_and(|shown| {
                     (path_with_url(shown) != 0 || buf_is_nofilename(Some(*b))) && shown == name
                 })
             })
@@ -48,7 +48,7 @@ pub fn f_bufadd(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // An empty name asks for an unnamed buffer.
     let name = (!name.is_empty()).then_some(name);
     let buffer = buflist_add_name(name, LineNr::ZERO, 0);
-    result.write_number(buffer.map_or(0, |b| VarNumber::from(b.handle)));
+    result.write_number(buffer.map_or(0, |b| VarNumber::from(b.handle())));
 }
 
 /// `bufexists({buf})`.
@@ -59,7 +59,7 @@ pub fn f_bufexists(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `buflisted({buf})`.
 pub fn f_buflisted(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let listed = find_buffer(&args[0]).is_some_and(|b| b.b_p_bl != 0);
+    let listed = find_buffer(&args[0]).is_some_and(|b| b.b_p_bl() != 0);
     result.write_number(VarNumber::from(listed));
 }
 
@@ -79,7 +79,7 @@ pub fn f_bufload(args: &[TypVal], _unused: &mut TypVal, _fptr: EvalFuncData) {
 
 /// `bufloaded({buf})`.
 pub fn f_bufloaded(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let loaded = find_buffer(&args[0]).is_some_and(|b| b.b_ml.ml_mfp.is_some());
+    let loaded = find_buffer(&args[0]).is_some_and(|b| b.ml().ml_mfp.is_some());
     result.write_number(VarNumber::from(loaded));
 }
 
@@ -92,9 +92,9 @@ pub fn f_bufname(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         Some(Buf::current())
     };
     if let Some(buf) = buf
-        && !buf.name.is_unnamed()
+        && !buf.read().name.is_unnamed()
     {
-        result.write_string(buf.name.shown().map(ThinCString::from_cstr));
+        result.write_string(buf.read().name.shown().map(ThinCString::from_cstr));
     }
 }
 
@@ -122,7 +122,7 @@ pub fn f_bufnr(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         buf = buflist_add_name(Some(name), LineNr::ONE, 0);
     }
     if let Some(buf) = buf {
-        result.write_number(VarNumber::from(buf.handle));
+        result.write_number(VarNumber::from(buf.handle()));
     }
 }
 

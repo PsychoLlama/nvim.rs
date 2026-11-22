@@ -465,7 +465,7 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
             let _ = add_nr(
                 retdict,
                 "preview_bufnr",
-                VarNumber::from(wp.buffer().handle.get()),
+                VarNumber::from(wp.buffer().handle().get()),
             );
         }
     }

@@ -31,7 +31,7 @@ pub fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(0);
     };
-    if b.b_ml.ml_mfp.is_none() {
+    if b.ml().ml_mfp.is_none() {
         return Ok(0);
     }
     Ok(i64::from(b.line_count()))
@@ -51,7 +51,7 @@ pub fn nvim_buf_get_lines(
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv.into());
     };
-    if b.b_ml.ml_mfp.is_none() {
+    if b.ml().ml_mfp.is_none() {
         return Ok(rv.into());
     }
     let mut oob: bool = false;
@@ -150,7 +150,7 @@ pub fn nvim_buf_set_lines(
         .collect();
     // What the bracket caught outranks the body's own refusal.
     api_try(|| -> Result<(), Error> {
-        if buffer.b_p_ma == 0 {
+        if buffer.b_p_ma() == 0 {
             return Err(Error::exception(c"Buffer is not 'modifiable'"));
         }
         if u_save_buf(buffer, start - 1, end).is_err() {
@@ -244,7 +244,7 @@ pub fn nvim_buf_get_text(
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(rv.into());
     };
-    if b.b_ml.ml_mfp.is_none() {
+    if b.ml().ml_mfp.is_none() {
         return Ok(rv.into());
     }
     let mut oob: bool = false;
@@ -278,7 +278,7 @@ pub fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer,
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(0);
     };
-    if b.b_ml.ml_mfp.is_none() {
+    if b.ml().ml_mfp.is_none() {
         return Ok(-1);
     }
     let Some(lnum) = LineNr::try_from(index)

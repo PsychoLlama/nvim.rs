@@ -421,7 +421,8 @@ pub(crate) fn check_more(forceit: bool) -> Result<(), Failed> {
         return Ok(());
     };
     let plural = c_ulong::from(n.unsigned_abs());
-    if (p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) && !Buf::current().name.is_unnamed() {
+    if (p_confirm() || cmdmod_has(CmdModFlags::CONFIRM)) && !Buf::current().read().name.is_unnamed()
+    {
         let fmt = ngettext(
             c"%d more file to edit.  Quit anyway?",
             c"%d more files to edit.  Quit anyway?",

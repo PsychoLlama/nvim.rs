@@ -737,10 +737,10 @@ pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> Option<Win
             Ok(buf) => buf,
             Err(e) => return handle_error_and_cleanup(Some(win), Some(e)),
         };
-        let Some(mut buf) = buf else {
+        let Some(buf) = buf else {
             return handle_error_and_cleanup(Some(win), None);
         };
-        buf.b_p_bl = 0; // unlist
+        buf.edit().b_p_bl = 0; // unlist
         set_bufhidden_wipe(buf);
         if let Err(e) = set_window_buf(win, buf) {
             return handle_error_and_cleanup(Some(win), Some(e));

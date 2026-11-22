@@ -117,7 +117,7 @@ impl Searcher<'_, '_> {
     /// static empty string.
     #[inline(always)]
     fn byte_at(&self, lnum: LineNr, col: ColNr) -> u8 {
-        if lnum > self.buf.b_ml.ml_line_count {
+        if lnum > self.buf.line_count() {
             return b'\0';
         }
         cstr::byte_at(self.lines().line(lnum), usize::try_from(col).unwrap_or(0))
@@ -139,7 +139,7 @@ impl Searcher<'_, '_> {
     /// Advance `col` over the character at it, if there is one.
     #[inline(always)]
     fn step_over(&self, lnum: LineNr, col: ColNr) -> ColNr {
-        if lnum > self.buf.b_ml.ml_line_count {
+        if lnum > self.buf.line_count() {
             return col;
         }
         let at = usize::try_from(col).unwrap_or(0);
@@ -338,7 +338,7 @@ impl Searcher<'_, '_> {
 
             // Loop twice if 'wrapscan' is set.
             for wrapped in [false, true] {
-                'lines: while lnum > LineNr::ZERO && lnum <= self.buf.b_ml.ml_line_count {
+                'lines: while lnum > LineNr::ZERO && lnum <= self.buf.line_count() {
                     // Stop after checking "stop_lnum", if it is set.
                     if stop_lnum != LineNr::ZERO
                         && if dir == FORWARD {
@@ -455,7 +455,7 @@ impl Searcher<'_, '_> {
         let start_char_len = if pos.col == ColNr::MAX {
             0
         } else if pos.lnum >= LineNr::ONE
-            && pos.lnum <= self.buf.b_ml.ml_line_count
+            && pos.lnum <= self.buf.line_count()
             && pos.col < ColNr::new(MAXCOL - 2)
         {
             // Watch out for "col" being MAXCOL - 2, used in a closed fold.
@@ -489,7 +489,7 @@ impl Searcher<'_, '_> {
     /// message is remembered in keep_msg for a redraw.
     fn wrap_around(&self, dir: Direction, extra_arg: Option<&mut SearchItArg>) -> LineNr {
         let lnum = if dir == BACKWARD {
-            self.buf.b_ml.ml_line_count
+            self.buf.line_count()
         } else {
             LineNr::ONE
         };
@@ -525,7 +525,7 @@ impl Searcher<'_, '_> {
                 }
             } else {
                 pos.col -= 1;
-                if pos.lnum <= self.buf.b_ml.ml_line_count {
+                if pos.lnum <= self.buf.line_count() {
                     // Step back off a trail byte onto the character's own
                     // first byte.
                     let col = usize::try_from(pos.col).unwrap_or(0);
@@ -721,8 +721,8 @@ fn search_compiled(
     }
 
     // A pattern like "\n\zs" may go past the last line.
-    if pos.lnum > buffer.b_ml.ml_line_count {
-        pos.lnum = buffer.b_ml.ml_line_count;
+    if pos.lnum > buffer.line_count() {
+        pos.lnum = buffer.line_count();
         pos.col = buffer.lines().line_len(pos.lnum);
         if pos.col > ColNr::ZERO {
             pos.col -= 1;
@@ -828,7 +828,7 @@ pub(crate) fn search_for_exact_line(
     let pat = cstr::until_nul(pat);
     let mut start: LineNr = LineNr::ZERO;
     let compl_len = ins_compl_len();
-    if buffer.b_ml.ml_line_count == LineNr::ZERO {
+    if buffer.line_count() == LineNr::ZERO {
         return Err(NoMatch);
     }
     loop {
@@ -838,11 +838,11 @@ pub(crate) fn search_for_exact_line(
                 pos.lnum = LineNr::ONE;
                 break;
             }
-            pos.lnum = buffer.b_ml.ml_line_count;
+            pos.lnum = buffer.line_count();
             if !shortmess(ShmFlag::SEARCH) {
                 give_warning(gettext(TOP_BOT_MSG), true, false);
             }
-        } else if pos.lnum > buffer.b_ml.ml_line_count {
+        } else if pos.lnum > buffer.line_count() {
             pos.lnum = LineNr::ONE;
             if !p_ws() {
                 break;

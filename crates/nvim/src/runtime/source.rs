@@ -122,7 +122,7 @@ fn open_readbin(name: &CStr) -> Option<BufReader<File>> {
 /// a synthetic `:source buffer=N` when it has none.
 fn do_source_buffer_init(excmd: &ExArg, ex_lua: bool) -> Option<(SourceCookie, XString)> {
     let buf = Buf::current_or_none()?;
-    let fname = match buf.name.full() {
+    let fname = match buf.read().name.full() {
         Some(ffname) => XString::from_cstr(ffname),
         None => {
             let fmt: &[u8] = if ex_lua {
@@ -130,7 +130,7 @@ fn do_source_buffer_init(excmd: &ExArg, ex_lua: bool) -> Option<(SourceCookie, X
             } else {
                 b":source buffer=%d"
             };
-            XString::from_vec(formatted!(IOSIZE as usize, fmt, buf.handle))
+            XString::from_vec(formatted!(IOSIZE as usize, fmt, buf.handle()))
         }
     };
     let (line1, line2) = (excmd.line1, excmd.line2);
@@ -421,9 +421,10 @@ fn profile_script_stop(wait_start: ProfTime) {
 /// Whether the current buffer is Lua by 'filetype' or by file name.
 fn curbuf_is_lua() -> bool {
     let buf = Buf::current();
-    let ft_is_lua = buf.b_p_ft.cstr() == c"lua";
+    let ft_is_lua = buf.read().b_p_ft.cstr() == c"lua";
     ft_is_lua
         || buf
+            .read()
             .name
             .shown()
             .is_some_and(|name| path_with_extension(name, c"lua"))
@@ -432,7 +433,7 @@ fn curbuf_is_lua() -> bool {
 /// Whether treesitter parses `excmd`'s range of the current buffer as Lua --
 /// which is what makes a fenced Lua block inside a help file `:source`able.
 fn range_is_lua(excmd: &ExArg) -> bool {
-    let (handle, line1, line2) = (Buf::current().handle, excmd.line1, excmd.line2);
+    let (handle, line1, line2) = (Buf::current().handle(), excmd.line1, excmd.line2);
     let args = Array::from(vec![
         integer_obj(Integer::from(handle)),
         integer_obj(Integer::from(line1)),

@@ -157,8 +157,8 @@ pub fn ex_spelldump(excmd: &mut ExArg) {
     spell_dump_compl(None, 0, None, dumpflags);
 
     // Drop the empty line the new buffer started with.
-    if Buf::current().b_ml.ml_line_count > LineNr::ONE {
-        let _ = ml_delete(Buf::current().b_ml.ml_line_count);
+    if Buf::current().line_count() > LineNr::ONE {
+        let _ = ml_delete(Buf::current().line_count());
     }
     redraw_later(Win::current(), UPD_NOT_VALID);
 }

@@ -54,8 +54,8 @@ impl SynState {
         self.line_changed_since(changedtick);
 
         self.stack_alloc();
-        let mut block = self.block();
-        block.b_sst_lasttick = display_tick.get();
+        let block = self.block();
+        block.edit().b_sst_lasttick = display_tick.get();
 
         // If the state at the end of the previous line is useful, store it.
         if self.stack_valid && self.lnum < lnum && self.lnum < buffer.line_count() {
@@ -78,9 +78,10 @@ impl SynState {
         let mut last_valid = None;
         if !self.stack_valid {
             let mut last_min_valid = None;
-            let minlines = block.b_syn_sync_minlines;
-            for id in block.b_sst.used() {
-                let entry = block.b_sst.entry(id);
+            let minlines = block.read().b_syn_sync_minlines;
+            for id in block.read().b_sst.used() {
+                let held = block.read();
+                let entry = held.b_sst.entry(id);
                 if entry.lnum > lnum {
                     break;
                 }
@@ -106,7 +107,7 @@ impl SynState {
             } else {
                 // "minlines" lines have to be parsed before a state can be
                 // considered valid enough to store.
-                (self.lnum + block.b_syn_sync_minlines).get()
+                (self.lnum + block.read().b_syn_sync_minlines).get()
             })
         };
 
@@ -136,7 +137,7 @@ impl SynState {
     /// How many lines apart to store cache entries for lines that are not
     /// displayed. Displayed lines get one each; the rest share what is left.
     pub(crate) fn store_distance(&self) -> i32 {
-        let entries = c_int::try_from(self.block().b_sst.len())
+        let entries = c_int::try_from(self.block().read().b_sst.len())
             .expect("the cache is a few thousand entries at most");
         if entries <= ROWS.get() {
             999999
@@ -160,11 +161,11 @@ impl SynState {
         dist: i32,
     ) -> Option<EntryId> {
         let parsed_lnum = self.lnum;
-        let mut block = self.block();
+        let block = self.block();
         if prev.is_none() {
-            prev = block.b_sst.find(parsed_lnum - 1);
+            prev = block.read().b_sst.find(parsed_lnum - 1);
         }
-        let cache = &block.b_sst;
+        let cache = &block.read().b_sst;
         let mut sp = prev.or(cache.first());
         while let Some(id) = sp
             && cache.entry(id).lnum < parsed_lnum
@@ -173,22 +174,24 @@ impl SynState {
         }
 
         if let Some(id) = sp
-            && block.b_sst.entry(id).lnum == parsed_lnum
+            && block.read().b_sst.entry(id).lnum == parsed_lnum
             && self.syn_stack_equal(id)
         {
             let mut prev = id;
             let mut sp = Some(id);
             while let Some(id) = sp
-                && block.b_sst.entry(id).change_lnum <= parsed_lnum
+                && block.read().b_sst.entry(id).change_lnum <= parsed_lnum
             {
-                let entry = block.b_sst.entry_mut(id);
+                let mut held = block.edit();
+                let entry = held.b_sst.entry_mut(id);
                 if entry.lnum <= lnum {
                     prev = id; // a valid state before the desired line
                 } else if entry.change_lnum == LineNr::ZERO {
                     break; // past the states that depend on a change
                 }
                 entry.change_lnum = LineNr::ZERO;
-                sp = block.b_sst.next(id);
+                drop(held);
+                sp = block.read().b_sst.next(id);
             }
             self.load_current_state(prev);
             return Some(prev);
@@ -197,7 +200,7 @@ impl SynState {
         // Store the state at this line when it is the first one, the line we
         // are parsing for, or far enough from the last stored one.
         if prev.is_none_or(|prev| {
-            parsed_lnum == lnum || parsed_lnum >= block.b_sst.entry(prev).lnum + dist
+            parsed_lnum == lnum || parsed_lnum >= block.read().b_sst.entry(prev).lnum + dist
         }) {
             return self.store_current_state();
         }
@@ -241,7 +244,7 @@ impl SynState {
             let lnum = self.lnum;
             for cur_si in &mut self.stack {
                 if cur_si.si_idx >= 0
-                    && c_int::from(block.pattern(cur_si.si_idx).sp_type) == SPTYPE_MATCH
+                    && c_int::from(block.read().pattern(cur_si.si_idx).sp_type) == SPTYPE_MATCH
                     && cur_si.si_m_endpos.lnum < lnum
                 {
                     cur_si.si_flags |= SynFlags::MATCHCONT;
@@ -328,6 +331,7 @@ impl SynState {
                 if si_idx >= 0
                     && self
                         .block()
+                        .read()
                         .pattern(si_idx)
                         .sp_flags
                         .has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE)
@@ -358,22 +362,22 @@ impl SynState {
 /// below the window.
 pub(crate) fn syntax_end_parsing(window: Win, lnum: LineNr) {
     with_parser(|parser| {
-        let Some(mut block) = parser.parsed else {
+        let Some(block) = parser.parsed else {
             return;
         };
         if block.raw() != window.w_s {
             return; // not the right window
         }
-        let mut sp = block.b_sst.find(lnum);
+        let mut sp = block.read().b_sst.find(lnum);
         if let Some(id) = sp
-            && block.b_sst.entry(id).lnum < lnum
+            && block.read().b_sst.entry(id).lnum < lnum
         {
-            sp = block.b_sst.next(id);
+            sp = block.read().b_sst.next(id);
         }
         if let Some(id) = sp
-            && block.b_sst.entry(id).change_lnum != LineNr::ZERO
+            && block.read().b_sst.entry(id).change_lnum != LineNr::ZERO
         {
-            block.b_sst.entry_mut(id).change_lnum = lnum;
+            block.edit().b_sst.entry_mut(id).change_lnum = lnum;
         }
     });
 }
@@ -401,9 +405,10 @@ pub(crate) fn syntax_check_changed(lnum: LineNr) -> bool {
         parser.buffer = buffer;
         let block = parser.block();
         let Some(sp) = block
+            .read()
             .b_sst
             .find(lnum)
-            .filter(|&id| block.b_sst.entry(id).lnum == lnum)
+            .filter(|&id| block.read().b_sst.entry(id).lnum == lnum)
         else {
             return true;
         };

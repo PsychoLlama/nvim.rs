@@ -227,10 +227,10 @@ struct KeywordDef<'a> {
 
 /// Add the keyword `name` to the table its case sensitivity selects.
 fn add_keyword(name: &[u8], def: &KeywordDef) {
-    let mut block = cur_syn_block();
+    let block = cur_syn_block();
     // With `:syntax case ignore` the table is keyed on the folded form,
     // and the lookup folds too.
-    let ignore_case = block.b_syn_ic != 0;
+    let ignore_case = block.read().b_syn_ic != 0;
     let folded;
     let key = if ignore_case {
         folded = foldcase(name, Some(MAXKEYWLEN as usize + 1));
@@ -251,12 +251,12 @@ fn add_keyword(name: &[u8], def: &KeywordDef) {
         conceal_char: def.conceal_char,
     };
     if !def.cont_in_list.is_none() {
-        block.b_syn_containedin = 1;
+        block.edit().b_syn_containedin = 1;
     }
     if ignore_case {
-        block.b_keywtab_ic.add(key, entry);
+        block.edit().b_keywtab_ic.add(key, entry);
     } else {
-        block.b_keywtab.add(key, entry);
+        block.edit().b_keywtab.add(key, entry);
     }
 }
 

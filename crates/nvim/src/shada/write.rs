@@ -407,7 +407,7 @@ impl Writing<'_> {
         if self.removable_bufs.contains(&buf.raw().cast_const()) {
             return None;
         }
-        buf.name.full().map(XString::from_cstr)
+        buf.read().name.full().map(XString::from_cstr)
     }
 
     /// Every buffer's local marks and change list, keyed by file name so
@@ -424,7 +424,13 @@ impl Writing<'_> {
     }
 
     fn collect_one_buffer(&mut self, buffer: Buf) {
-        let fname = XString::from_cstr(buffer.name.full().expect("an ignored buffer has a name"));
+        let fname = XString::from_cstr(
+            buffer
+                .read()
+                .name
+                .full()
+                .expect("an ignored buffer has a name"),
+        );
         let filemarks = self.wms.file_marks_for(fname.as_cstr().to_bytes());
 
         for (name, fm) in shada_buffer_marks(buffer) {
@@ -468,7 +474,7 @@ impl Writing<'_> {
         {
             return;
         }
-        let fname = Buf::current().name.full().map(XString::from_cstr);
+        let fname = Buf::current().read().name.full().map(XString::from_cstr);
         let entry = ShadaEntry::new(
             os_time(),
             ShadaEntryData::GlobalMark(ShadaFileMark {

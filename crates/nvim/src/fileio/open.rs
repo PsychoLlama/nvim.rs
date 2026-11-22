@@ -104,11 +104,12 @@ impl BufferWatch {
     fn new(fname: Option<&CStr>, sfname: Option<&CStr>) -> Self {
         let is_named = |name: Option<&CStr>, own: Option<&CStr>| name.is_some() && name == own;
         let current = Buf::current();
-        let (full, shown) = (current.name.full(), current.name.shown());
+        let held = current.read();
+        let (full, shown) = (held.name.full(), held.name.shown());
         BufferWatch {
             buffer: Buf::current_raw(),
-            full: current.name.full_ptr().addr(),
-            shown: current.name.shown_ptr().addr(),
+            full: current.read().name.full_ptr().addr(),
+            shown: current.read().name.shown_ptr().addr(),
             using_full: is_named(fname, full) || is_named(sfname, full),
             using_shown: is_named(fname, shown) || is_named(sfname, shown),
         }
@@ -117,21 +118,21 @@ impl BufferWatch {
     /// Whether the current buffer, or the name being read, changed since.
     fn changed(&self) -> bool {
         Buf::current_raw() != self.buffer
-            || (self.using_full && self.full != Buf::current().name.full_ptr().addr())
-            || (self.using_shown && self.shown != Buf::current().name.shown_ptr().addr())
+            || (self.using_full && self.full != Buf::current().read().name.full_ptr().addr())
+            || (self.using_shown && self.shown != Buf::current().read().name.shown_ptr().addr())
     }
 }
 
 /// Set the '[ mark to the line above where the lines go, line 1 if zero.
 /// Answers the mark it replaced.
 fn mark_insert_point(from: LineNr) -> Pos {
-    let orig_start = Buf::current().b_op_start;
-    Buf::current().b_op_start.lnum = if from == LineNr::ZERO {
+    let orig_start = Buf::current().b_op_start();
+    Buf::current().edit().b_op_start.lnum = if from == LineNr::ZERO {
         LineNr::ONE
     } else {
         from
     };
-    Buf::current().b_op_start.col = ColNr::ZERO;
+    Buf::current().edit().b_op_start.col = ColNr::ZERO;
     orig_start
 }
 
@@ -173,7 +174,7 @@ pub(crate) fn open_source<'a>(
     }
 
     MSG_SCROLL.set(c_int::from(
-        !((shortmess(ShmFlag::OVER) && MSG_LISTDO_OVERWRITE.get() == 0) || Buf::current().b_help)
+        !((shortmess(ShmFlag::OVER) && MSG_LISTDO_OVERWRITE.get() == 0) || Buf::current().b_help())
             || p_verbose() != 0,
     ));
 
@@ -185,9 +186,9 @@ pub(crate) fn open_source<'a>(
     // When opening a new file take the readonly flag from the file.
     // The default is r/w and can be set to r/o below; don't reset it
     // in readonly mode, and only touch b_p_ro when BufFlags::CHECK_RO is set.
-    let check_readonly = how.newfile && Buf::current().b_flags.has(BufFlags::CHECK_RO);
+    let check_readonly = how.newfile && Buf::current().b_flags().has(BufFlags::CHECK_RO);
     if check_readonly && !READONLYMODE.get() {
-        Buf::current().b_p_ro = c_int::from(false);
+        Buf::current().set_b_p_ro(c_int::from(false));
     }
 
     let (file_info, swap_mode) = if how.newfile && !how.stdin && !how.buffer && !how.fifo {
@@ -216,21 +217,21 @@ pub(crate) fn open_source<'a>(
 
     // Only set the 'ro' flag for readonly files the first time they
     // are loaded. Help files always get readonly mode.
-    if (check_readonly && file_readonly) || Buf::current().b_help {
-        Buf::current().b_p_ro = c_int::from(true);
+    if (check_readonly && file_readonly) || Buf::current().b_help() {
+        Buf::current().set_b_p_ro(c_int::from(true));
     }
 
     if how.set_options {
         // Don't change 'eol' when reading from a buffer: it was
         // already set correctly when stdin was read.
         if !how.buffer {
-            Buf::current().b_p_eof = c_int::from(false);
-            Buf::current().b_start_eof = c_int::from(false);
-            Buf::current().b_p_eol = c_int::from(true);
-            Buf::current().b_start_eol = c_int::from(true);
+            Buf::current().set_b_p_eof(c_int::from(false));
+            Buf::current().set_b_start_eof(c_int::from(false));
+            Buf::current().set_b_p_eol(c_int::from(true));
+            Buf::current().set_b_start_eol(c_int::from(true));
         }
-        Buf::current().b_p_bomb = c_int::from(false);
-        Buf::current().b_start_bomb = c_int::from(false);
+        Buf::current().set_b_p_bomb(c_int::from(false));
+        Buf::current().set_b_start_bomb(c_int::from(false));
     }
 
     // Create a swap file now, so that other Nvims are warned that we
@@ -298,12 +299,12 @@ fn run_read_cmd(
         // like ":edit", so reset BufFlags::NOTEDITED and let ":write"
         // overwrite the file.
         if how.newfile {
-            Buf::current().b_flags.clear(BufFlags::NOTEDITED);
+            Buf::current().edit().b_flags.clear(BufFlags::NOTEDITED);
         }
         return Some(Ok(Loaded::Read));
     }
 
-    Buf::current().b_op_start = orig_start;
+    Buf::current().set_b_op_start(orig_start);
 
     // NOTDONE rather than FAIL, so that BufEnter can still be triggered
     // and other operations don't fail.
@@ -377,8 +378,8 @@ fn remember_file_time(fname: Option<&CStr>) -> (Option<FileInfo>, c_int) {
     let file_info = fname.and_then(crate::os::fs::file_info);
     if let Some(info) = &file_info {
         buf_store_file_info(Buf::current(), info);
-        Buf::current().b_mtime_read = Buf::current().b_mtime;
-        Buf::current().b_mtime_read_ns = Buf::current().b_mtime_ns;
+        Buf::current().set_b_mtime_read(Buf::current().b_mtime());
+        Buf::current().set_b_mtime_read_ns(Buf::current().b_mtime_ns());
         // Use the protection bits of the original file for the swap file,
         // so that others can read the name of the edited file from it, but
         // only if they can read the file itself. Remove the write and
@@ -388,14 +389,15 @@ fn remember_file_time(fname: Option<&CStr>) -> (Option<FileInfo>, c_int) {
         // is created.
         swap_mode = (info.mode() & 0o644) | 0o600;
     } else {
-        Buf::current().b_mtime = 0;
-        Buf::current().b_mtime_ns = 0;
-        Buf::current().b_mtime_read = 0;
-        Buf::current().b_mtime_read_ns = 0;
-        Buf::current().b_orig_size = 0;
-        Buf::current().b_orig_mode = 0;
+        Buf::current().set_b_mtime(0);
+        Buf::current().set_b_mtime_ns(0);
+        Buf::current().set_b_mtime_read(0);
+        Buf::current().set_b_mtime_read_ns(0);
+        Buf::current().set_b_orig_size(0);
+        Buf::current().set_b_orig_mode(0);
     }
     Buf::current()
+        .edit()
         .b_flags
         .clear(BufFlags::NEW | BufFlags::NEW_W);
     (file_info, swap_mode)
@@ -425,13 +427,13 @@ fn cannot_open(
             c"[Permission Denied]"
         };
         Buf::current().file_message(sfname, translate(note));
-        Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
+        Buf::current().edit().b_p_ro = c_int::from(true); // must use "w!" now
         return REFUSED;
     }
 
     // The file does not exist. Set the 'new-file' flag, so that a ":w"
     // complains if someone else created it since.
-    Buf::current().b_flags |= BufFlags::NEW;
+    Buf::current().set_b_flags(Buf::current().b_flags() | BufFlags::NEW);
 
     // Create a swap file now, so that other Nvims are warned that we are
     // editing this file. Not for a "nofile" or "nowrite" buffer type.
@@ -549,7 +551,7 @@ fn run_read_pre(
     } else {
         read_autocmd(AutoEvent::FileReadPre, sfname, excmd, true);
     }
-    Buf::current().b_op_start = orig_start;
+    Buf::current().set_b_op_start(orig_start);
 
     if MSG_SCROLLED.get() == n {
         MSG_SCROLL.set(m);
@@ -558,7 +560,7 @@ fn run_read_pre(
     let give_up = |answer: Unread| {
         NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1);
         MSG_SCROLL.set(msg_save);
-        Buf::current().b_p_ro = c_int::from(true); // must use "w!" now
+        Buf::current().edit().b_p_ro = c_int::from(true); // must use "w!" now
         Err(answer)
     };
     if aborting() {

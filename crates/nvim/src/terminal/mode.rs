@@ -219,13 +219,13 @@ fn restore_saved_winopts(s: &mut TerminalState) {
     let Some(mut wp) = s.save_curwin.and_then(WinId::get) else {
         return;
     };
-    if wp.buffer().handle != s.term.buf_handle.get() {
+    if wp.buffer().handle() != s.term.buf_handle.get() {
         // The window went elsewhere; the terminal's buffer kept a copy of
         // the options this window had while it was showing it.
-        let Some(mut buf) = super::term_buf(s.term) else {
+        let Some(buf) = super::term_buf(s.term) else {
             return;
         };
-        for wip in buf.b_wininfo.iter_mut() {
+        for wip in buf.edit().b_wininfo.iter_mut() {
             if wip.wi_win == Some(wp.id()) && wip.wi_optset {
                 put_back_winopts(s, &mut wip.wi_opt);
                 return;
@@ -277,8 +277,8 @@ pub(crate) fn terminal_enter() -> bool {
     showmode();
     ui_cursor_shape();
     terminal_focus(s.term, true);
-    let mut buf = current_buf();
-    buf.b_last_changedtick_i = buf_get_changedtick(buf);
+    let buf = current_buf();
+    buf.set_b_last_changedtick_i(buf_get_changedtick(buf));
 
     s.term.retain();
     // SAFETY: TermEnter against a live buffer; nothing of the terminal or
@@ -303,9 +303,9 @@ pub(crate) fn terminal_enter() -> bool {
     let _ = parse_shape_opt(SHAPE_CURSOR);
     unset_terminal_winopts(s);
     terminal_focus(s.term, false);
-    let mut buf = current_buf();
-    buf.b_last_changedtick = buf_get_changedtick(buf);
-    if buf.terminal == s.term.raw() && !s.close {
+    let buf = current_buf();
+    buf.set_b_last_changedtick(buf_get_changedtick(buf));
+    if buf.terminal() == s.term.raw() && !s.close {
         terminal_check_cursor(s.term);
     }
     if !RESTART_EDIT.get().is_nul() {
@@ -383,14 +383,14 @@ pub(super) fn terminal_check_cursor(term: Term) {
 /// Returns false once the current buffer has no terminal at all, which is
 /// how the mode loop learns to stop.
 fn terminal_check_focus(s: &mut TerminalState) -> bool {
-    if current_buf().terminal.is_null() {
+    if current_buf().terminal().is_null() {
         return false;
     }
     if s.save_curwin != Some(current_win().id()) {
         unset_terminal_winopts(s);
         set_terminal_winopts(s);
     }
-    if s.term.raw() != current_buf().terminal {
+    if s.term.raw() != current_buf().terminal() {
         terminal_focus(s.term, false);
         // The terminal being left was already finished; nothing else will
         // come back to close it.
@@ -417,7 +417,8 @@ fn terminal_check_focus(s: &mut TerminalState) -> bool {
 pub(crate) fn terminal_check(s: &mut TerminalState) -> Step {
     debug_assert!(
         !s.close
-            || (s.term.buf_handle.get() == Handle::NONE && s.term.raw() != current_buf().terminal),
+            || (s.term.buf_handle.get() == Handle::NONE
+                && s.term.raw() != current_buf().terminal()),
         "a terminal marked closed is still the current buffer's"
     );
     if STOP_INSERT_MODE.get() || !terminal_check_focus(s) {
@@ -434,12 +435,12 @@ pub(crate) fn terminal_check(s: &mut TerminalState) -> Step {
     let observed = has_event(AutoEvent::TextChangedT);
     let buf = current_buf();
     // SAFETY: a live buffer's own change counter.
-    if observed && buf.b_last_changedtick_i != buf_get_changedtick(buf) {
+    if observed && buf.b_last_changedtick_i() != buf_get_changedtick(buf) {
         // SAFETY: TextChangedT against a live buffer; nothing of the
         // terminal or the session is borrowed across it.
         apply_autocmds(AutoEvent::TextChangedT, None, None, false, Some(buf));
-        let mut buf = current_buf();
-        buf.b_last_changedtick_i = buf_get_changedtick(buf);
+        let buf = current_buf();
+        buf.set_b_last_changedtick_i(buf_get_changedtick(buf));
     }
     may_trigger_win_scrolled_resized();
     s.term.release();

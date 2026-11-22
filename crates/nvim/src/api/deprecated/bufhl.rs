@@ -26,7 +26,7 @@ pub fn nvim_buf_get_number(buffer: BufferHandle) -> Result<Integer, Error> {
     let Some(buf) = find_buffer_by_handle(buffer)? else {
         return Ok(0 as Integer);
     };
-    Ok(Integer::from(buf.handle))
+    Ok(Integer::from(buf.handle()))
 }
 
 /// The namespace `src_id` names, allocating one for the 0 every pre-namespace
@@ -92,7 +92,7 @@ pub fn nvim_buf_add_highlight(
         col_end = Integer::from(MAXCOL);
     }
     let ns = src2ns(&mut ns_id);
-    if line >= Integer::from(buf.b_ml.ml_line_count) {
+    if line >= Integer::from(buf.line_count()) {
         return Ok(ns_id);
     }
     if hl_group.is_empty() {

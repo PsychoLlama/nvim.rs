@@ -147,7 +147,7 @@ pub fn getout(mut exitval: c_int) -> ! {
                 let live = wp.surviving_buffer();
                 if let Some(buffer) = live.filter(|b| buf_get_changedtick(*b) != -1) {
                     let bufref = BufRef::of(buffer);
-                    let fname = buffer.name.shown().map(XString::from_cstr);
+                    let fname = buffer.read().name.shown().map(XString::from_cstr);
                     let event = AutoEvent::BufWinLeave;
                     fire_autocmds_for(event, fname.clone(), fname, false, Some(buffer), None);
                     // The event may have wiped it; ask again before writing.
@@ -166,9 +166,9 @@ pub fn getout(mut exitval: c_int) -> ! {
 
         // `BufUnload` for every loaded buffer.
         for buf in buffers() {
-            if buf.b_ml.ml_mfp.is_some() {
+            if buf.ml().ml_mfp.is_some() {
                 let bufref = BufRef::of(buf);
-                let name = buf.name.shown().map(XString::from_cstr);
+                let name = buf.read().name.shown().map(XString::from_cstr);
                 let some = Some(buf);
                 fire_autocmds_for(AutoEvent::BufUnload, name.clone(), name, false, some, None);
                 if !bufref.valid() {

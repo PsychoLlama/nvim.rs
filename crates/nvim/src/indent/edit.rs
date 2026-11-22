@@ -81,10 +81,10 @@ fn indent_progress(fmt: &CStr, n: int64_t, status: &CStr) {
 /// Reindents `op`'s lines with `how`, one of the three indent engines.
 pub fn op_reindent(op: &OpArg, how: Indenter) {
     let mut win = Win::current();
-    let mut buf = Buf::current();
+    let buf = Buf::current();
     let start_lnum = win.w_cursor.lnum;
     let line_count = op.line_count;
-    if buf.b_p_ma == 0 {
+    if buf.b_p_ma() == 0 {
         emsg(gettext(E_MODIFIABLE));
         return;
     }
@@ -170,24 +170,24 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
     }
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // Set the '[ and '] marks.
-        buf.b_op_start = op.start;
-        buf.b_op_end = op.end;
+        buf.set_b_op_start(op.start);
+        buf.set_b_op_end(op.end);
     }
 }
 
 /// Whether lines starting with `#` should be left aligned.
 pub fn preprocs_left() -> bool {
     let buf = Buf::current();
-    buf.b_p_si != 0 && buf.b_p_cin == 0
-        || buf.b_p_cin != 0
+    buf.b_p_si() != 0 && buf.b_p_cin() == 0
+        || buf.b_p_cin() != 0
             && in_cinkeys(Key::ascii(b'#'), b' ', true)
-            && buf.b_ind_hash_comment == 0
+            && buf.b_ind_hash_comment() == 0
 }
 
 /// Whether the conditions are right for smart indenting.
 pub fn may_do_si() -> bool {
     let buf = Buf::current();
-    buf.b_p_si != 0 && buf.b_p_cin == 0 && buf.b_p_inde.first_byte() == 0 && !p_paste()
+    buf.b_p_si() != 0 && buf.b_p_cin() == 0 && buf.read().b_p_inde.first_byte() == 0 && !p_paste()
 }
 
 /// Sets the cursor line's indent to that of the line holding the `{` that
@@ -491,7 +491,7 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
 pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
     let buf = Buf::current();
     let pad = |col: c_int| buf.tab_padding(ColNr::new(col));
-    let expandtab = buf.b_p_et != 0;
+    let expandtab = buf.b_p_et() != 0;
     let src_indent = src;
 
     let mut indent: Vec<u8> = Vec::new();
@@ -590,7 +590,7 @@ fn parse_retab_arg(arg: &[u8]) -> Result<RetabTabs, Failed> {
     Ok(match vts {
         // No list given: measure against the buffer's own.
         None => RetabTabs {
-            vts: Buf::current().b_p_vts_array.clone(),
+            vts: Buf::current().read().b_p_vts_array.clone(),
             ts_str: None,
             indent_only,
         },
@@ -653,18 +653,18 @@ impl Retab {
         let width = number_as_int(scan.vcol - self.start_vcol);
         self.num_spaces = width;
         let mut num_tabs = 0;
-        if buf.b_p_et == 0 {
+        if buf.b_p_et() == 0 {
             let (start, end) = (number_as_col(self.start_vcol), number_as_col(scan.vcol));
             (num_tabs, self.num_spaces) = match tabstops(tabs.vts.as_deref()) {
                 Some(stops) => stops.from_to(start, end),
                 None => {
-                    let ts = number_as_int(buf.b_p_ts);
+                    let ts = number_as_int(buf.b_p_ts());
                     debug_assert!(ts != 0);
                     tabstop::uniform_from_to(start, end, ts)
                 }
             };
         }
-        if !(buf.b_p_et != 0 || self.got_tab || self.num_spaces + num_tabs < width) {
+        if !(buf.b_p_et() != 0 || self.got_tab || self.num_spaces + num_tabs < width) {
             return Retabulated::Done;
         }
         if !scan.did_undo {
@@ -767,8 +767,8 @@ impl Retab {
 /// Applies the tabstop list `:retab` was given (`vts`, spelled `ts_str`) to
 /// the buffer.
 fn set_retab_tabstop(vts: TabStopArray, ts_str: &XString) {
-    let mut buf = Buf::current();
-    if stop_count(buf.b_p_vts_array.as_deref()) > 0 || stop_count(vts.as_deref()) > 1 {
+    let buf = Buf::current();
+    if stop_count(buf.read().b_p_vts_array.as_deref()) > 0 || stop_count(vts.as_deref()) > 1 {
         // 'vartabstop' is in use, or more than one stop was given.
         set_option_direct(
             OPT_VARTABSTOP,
@@ -776,10 +776,10 @@ fn set_retab_tabstop(vts: TabStopArray, ts_str: &XString) {
             OptionSetFlags::LOCAL,
             0,
         );
-        buf.b_p_vts_array = vts;
+        buf.edit().b_p_vts_array = vts;
     } else {
         // A single stop with 'vartabstop' unused is 'tabstop'.
-        buf.b_p_ts = OptInt::from(first_stop(vts.as_deref()));
+        buf.set_b_p_ts(OptInt::from(first_stop(vts.as_deref())));
     }
 }
 
@@ -809,11 +809,13 @@ pub fn ex_retab(excmd: &mut ExArg) {
     }
     // A single value given is equal to either 'tabstop' or 'vartabstop',
     // and then nothing on screen changed.
-    let (own, given) = (buf.b_p_vts_array.as_deref(), tabs.vts.as_deref());
+    let held = buf.read();
+    let (own, given) = (held.b_p_vts_array.as_deref(), tabs.vts.as_deref());
     let unchanged = stop_count(own) == 0
         && stop_count(given) == 1
-        && buf.b_p_ts == OptInt::from(first_stop(given))
+        && buf.b_p_ts() == OptInt::from(first_stop(given))
         || stop_count(own) > 0 && tabstop::eq(own, given);
+    drop(held);
     if !unchanged {
         redraw_curbuf_later(UPD_NOT_VALID);
     }

@@ -621,7 +621,7 @@ fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
     let mark = entry.data.filemark();
     let name = mark.fname.as_cstr().to_bytes();
     for buf in buffers() {
-        let Some(full) = buf.name.full() else {
+        let Some(full) = buf.full_name() else {
             continue;
         };
         if path_fnamecmp(name, full.to_bytes()) == 0

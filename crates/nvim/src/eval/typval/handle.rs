@@ -896,10 +896,11 @@ impl Dict {
 /// The buffer owns both, and [`unlink_buf_changedtick`] takes the item out
 /// of the table before either goes, which is what makes the link sound. `b:`
 /// is neither scope the function-name check guards.
-pub(crate) fn link_buf_changedtick(mut buffer: crate::winlayer::Buf) {
+pub(crate) fn link_buf_changedtick(buffer: crate::winlayer::Buf) {
     let item = buffer.changedtick_item();
     let key = DictKey::new(b"changedtick");
-    let Some(mut dict) = buffer.b_bufvar.di_tv.dict_mut() else {
+    let mut held = buffer.edit();
+    let Some(mut dict) = held.b_bufvar.di_tv.dict_mut() else {
         return;
     };
     // The buffer's own item, which outlives its stay in the table as above.
@@ -910,8 +911,9 @@ pub(crate) fn link_buf_changedtick(mut buffer: crate::winlayer::Buf) {
 
 /// Take `b:changedtick` out of `buffer`'s `b:` table, leaving the item --
 /// and the counter in it -- alone: clearing it would zero the counter.
-pub(crate) fn unlink_buf_changedtick(mut buffer: crate::winlayer::Buf) {
-    let Some(mut dict) = buffer.b_bufvar.di_tv.dict_mut() else {
+pub(crate) fn unlink_buf_changedtick(buffer: crate::winlayer::Buf) {
+    let mut held = buffer.edit();
+    let Some(mut dict) = held.b_bufvar.di_tv.dict_mut() else {
         return;
     };
     let slot = dict.slot_of(b"changedtick");
@@ -1019,12 +1021,17 @@ mod tests {
     #[test]
     fn b_changedtick_is_the_buffer_own_item() {
         let _held = editor_state_lock();
-        let mut buffer = bare_buffer();
-        buffer.b_bufvar = new_var_scope(VAR_SCOPE);
+        let buffer = bare_buffer();
+        buffer.edit().b_bufvar = new_var_scope(VAR_SCOPE);
         buf_init_changedtick(buffer);
-        buffer.b_changed = 1;
-        buffer.changedtick_di.di_tv.write_number(7);
-        let vars = buffer.b_bufvar.di_tv.dict_handle().expect("a b: scope");
+        buffer.set_b_changed(1);
+        buffer.edit().changedtick_di.di_tv.write_number(7);
+        let vars = buffer
+            .read()
+            .b_bufvar
+            .di_tv
+            .dict_handle()
+            .expect("a b: scope");
         let tick = vars
             .read()
             .find(b"changedtick")
@@ -1034,7 +1041,7 @@ mod tests {
         assert!(vars.read().find(b"changedtick").is_none());
         vars_clear(&vars);
         drop(vars);
-        release_var_scope(&mut buffer.b_bufvar);
+        release_var_scope(&mut buffer.edit().b_bufvar);
         free_bare_buffer(buffer);
     }
 

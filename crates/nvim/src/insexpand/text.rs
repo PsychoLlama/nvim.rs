@@ -117,7 +117,7 @@ pub(crate) fn ins_compl_add_infercase(
 ) -> Added {
     let recased;
     let mut text = &rest[..len.min(rest.len())];
-    if p_ic() && Buf::current().b_p_inf != 0 && len > 0 {
+    if p_ic() && Buf::current().b_p_inf() != 0 && len > 0 {
         let typed = compl_orig_text().to_vec();
         recased = infercase_text(rest, &typed);
         text = &recased[..len.min(recased.len())];
@@ -172,10 +172,11 @@ pub(crate) fn line_end(text: &[u8]) -> usize {
 /// Add every listed buffer's file name that starts with what was typed.
 pub(crate) fn get_next_bufname_token() {
     for b in buffers() {
-        if b.b_p_bl == 0 || b.name.short().is_none() {
+        if b.b_p_bl() == 0 || b.read().name.short().is_none() {
             continue;
         }
-        let Some(short) = b.name.short() else {
+        let held = b.read();
+        let Some(short) = held.name.short() else {
             continue;
         };
         let tail = path_tail(short);

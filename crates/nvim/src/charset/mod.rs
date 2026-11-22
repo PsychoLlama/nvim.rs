@@ -120,7 +120,7 @@ pub fn init_chartab() -> bool {
 /// Answers whether every option parsed; a malformed one leaves the tables
 /// half-built, which is why the option code validates with [`check_isopt`]
 /// before assigning.
-pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
+pub fn buf_init_chartab(buffer: Buf, global: bool) -> bool {
     if global {
         // Control characters display as `^X` or `<xx>`; printable ASCII is
         // one cell wide; the Latin-1 upper half is printable and valid in a
@@ -141,8 +141,8 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
         }
     }
 
-    buffer.b_chartab = [0; 4];
-    if buffer.b_p_lisp != 0 {
+    buffer.set_b_chartab([0; 4]);
+    if buffer.b_p_lisp() != 0 {
         // In Lisp, `-` belongs to a word even when 'iskeyword' omits it.
         set_buf_chartab(buffer, b'-', true);
     }
@@ -159,7 +159,7 @@ pub fn buf_init_chartab(mut buffer: Buf, global: bool) -> bool {
     {
         return false;
     }
-    let keywords = buffer.b_p_isk.bytes().to_vec();
+    let keywords = buffer.read().b_p_isk.bytes().to_vec();
     if parse_isopt(&keywords, IsoptTable::Keyword, Some(buffer), false).is_err() {
         return false;
     }
@@ -175,10 +175,11 @@ pub fn check_isopt(var: &[u8]) -> Result<(), Failed> {
 
 /// Set or clear `c`'s bit in `buffer`'s keyword set.
 #[inline(always)]
-fn set_buf_chartab(mut buffer: Buf, c: u8, on: bool) {
+fn set_buf_chartab(buffer: Buf, c: u8, on: bool) {
     let word = usize::from(c >> 6);
     let bit = 1u64 << (c & 0x3f);
-    buffer.b_chartab[word] = (buffer.b_chartab[word] & !bit) | if on { bit } else { 0 };
+    let value = (buffer.b_chartab()[word] & !bit) | if on { bit } else { 0 };
+    buffer.edit().b_chartab[word] = value;
 }
 
 /// Which of the four tables an 'isident'-style option fills.
@@ -347,7 +348,7 @@ pub fn vim_iswordc_tab(c: Codepoint, chartab: &[uint64_t; 4]) -> bool {
 
 /// Whether `c` belongs to a word in `buffer`.
 pub fn vim_iswordc_buf(c: Codepoint, buffer: Buf) -> bool {
-    vim_iswordc_tab(c, &buffer.b_chartab)
+    vim_iswordc_tab(c, &buffer.b_chartab())
 }
 
 /// Whether the character at the start of `bytes` belongs to a word in

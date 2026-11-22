@@ -154,7 +154,7 @@ pub(crate) fn ins_end(c: Key) {
 
     let tpos = Win::current().w_cursor;
     if c == SpecialKey::CEnd {
-        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+        Win::current().w_cursor.lnum = Buf::current().line_count();
     }
     coladvance_to(MAXCOL);
     Win::current().w_curswant = ColNr::MAX;
@@ -213,7 +213,7 @@ pub(crate) fn ins_right() {
             REVINS_CHARS.set(REVINS_CHARS.get() - 1);
         }
     } else if p_ww(|value| value.to_bytes().contains(&b']'))
-        && Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
+        && Win::current().w_cursor.lnum < Buf::current().line_count()
     {
         // 'whichwrap' allows the motion to leave the line.
         start_arrow_at(InsertEnd::cursor());
@@ -234,7 +234,7 @@ pub(crate) fn ins_s_right() {
     may_open_fold_hor();
     hide_dollar();
 
-    if Win::current().w_cursor.lnum < Buf::current().b_ml.ml_line_count
+    if Win::current().w_cursor.lnum < Buf::current().line_count()
         || gchar_cursor() != Codepoint::NUL
     {
         start_arrow_changing(InsertEnd::cursor(), end_change);

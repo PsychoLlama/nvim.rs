@@ -31,6 +31,7 @@ use crate::eval::typval::DI_FLAGS_FIX;
 use crate::eval::typval::DI_FLAGS_RO;
 use crate::types::Handle;
 use core::ffi::{CStr, c_int};
+use std::borrow::Cow;
 
 use super::*;
 use crate::eval::typval::DictItem;
@@ -52,18 +53,18 @@ use crate::winlayer::graph::CMDWIN_BUF;
 /// The first byte of `'buftype'`, or NUL when there is no buffer. Option
 /// variables are never null, so upstream indexes `b_p_bt` unconditionally.
 fn buftype(buffer: Option<Buf>) -> u8 {
-    buffer.map_or(0, |b| b.b_p_bt.first_byte())
+    buffer.map_or(0, |b| b.read().b_p_bt.first_byte())
 }
 
 /// `b_p_bt[2]`, which upstream reads only once `b_p_bt[0] == 'n'` has said
 /// there are at least three bytes ("nofile" or "nowrite") to read.
 fn buftype_2(buffer: Buf) -> u8 {
     // A `'buftype'` beginning with 'n' is one of those two words.
-    buffer.b_p_bt.bytes()[2]
+    buffer.read().b_p_bt.bytes()[2]
 }
 
 fn has_terminal(buffer: Buf) -> bool {
-    !buffer.terminal.is_null()
+    !buffer.terminal().is_null()
 }
 
 // ---------------------------------------------------------------------------
@@ -83,7 +84,7 @@ pub(crate) fn buf_is_prompt(buffer: Option<Buf>) -> bool {
 
 /// `bt_help()`: a help buffer.
 pub(crate) fn buf_is_help(buffer: Option<Buf>) -> bool {
-    buffer.is_some_and(|b| b.b_help)
+    buffer.is_some_and(|b| b.b_help())
 }
 
 /// `bt_normal()`: a normal buffer, `'buftype'` empty.
@@ -151,7 +152,7 @@ pub(crate) fn buf_dontwrite_msg(buffer: Option<Buf>) -> bool {
 /// Whether the buffer should be hidden rather than unloaded, according to
 /// `'bufhidden'`, `'hidden'` and `:hide`.
 pub fn buf_hide(buffer: Buf) -> bool {
-    match buffer.b_p_bh.first_byte() {
+    match buffer.read().b_p_bh.first_byte() {
         b'u' | b'w' | b'd' => return false, // "unload", "wipe", "delete"
         b'h' => return true,                // "hide"
         _ => {}
@@ -165,33 +166,33 @@ pub fn buf_hide(buffer: Buf) -> bool {
 /// A copy of [`buf_spname`], for a caller that runs anything while it holds
 /// the name.
 pub(crate) fn buf_spname_owned(buffer: Buf) -> Option<XString> {
-    buf_spname(&buffer).map(XString::from_cstr)
+    buf_spname(&buffer).map(|name| XString::from_cstr(&name))
 }
 
 /// The name to display for a special buffer, or `None` for an ordinary one:
-/// a translated literal, or the buffer's own name, borrowed from the handle.
-pub fn buf_spname(buffer: &Buf) -> Option<&CStr> {
+/// a translated literal, or a copy of the buffer's own name.
+pub fn buf_spname(buffer: &Buf) -> Option<Cow<'static, CStr>> {
     let b = buffer;
     if buf_is_quickfix(Some(*b)) {
-        if b.handle == Handle::new(qf_stack_get_bufnr()) {
-            return Some(gettext(MSG_QFLIST));
+        if b.handle() == Handle::new(qf_stack_get_bufnr()) {
+            return Some(Cow::Borrowed(gettext(MSG_QFLIST)));
         }
-        return Some(gettext(MSG_LOCLIST));
+        return Some(Cow::Borrowed(gettext(MSG_LOCLIST)));
     }
     if buf_is_nofilename(Some(*b)) {
-        if let Some(name) = b.name.shown() {
-            return Some(name);
+        if let Some(name) = b.read().name.shown() {
+            return Some(Cow::Owned(name.to_owned()));
         }
         if CMDWIN_BUF.get() == Some(b.id()) {
-            return Some(gettext(c"[Command Line]"));
+            return Some(Cow::Borrowed(gettext(c"[Command Line]")));
         }
         if buf_is_prompt(Some(*b)) {
-            return Some(gettext(c"[Prompt]"));
+            return Some(Cow::Borrowed(gettext(c"[Prompt]")));
         }
-        return Some(gettext(c"[Scratch]"));
+        return Some(Cow::Borrowed(gettext(c"[Scratch]")));
     }
-    if b.name.is_unnamed() {
-        return Some(gettext(c"[No Name]"));
+    if b.read().name.is_unnamed() {
+        return Some(Cow::Borrowed(gettext(c"[No Name]")));
     }
     None
 }
@@ -202,11 +203,11 @@ pub fn buf_spname(buffer: &Buf) -> Option<&CStr> {
 /// Set `'buflisted'` for the current buffer, firing `BufAdd`/`BufDelete` if
 /// it changed.
 pub fn set_buflisted(on: c_int) {
-    let mut buf = Buf::current();
-    if on == buf.b_p_bl {
+    let buf = Buf::current();
+    if on == buf.b_p_bl() {
         return;
     }
-    buf.b_p_bl = on;
+    buf.set_b_p_bl(on);
     let event = if on != 0 {
         AutoEvent::BufAdd
     } else {
@@ -221,7 +222,7 @@ pub fn buf_is_empty(buffer: Buf) -> bool {
     let b = buffer;
     // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
     // NUL-terminated line.
-    b.b_ml.ml_line_count == LineNr::ONE && buffer.lines().line(LineNr::ONE).is_empty()
+    b.line_count() == LineNr::ONE && buffer.lines().line(LineNr::ONE).is_empty()
 }
 
 pub fn buf_inc_changedtick(buffer: Buf) {
@@ -229,21 +230,21 @@ pub fn buf_inc_changedtick(buffer: Buf) {
 }
 
 /// Set `b:changedtick`, telling any `b:` watcher about the change.
-pub fn buf_set_changedtick(mut b: Buf, changedtick: VarNumber) {
+pub fn buf_set_changedtick(b: Buf, changedtick: VarNumber) {
     // `b:changedtick` is always a plain number, so the watcher's "old
     // value" is one too: a fresh typval, owning nothing.
-    let old_val = TypVal::Number(b.changedtick_di.di_tv.number_or_zero());
+    let old_val = TypVal::Number(b.read().changedtick_di.di_tv.number_or_zero());
     check_changedtick_item(b);
-    b.changedtick_di.di_tv.write_number(changedtick);
-    if dict_is_watched(b.b_bufvar.di_tv.dict_ref().as_deref())
-        && let Some(vars) = b.b_bufvar.di_tv.dict_handle()
-    {
-        b.b_locked += 1;
+    b.edit().changedtick_di.di_tv.write_number(changedtick);
+    let watched = dict_is_watched(b.read().b_bufvar.di_tv.dict_ref().as_deref());
+    let vars = b.read().b_bufvar.di_tv.dict_handle();
+    if watched && let Some(vars) = vars {
+        b.set_b_locked(b.b_locked() + 1);
         // The new value as a copy: the watchers run Vimscript, which must
         // not find the buffer's own item borrowed.
         let new_val = TypVal::Number(changedtick);
         dict_watcher_notify(&vars, c"changedtick", Some(&new_val), Some(&old_val));
-        b.b_locked -= 1;
+        b.set_b_locked(b.b_locked() - 1);
     }
 }
 
@@ -254,7 +255,8 @@ fn check_changedtick_item(buffer: Buf) {
         return;
     }
     let key = c"changedtick";
-    let vars = buffer.b_bufvar.di_tv.dict_ref();
+    let held = buffer.read();
+    let vars = held.b_bufvar.di_tv.dict_ref();
     let item = dict_find(vars.as_deref(), key.to_bytes())
         .expect("every buffer's b: dict holds changedtick");
     assert!(
@@ -270,7 +272,7 @@ fn check_changedtick_item(buffer: Buf) {
         "changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)"
     );
     assert!(
-        ::core::ptr::from_ref(item) == (&raw const buffer.changedtick_di).cast::<DictItem>(),
+        ::core::ptr::from_ref(item) == (&raw const buffer.read().changedtick_di).cast::<DictItem>(),
         "changedtick_di == (DictItem *)&buf->changedtick_di"
     );
 }

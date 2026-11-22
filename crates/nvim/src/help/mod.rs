@@ -160,8 +160,8 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
         // autocommands may have jumped to another window, so check that
         // the buffer is not in one.
         if opened.empty_fnum.is_some()
-            && Some(Buf::current().handle) != opened.empty_fnum
-            && let Some(buf) = find_buf(opened.empty_fnum).filter(|b| b.b_nwindows == 0)
+            && Some(Buf::current().handle()) != opened.empty_fnum
+            && let Some(buf) = find_buf(opened.empty_fnum).filter(|b| b.b_nwindows() == 0)
         {
             wipe_buffer(buf, true);
         }
@@ -249,7 +249,7 @@ fn enter_help_window() -> Result<HelpWindow, Failed> {
             })
         })
         .flatten();
-    if let Some(wp) = existing.filter(|wp| wp.buffer().b_nwindows > 0) {
+    if let Some(wp) = existing.filter(|wp| wp.buffer().b_nwindows() > 0) {
         win_enter(wp, true);
         return Ok(opened);
     }
@@ -279,13 +279,13 @@ fn enter_help_window() -> Result<HelpWindow, Failed> {
 
     // Open the help file. `do_ecmd` sets `b_help` and `readfile` sets
     // 'readonly'. The buffer is still open, so don't store info.
-    opened.alt_fnum = Some(Buf::current().handle);
+    opened.alt_fnum = Some(Buf::current().handle());
     let (lnum, flags) = (newlnum::LASTL, EcmdFlags::HIDE | EcmdFlags::SET_HELP);
     let _ = do_ecmd(None, None, None, None, lnum, flags, None);
     if keepalt_is_off() {
         Win::current().w_alt_fnum = opened.alt_fnum;
     }
-    opened.empty_fnum = Some(Buf::current().handle);
+    opened.empty_fnum = Some(Buf::current().handle());
     Ok(opened)
 }
 
@@ -471,7 +471,7 @@ pub(crate) fn help_tag_matches(arg: &CStr) -> Option<Vec<XString>> {
 /// edited, because a user autocommand may have changed them since the last
 /// time.
 pub(crate) fn prepare_help_buffer() {
-    Buf::current().b_help = true;
+    Buf::current().set_b_help(true);
     set_option_direct(
         OPT_BUFTYPE,
         OptVal::static_string(c"help"),
@@ -483,7 +483,7 @@ pub(crate) fn prepare_help_buffer() {
     // '*', '"' and '|', plus the latin1 word characters translated help
     // files use. Only set it when needed: `buf_init_chartab` is work.
     let isk = c"!-~,^*,^|,^\",192-255";
-    if Buf::current().b_p_isk.bytes() != isk.to_bytes() {
+    if Buf::current().read().b_p_isk.bytes() != isk.to_bytes() {
         set_option_direct(
             OPT_ISKEYWORD,
             OptVal::static_string(isk),
@@ -502,9 +502,9 @@ pub(crate) fn prepare_help_buffer() {
         0,
     );
 
-    Buf::current().b_p_ts = 8;
-    Buf::current().b_p_ma = 0; // not modifiable
-    Buf::current().b_p_bin = 0; // reset 'bin' before reading the file
+    Buf::current().set_b_p_ts(8);
+    Buf::current().edit().b_p_ma = 0; // not modifiable
+    Buf::current().edit().b_p_bin = 0; // reset 'bin' before reading the file
     let mut win = Win::current();
     let wo = &mut win.w_onebuf_opt;
     wo.wo_list = 0;

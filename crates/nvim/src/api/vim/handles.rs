@@ -35,14 +35,14 @@ pub fn nvim_list_bufs() -> Array {
     let n: size_t = buffers().count();
     let mut rv = Vec::with_capacity(n);
     for buf in buffers() {
-        rv.push(Object::buffer(buf.handle));
+        rv.push(Object::buffer(buf.handle()));
     }
     rv.into()
 }
 
 /// The current buffer's handle.
 pub fn nvim_get_current_buf() -> BufferHandle {
-    Buf::current().handle
+    Buf::current().handle()
 }
 
 /// Make `buf` the current buffer, as `:buffer` does.
@@ -50,7 +50,7 @@ pub fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(());
     };
-    let handle = b.handle;
+    let handle = b.handle();
     api_try(|| {
         let _ = do_buffer(
             DOBUF_GOTO,
@@ -118,11 +118,11 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
         unblock_autocmds();
         return Handle::NONE;
     }
-    let mut b = buf.expect("`buflist_new` answered a buffer");
+    let b = buf.expect("`buflist_new` answered a buffer");
     let tick = buf_get_changedtick(b);
-    b.b_last_changedtick = tick;
-    b.b_last_changedtick_i = tick;
-    b.b_last_changedtick_pum = tick;
+    b.set_b_last_changedtick(tick);
+    b.set_b_last_changedtick_i(tick);
+    b.set_b_last_changedtick_pum(tick);
     buf_copy_options(buf.expect("a live handle"), BCO_ENTER | BCO_NOHELP);
     if scratch {
         let local = OptionSetFlags::LOCAL;
@@ -131,8 +131,8 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
         let nofile = OptVal::static_string(c"nofile");
         set_option_direct_for(OPT_BUFTYPE, nofile, local, 0, OptionTarget::Buf(b));
         debug_assert!(b.swap_file_closed(), "buf->b_ml.ml_mfp->mf_fd < 0");
-        b.b_p_swf = 0;
-        b.b_p_ml = 0;
+        b.set_b_p_swf(0);
+        b.set_b_p_ml(0);
     }
     unblock_autocmds();
     let bufref = BufRef::of_opt(Some(b));
@@ -147,7 +147,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
         return Handle::NONE;
     }
     // The autocommands above left the buffer alive.
-    buf.map_or(Handle::NONE, |b| b.handle)
+    buf.map_or(Handle::NONE, |b| b.handle())
 }
 
 /// Every tab page's handle, in order.

@@ -279,7 +279,7 @@ impl Win {
             state.new_range_ordering = 0;
         });
 
-        self.buffer().b_marktree.n_keys != 0
+        self.buffer().read().b_marktree.n_keys != 0
     }
 }
 

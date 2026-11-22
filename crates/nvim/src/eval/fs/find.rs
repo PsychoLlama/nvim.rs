@@ -117,7 +117,7 @@ fn suffixes(find_what: c_int) -> XString {
     if find_what == FINDFILE_DIR {
         return XString::new();
     }
-    Buf::current().b_p_sua.get()
+    Buf::current().read().b_p_sua.get()
 }
 
 // ---------------------------------------------------------------------
@@ -158,10 +158,11 @@ fn findfilendir(args: &[TypVal], result: &mut TypVal, find_what: c_int) {
         return;
     }
 
-    let path = path.unwrap_or_else(|| local_or_global(&Buf::current().b_p_path, P_PATH).get());
+    let path =
+        path.unwrap_or_else(|| local_or_global(&Buf::current().read().b_p_path, P_PATH).get());
     let sua = suffixes(find_what);
     // A copy: the walk can run user code, which may rename the buffer.
-    let rel = Buf::current().name.full().map(XString::from_cstr);
+    let rel = Buf::current().read().name.full().map(XString::from_cstr);
     // `findfile()` is quiet and takes the name as written: no message, no
     // `'includeexpr'`, no relative-path preference.
     let quiet = FileNameOpts::NONE;

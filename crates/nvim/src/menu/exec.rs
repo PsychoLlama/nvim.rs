@@ -288,7 +288,7 @@ pub(crate) fn menu_find(path: &CStr) -> Result<MenuId, Failed> {
 // for exactly one statement, so none can span the rhs being run.
 
 fn with_curbuf<R>(f: impl FnOnce(&Buffer) -> R) -> R {
-    f(&Buf::current())
+    f(&Buf::current().read())
 }
 
 /// The script id of whatever is running, 0 for the user's own typing.

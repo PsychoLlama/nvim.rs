@@ -61,7 +61,7 @@ pub fn f_byte2line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// past the end. One past the last line is allowed: it is the buffer size.
 pub fn f_line2byte(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let lnum = arg_lnum(&args[0]);
-    let offset = if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count + 1 {
+    let offset = if lnum < LineNr::ONE || lnum > Buf::current().line_count() + 1 {
         -1
     } else {
         Buf::current()
@@ -110,16 +110,16 @@ fn get_col(args: &[TypVal], result: &mut TypVal, charcol: bool) {
     };
     let wp = wp.expect("a window for the column lookup");
     let bp = wp.buffer();
-    let mut fnum = bp.handle.get();
+    let mut fnum = bp.handle().get();
     let fp = var2fpos(&args[0], false, &mut fnum, charcol, wp);
     let mut col: ColNr = ColNr::ZERO;
     if let Some(fp) = fp
-        && fnum == bp.handle.get()
+        && fnum == bp.handle().get()
     {
         if fp.col == END_OF_LINE {
             // MAXCOL means "end of line"; past the last line there is
             // no line to measure, so it stays MAXCOL.
-            col = if fp.lnum <= bp.b_ml.ml_line_count {
+            col = if fp.lnum <= bp.line_count() {
                 (ml_get_buf_len(bp, fp.lnum)) + 1
             } else {
                 END_OF_LINE
@@ -150,11 +150,11 @@ pub fn f_virtcol(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     };
     if let Some(Some(wp)) = wp {
         let bp = wp.buffer();
-        let mut fnum = bp.handle.get();
+        let mut fnum = bp.handle().get();
         let fp = var2fpos(&args[0], false, &mut fnum, false, wp);
         if let Some(mut fp) = fp
-            && fp.lnum <= bp.b_ml.ml_line_count
-            && fnum == bp.handle.get()
+            && fp.lnum <= bp.line_count()
+            && fnum == bp.handle().get()
         {
             // Clamped before it is measured, as upstream clamps the
             // shared position it answered out of.

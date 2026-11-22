@@ -75,7 +75,7 @@ pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Option<Vec<XStr
     let mut found: Vec<Found> = Vec::new();
     for buf in buffers() {
         // Skip unlisted buffers.
-        if buf.b_p_bl == 0 {
+        if buf.b_p_bl() == 0 {
             continue;
         }
         if options.has(BUF_DIFF_FILTER) {
@@ -86,10 +86,11 @@ pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Option<Vec<XStr
         }
 
         let mut score = 0;
+        let held = buf.read();
         let name = if fuzzy {
             // First try matching with the short file name, then with the
             // full path file name. An unnamed buffer has neither.
-            [buf.name.short(), buf.name.full()]
+            [held.name.short(), held.name.full()]
                 .into_iter()
                 .flatten()
                 .find(|name| {
@@ -100,8 +101,8 @@ pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Option<Vec<XStr
             // An invalid pattern, possibly after recompiling, offers none.
             regmatch.regprog.as_ref()?;
             match buflist_match(&mut regmatch, buf, p_wic()) {
-                Some(BufNameKind::Short) => buf.name.short(),
-                Some(BufNameKind::Full) => buf.name.full(),
+                Some(BufNameKind::Short) => held.name.short(),
+                Some(BufNameKind::Full) => held.name.full(),
                 None => None,
             }
         };
@@ -183,10 +184,10 @@ pub(crate) fn buflist_match(
     buffer: Buf,
     ignore_case: bool,
 ) -> Option<BufNameKind> {
-    if fname_match(rmp, buffer.name.short(), ignore_case) {
+    if fname_match(rmp, buffer.read().name.short(), ignore_case) {
         return Some(BufNameKind::Short);
     }
-    if rmp.regprog.is_some() && fname_match(rmp, buffer.name.full(), ignore_case) {
+    if rmp.regprog.is_some() && fname_match(rmp, buffer.read().name.full(), ignore_case) {
         return Some(BufNameKind::Full);
     }
     None
@@ -229,10 +230,11 @@ pub(crate) fn find_buf(handle: Option<Handle>) -> Option<Buf> {
 /// is no such buffer, empty for one with no name.
 pub fn buflist_nr2name(n: Option<Handle>, fullname: c_int, helptail: c_int) -> Option<XString> {
     let buf = find_buf(n)?;
+    let held = buf.read();
     let name = if fullname != 0 {
-        buf.name.full()
+        held.name.full()
     } else {
-        buf.name.shown()
+        held.name.shown()
     };
     let helptail = (helptail != 0).then_some(buf);
     Some(name.map_or_else(XString::new, |name| home_replaced(helptail, name)))

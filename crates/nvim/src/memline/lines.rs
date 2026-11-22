@@ -112,7 +112,7 @@ impl Lines {
 
     /// How many lines the buffer has.
     pub fn count(&self) -> LineNr {
-        self.0.b_ml.ml_line_count
+        self.0.line_count()
     }
 
     /// Line `lnum`, without its NUL.
@@ -121,7 +121,7 @@ impl Lines {
     /// E315 complaint upstream's `ml_get` gives.
     pub fn line(&mut self, lnum: LineNr) -> &[u8] {
         fetch_line(self.0, lnum, false);
-        self.0.b_ml.cached_bytes()
+        self.0.lend_cached_line()
     }
 
     /// Line `lnum`, writable in place.
@@ -131,7 +131,7 @@ impl Lines {
     /// deleted. Use `ml_replace` to change a line's length.
     pub fn line_mut(&mut self, lnum: LineNr) -> &mut [u8] {
         fetch_line(self.0, lnum, true);
-        self.0.b_ml.cached_bytes_mut()
+        self.0.lend_cached_line_mut()
     }
 
     /// Overwrite byte `at` of line `lnum` in place, answering the byte that
@@ -144,7 +144,7 @@ impl Lines {
     /// pointer). Answers NUL, writing nothing, when `at` is past the line.
     pub fn swap_byte_unbooked(&mut self, lnum: LineNr, at: usize, byte: u8) -> u8 {
         fetch_line(self.0, lnum, false);
-        match self.0.b_ml.cached_bytes_mut().get_mut(at) {
+        match self.0.ml().cached_bytes_mut().get_mut(at) {
             Some(slot) => core::mem::replace(slot, byte),
             None => 0,
         }
@@ -171,7 +171,7 @@ impl Lines {
     /// When `at` is past the end of the line.
     pub fn line_cstr(&mut self, lnum: LineNr, at: usize) -> &CStr {
         fetch_line(self.0, lnum, false);
-        let bytes = self.0.b_ml.cached_bytes_with_nul();
+        let bytes = self.0.lend_cached_line_with_nul();
         assert!(at < bytes.len(), "column past the end of the line");
         cstr::in_bytes(&bytes[at..])
     }
@@ -251,23 +251,23 @@ impl HeldLines {
             self.pin();
         }
         fetch_line(self.buffer, lnum, false);
-        self.buffer.b_ml.lend_cached_bytes_with_nul()
+        self.buffer.lend_pinned_line()
     }
 
     /// Pin the memfile, if the buffer has one yet (a memline that is not
     /// open answers static stand-ins, which need none).
     #[inline(never)]
     fn pin(&self) {
-        let mut buffer = self.buffer;
-        if !buffer.b_ml.is_open() {
+        let buffer = self.buffer;
+        if !buffer.ml().is_open() {
             return;
         }
         // A pending replacement goes back into its block first: once
         // pinned, nothing may cache one, nor write it back.
-        if buffer.b_ml.line_is_dirty() {
+        if buffer.ml().line_is_dirty() {
             ml_flush_line(buffer);
         }
-        buffer.b_ml.memfile().pin();
+        buffer.ml().memfile().pin();
         self.pinned.set(true);
     }
 }
@@ -277,7 +277,7 @@ impl Drop for HeldLines {
     fn drop(&mut self) {
         if self.pinned.get() {
             self.buffer
-                .b_ml
+                .ml()
                 .ml_mfp
                 .as_deref_mut()
                 .expect("a pinned memfile is not dropped")
@@ -333,7 +333,7 @@ pub fn ml_get_len(lnum: LineNr) -> ColNr {
 /// Length of line `lnum` of `buffer`, excluding the NUL.
 pub fn ml_get_buf_len(buffer: Buf, lnum: LineNr) -> ColNr {
     fetch_line(buffer, lnum, false);
-    (buffer.b_ml.cached_len() - 1).max(ColNr::ZERO)
+    (buffer.ml().cached_len() - 1).max(ColNr::ZERO)
 }
 
 /// The codepoint at `pos`, which must either be valid or have `col` set to
@@ -358,19 +358,20 @@ pub fn gchar_pos(pos: &Pos) -> Codepoint {
 /// Whether the line last handed out by `ml_get` is the memline's own
 /// replacement, which may be edited in place.
 pub fn ml_line_alloced() -> bool {
-    Buf::current().b_ml.line_is_dirty()
+    Buf::current().ml().line_is_dirty()
 }
 
 /// Insert `line` (its NUL the last byte) after line `lnum` of `buffer`,
 /// whose memline is open, flushing any pending change first.
 fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), LineError> {
-    // One dereference for both questions (each through the handle checks
-    // it is live): a file read asks them once per line.
-    let ml = &buffer.b_ml;
-    if lnum > ml.ml_line_count {
+    // One read for both questions: a file read asks them once per line.
+    let held = buffer.ml();
+    let (line_count, cached) = (held.ml_line_count, held.cached_lnum());
+    drop(held);
+    if lnum > line_count {
         return Err(LineError::NoSuchLine);
     }
-    if ml.cached_lnum() != LineNr::ZERO {
+    if cached != LineNr::ZERO {
         // This may invoke ml_append_int in turn.
         ml_flush_line(buffer);
     }
@@ -388,7 +389,7 @@ fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Resu
 pub(crate) fn ml_append_flags(lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), LineError> {
     debug_assert_eq!(line.last(), Some(&0), "the line carries its NUL");
     // During startup the memfile may still have to be created.
-    if !Buf::current().b_ml.is_open() {
+    if !Buf::current().ml().is_open() {
         open_buffer(false, None, ReadFlags::NONE)?;
     }
     ml_append_flush(Buf::current(), lnum, line, flags)
@@ -431,7 +432,7 @@ pub fn ml_append_buf_terminated(
     newfile: bool,
 ) -> Result<(), LineError> {
     debug_assert_eq!(line.last(), Some(&0), "the line carries its NUL");
-    if !buffer.b_ml.is_open() {
+    if !buffer.ml().is_open() {
         return Err(LineError::NoSuchLine);
     }
     ml_append_flush(buffer, lnum, line, if newfile { ML_APPEND_NEW } else { 0 })
@@ -453,18 +454,46 @@ pub fn ml_add_deleted_len(text: &[u8], len: usize) {
 }
 
 /// [`ml_add_deleted_len`] for an arbitrary buffer.
-pub fn ml_add_deleted_len_buf(mut buffer: Buf, text: &[u8], len: usize) {
+pub fn ml_add_deleted_len_buf(buffer: Buf, text: &[u8], len: usize) {
+    book_deleted(buffer, deleted_counts(buffer, text, len));
+}
+
+/// What deleting `text` (its first `len` bytes) adds to `buffer`'s deleted
+/// counts, measured without writing the buffer: a caller holding a read of
+/// it measures first and books after letting go. `None` while deletes are
+/// not counted.
+pub(crate) fn deleted_counts(buffer: Buf, text: &[u8], len: usize) -> Option<DeletedCounts> {
     if INHIBIT_DELETE_COUNT.get() != 0 {
-        return;
+        return None;
     }
     let text = &text[..len.min(text.len())];
+    let units = buffer
+        .update_need_codepoints()
+        .then(|| utf_lengths(text, text.len()));
+    Some(DeletedCounts {
+        bytes: text.len(),
+        units,
+    })
+}
+
+/// [`deleted_counts`]' answer: bytes, and code points and units when the
+/// buffer's watchers want them.
+pub(crate) struct DeletedCounts {
+    bytes: usize,
+    units: Option<(usize, usize)>,
+}
+
+/// Add what [`deleted_counts`] measured to `buffer`'s counts.
+pub(crate) fn book_deleted(buffer: Buf, counts: Option<DeletedCounts>) {
+    let Some(counts) = counts else {
+        return;
+    };
     // The + 1 is the newline the line carries internally.
-    buffer.deleted_bytes += text.len() + 1;
-    buffer.deleted_bytes2 += text.len() + 1;
-    if buffer.update_need_codepoints {
-        let (points, units) = utf_lengths(text, text.len());
-        buffer.deleted_codepoints += points + 1; // NL char
-        buffer.deleted_codeunits += units + 1;
+    buffer.set_deleted_bytes(buffer.deleted_bytes() + counts.bytes + 1);
+    buffer.set_deleted_bytes2(buffer.deleted_bytes2() + counts.bytes + 1);
+    if let Some((points, units)) = counts.units {
+        buffer.set_deleted_codepoints(buffer.deleted_codepoints() + points + 1); // NL char
+        buffer.set_deleted_codeunits(buffer.deleted_codeunits() + units + 1);
     }
 }
 
@@ -473,15 +502,15 @@ pub fn ml_add_deleted_len_buf(mut buffer: Buf, text: &[u8], len: usize) {
 /// book the old text as deleted.
 fn begin_replace(buffer: Buf, lnum: LineNr) -> Result<(), Failed> {
     // During startup the memfile may still have to be created.
-    if !buffer.b_ml.is_open() {
+    if !buffer.ml().is_open() {
         open_buffer(false, None, ReadFlags::NONE)?;
     }
-    if buffer.b_ml.cached_lnum() != lnum {
+    if buffer.ml().cached_lnum() != lnum {
         ml_flush_line(buffer); // another line is buffered, flush it
     }
     if crate::buffer_updates::has_callbacks(buffer) {
         fetch_line(buffer, lnum, false);
-        let text = buffer.b_ml.cached_bytes();
+        let text = buffer.lend_cached_line();
         ml_add_deleted_len_buf(buffer, text, text.len());
     }
     Ok(())
@@ -494,9 +523,9 @@ impl Buf {
     ///
     /// The caller should probably also call `changed_lines`, unless it uses
     /// `update_screen(UPD_NOT_VALID)`.
-    fn replace_line(mut self, lnum: LineNr, line: Vec<u8>) -> Result<(), Failed> {
+    fn replace_line(self, lnum: LineNr, line: Vec<u8>) -> Result<(), Failed> {
         begin_replace(self, lnum)?;
-        self.b_ml.cache_replacement(line, lnum);
+        self.ml().cache_replacement(line, lnum);
         Ok(())
     }
 }
@@ -524,16 +553,16 @@ pub(crate) fn ml_replace_owned(lnum: LineNr, line: XString) -> Result<(), Failed
 /// a loop is common, and a scratch allocation per line is a lot of noise.
 ///
 /// `line` holds the text and, last, its NUL.
-pub(crate) fn ml_replace_buf_now(mut buffer: Buf, lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
+pub(crate) fn ml_replace_buf_now(buffer: Buf, lnum: LineNr, line: &[u8]) -> Result<(), Failed> {
     debug_assert_eq!(line.last(), Some(&0), "the line carries its NUL");
     begin_replace(buffer, lnum)?;
     let text = line;
-    buffer.b_ml.cache_pending(
+    buffer.ml().cache_pending(
         lnum,
         ColNr::try_from(text.len()).expect("a line shorter than INT_MAX"),
     );
     ml_flush_text(buffer, lnum, text);
-    buffer.b_ml.clear_cache();
+    buffer.ml().clear_cache();
     Ok(())
 }
 
@@ -553,7 +582,7 @@ pub fn ml_delete(lnum: LineNr) -> Result<(), LineError> {
 /// [`ml_delete`] taking `ML_DEL_` flags.
 pub fn ml_delete_flags(lnum: LineNr, flags: c_int) -> Result<(), LineError> {
     ml_flush_line(Buf::current());
-    if lnum < LineNr::ONE || lnum > Buf::current().b_ml.ml_line_count {
+    if lnum < LineNr::ONE || lnum > Buf::current().line_count() {
         return Err(LineError::NoSuchLine);
     }
     ml_delete_int(Buf::current(), lnum, flags)
@@ -561,8 +590,8 @@ pub fn ml_delete_flags(lnum: LineNr, flags: c_int) -> Result<(), LineError> {
 
 /// Set the [`DB_MARKED`] bit on line `lnum`.
 pub fn ml_setmarked(lnum: LineNr) {
-    let mut buffer = Buf::current();
-    if lnum < LineNr::ONE || lnum > buffer.b_ml.ml_line_count || !buffer.b_ml.is_open() {
+    let buffer = Buf::current();
+    if lnum < LineNr::ONE || lnum > buffer.line_count() || !buffer.ml().is_open() {
         return; // invalid line number
     }
     if LOWEST_MARKED.get() == LineNr::ZERO || LOWEST_MARKED.get() > lnum {
@@ -571,27 +600,28 @@ pub fn ml_setmarked(lnum: LineNr) {
     let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
         return;
     };
-    let idx = (lnum - buffer.b_ml.locked_low()).cast_unsigned() as usize;
-    DataBlock(buffer.b_ml.page_mut(id)).set_marked(idx, true);
-    buffer.b_ml.locked_is_dirty();
+    let idx = (lnum - buffer.ml().locked_low()).cast_unsigned() as usize;
+    DataBlock(buffer.ml().page_mut(id)).set_marked(idx, true);
+    buffer.ml().locked_is_dirty();
 }
 
 /// Walk the lines from `LOWEST_MARKED` on, clearing every [`DB_MARKED`] bit
 /// found. With `first`, stop at the first one and answer its line; otherwise
 /// answer 0 once all are clear.
 fn clear_marks(first: bool) -> LineNr {
-    let mut buffer = Buf::current();
+    let buffer = Buf::current();
     // Nothing marked yet leaves `LOWEST_MARKED` at 0, and line 0 is line
     // 1's block. Upstream starts there anyway and reads index entry -1 --
     // the top half of the block's line count, which is never marked -- so
     // starting at line 1 skips only a read that could find nothing.
     let mut lnum = LOWEST_MARKED.get().max(LineNr::ONE);
-    while lnum <= buffer.b_ml.ml_line_count {
+    while lnum <= buffer.line_count() {
         let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
             return LineNr::ZERO;
         };
-        let (low, high) = (buffer.b_ml.locked_low(), buffer.b_ml.locked_high());
-        let mut data = DataBlock(buffer.b_ml.page_mut(id));
+        let mut held = buffer.ml();
+        let (low, high) = (held.locked_low(), held.locked_high());
+        let mut data = DataBlock(held.page_mut(id));
         let mut found = None;
         while lnum <= high {
             let idx = (lnum - low).cast_unsigned() as usize;
@@ -604,8 +634,9 @@ fn clear_marks(first: bool) -> LineNr {
             }
             lnum += 1;
         }
+        drop(held);
         if found.is_some() {
-            buffer.b_ml.locked_is_dirty();
+            buffer.ml().locked_is_dirty();
         }
         if first && let Some(found) = found {
             LOWEST_MARKED.set(found + 1);
@@ -618,7 +649,7 @@ fn clear_marks(first: bool) -> LineNr {
 /// The first line with its [`DB_MARKED`] bit set, clearing the bit. Zero when
 /// there is none left.
 pub fn ml_firstmarked() -> LineNr {
-    if !Buf::current().b_ml.is_open() {
+    if !Buf::current().ml().is_open() {
         return LineNr::ZERO;
     }
     // Start at lowest_marked: the last line a mark was found at, kept up
@@ -628,7 +659,7 @@ pub fn ml_firstmarked() -> LineNr {
 
 /// Clear every [`DB_MARKED`] bit.
 pub fn ml_clearmarked() {
-    if !Buf::current().b_ml.is_open() {
+    if !Buf::current().ml().is_open() {
         return; // nothing to do
     }
     let _ = clear_marks(false);
@@ -637,15 +668,15 @@ pub fn ml_clearmarked() {
 
 /// Take and reset the deleted-byte counters the buffer-update callbacks
 /// report: the bytes, codepoints and code units deleted since the last take.
-pub fn ml_flush_deleted_bytes(mut buffer: Buf) -> (size_t, size_t, size_t) {
+pub fn ml_flush_deleted_bytes(buffer: Buf) -> (size_t, size_t, size_t) {
     let taken = (
-        buffer.deleted_bytes,
-        buffer.deleted_codepoints,
-        buffer.deleted_codeunits,
+        buffer.deleted_bytes(),
+        buffer.deleted_codepoints(),
+        buffer.deleted_codeunits(),
     );
-    buffer.deleted_bytes = 0;
-    buffer.deleted_codepoints = 0;
-    buffer.deleted_codeunits = 0;
+    buffer.set_deleted_bytes(0);
+    buffer.set_deleted_codepoints(0);
+    buffer.set_deleted_codeunits(0);
     taken
 }
 
@@ -698,7 +729,7 @@ pub(crate) fn inc(pos: &mut Pos) -> Moved {
             };
         }
     }
-    if pos.lnum != Buf::current().b_ml.ml_line_count {
+    if pos.lnum != Buf::current().line_count() {
         // There is a next line.
         pos.col = ColNr::ZERO;
         pos.lnum += 1;

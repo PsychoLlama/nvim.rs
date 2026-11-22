@@ -172,7 +172,7 @@ fn printable(mut text: Vec<u8>) -> XString {
 pub(super) fn foldtext_cleanup(text: &mut Vec<u8>, from: usize) {
     // 'commentstring' split around its `%s`, with the padding trimmed; a copy
     // of the current buffer's value.
-    let cms = Buf::current().b_p_cms.get();
+    let cms = Buf::current().read().b_p_cms.get();
     let cms = &cms[skip::white(&cms)..];
     let mut cms_slen = trimmed_len(cms);
     let mut cms_end: Option<&[u8]> = None;

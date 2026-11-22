@@ -218,10 +218,10 @@ pub(crate) fn ins_ctrl_hat() {
     if map_to_exists_mode(b"", MODE_LANGMAP, false) {
         // `:lmap` mappings exist, so the key toggles their use.
         if STATE.get() & MODE_LANGMAP != 0 {
-            Buf::current().b_p_iminsert = B_IMODE_NONE;
+            Buf::current().set_b_p_iminsert(B_IMODE_NONE);
             STATE.set(STATE.get() & !MODE_LANGMAP);
         } else {
-            Buf::current().b_p_iminsert = B_IMODE_LMAP;
+            Buf::current().set_b_p_iminsert(B_IMODE_LMAP);
             STATE.set(STATE.get() | MODE_LANGMAP);
         }
     }
@@ -295,8 +295,9 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     // Remember the last Insert position in the `'^` mark (`RESET_FMARK`).
     if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
         let view = mark_view_make(Win::current(), Win::current().w_cursor);
-        let mut buf = Buf::current();
-        buf.b_last_insert = FileMark::fresh(Win::current().w_cursor, Some(buf.handle), view);
+        let buf = Buf::current();
+        let value = FileMark::fresh(Win::current().w_cursor, Some(buf.handle()), view);
+        buf.edit().b_last_insert = value;
     }
 
     // The cursor should end up on the last inserted character.  Not for

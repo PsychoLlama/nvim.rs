@@ -105,7 +105,7 @@ pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
             return Err(report(c"Invalid 'range': Expected 2-tuple of Integers"));
         };
         let rbuf = win.map(Win::buffer).or(buf).unwrap_or_else(Buf::current);
-        let line_count = int64_t::from(rbuf.b_ml.ml_line_count);
+        let line_count = int64_t::from(rbuf.line_count());
         // The range is clamped to the buffer, and `-1` means "to the end".
         let begin = begin_raw.min(line_count);
         let end = if end_raw == -1 {

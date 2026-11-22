@@ -103,7 +103,7 @@ fn at(line: &[u8], i: usize) -> u8 {
 pub fn do_modelines(flags: OptionSetFlags) {
     static ENTERED: GlobalCell<c_int> = GlobalCell::new(0);
 
-    if current_buf().b_p_ml == 0 {
+    if current_buf().b_p_ml() == 0 {
         return;
     }
     let mut nmlines = number_as_int(p_mls());
@@ -119,8 +119,8 @@ pub fn do_modelines(flags: OptionSetFlags) {
     let _entered = Depth::of(&ENTERED);
 
     let mut lnum: LineNr = LineNr::ONE;
-    while current_buf().b_p_ml != 0
-        && lnum <= current_buf().b_ml.ml_line_count
+    while current_buf().b_p_ml() != 0
+        && lnum <= current_buf().line_count()
         && lnum <= LineNr::new(nmlines)
     {
         if chk_modeline(lnum, flags).is_err() {
@@ -129,11 +129,11 @@ pub fn do_modelines(flags: OptionSetFlags) {
         lnum += 1;
     }
 
-    lnum = current_buf().b_ml.ml_line_count;
-    while current_buf().b_p_ml != 0
+    lnum = current_buf().line_count();
+    while current_buf().b_p_ml() != 0
         && lnum > LineNr::ZERO
         && lnum > LineNr::new(nmlines)
-        && lnum > current_buf().b_ml.ml_line_count - nmlines
+        && lnum > current_buf().line_count() - nmlines
     {
         if chk_modeline(lnum, flags).is_err() {
             nmlines = 0;

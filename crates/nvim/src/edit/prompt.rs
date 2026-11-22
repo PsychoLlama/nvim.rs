@@ -30,13 +30,14 @@ use core::ffi::c_int;
 use super::*;
 
 /// Give `buffer` the prompt `text`, releasing the one it had.
-pub(crate) fn set_buf_prompt_text(mut buffer: Buf, text: ThinCString) {
-    buffer.b_prompt_text = Some(text);
+pub(crate) fn set_buf_prompt_text(buffer: Buf, text: ThinCString) {
+    buffer.edit().b_prompt_text = Some(text);
 }
 
 /// The effective prompt for `buffer`, 'b:prompt_text' or `"% "`, copied.
 pub(crate) fn buf_prompt_text_owned(buffer: Buf) -> ThinCString {
     buffer
+        .read()
         .b_prompt_text
         .clone()
         .unwrap_or_else(|| ThinCString::from_cstr(c"% "))
@@ -58,14 +59,14 @@ pub(crate) fn init_prompt(cmdchar_todo: Key) {
     // The mark may name a line that no longer exists.  It is read and
     // written a field at a time rather than held: the calls below adjust
     // marks, this one included.
-    if start().lnum < LineNr::ONE || start().lnum > Buf::current().b_ml.ml_line_count {
+    if start().lnum < LineNr::ONE || start().lnum > Buf::current().line_count() {
         set_start_lnum(
             start()
                 .lnum
-                .min(Buf::current().b_ml.ml_line_count)
+                .min(Buf::current().line_count())
                 .max(LineNr::ONE),
         );
-        Buf::current().b_prompt_append_new_line = true;
+        Buf::current().set_b_prompt_append_new_line(true);
     }
 
     win.w_cursor.lnum = win.w_cursor.lnum.max(start().lnum);
@@ -88,17 +89,17 @@ pub(crate) fn init_prompt(cmdchar_todo: Key) {
         } else {
             // The line holds something else, so the prompt goes on a new
             // last line.
-            let lnum = Buf::current().b_ml.ml_line_count;
+            let lnum = Buf::current().line_count();
             let _ = ml_append_text(lnum, prompt);
             appended_lines_mark(lnum, 1);
-            set_start_lnum(Buf::current().b_ml.ml_line_count);
-            Buf::current().b_prompt_append_new_line = true;
+            set_start_lnum(Buf::current().line_count());
+            Buf::current().set_b_prompt_append_new_line(true);
             // Like submitting: the undo history belonged to the old
             // prompt.
             u_clearallandblockfree(Buf::current());
         }
         set_start_col(ColNr::new(prompt_len));
-        win.w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+        win.w_cursor.lnum = Buf::current().line_count();
         coladvance_win(win, MAXCOL);
     }
 
@@ -128,19 +129,19 @@ pub(crate) fn init_prompt(cmdchar_todo: Key) {
 /// Where the prompt's editable part begins.
 #[inline(always)]
 fn start() -> Pos {
-    Buf::current().b_prompt_start.mark
+    Buf::current().read().b_prompt_start.mark
 }
 
 /// Move that mark to line `lnum`.
 #[inline(always)]
 fn set_start_lnum(lnum: LineNr) {
-    Buf::current().b_prompt_start.mark.lnum = lnum;
+    Buf::current().edit().b_prompt_start.mark.lnum = lnum;
 }
 
 /// Move that mark to column `col`.
 #[inline(always)]
 fn set_start_col(col: ColNr) {
-    Buf::current().b_prompt_start.mark.col = col;
+    Buf::current().edit().b_prompt_start.mark.col = col;
 }
 
 /// Move `win`'s cursor to virtual column `vcol` of its line.

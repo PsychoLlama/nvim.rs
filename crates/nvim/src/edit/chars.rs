@@ -201,7 +201,7 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
     let virtcol =
         get_nolist_virtcol() + char2cells(if c.is_nul() { gchar_cursor() } else { c.code() });
 
-    if Buf::current().b_p_fex.first_byte() != 0
+    if Buf::current().read().b_p_fex.first_byte() != 0
         && flags & INSCHAR_NO_FEX == 0
         && (force_format != 0 || virtcol > ColNr::new(textwidth))
     {
@@ -239,7 +239,8 @@ fn end_pending_comment(c: Key) {
 
     let (middle_len, lead_end) = {
         let buffer = Buf::current();
-        let com = buffer.b_p_com.bytes();
+        let held = buffer.read();
+        let com = held.b_p_com.bytes();
         let before = |p: usize| p.checked_sub(1).map_or(0, |prev| com[prev]);
         let mut p = flags.offset();
         // Skip the middle-comment string.

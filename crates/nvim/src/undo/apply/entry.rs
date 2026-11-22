@@ -101,22 +101,23 @@ impl CursorPick {
 /// callbacks, and nothing of the store is borrowed across them. The header
 /// is looked up by its link again at every step after.
 pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
-    let mut buf = Buf::current();
-    let link = buf.b_u_curhead;
-    let Some(header) = buf.header_mut(link) else {
+    let buf = Buf::current();
+    let link = buf.b_u_curhead();
+    let Some(mut header) = buf.header_mut(link) else {
         return;
     };
     let old_flags = header.flags;
     let saved_cursor = header.cursor;
     let mut entries = core::mem::take(&mut header.entries);
     let getbot = header.getbot.take();
+    drop(header);
 
     // Autocommands must not see the undo structures: they are inconsistent
     // until the end.
     block_autocmds();
 
-    let new_flags = (if buf.b_changed != 0 { UH_CHANGED } else { 0 })
-        | (if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
+    let new_flags = (if buf.b_changed() != 0 { UH_CHANGED } else { 0 })
+        | (if buf.ml_flags().has(MlFlags::EMPTY) {
             UH_EMPTYBUF
         } else {
             0
@@ -126,13 +127,14 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     // The marks and visual area from before the move; they go into the header
     // at the end, swapped with the ones it was carrying.
-    drop_named_mark_extras(&mut buf.b_namedm);
-    let saved_marks = buf.b_namedm.each_ref().map(SavedMark::of);
-    let saved_visual = buf.b_visual;
-    buf.b_op_start.lnum = buf.b_ml.ml_line_count;
-    buf.b_op_start.col = ColNr::ZERO;
-    buf.b_op_end.lnum = LineNr::ZERO;
-    buf.b_op_end.col = ColNr::ZERO;
+    drop_named_mark_extras(&mut buf.edit().b_namedm);
+    let saved_marks = buf.read().b_namedm.each_ref().map(SavedMark::of);
+    let saved_visual = buf.b_visual();
+    let value = buf.line_count();
+    buf.edit().b_op_start.lnum = value;
+    buf.edit().b_op_start.col = ColNr::ZERO;
+    buf.edit().b_op_end.lnum = LineNr::ZERO;
+    buf.edit().b_op_end.col = ColNr::ZERO;
 
     let mut pick = CursorPick {
         line: MAXLNUM,
@@ -154,7 +156,7 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
             // Upstream had relinked the entries it applied into a list of
             // their own by now, and the header kept only the first of them
             // -- or all of them, when the first one was the bad one.
-            if let Some(header) = buf.header_mut(link) {
+            if let Some(mut header) = buf.header_mut(link) {
                 if applied == 0 {
                     header.entries = entries;
                     header.getbot = getbot;
@@ -173,16 +175,18 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     let getbot = getbot.map(|g| count - 1 - g);
 
     // Keep the '[ and '] marks inside the buffer.
-    let last_line = buf.b_ml.ml_line_count;
-    buf.b_op_start.lnum = buf.b_op_start.lnum.min(last_line);
-    buf.b_op_end.lnum = buf.b_op_end.lnum.min(last_line);
+    let last_line = buf.line_count();
+    let value = buf.b_op_start().lnum.min(last_line);
+    buf.edit().b_op_start.lnum = value;
+    let value = buf.b_op_end().lnum.min(last_line);
+    buf.edit().b_op_end.lnum = value;
 
     // Undo replays the header's extmark moves backwards; redo replays them in
     // the order they were recorded. The list is taken out for the replay,
     // which records nothing (`EXTMARK_NO_UNDO`), and put back after it.
     let marks = buf
         .header_mut(link)
-        .map(|uh| core::mem::take(&mut uh.extmarks))
+        .map(|mut uh| core::mem::take(&mut uh.extmarks))
         .unwrap_or_default();
     if undo {
         marks
@@ -195,7 +199,7 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
             .for_each(|mark| extmark_apply_undo(mark, false));
     }
     let reload = old_flags & UH_RELOAD != 0;
-    if let Some(header) = buf.header_mut(link) {
+    if let Some(mut header) = buf.header_mut(link) {
         let mut marks = marks;
         marks.append(&mut header.extmarks);
         header.extmarks = marks;
@@ -211,13 +215,13 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     win.w_cursor = pick.pos;
     check_cursor_lnum(win);
 
-    if let Some(header) = buf.header_mut(link) {
+    if let Some(mut header) = buf.header_mut(link) {
         header.entries = entries;
         header.getbot = getbot;
         header.flags = new_flags;
     }
     if old_flags & UH_EMPTYBUF != 0 && buf_is_empty(buf) {
-        buf.b_ml.ml_flags |= MlFlags::EMPTY;
+        buf.set_ml_flags(buf.ml_flags() | MlFlags::EMPTY);
     }
     if old_flags & UH_CHANGED != 0 {
         changed(buf);
@@ -245,17 +249,18 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
         unblock_autocmds();
         return;
     };
-    buf.b_u_seq_cur = if undo {
+    let value = if undo {
         buf.header(next).map_or(0, |uh| uh.seq)
     } else {
         seq
     };
+    buf.edit().b_u_seq_cur = value;
     // Where ":earlier 1f" and ":later 1f" resume from.
     if save_nr != 0 {
-        buf.b_u_save_nr_cur = if undo { save_nr - 1 } else { save_nr };
+        buf.set_b_u_save_nr_cur(if undo { save_nr - 1 } else { save_nr });
     }
     // Several changes can share a timestamp; the one that moved wins.
-    buf.b_u_time_cur = time;
+    buf.set_b_u_time_cur(time);
     unblock_autocmds();
 }
 
@@ -264,7 +269,7 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
 /// Answers `false` — having changed nothing — when the entry's line numbers
 /// do not fit the buffer. The entry is the caller's own, out of its header.
 fn apply_entry(
-    mut buffer: Buf,
+    buffer: Buf,
     saved_cursor: Pos,
     entry: &mut UndoEntry,
     last: bool,
@@ -276,11 +281,11 @@ fn apply_entry(
     // writes it whenever the change ran past the last line — and it is
     // resolved here, against the buffer as it stands now.
     let bot = if saved_bot == LineNr::ZERO {
-        buffer.b_ml.ml_line_count + 1
+        buffer.line_count() + 1
     } else {
         saved_bot
     };
-    if top > buffer.b_ml.ml_line_count || top >= bot || bot > buffer.b_ml.ml_line_count + 1 {
+    if top > buffer.line_count() || top >= bot || bot > buffer.line_count() + 1 {
         return false;
     }
     let oldsize = bot - top - 1; // lines the entry covers now
@@ -294,7 +299,7 @@ fn apply_entry(
         taken.push(line_copy(Buf::current(), top + 1 + i));
         // Deleting the buffer's last line leaves a dummy empty one behind,
         // which the insert below has to replace.
-        if buffer.b_ml.ml_line_count == LineNr::ONE {
+        if buffer.line_count() == LineNr::ONE {
             emptied = true;
         }
         let _ = ml_delete(top + 1 + i);
@@ -316,11 +321,11 @@ fn apply_entry(
     if oldsize != newsize {
         let delta = newsize - oldsize;
         mark_adjust(top + 1, top + oldsize, MAXLNUM.get(), delta, EXTMARK_NOOP);
-        if buffer.b_op_start.lnum > top + oldsize {
-            buffer.b_op_start.lnum += delta;
+        if buffer.b_op_start().lnum > top + oldsize {
+            buffer.edit().b_op_start.lnum += delta;
         }
-        if buffer.b_op_end.lnum > top + oldsize {
-            buffer.b_op_end.lnum += delta;
+        if buffer.b_op_end().lnum > top + oldsize {
+            buffer.edit().b_op_end.lnum += delta;
         }
     }
     if oldsize > 0 || newsize > 0 {
@@ -334,17 +339,18 @@ fn apply_entry(
         );
         // The next line's start may have gained or lost a SpellCap, so
         // schedule it for redrawing just in case.
-        if spell_check_window(Win::current()) && bot <= buffer.b_ml.ml_line_count {
+        if spell_check_window(Win::current()) && bot <= buffer.line_count() {
             redraw_win_line(Win::current(), bot);
         }
     }
 
     // The '[ mark, then the '] mark.
-    buffer.b_op_start.lnum = buffer.b_op_start.lnum.min(top + 1);
-    if newsize == 0 && top + 1 > buffer.b_op_end.lnum {
-        buffer.b_op_end.lnum = top + 1;
-    } else if top + newsize > buffer.b_op_end.lnum {
-        buffer.b_op_end.lnum = top + newsize;
+    let value = buffer.b_op_start().lnum.min(top + 1);
+    buffer.edit().b_op_start.lnum = value;
+    if newsize == 0 && top + 1 > buffer.b_op_end().lnum {
+        buffer.edit().b_op_end.lnum = top + 1;
+    } else if top + newsize > buffer.b_op_end().lnum {
+        buffer.edit().b_op_end.lnum = top + newsize;
     }
     U_NEWCOUNT.set(U_NEWCOUNT.get() + newsize);
     U_OLDCOUNT.set(U_OLDCOUNT.get() + oldsize);
@@ -359,12 +365,13 @@ fn apply_entry(
 /// carrying, and the header the ones the buffer had, so that it can put them
 /// back on the next move.
 fn swap_marks(
-    mut buffer: Buf,
+    buffer: Buf,
     link: UndoLink,
     saved: &[SavedMark; NMARKS as usize],
     saved_visual: VisualInfo,
 ) {
-    let b: &mut Buffer = &mut buffer;
+    let mut edit = buffer.edit();
+    let b: &mut Buffer = &mut edit;
     let Some(header) = b
         .b_u_store
         .as_deref_mut()
@@ -399,7 +406,7 @@ fn place_cursor(buffer: Buf, mut win: Win, cursor: Pos, cursor_vcol: ColNr) {
     if win.w_cursor.lnum > LineNr::ONE && cursor.lnum == win.w_cursor.lnum - 1 {
         win.w_cursor.lnum -= 1;
     }
-    if win.w_cursor.lnum > buffer.b_ml.ml_line_count {
+    if win.w_cursor.lnum > buffer.line_count() {
         // Past the end, which happens after undoing lines added at the end of
         // the file. `check_cursor` below moves it to the last line, so all
         // that is left is to put it in the first column.

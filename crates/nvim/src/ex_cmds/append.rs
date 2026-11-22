@@ -57,7 +57,7 @@ pub fn ex_append(excmd: &mut ExArg) {
     let (cmdidx, forceit, line2) = (excmd.cmdidx, excmd.forceit, excmd.line2);
     let mut lnum = line2;
     let mut indent = 0;
-    let mut empty = Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY);
+    let mut empty = Buf::current().ml_flags().has(MlFlags::EMPTY);
 
     // The ! flag toggles autoindent.
     if forceit {
@@ -65,7 +65,7 @@ pub fn ex_append(excmd: &mut ExArg) {
     }
 
     // First autoindent comes from the line we start on.
-    if cmdidx != CmdIdx::change && Buf::current().b_p_ai != 0 && lnum > LineNr::ZERO {
+    if cmdidx != CmdIdx::change && Buf::current().b_p_ai() != 0 && lnum > LineNr::ZERO {
         APPEND_INDENT.set(get_indent_lnum(lnum));
     }
 
@@ -79,14 +79,14 @@ pub fn ex_append(excmd: &mut ExArg) {
 
     // Behave like in Insert mode.
     STATE.set(MODE_INSERT);
-    if Buf::current().b_p_iminsert == B_IMODE_LMAP {
+    if Buf::current().b_p_iminsert() == B_IMODE_LMAP {
         STATE.set(STATE.get() | MODE_LANGMAP);
     }
 
     loop {
         MSG_SCROLL.set(1);
         NEED_WAIT_RETURN.set(false);
-        if Buf::current().b_p_ai != 0 {
+        if Buf::current().b_p_ai() != 0 {
             if APPEND_INDENT.get() >= 0 {
                 indent = APPEND_INDENT.replace(-1);
             } else if lnum > LineNr::ZERO {
@@ -156,7 +156,7 @@ pub fn ex_append(excmd: &mut ExArg) {
     // eap->line2 pointed to the end of the buffer and nothing was appended);
     // "end" is set to lnum when something has been appended, otherwise
     // it is the same as "start"  -- Acevedo
-    let mut start = Buf::current().b_ml.ml_line_count;
+    let mut start = Buf::current().line_count();
     if line2 < start {
         start = line2 + 1;
     }
@@ -176,7 +176,7 @@ pub fn ex_append(excmd: &mut ExArg) {
 
 /// Flip 'autoindent' for the duration of a `!` command.
 fn toggle_autoindent() {
-    Buf::current().b_p_ai = c_int::from(Buf::current().b_p_ai == 0);
+    Buf::current().set_b_p_ai(c_int::from(Buf::current().b_p_ai() == 0));
 }
 
 /// The next line for `:append` to insert.
@@ -234,7 +234,7 @@ pub fn ex_change(excmd: &mut ExArg) {
     }
 
     // The ! flag toggles autoindent.
-    let autoindent = Buf::current().b_p_ai;
+    let autoindent = Buf::current().b_p_ai();
     if if forceit {
         autoindent == 0
     } else {
@@ -245,7 +245,7 @@ pub fn ex_change(excmd: &mut ExArg) {
 
     let mut lnum = line2;
     while lnum >= line1 {
-        if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
+        if Buf::current().ml_flags().has(MlFlags::EMPTY) {
             // Nothing left to delete.
             break;
         }
@@ -282,7 +282,7 @@ pub fn ex_z(excmd: &mut ExArg) {
         // `atol`, which saturates.
         bigness = crate::charset::skip::decimal(&text[at..]).0;
         // `bigness` could be < 0 if atol() overflowed.
-        let cap = int64_t::from(Buf::current().b_ml.ml_line_count) * 2;
+        let cap = int64_t::from(Buf::current().line_count()) * 2;
         if bigness > cap || bigness < 0 {
             bigness = cap;
         }
@@ -329,7 +329,7 @@ pub fn ex_z(excmd: &mut ExArg) {
         }
     };
 
-    let last = Buf::current().b_ml.ml_line_count;
+    let last = Buf::current().line_count();
     start = start.max(LineNr::ONE);
     end = end.min(last);
     curs = curs.max(LineNr::ONE).min(last);

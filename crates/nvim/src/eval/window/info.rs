@@ -43,7 +43,7 @@ fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> DictRef {
     nr(c"leftcol", VarNumber::from(window.w_leftcol));
     nr(c"winbar", VarNumber::from(window.w_winbar_height));
     nr(c"width", VarNumber::from(window.w_view_width));
-    nr(c"bufnr", VarNumber::from(buf.handle));
+    nr(c"bufnr", VarNumber::from(buf.handle()));
     nr(c"wincol", VarNumber::from(window.w_wincol + 1));
     nr(c"textoff", VarNumber::from(textoff));
     nr(c"terminal", VarNumber::from(terminal));

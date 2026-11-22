@@ -154,7 +154,7 @@ pub(crate) fn find_match_paren_after_brace(ind_maxparen: c_int) -> Option<Pos> {
 /// paren the option was meant to exclude.  Only a `startpos` below the cursor
 /// and within half the budget shortens it.
 pub(crate) fn corr_ind_maxparen(startpos: &Pos) -> c_int {
-    let maxparen = Buf::current().b_ind_maxparen;
+    let maxparen = Buf::current().b_ind_maxparen();
     let n = startpos.lnum - Win::current().w_cursor.lnum;
     if n > 0 && n < maxparen / 2 {
         maxparen - n

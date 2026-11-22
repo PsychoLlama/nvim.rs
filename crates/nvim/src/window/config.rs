@@ -434,7 +434,7 @@ pub fn check_split_disallowed_err(window: Win) -> Result<(), Error> {
             c"E242: Can't split a window while closing another",
         ));
     }
-    if window.buffer().b_locked_split != 0 {
+    if window.buffer().b_locked_split() != 0 {
         return Err(Error::exception(E_CANNOT_SPLIT_WINDOW_WHEN_CLOSING_BUFFER));
     }
     Ok(())

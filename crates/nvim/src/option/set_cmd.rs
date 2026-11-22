@@ -482,7 +482,8 @@ fn show_one(opt_idx: OptIndex, opt_flags: OptionSetFlags, varp: OptSlot, did_sho
         last_set_msg(Win::current().w_onebuf_opt.wo_script_ctx[at]);
     } else if option_has_scope(opt_idx, OPT_SCOPE_BUF) {
         let at = option_scope_idx(opt_idx, OPT_SCOPE_BUF).cast_unsigned();
-        last_set_msg(Buf::current().b_p_script_ctx[at]);
+        let arg = Buf::current().read().b_p_script_ctx[at];
+        last_set_msg(arg);
     }
 }
 

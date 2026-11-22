@@ -533,10 +533,10 @@ pub(crate) fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: ShRedra
 
 /// Accounts for a decoration that has just been placed on rows `row..=row2`.
 pub fn buf_put_decor(buffer: Buf, decor: DecorInline, row: c_int, mut row2: c_int) {
-    if !decor.is_ext() || LineNr::new(row) >= buffer.b_ml.ml_line_count {
+    if !decor.is_ext() || LineNr::new(row) >= buffer.line_count() {
         return;
     }
-    row2 = (buffer.b_ml.ml_line_count - 1).min(LineNr::new(row2)).get();
+    row2 = (buffer.line_count() - 1).min(LineNr::new(row2)).get();
     for idx in sh_chain(decor) {
         buf_put_decor_sh(buffer, idx, row, row2);
     }
@@ -553,8 +553,8 @@ pub fn buf_decor_remove(
     free: bool,
 ) {
     decor_redraw(buffer, row1, row2, col1, decor);
-    if decor.is_ext() && LineNr::new(row1) < buffer.b_ml.ml_line_count {
-        row2 = (buffer.b_ml.ml_line_count - 1).min(LineNr::new(row2)).get();
+    if decor.is_ext() && LineNr::new(row1) < buffer.line_count() {
+        row2 = (buffer.line_count() - 1).min(LineNr::new(row2)).get();
         for idx in sh_chain(decor) {
             buf_remove_decor_sh(buffer, row1, row2, idx);
         }

@@ -41,7 +41,7 @@ const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
 /// The value can be a function name, `function(<name>)`, `funcref(<name>)`
 /// or a lambda. Answers NULL, or the error message for an invalid one.
 pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
-    let mut buf = args.os_buf;
+    let buf = args.os_buf;
     let value = args
         .os_newval
         .as_string()
@@ -51,7 +51,7 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
     // expression, and evaluating it may set the option again.
     let cb = callback_from_option(value);
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        cb.map(|cb| install_callback(&mut buf.b_tfu_cb, cb))
+        cb.map(|cb| install_callback(&mut buf.edit().b_tfu_cb, cb))
     } else {
         let retval = cb.map(|cb| GLOBAL_TAGFUNC.with_mut(|slot| install_callback(slot, cb)));
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
@@ -76,11 +76,11 @@ pub fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
 ///
 /// Safe: the buffer is live by [`Buf`]'s promise, and the global callback
 /// lives in a static.
-pub fn set_buflocal_tfu_callback(mut buffer: Buf) {
-    callback_free(&mut buffer.b_tfu_cb);
+pub fn set_buflocal_tfu_callback(buffer: Buf) {
+    callback_free(&mut buffer.edit().b_tfu_cb);
     GLOBAL_TAGFUNC.with(|global| {
         if global.is_set() {
-            callback_copy(&mut buffer.b_tfu_cb, global);
+            callback_copy(&mut buffer.edit().b_tfu_cb, global);
         }
     });
 }
@@ -105,7 +105,7 @@ pub(crate) fn find_tagfunc_tags(
     flags: c_int,
     buf_ffname: Option<&CStr>,
 ) -> TagfuncAnswer {
-    if Buf::current().b_p_tfu.first_byte() == 0 || !Buf::current().b_tfu_cb.is_set() {
+    if Buf::current().read().b_p_tfu.first_byte() == 0 || !Buf::current().read().b_tfu_cb.is_set() {
         return TagfuncAnswer::Unusable;
     }
 
@@ -154,7 +154,7 @@ pub(crate) fn find_tagfunc_tags(
     let mut rettv = TV_INITIAL_VALUE;
     let save_pos = Win::current().w_cursor;
     // A copy: the function may set 'tagfunc' again.
-    let mut callback = Buf::current().b_tfu_cb.duplicate();
+    let mut callback = Buf::current().read().b_tfu_cb.duplicate();
     let called = callback_call(&callback, args.args(), &mut rettv) == Ok(true);
     callback_free(&mut callback);
     // The function may have moved the cursor, or left it somewhere

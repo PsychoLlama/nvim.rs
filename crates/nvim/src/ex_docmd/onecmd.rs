@@ -686,9 +686,9 @@ fn refuses_here(excmd: &ExArg) -> Result<(), CmdError> {
         return refuse(E_SANDBOX);
     }
     // `:put` is allowed in a terminal buffer, which is not 'modifiable'.
-    if Buf::current().b_p_ma == 0
+    if Buf::current().b_p_ma() == 0
         && excmd.argt.has(ExArgt::MODIFY)
-        && !(!Buf::current().terminal.is_null()
+        && !(!Buf::current().terminal().is_null()
             && (excmd.cmdidx == CmdIdx::put || excmd.cmdidx == CmdIdx::iput))
     {
         return refuse(E_MODIFIABLE);
@@ -722,7 +722,7 @@ pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Result<(), CmdError
         correct_range(excmd);
         ex_print(excmd);
     } else if excmd.addr_count != 0 {
-        excmd.line2 = excmd.line2.min(Buf::current().b_ml.ml_line_count);
+        excmd.line2 = excmd.line2.min(Buf::current().line_count());
         if excmd.line2 < LineNr::ZERO {
             return Err(CmdError::Message(ex_msg(E_INVRANGE)));
         } else {

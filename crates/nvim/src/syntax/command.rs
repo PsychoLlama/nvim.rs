@@ -50,14 +50,14 @@ pub(crate) fn syn_cmd_conceal(args: &mut ExArg, _syncing: c_int) {
     }
     let (word, _) = word_at(args.line.arg());
     if word.is_empty() {
-        let state = if cur_syn_block().b_syn_conceal != 0 {
+        let state = if cur_syn_block().read().b_syn_conceal != 0 {
             c"syntax conceal on"
         } else {
             c"syntax conceal off"
         };
         msg(state, 0);
     } else if let Some(i) = word_index(word, &[c"on", c"off"]) {
-        cur_syn_block().b_syn_conceal = if i == 0 { 1 } else { 0 };
+        cur_syn_block().edit().b_syn_conceal = if i == 0 { 1 } else { 0 };
     } else {
         let arg = msg_bytes(args.line.arg());
         semsg!("E390: Illegal argument: {arg}");
@@ -71,14 +71,14 @@ pub(crate) fn syn_cmd_case(args: &mut ExArg, _syncing: c_int) {
     }
     let (word, _) = word_at(args.line.arg());
     if word.is_empty() {
-        let state = if cur_syn_block().b_syn_ic != 0 {
+        let state = if cur_syn_block().read().b_syn_ic != 0 {
             c"syntax case ignore"
         } else {
             c"syntax case match"
         };
         msg(state, 0);
     } else if let Some(i) = word_index(word, &[c"match", c"ignore"]) {
-        cur_syn_block().b_syn_ic = if i == 0 { 0 } else { 1 };
+        cur_syn_block().edit().b_syn_ic = if i == 0 { 0 } else { 1 };
     } else {
         let arg = msg_bytes(args.line.arg());
         semsg!("E390: Illegal argument: {arg}");
@@ -93,17 +93,17 @@ pub(crate) fn syn_cmd_foldlevel(args: &mut ExArg, _syncing: c_int) {
     let (word, arg_end) = word_at(args.line.arg());
     if word.is_empty() {
         // A block whose foldlevel is neither of the two reports nothing.
-        if cur_syn_block().b_syn_foldlevel == SYNFLD_START {
+        if cur_syn_block().read().b_syn_foldlevel == SYNFLD_START {
             msg(c"syntax foldlevel start", 0);
-        } else if cur_syn_block().b_syn_foldlevel == SYNFLD_MINIMUM {
+        } else if cur_syn_block().read().b_syn_foldlevel == SYNFLD_MINIMUM {
             msg(c"syntax foldlevel minimum", 0);
         }
         return;
     }
 
     match word_index(word, &[c"start", c"minimum"]) {
-        Some(0) => cur_syn_block().b_syn_foldlevel = SYNFLD_START,
-        Some(_) => cur_syn_block().b_syn_foldlevel = SYNFLD_MINIMUM,
+        Some(0) => cur_syn_block().edit().b_syn_foldlevel = SYNFLD_START,
+        Some(_) => cur_syn_block().edit().b_syn_foldlevel = SYNFLD_MINIMUM,
         None => {
             let arg = msg_bytes(args.line.arg());
             semsg!("E390: Illegal argument: {arg}");
@@ -126,14 +126,14 @@ pub(crate) fn syn_cmd_spell(args: &mut ExArg, _syncing: c_int) {
     }
     let (word, _) = word_at(args.line.arg());
     if word.is_empty() {
-        let state = match cur_syn_block().b_syn_spell {
+        let state = match cur_syn_block().read().b_syn_spell {
             SYNSPL_TOP => c"syntax spell toplevel",
             SYNSPL_NOTOP => c"syntax spell notoplevel",
             _ => c"syntax spell default",
         };
         msg(state, 0);
     } else if let Some(i) = word_index(word, &[c"toplevel", c"notoplevel", c"default"]) {
-        cur_syn_block().b_syn_spell = match i {
+        cur_syn_block().edit().b_syn_spell = match i {
             0 => SYNSPL_TOP,
             1 => SYNSPL_NOTOP,
             _ => SYNSPL_DEFAULT,
@@ -160,16 +160,16 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
     let at = args.line.skip_white(args.line.arg);
     if args.line.byte_at(at) == 0 {
         msg_str(c"\n");
-        if !cur_syn_block().b_syn_isk.is_unset() {
+        if !cur_syn_block().read().b_syn_isk.is_unset() {
             msg_str(c"syntax iskeyword ");
-            let value = cur_syn_block().b_syn_isk.clone().unwrap_or_default();
+            let value = cur_syn_block().read().b_syn_isk.clone().unwrap_or_default();
             msg_display(value.as_cstr(), 0, false);
         } else {
             msg_display(gettext(c"syntax iskeyword not set"), 0, false);
         }
     } else if args.line.slice_at(at, 5).eq_ignore_ascii_case(b"clear") {
-        cur_syn_block().b_syn_chartab = buf_chartab();
-        cur_syn_block().b_syn_isk = None;
+        cur_syn_block().edit().b_syn_chartab = buf_chartab();
+        cur_syn_block().edit().b_syn_isk = None;
     } else {
         // Run the value through `'iskeyword'`'s own parser on the current
         // buffer and keep the table it produces, putting the buffer's own
@@ -177,13 +177,14 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
         // from the buffer's option into the syntax block's own copy.
         let saved = buf_chartab();
         let value = XString::from_cstr(args.line.cstr_from(at));
-        let save_isk = Buf::current().b_p_isk.replace(value);
+        let save_isk = Buf::current().edit().b_p_isk.replace(value);
 
         buf_init_chartab(Buf::current(), false);
-        cur_syn_block().b_syn_chartab = buf_chartab();
+        cur_syn_block().edit().b_syn_chartab = buf_chartab();
         set_buf_chartab(saved);
-        cur_syn_block().b_syn_isk = Buf::current().b_p_isk.take();
-        Buf::current().b_p_isk = save_isk;
+        let value = Buf::current().edit().b_p_isk.take();
+        cur_syn_block().edit().b_syn_isk = value;
+        Buf::current().edit().b_p_isk = save_isk;
     }
     redraw_later(Win::current(), UPD_NOT_VALID);
 }
@@ -191,13 +192,13 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
 /// The current buffer's character table, as the 32 bytes a syntax block
 /// stores it in. The buffer declares it as four `uint64_t`s.
 fn buf_chartab() -> [uint8_t; 32] {
-    let words = Buf::current().b_chartab;
+    let words = Buf::current().b_chartab();
     ::core::array::from_fn(|i| words[i / 8].to_ne_bytes()[i % 8])
 }
 
 /// Put `table` back as the current buffer's character table.
 fn set_buf_chartab(table: [uint8_t; 32]) {
-    Buf::current().b_chartab = ::core::array::from_fn(|i| {
+    Buf::current().edit().b_chartab = ::core::array::from_fn(|i| {
         uint64_t::from_ne_bytes(::core::array::from_fn(|j| table[i * 8 + j]))
     });
 }
@@ -344,10 +345,11 @@ pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
     let buffer = Buf::current();
+    let arg = buffer.read().name.shown().map(XString::from_cstr);
     let _ = apply_autocmds_exarg(
         AutoEvent::Syntax,
         Some(XString::from_bytes(cstr::until_nul(excmd.line.arg()))),
-        buffer.name.shown().map(XString::from_cstr),
+        arg,
         true,
         Some(buffer),
         None,

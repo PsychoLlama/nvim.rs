@@ -125,7 +125,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     // Looked up before the split, and read after it: upstream does the same,
     // so an autocommand that wipes the quickfix buffer during `win_split`
     // leaves this naming a buffer that is gone either way.
-    let qf_buf = qf_find_buf(qi).map(|buf| buf.handle);
+    let qf_buf = qf_find_buf(qi).map(|buf| buf.handle());
     // The current window becomes the previous window afterwards.
     let win = Win::current().id();
 
@@ -165,7 +165,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
             if edit_buffer_number(None, LineNr::ONE, hide, oldwin).is_err() {
                 return false;
             }
-            qi.bufnr = Some(Buf::current().handle);
+            qi.bufnr = Some(Buf::current().handle());
         }
     }
 
@@ -332,7 +332,7 @@ pub fn ex_cbottom(excmd: &mut ExArg) {
         return;
     };
     if let Some(win) = qf_find_win(qi) {
-        let last = win.buffer().b_ml.ml_line_count;
+        let last = win.buffer().line_count();
         if win.w_cursor.lnum != last {
             win_goto_line(win, last);
         }
@@ -360,7 +360,7 @@ pub(crate) fn qf_win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
     let Some(mut win) = qf_find_win(qi) else {
         return false;
     };
-    if LineNr::new(qf_index) <= win.buffer().b_ml.ml_line_count && old_qf_index != qf_index {
+    if LineNr::new(qf_index) <= win.buffer().line_count() && old_qf_index != qf_index {
         // Both the old and the new line need redrawing.
         win.w_redraw_top = LineNr::new(old_qf_index.min(qf_index));
         win.w_redraw_bot = LineNr::new(old_qf_index.max(qf_index));

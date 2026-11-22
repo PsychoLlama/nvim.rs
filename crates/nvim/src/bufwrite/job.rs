@@ -64,7 +64,7 @@ fn write_encoding(buffer: Buf, excmd: Option<&ExArg>) -> XString {
     match excmd.and_then(|command| Some((command, command.line.cmd + command.force_enc?))) {
         // `force_enc` is an offset into the command's line.
         Some((command, at)) => canonize(command.line.rest_of(at)),
-        None => XString::from_bytes(buffer.b_p_fenc.as_deref().unwrap_or_default()),
+        None => XString::from_bytes(buffer.read().b_p_fenc.as_deref().unwrap_or_default()),
     }
 }
 
@@ -166,7 +166,7 @@ impl WriteJob {
         prev_got_int: &mut bool,
     ) -> Result<(), WriteError> {
         let req = self.mode.req;
-        let mut buf = self.buf;
+        let buf = self.buf;
         // For systems that support ACL: take the original's.
         if !target.newfile {
             self.acl = os_get_acl(fname);
@@ -187,7 +187,7 @@ impl WriteJob {
         GOT_INT.set(false);
         // Mark the buffer as being saved, to suppress changed-buffer
         // warnings.
-        buf.b_saving = true;
+        buf.set_b_saving(true);
 
         // Back up when the file exists and 'writebackup', 'backup' or
         // 'patchmode' asks for it; appending only backs up for 'patchmode'.
@@ -223,13 +223,13 @@ impl WriteJob {
         // With ":w!" over the current file, 'readonly' makes no sense; reset
         // it unless 'cpoptions' contains "Z".
         if req.forceit && self.mode.overwriting && !cpo_has(CpoFlag::KEEPRO) {
-            buf.b_p_ro = 0;
+            buf.set_b_p_ro(0);
             NEED_MAKETITLE.set(true); // set the window title later
             status_redraw_all(); // redraw status lines later
         }
 
-        self.end = self.end.min(buf.b_ml.ml_line_count);
-        if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
+        self.end = self.end.min(buf.line_count());
+        if buf.ml_flags().has(MlFlags::EMPTY) {
             self.start = self.end + 1;
         }
         Ok(())
@@ -256,8 +256,8 @@ impl WriteJob {
             && self.mode.overwriting
             && !(EXITING.get() && self.backup.path.is_some())
         {
-            let fsync = if self.buf.b_p_fs >= 0 {
-                self.buf.b_p_fs != 0
+            let fsync = if self.buf.b_p_fs() >= 0 {
+                self.buf.b_p_fs() != 0
             } else {
                 p_fs()
             };
@@ -430,12 +430,12 @@ impl WriteJob {
             // use "++bin", "++nobin" or 'binary'
             let write_bin = excmd
                 .and_then(|command| command.force_bin)
-                .unwrap_or(buf.b_p_bin != 0);
+                .unwrap_or(buf.b_p_bin() != 0);
 
             let mut bom_chars = 0;
             // Skip the BOM when appending to a file that already existed: it
             // only means anything at the start.
-            if buf.b_p_bomb != 0
+            if buf.b_p_bomb() != 0
                 && !write_bin
                 && (!req.append || target.perm < 0)
                 && self.writer.stage_bom(fenc.to_bytes()) > 0
@@ -451,7 +451,7 @@ impl WriteJob {
                 }
             }
 
-            self.write_undo_file = buf.b_p_udf != 0
+            self.write_undo_file = buf.b_p_udf() != 0
                 && self.mode.overwriting
                 && !req.append
                 && !req.filtering
@@ -490,7 +490,7 @@ impl WriteJob {
         fname: &CStr,
         (written, notes): (Written, WriteNotes),
     ) {
-        let (mut buf, req) = (self.buf, self.mode.req);
+        let (buf, req) = (self.buf, self.mode.req);
         NO_WAIT_RETURN.set(NO_WAIT_RETURN.get() - 1); // may wait now
 
         if !req.filtering {
@@ -507,10 +507,10 @@ impl WriteJob {
         {
             unchanged(buf, true, false);
             let changedtick = buf_get_changedtick(buf);
-            if buf.b_last_changedtick + 1 == changedtick {
+            if buf.b_last_changedtick() + 1 == changedtick {
                 // b:changedtick may have been incremented in unchanged(), but
                 // that must not fire TextChanged.
-                buf.b_last_changedtick = changedtick;
+                buf.set_b_last_changedtick(changedtick);
             }
             u_unchanged(buf);
             u_update_save_nr(buf);
@@ -521,9 +521,9 @@ impl WriteJob {
         if self.mode.overwriting {
             ml_timestamp(buf);
             if req.append {
-                buf.b_flags.clear(BufFlags::NEW);
+                buf.edit().b_flags.clear(BufFlags::NEW);
             } else {
-                buf.b_flags.clear(BufFlags::WRITE_MASK);
+                buf.edit().b_flags.clear(BufFlags::WRITE_MASK);
             }
         }
 

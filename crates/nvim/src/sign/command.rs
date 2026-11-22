@@ -72,7 +72,7 @@ pub(crate) fn sign_list_placed(rbuf: Option<Buf>, group: Option<&[u8]>) {
         }
         if buf_has_signs(cbuf) {
             msg_put_ascii(b'\n');
-            let lbuf = msg_buf!(c"Signs for %s:", cbuf.name.shown());
+            let lbuf = msg_buf!(c"Signs for %s:", cbuf.read().name.shown());
             msg_bytes(&lbuf, HLF_D, false);
         }
 

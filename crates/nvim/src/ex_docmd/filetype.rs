@@ -189,7 +189,7 @@ pub fn filetype_maybe_enable() {
 /// is spelled by leaving `b_did_filetype` clear so that a later
 /// `:setfiletype` still applies.
 pub(crate) fn ex_setfiletype(excmd: &mut ExArg) {
-    if Buf::current().b_did_filetype {
+    if Buf::current().b_did_filetype() {
         return;
     }
     let fallback = excmd.line.starts_with(excmd.line.arg, b"FALLBACK ");
@@ -200,7 +200,7 @@ pub(crate) fn ex_setfiletype(excmd: &mut ExArg) {
         OptionSetFlags::LOCAL,
     );
     if fallback {
-        Buf::current().b_did_filetype = false;
+        Buf::current().set_b_did_filetype(false);
     }
 }
 

@@ -21,6 +21,7 @@
 use crate::types::Handle;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
+use std::ffi::CString;
 
 use super::*;
 use crate::arglist::check_arg_idx;
@@ -49,7 +50,7 @@ fn current_win() -> Win {
 /// it.
 pub fn buflist_name_nr(fnum: Option<Handle>) -> Option<(Buf, LineNr)> {
     let buf = find_buf(fnum)?;
-    if buf.name.is_unnamed() {
+    if buf.read().name.is_unnamed() {
         return None;
     }
     Some((buf, buflist_findlnum(buf)))
@@ -59,6 +60,11 @@ pub fn buflist_name_nr(fnum: Option<Handle>) -> Option<(Buf, LineNr)> {
 // Setting one
 
 impl Buf {
+    /// The buffer's full file name, copied; `None` for an unnamed buffer.
+    pub fn full_name(self) -> Option<CString> {
+        self.read().name.full().map(CStr::to_owned)
+    }
+
     /// Give `self` the file name `ffname_arg` (short form `sfname_arg`).
     ///
     /// Fails, with `message`, when another *loaded* buffer already has the name;
@@ -72,21 +78,21 @@ impl Buf {
         sfname_arg: Option<&CStr>,
         message: bool,
     ) -> Result<(), Failed> {
-        let mut b = self;
+        let b = self;
         let mut file_id = None;
 
         match fname_expand(ffname_arg.filter(|name| !name.is_empty()), sfname_arg) {
             None => {
                 // Removing the name. Upstream's three lines here are the
                 // `b_sfname != b_ffname` dance; the name owns its blocks now.
-                b.name.clear();
+                b.edit().name.clear();
             }
             Some((ffname, sfname)) => {
                 // If the file name is already used in another buffer:
                 // - if the buffer is loaded, fail
                 // - if the buffer is not loaded, delete it from the list
                 file_id = crate::os::fs::file_id(ffname.as_cstr());
-                let obuf = if b.b_flags.has(BufFlags::DUMMY) {
+                let obuf = if b.b_flags().has(BufFlags::DUMMY) {
                     None
                 } else {
                     buflist_findname_file_id(ffname.as_cstr(), file_id.as_ref())
@@ -95,7 +101,7 @@ impl Buf {
                     // During startup a window may use a buffer that is not
                     // loaded yet.
                     let in_use = tab_windows().any(|win| win.w_buffer == o);
-                    if o.b_ml.ml_mfp.is_some() || in_use {
+                    if o.ml().ml_mfp.is_some() || in_use {
                         // It is loaded or used in a window: fail.
                         if message {
                             emsg(gettext(c"E95: Buffer with this name already exists"));
@@ -106,12 +112,12 @@ impl Buf {
                     // no window.
                     close_buffer(None, o, DOBUF_WIPE, false, false);
                 }
-                b.name.set(ffname, Some(sfname));
+                b.edit().name.set(ffname, Some(sfname));
             }
         }
-        b.file_id_valid = file_id.is_some();
+        b.set_file_id_valid(file_id.is_some());
         if let Some(file_id) = file_id {
-            b.file_id = file_id;
+            b.edit().file_id = file_id;
         }
 
         buf_name_changed(self);
@@ -123,12 +129,14 @@ impl Buf {
     /// `file_id` is the caller's already-computed file id for `ffname` (itself
     /// `None` when the file does not exist), or `None` to have it looked up here.
     pub(crate) fn is_other_file(self, ffname: &CStr, file_id: Option<Option<&FileID>>) -> bool {
-        let Some(full) = self.name.full().filter(|_| !ffname.is_empty()) else {
+        let held = self.read();
+        let Some(full) = held.name.full().filter(|_| !ffname.is_empty()) else {
             return true;
         };
         if path_fnamecmp(ffname.to_bytes(), full.to_bytes()) == 0 {
             return false;
         }
+        drop(held);
 
         let own;
         let file_id = match file_id {
@@ -142,9 +150,9 @@ impl Buf {
             return true;
         };
 
-        if self.file_id_valid && self.file_id == *file_id {
+        if self.file_id_valid() && self.read().file_id == *file_id {
             buf_set_file_id(self);
-            if self.file_id_valid && self.file_id == *file_id {
+            if self.file_id_valid() && self.read().file_id == *file_id {
                 return false;
             }
         }
@@ -156,17 +164,17 @@ impl Buf {
 /// relative to the current directory: it becomes the short name, and its
 /// expansion the full one.
 pub(crate) fn buf_set_name(fnum: c_int, name: &CStr) {
-    let Some(mut b) = find_buf(Handle::from_number(fnum)) else {
+    let Some(b) = find_buf(Handle::from_number(fnum)) else {
         return;
     };
     if let Some((ffname, sfname)) = fname_expand(Some(name), None) {
-        b.name.set(ffname, Some(sfname));
+        b.edit().name.set(ffname, Some(sfname));
     }
 }
 
 /// What has to happen once a buffer's name has changed.
 pub fn buf_name_changed(b: Buf) {
-    if b.b_ml.ml_mfp.is_some() {
+    if b.ml().ml_mfp.is_some() {
         // The swap file's name follows the buffer's.
         ml_setname(b);
     }
@@ -194,7 +202,7 @@ pub fn setaltfname(ffname: Option<&CStr>, sfname: Option<&CStr>, lnum: LineNr) -
     if let Some(buf) = buf
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        current_win().w_alt_fnum = Some(buf.handle);
+        current_win().w_alt_fnum = Some(buf.handle());
     }
     buf
 }
@@ -203,7 +211,7 @@ pub fn setaltfname(ffname: Option<&CStr>, sfname: Option<&CStr>, lnum: LineNr) -
 /// anything runs), null when there is none.
 pub fn getaltfname(errmsg: bool) -> *mut c_char {
     match buflist_name_nr(None) {
-        Some((alt, _)) => alt.name.shown_ptr(),
+        Some((alt, _)) => alt.read().name.shown_ptr(),
         None => {
             if errmsg {
                 emsg(gettext(E_NOALT));
@@ -230,11 +238,11 @@ pub fn otherfile(ffname: &CStr) -> bool {
 }
 
 /// Record the file id of `buffer`'s file, for recognising it under another name.
-pub fn buf_set_file_id(mut b: Buf) {
-    let found = b.name.shown().and_then(file_id);
-    b.file_id_valid = found.is_some();
+pub fn buf_set_file_id(b: Buf) {
+    let found = b.read().name.shown().and_then(file_id);
+    b.set_file_id_valid(found.is_some());
     if let Some(found) = found {
-        b.file_id = found;
+        b.edit().file_id = found;
     }
 }
 

@@ -114,10 +114,10 @@ impl<'a> Reader<'a> {
         {
             conv.bad_char = command.bad_char;
             if how.set_options {
-                Buf::current().b_bad_char = command.bad_char;
+                Buf::current().set_b_bad_char(command.bad_char);
             }
         } else {
-            Buf::current().b_bad_char = 0;
+            Buf::current().set_b_bad_char(0);
         }
         let (fenc, fencs, keep_dest_enc) = first_encoding(excmd);
         Reader {
@@ -143,7 +143,7 @@ impl<'a> Reader<'a> {
             illegal_byte: LineNr::ZERO,
             // Set now, before the "retry" caused by a wrong guess at the
             // fileformat, and after the autocommands, which may change it.
-            linecnt: Buf::current().b_ml.ml_line_count.get(),
+            linecnt: Buf::current().line_count().get(),
             fenc,
             fencs,
             converted: false,
@@ -233,8 +233,8 @@ impl<'a> Reader<'a> {
         }
         self.file_rewind = false;
         if self.how.set_options {
-            Buf::current().b_p_bomb = c_int::from(false);
-            Buf::current().b_start_bomb = c_int::from(false);
+            Buf::current().set_b_p_bomb(c_int::from(false));
+            Buf::current().set_b_start_bomb(c_int::from(false));
         }
         self.conv.conv_error = LineNr::ZERO;
         true
@@ -251,7 +251,7 @@ impl<'a> Reader<'a> {
             self.guess.try_dos = false;
             self.guess.try_mac = 0;
             Buf::current().fileformat_forced(Some(command))
-        } else if Buf::current().b_p_bin != 0 {
+        } else if Buf::current().b_p_bin() != 0 {
             EOL_UNIX // binary: use Unix format
         } else if p_ffs(CStr::is_empty) {
             get_fileformat(Buf::current()) // from the buffer
@@ -351,8 +351,8 @@ impl<'a> Reader<'a> {
         self.conv.restlen = 0;
         self.read_undo_file = how.newfile
             && !how.keep_undo
-            && !Buf::current().name.full().is_none()
-            && Buf::current().b_p_udf != 0
+            && !Buf::current().read().name.full().is_none()
+            && Buf::current().b_p_udf() != 0
             && !how.filtering
             && !how.fifo
             && !how.stdin
@@ -521,11 +521,11 @@ impl<'a> Reader<'a> {
                 return Next::Retry;
             }
             if conv.conv_error == LineNr::ZERO {
-                conv.conv_error = Buf::current().b_ml.ml_line_count - self.linecnt + 1;
+                conv.conv_error = Buf::current().line_count() - self.linecnt + 1;
             }
         } else if self.illegal_byte == LineNr::ZERO {
             // Remember the first line with an illegal byte.
-            self.illegal_byte = Buf::current().b_ml.ml_line_count - self.linecnt + 1;
+            self.illegal_byte = Buf::current().line_count() - self.linecnt + 1;
         }
         if conv.bad_char == BAD_DROP {
             w.bytes[w.ptr - conv.restlen] = 0;
@@ -557,14 +557,14 @@ impl<'a> Reader<'a> {
         let conv = &self.conv;
         if self.filesize != 0
             || !(conv.flags == FioFlags::UCSBOM
-                || (Buf::current().b_p_bomb == 0
+                || (Buf::current().b_p_bomb() == 0
                     && self.tmpname.is_none()
                     && matches!(self.fenc.first(), Some(b'u') | None)))
         {
             return Next::Go;
         }
         // No BOM detection in a short file or in binary mode.
-        let found = if w.size < 2 || Buf::current().b_p_bin != 0 {
+        let found = if w.size < 2 || Buf::current().b_p_bin() != 0 {
             None
         } else {
             let allowed = if conv.flags == FioFlags::UCSBOM {
@@ -581,8 +581,8 @@ impl<'a> Reader<'a> {
             let rest = w.ptr + blen..w.ptr + blen + w.len();
             w.bytes.copy_within(rest, w.ptr);
             if self.how.set_options {
-                Buf::current().b_p_bomb = c_int::from(true);
-                Buf::current().b_start_bomb = c_int::from(true);
+                Buf::current().set_b_p_bomb(c_int::from(true));
+                Buf::current().set_b_start_bomb(c_int::from(true));
             }
         }
 
@@ -612,7 +612,7 @@ impl<'a> Reader<'a> {
         let failed = if converts {
             !conv.units_to_utf8(&mut self.w)
         } else {
-            Buf::current().b_p_bin == 0
+            Buf::current().b_p_bin() == 0
                 && !conv.check_utf8(&mut self.w, self.filesize, &mut self.illegal_byte)
         };
         if failed {
@@ -679,14 +679,14 @@ impl<'a> Reader<'a> {
         // should be dropped; 'endoffile' lets the user decide what to write
         // later. In Unix format the CTRL-Z is just a character.
         if w.linerest != 0
-            && Buf::current().b_p_bin == 0
+            && Buf::current().b_p_bin() == 0
             && self.fileformat == EOL_DOS
             && w.bytes[w.ptr - 1] == 0x1a
         {
             w.ptr -= 1;
             w.linerest -= 1;
             if set_options {
-                Buf::current().b_p_eof = c_int::from(true);
+                Buf::current().set_b_p_eof(c_int::from(true));
             }
         }
 
@@ -697,7 +697,7 @@ impl<'a> Reader<'a> {
         }
         // Remember it for when writing.
         if set_options {
-            Buf::current().b_p_eol = c_int::from(false);
+            Buf::current().set_b_p_eol(c_int::from(false));
         }
         w.bytes[w.ptr] = 0;
         let line = &w.bytes[w.line_start..=w.ptr];
@@ -722,9 +722,9 @@ fn first_encoding(excmd: Option<&ExArg>) -> (XString, FencList, bool) {
         // `force_enc` is an offset into the command's own line.
         let name = command.line.rest_of(command.line.cmd + force_enc);
         (canonize(name), FencList::none(), true)
-    } else if Buf::current().b_p_bin != 0 {
+    } else if Buf::current().b_p_bin() != 0 {
         (XString::new(), FencList::none(), false) // binary: don't convert
-    } else if Buf::current().b_help {
+    } else if Buf::current().b_help() {
         // Help files are either utf-8 or latin1. Try utf-8 first; if that
         // fails it must be latin1. This is needed when the first line has
         // non-ASCII characters, which happens only in *.??x files.
@@ -735,7 +735,11 @@ fn first_encoding(excmd: Option<&ExArg>) -> (XString, FencList, bool) {
         )
     } else if p_fencs(CStr::is_empty) {
         // Use the buffer's encoding.
-        (Buf::current().b_p_fenc.get(), FencList::none(), false)
+        (
+            Buf::current().read().b_p_fenc.get(),
+            FencList::none(),
+            false,
+        )
     } else {
         // Try the items in 'fileencodings'; a copy, because the walk spans
         // every pass.
@@ -796,7 +800,7 @@ fn read_from_buffer(w: &mut ReadBuf, last: LineNr, lnum: &mut LineNr, col: &mut 
         *lnum += 1;
         if *lnum > last {
             // When the last line had no end-of-line, don't add one now.
-            if Buf::current().b_p_eol == 0 {
+            if Buf::current().b_p_eol() == 0 {
                 tlen -= 1;
             }
             return tlen.cast_signed();

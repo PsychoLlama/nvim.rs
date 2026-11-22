@@ -42,7 +42,7 @@ fn emsg_gettext(msg: &'static CStr) {
 /// Whether `:diffput` may write into `buffer` -- or the command is not
 /// `:diffput` at all, in which case nothing has to be modifiable.
 fn writable_target(buffer: Buf, cmdidx: CmdIdx) -> bool {
-    cmdidx != CmdIdx::diffput || buffer.b_p_ma != 0
+    cmdidx != CmdIdx::diffput || buffer.b_p_ma() != 0
 }
 
 /// `do` and `dp`: get or put the diff block under the cursor.
@@ -188,7 +188,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
         // the very end of the buffer where the filler below it is.
         let line1 = excmd.line1;
         // The short circuit is upstream's.
-        let below_end = line1 == Buf::current().b_ml.ml_line_count
+        let below_end = line1 == Buf::current().line_count()
             && diff_check_with_linestatus(Win::current(), line1) == (0, 0)
             && (line1 == LineNr::ONE || {
                 let (fill, linestatus) = diff_check_with_linestatus(Win::current(), line1 - 1);
@@ -213,7 +213,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     } else {
         (idx_other, idx_cur)
     };
-    let moved = if Buf::current().b_changed == 0 {
+    let moved = if Buf::current().b_changed() == 0 {
         change_warning(Buf::current(), 0);
         // The warning can run autocommands, which can move us.
         tp.diff_index(Buf::current()) != idx_to
@@ -345,7 +345,7 @@ fn diffgetput(
             let mut buf_empty = buf_is_empty(Buf::current());
             let mut added: c_int = 0;
             for _ in 0..count {
-                buf_empty = Buf::current().b_ml.ml_line_count == LineNr::ONE;
+                buf_empty = Buf::current().line_count() == LineNr::ONE;
                 if ml_delete(lnum).is_ok() {
                     added -= 1;
                 }
@@ -354,7 +354,7 @@ fn diffgetput(
             while i < df_count[idx_from] - start_skip - end_skip {
                 let src = tp.used_diffbuf(idx_from);
                 let nr = df_lnum[idx_from] + start_skip + i;
-                if nr > src.b_ml.ml_line_count {
+                if nr > src.line_count() {
                     break;
                 }
                 // A copy, because `ml_append` writes into the buffer this
@@ -364,7 +364,7 @@ fn diffgetput(
                 let at = lnum + i - 1;
                 let _ = ml_append_cstr(at, text.as_cstr());
                 added += 1;
-                if buf_empty && Buf::current().b_ml.ml_line_count == LineNr::new(2) {
+                if buf_empty && Buf::current().line_count() == LineNr::new(2) {
                     buf_empty = false;
                     let _ = ml_delete(LineNr::new(2));
                 }
@@ -405,7 +405,7 @@ fn diffgetput(
                 if Win::current().w_cursor.lnum >= lnum {
                     if Win::current().w_cursor.lnum >= lnum + count {
                         let moved = Win::current().w_cursor.lnum + amount;
-                        Win::current().w_cursor.lnum = moved.min(Buf::current().b_ml.ml_line_count);
+                        Win::current().w_cursor.lnum = moved.min(Buf::current().line_count());
                     } else if added < 0 {
                         Win::current().w_cursor.lnum = lnum;
                     }

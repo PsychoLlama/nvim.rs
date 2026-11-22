@@ -106,7 +106,7 @@ pub fn ex_luado(excmd: &mut ExArg) {
         let was_curbuf = Buf::current().handle();
         let mut l: LineNr = excmd.line1;
         while l <= excmd.line2 {
-            if l > Buf::current().b_ml.ml_line_count {
+            if l > Buf::current().line_count() {
                 break;
             }
             stack.push_value(At::TOP);
@@ -123,7 +123,7 @@ pub fn ex_luado(excmd: &mut ExArg) {
                 nlua_error(stack, c"E5111: Lua: %.*s");
                 break;
             }
-            if Buf::current().handle() != was_curbuf || l > Buf::current().b_ml.ml_line_count {
+            if Buf::current().handle() != was_curbuf || l > Buf::current().line_count() {
                 break;
             }
             if stack.is_string(At::TOP) {

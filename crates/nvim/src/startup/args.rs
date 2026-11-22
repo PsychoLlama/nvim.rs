@@ -325,8 +325,8 @@ impl<'a> Scan<'a> {
             b'b' => {
                 // Before the file names are expanded: on Windows this is
                 // what decides whether a shortcut is edited or followed.
-                set_options_bin(Buf::current().b_p_bin != 0, true, OptionSetFlags::NONE);
-                Buf::current().b_p_bin = 1;
+                set_options_bin(Buf::current().b_p_bin() != 0, true, OptionSetFlags::NONE);
+                Buf::current().set_b_p_bin(1);
             }
             b'D' => self.parm.debug_break_at = DEBUG_BREAK_ALL,
             b'd' => self.parm.diff_mode = true,
@@ -379,7 +379,7 @@ impl<'a> Scan<'a> {
             }
             b'R' => {
                 READONLYMODE.set(true);
-                Buf::current().b_p_ro = 1;
+                Buf::current().set_b_p_ro(1);
                 P_UC.set(READONLY_UPDATECOUNT);
             }
             // `-L` is the historical spelling of `-r`.

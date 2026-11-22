@@ -118,7 +118,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
     if !cmd_result {
         clear_op(op);
     } else if op.op_type != OpType::Nop
-        && (op.start.lnum > Buf::current().b_ml.ml_line_count
+        && (op.start.lnum > Buf::current().line_count()
             || op.start.col > Buf::current().lines().line_len(op.start.lnum)
             || DID_EMSG.get() != 0)
     {
@@ -160,7 +160,7 @@ pub(crate) fn nv_clear(cmd_arg: &mut CmdArg) {
     // Upstream walks `FIRSTWIN` -- the *current* tab page's windows --
     // even though the loop reads as if it might walk another one's.
     for wp in windows() {
-        wp.syntax().b_syn_slow = false;
+        wp.syntax().edit().b_syn_slow = false;
     }
     redraw_later(Win::current(), UPD_CLEAR);
 }

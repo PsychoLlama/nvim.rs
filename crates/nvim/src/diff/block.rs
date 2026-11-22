@@ -563,7 +563,7 @@ pub(crate) fn used_slot(slots: &DiffSlots, idx: usize) -> Buf {
 pub(crate) fn diff_check_sanity(slots: &DiffSlots, dp: &DiffBlock) -> Result<(), Failed> {
     for (i, slot) in slots.iter().enumerate() {
         if let Some(buf) = slot.and_then(BufId::get)
-            && dp.end(i) - 1 > buf.b_ml.ml_line_count
+            && dp.end(i) - 1 > buf.line_count()
         {
             return Err(Failed);
         }

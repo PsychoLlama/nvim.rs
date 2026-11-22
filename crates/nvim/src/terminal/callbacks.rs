@@ -118,20 +118,20 @@ impl ScreenHost for ScreenReports {
 /// Does nothing when the buffer is gone, which happens if the child sets a
 /// title after its terminal buffer was wiped.
 pub(crate) fn buf_set_term_title(buffer: Option<Buf>, title: &[u8]) {
-    let Some(mut buf) = buffer else {
+    let Some(buf) = buffer else {
         return;
     };
     let mut err = Error::none();
     let title = Object::string(ApiString::from_bytes(title));
     let (vars, key) = (
-        scope_vars(&buf.b_bufvar),
+        scope_vars(&buf.read().b_bufvar),
         ApiString::from_cstr(c"term_title"),
     );
     // Setting a variable can run `BufModified`-ish machinery; the lock
     // keeps that from touching the buffer's lines mid-update.
-    buf.b_locked += 1;
+    buf.set_b_locked(buf.b_locked() + 1);
     drop(dict_set_var(&vars, &key, title, false, false));
-    buf.b_locked -= 1;
+    buf.set_b_locked(buf.b_locked() - 1);
     err.clear();
     status_redraw_buf(buf);
 }

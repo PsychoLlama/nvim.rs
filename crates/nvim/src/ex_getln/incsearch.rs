@@ -101,8 +101,8 @@ pub(crate) fn init_incsearch_state(s: &mut IncsearchState) {
 pub(crate) fn set_search_match(t: &mut Pos) {
     t.lnum += SEARCH_MATCH_LINES.get();
     t.col = SEARCH_MATCH_ENDCOL.get();
-    if t.lnum > Buf::current().b_ml.ml_line_count {
-        t.lnum = Buf::current().b_ml.ml_line_count;
+    if t.lnum > Buf::current().line_count() {
+        t.lnum = Buf::current().line_count();
         coladvance(Win::current(), ColNr::MAX);
     }
 }
@@ -359,9 +359,9 @@ pub(crate) fn may_do_incsearch_highlighting(
     if SEARCH_FIRST_LINE.get() == LineNr::ZERO {
         // Start at the original cursor position.
         Win::current().w_cursor = s.search_start;
-    } else if SEARCH_FIRST_LINE.get() > Buf::current().b_ml.ml_line_count {
+    } else if SEARCH_FIRST_LINE.get() > Buf::current().line_count() {
         // Start after the last line.
-        Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
+        Win::current().w_cursor.lnum = Buf::current().line_count();
         Win::current().w_cursor.col = ColNr::MAX;
     } else {
         // Start at the first line in the range.
@@ -769,9 +769,9 @@ fn set_cursor_to_search_match() {
     let mut t = Win::current().w_cursor;
     t.lnum += SEARCH_MATCH_LINES.get();
     t.col = SEARCH_MATCH_ENDCOL.get();
-    let past_end = t.lnum > Buf::current().b_ml.ml_line_count;
+    let past_end = t.lnum > Buf::current().line_count();
     if past_end {
-        t.lnum = Buf::current().b_ml.ml_line_count;
+        t.lnum = Buf::current().line_count();
     }
     Win::current().w_cursor = t;
     if past_end {

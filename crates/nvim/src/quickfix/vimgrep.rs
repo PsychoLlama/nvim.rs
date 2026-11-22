@@ -195,12 +195,12 @@ fn match_buflines(
     duplicate_name: bool,
 ) -> bool {
     // A name listed twice gets no buffer, so the entry resolves the name.
-    let bufnum = (!duplicate_name).then_some(buffer.handle);
+    let bufnum = (!duplicate_name).then_some(buffer.handle());
     let global = search.flags & VGR_GLOBAL != 0;
     let mut found_match = false;
 
     let mut lnum: LineNr = LineNr::ONE;
-    while lnum <= buffer.b_ml.ml_line_count && search.tomatch > 0 {
+    while lnum <= buffer.line_count() && search.tomatch > 0 {
         if search.flags & VGR_FUZZY == 0 {
             let mut col: ColNr = ColNr::ZERO;
             let mut regmatch = RegMMatch {
@@ -369,7 +369,7 @@ fn process_files(
 
         // Load the file into a buffer, unless it is already loaded.
         let mut buf = find_buffer_by_name(file.as_cstr());
-        let using_dummy = buf.is_none_or(|buf| buf.b_ml.ml_mfp.is_none());
+        let using_dummy = buf.is_none_or(|buf| buf.ml().ml_mfp.is_none());
         if using_dummy {
             duplicate_name = buf.is_some();
             out.redraw_for_dummy = true;
@@ -414,7 +414,7 @@ impl Buf {
     /// unload it, or keep it because it holds the first match and the jump will
     /// land there.
     fn keep_or_drop_dummy(
-        mut self,
+        self,
         found_match: bool,
         duplicate_name: bool,
         search: &Search,
@@ -434,7 +434,7 @@ impl Buf {
 
         // `:hide` keeps the buffer loaded — unless 'bufhidden' says the
         // buffer goes away as soon as it is hidden, which wins.
-        let bufhidden = self.b_p_bh.first_byte();
+        let bufhidden = self.read().b_p_bh.first_byte();
         let hidden_stays =
             cmdmod_has(CmdModFlags::HIDE) && !matches!(bufhidden, b'u' | b'w' | b'd');
         if !hidden_stays {
@@ -449,13 +449,13 @@ impl Buf {
             {
                 unload_dummy_buffer(self, dirname_start);
                 // Keeping the buffer, remove the dummy flag.
-                self.b_flags.clear(BufFlags::DUMMY);
+                self.edit().b_flags.clear(BufFlags::DUMMY);
                 return;
             }
         }
 
         // Keeping the buffer, remove the dummy flag.
-        self.b_flags.clear(BufFlags::DUMMY);
+        self.edit().b_flags.clear(BufFlags::DUMMY);
 
         // The buffer is still loaded, so the jump below has to go to the
         // directory the search left it in.
@@ -469,14 +469,9 @@ impl Buf {
         // The Filetype autocommands and the modelines need to run now, in
         // that buffer — but not the window-local options.
         let aco = AucmdBuf::enter(self);
-        fire_autocmds_for(
-            AutoEvent::FileType,
-            Some(self.b_p_ft.get()),
-            self.name.shown().map(XString::from_cstr),
-            true,
-            Some(self),
-            None,
-        );
+        let arg0 = Some(self.read().b_p_ft.get());
+        let arg1 = self.read().name.shown().map(XString::from_cstr);
+        fire_autocmds_for(AutoEvent::FileType, arg0, arg1, true, Some(self), None);
         do_modelines(OptionSetFlags::NOWIN);
         drop(aco);
     }

@@ -31,7 +31,7 @@ pub(crate) fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int {
     let mut our_paren_pos = our_paren_pos;
     let mut cur_amount = c_int::MAX;
 
-    let mut amount = if line.starts_with(b')') && Buf::current().b_ind_paren_prev != 0 {
+    let mut amount = if line.starts_with(b')') && Buf::current().b_ind_paren_prev() != 0 {
         // Line up with the start of the matching paren's line.
         get_indent_lnum(Win::current().w_cursor.lnum - 1)
     } else {
@@ -51,7 +51,7 @@ pub(crate) fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int {
     // `starts_comment(theline)`) blocks are both on this path
     // (`v0.12.4:src/nvim/indent_c.c:2430` and `:3419`).  Reproduced.
     if starts_comment(line.theline(), 0) {
-        amount += Buf::current().b_ind_comment;
+        amount += Buf::current().b_ind_comment();
     }
     amount
 }
@@ -119,7 +119,7 @@ fn align_with_unclosed_paren(
     let mut ignore_paren_col = 0;
     let mut is_if_for_while = false;
 
-    if Buf::current().b_ind_if_for_while != 0 {
+    if Buf::current().b_ind_if_for_while() != 0 {
         // Find the outermost opening paren on that line and ask whether
         // it belongs to an "if", "for" or "while".
         let cursor_save = Win::current().w_cursor;
@@ -127,7 +127,7 @@ fn align_with_unclosed_paren(
         loop {
             Win::current().w_cursor.lnum = outermost.lnum;
             Win::current().w_cursor.col = outermost.col;
-            match find_match_paren(Buf::current().b_ind_maxparen) {
+            match find_match_paren(Buf::current().b_ind_maxparen()) {
                 Some(pos) if pos.lnum == outermost.lnum => outermost = pos,
                 _ => break,
             }
@@ -152,7 +152,7 @@ fn align_with_unclosed_paren(
         let save_lnum = Win::current().w_cursor.lnum;
         Win::current().w_cursor.lnum = our_paren_pos.lnum;
         Win::current().w_cursor.col = ColNr::try_from(look_col).unwrap_or(ColNr::MAX - 1) + 1;
-        let maxparen = int64_t::from(Buf::current().b_ind_maxparen);
+        let maxparen = int64_t::from(Buf::current().b_ind_maxparen());
         let trypos = findmatchlimit(None, Codepoint::byte(b')'), 0, maxparen);
         if let Some(trypos) = trypos
             && trypos.lnum == our_paren_pos.lnum
@@ -171,8 +171,8 @@ fn align_with_unclosed_paren(
         // The column is read from the cache each time: the searches in
         // between unlock lines, and it is the same line and column either
         // way -- the `skipwhite`d label tail of `our_paren_pos.lnum`.
-        Buf::current().b_ind_unclosed == 0 && !is_if_for_while
-            || Buf::current().b_ind_unclosed_noignore == 0
+        Buf::current().b_ind_unclosed() == 0 && !is_if_for_while
+            || Buf::current().b_ind_unclosed_noignore() == 0
                 && byte_at(Lines::current().line(our_paren_pos.lnum), look_col) == b'('
                 && ignore_paren_col == 0
     };
@@ -185,7 +185,7 @@ fn align_with_unclosed_paren(
             // scan behind the option test, as upstream does.
             let mut lines = Lines::current();
             let l = lines.line(our_paren_pos.lnum);
-            if Buf::current().b_ind_unclosed_wrapped != 0 && ends_in(l, 0, b"(") {
+            if Buf::current().b_ind_unclosed_wrapped() != 0 && ends_in(l, 0, b"(") {
                 // The paren is the last non-white character of its line:
                 // indent one `W` level per nesting level instead.
                 let mut n = 1;
@@ -201,8 +201,8 @@ fn align_with_unclosed_paren(
                     }
                 }
                 our_paren_pos.col = ColNr::ZERO;
-                amount += n * Buf::current().b_ind_unclosed_wrapped;
-            } else if Buf::current().b_ind_unclosed_whiteok != 0 {
+                amount += n * Buf::current().b_ind_unclosed_wrapped();
+            } else if Buf::current().b_ind_unclosed_whiteok() != 0 {
                 our_paren_pos.col += 1;
             } else {
                 let mut col = our_paren_pos.col + 1;
@@ -230,7 +230,7 @@ fn align_with_unclosed_paren(
         }
     }
 
-    if line.starts_with(b')') && Buf::current().b_ind_matching_paren != 0 {
+    if line.starts_with(b')') && Buf::current().b_ind_matching_paren() != 0 {
         // 'cinoptions' `m`: line up with the start of the matching
         // paren's line, which `amount` already holds.
     } else if line_up_with_paren() {
@@ -252,11 +252,11 @@ fn align_with_unclosed_paren(
             );
             match byte {
                 b'(' => {
-                    amount += Buf::current().b_ind_unclosed2;
+                    amount += Buf::current().b_ind_unclosed2();
                     col = our_paren_pos.col;
                 }
                 b')' => {
-                    amount -= Buf::current().b_ind_unclosed2;
+                    amount -= Buf::current().b_ind_unclosed2();
                     col = ColNr::MAX;
                 }
                 _ => {}
@@ -265,16 +265,16 @@ fn align_with_unclosed_paren(
 
         // Use `(` once, when the first '(' is not inside braces.
         if col == ColNr::MAX {
-            amount += Buf::current().b_ind_unclosed;
+            amount += Buf::current().b_ind_unclosed();
         } else {
             Win::current().w_cursor.lnum = our_paren_pos.lnum;
             Win::current().w_cursor.col = col;
-            if find_match_paren_after_brace(Buf::current().b_ind_maxparen).is_some() {
-                amount += Buf::current().b_ind_unclosed2;
+            if find_match_paren_after_brace(Buf::current().b_ind_maxparen()).is_some() {
+                amount += Buf::current().b_ind_unclosed2();
             } else if is_if_for_while {
-                amount += Buf::current().b_ind_if_for_while;
+                amount += Buf::current().b_ind_if_for_while();
             } else {
-                amount += Buf::current().b_ind_unclosed;
+                amount += Buf::current().b_ind_unclosed();
             }
         }
 

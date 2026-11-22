@@ -108,11 +108,11 @@ pub fn get_spec_reg(regname: RegName, errmsg: bool) -> Option<Option<XString>> {
             if errmsg {
                 let _ = check_fname(); // will give an error message
             }
-            Buf::current().name.shown().map(XString::from_cstr)
+            Buf::current().read().name.shown().map(XString::from_cstr)
         }
         // `"#` -- the alternate file name.
         b'#' => match buflist_name_nr(None) {
-            Some((alt, _)) => alt.name.shown().map(XString::from_cstr),
+            Some((alt, _)) => alt.read().name.shown().map(XString::from_cstr),
             None => {
                 if errmsg {
                     emsg(gettext(E_NOALT));

@@ -321,7 +321,7 @@ fn mouse_class(line: &[u8], idx: usize) -> c_int {
     let rest = &line[idx..];
     let byte = rest[0];
     if utf8len_tab[usize::from(byte)] > 1 {
-        return class_of(byte, || char_at(rest), &Buf::current().b_chartab);
+        return class_of(byte, || char_at(rest), &Buf::current().b_chartab());
     }
 
     if byte == b' ' || byte == b'\t' {

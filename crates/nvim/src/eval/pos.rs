@@ -34,7 +34,7 @@ pub fn buf_byteidx_to_charidx(buffer: Option<Buf>, mut lnum: LineNr, byteidx: c_
     let Some(buf) = buffer else {
         return -1;
     };
-    if buf.b_ml.ml_mfp.is_none() {
+    if buf.ml().ml_mfp.is_none() {
         return -1;
     }
     if lnum > buf.line_count() {
@@ -70,7 +70,7 @@ pub fn buf_charidx_to_byteidx(buffer: Option<Buf>, mut lnum: LineNr, charidx: c_
     let Some(buf) = buffer else {
         return -1;
     };
-    if buf.b_ml.ml_mfp.is_none() {
+    if buf.ml().ml_mfp.is_none() {
         return -1;
     }
     if lnum > buf.line_count() {
@@ -251,7 +251,7 @@ pub fn list2fpos(
             return Err(Failed);
         }
         if n == 0 {
-            n = Buf::current().handle.get(); // buffer 0 is "current"
+            n = Buf::current().handle().get(); // buffer 0 is "current"
         }
         *fnum = n;
     }
@@ -269,8 +269,8 @@ pub fn list2fpos(
         return Err(Failed);
     }
     if charcol {
-        let handle = fnum.map_or(Buf::current().handle.get(), |fnum| *fnum);
-        let Some(buf) = find_buf(Handle::from_number(handle)).filter(|b| b.b_ml.ml_mfp.is_some())
+        let handle = fnum.map_or(Buf::current().handle().get(), |fnum| *fnum);
+        let Some(buf) = find_buf(Handle::from_number(handle)).filter(|b| b.ml().ml_mfp.is_some())
         else {
             return Err(Failed);
         };

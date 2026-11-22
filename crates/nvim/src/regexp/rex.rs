@@ -340,7 +340,7 @@ impl<'t> RegExec<'t> {
         starts: &'t Slots,
         ends: &'t Slots,
     ) -> Self {
-        let line_count = setup.buf.b_ml.ml_line_count;
+        let line_count = setup.buf.line_count();
         let mut ctx = RegExec::for_lines(setup, maxcol, starts, ends);
         ctx.firstlnum = Cell::new(lnum);
         ctx.maxline = Cell::new(LineNr::new(line_count - lnum));
@@ -369,8 +369,7 @@ impl<'t> RegExec<'t> {
     #[inline(always)]
     pub(crate) fn seat(&self, lnum: LineNr) {
         self.firstlnum.set(lnum);
-        self.maxline
-            .set(LineNr::new(self.buf.b_ml.ml_line_count - lnum));
+        self.maxline.set(LineNr::new(self.buf.line_count() - lnum));
         self.ic.set(self.caller_ic);
         self.icombine.set(false);
         self.lnum.set(LineNr::ZERO);

@@ -41,7 +41,7 @@ use crate::winlayer::Buf;
 /// by adding markers.
 pub(super) fn fold_create_markers(window: Win, start: Pos, end: Pos) {
     let buf = window.buffer();
-    if buf.b_p_ma == 0 {
+    if buf.b_p_ma() == 0 {
         emsg(gettext(E_MODIFIABLE));
         return;
     }
@@ -75,7 +75,7 @@ pub(super) fn fold_add_marker(buffer: Buf, pos: Pos, marker: &[u8]) {
     let lnum = pos.lnum;
     // 'commentstring', and where in it the marker's text goes.
     // A copy: `u_save` may run autocommands, which may set 'commentstring'.
-    let cms = buffer.b_p_cms.get();
+    let cms = buffer.read().b_p_cms.get();
     let text_at = cms.windows(2).position(|w| w == b"%s");
     if u_save(lnum - 1, lnum + 1).is_err() {
         return;
@@ -161,11 +161,11 @@ impl Win {
 /// If the marker is not found, there is no error message.  Could be a missing
 /// close-marker.
 pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
-    if lnum > buffer.b_ml.ml_line_count {
+    if lnum > buffer.line_count() {
         return;
     }
     // A copy: `u_save` may run autocommands, which may set 'commentstring'.
-    let cms = buffer.b_p_cms.get();
+    let cms = buffer.read().b_p_cms.get();
     let text_at = cms.windows(2).position(|w| w == b"%s");
     // A copy, because the line is rewritten from it below and `u_save` runs
     // in between.

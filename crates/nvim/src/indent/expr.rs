@@ -60,10 +60,10 @@ pub fn get_expr_indent() -> c_int {
     let mut indent = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         let _locked = Lock::text();
-        CURRENT_SCTX.set(buf.b_p_script_ctx[BUF_OPT_INDENTEXPR as usize]);
+        CURRENT_SCTX.set(buf.read().b_p_script_ctx[BUF_OPT_INDENTEXPR as usize]);
         // The expression is evaluated from a copy, because 'indentexpr' can
         // be changed while it is running.
-        let expression = buf.b_p_inde.get();
+        let expression = buf.read().b_p_inde.get();
         #[allow(clippy::cast_possible_truncation, reason = "C's `(int)` narrowing")]
         let indent = eval_to_number(&expression, true) as c_int;
         indent
@@ -326,8 +326,8 @@ pub fn get_lisp_indent() -> c_int {
 fn lisp_match(p: &[u8]) -> bool {
     // The buffer's own 'lispwords' where it has one, else the global value.
     let buf = Buf::current();
-    let lispwords = if buf.b_p_lw.first_byte() != 0 {
-        buf.b_p_lw.get()
+    let lispwords = if buf.read().b_p_lw.first_byte() != 0 {
+        buf.read().b_p_lw.get()
     } else {
         P_LISPWORDS.get()
     };
@@ -361,7 +361,9 @@ pub fn fixthisline(get_the_indent: Indenter) {
 /// want to check 'autoindent' as well.
 pub fn use_indentexpr_for_lisp() -> bool {
     let buf = Buf::current();
-    buf.b_p_lisp != 0 && buf.b_p_inde.first_byte() != 0 && buf.b_p_lop.bytes() == b"expr:1"
+    buf.b_p_lisp() != 0
+        && buf.read().b_p_inde.first_byte() != 0
+        && buf.read().b_p_lop.bytes() == b"expr:1"
 }
 
 /// Fixes the cursor line's indent for 'lisp' and 'cindent'.
@@ -370,7 +372,7 @@ pub fn fix_indent() {
         return; // no auto-indenting when 'paste' is set
     }
     let buf = Buf::current();
-    if buf.b_p_lisp != 0 && buf.b_p_ai != 0 {
+    if buf.b_p_lisp() != 0 && buf.b_p_ai() != 0 {
         if use_indentexpr_for_lisp() {
             do_c_expr_indent();
         } else {
@@ -385,7 +387,7 @@ pub fn fix_indent() {
 pub fn f_indent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let lnum = tv_get_lnum(&args[0]);
     result.write_number(
-        if (LineNr::ONE..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
+        if (LineNr::ONE..=Buf::current().line_count()).contains(&lnum) {
             VarNumber::from(get_indent_lnum(lnum))
         } else {
             -1
@@ -398,7 +400,7 @@ pub fn f_lispindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let pos = win.w_cursor;
     let lnum = tv_get_lnum(&args[0]);
     (*result).write_number(
-        if (LineNr::ONE..=Buf::current().b_ml.ml_line_count).contains(&lnum) {
+        if (LineNr::ONE..=Buf::current().line_count()).contains(&lnum) {
             win.w_cursor.lnum = lnum;
             let amount = VarNumber::from(get_lisp_indent());
             win.w_cursor = pos;

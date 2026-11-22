@@ -146,14 +146,14 @@ impl CptCallbacks {
 
     /// Copy the cache into `buffer`'s array, freeing what was there. An
     /// empty cache leaves the buffer's array alone.
-    pub(crate) fn copy_to_buffer(self, mut buffer: Buf) {
+    pub(crate) fn copy_to_buffer(self, buffer: Buf) {
         let fresh: Vec<Callback> =
             CPT_CB.with(|slots| slots.iter().map(Callback::duplicate).collect());
         if fresh.is_empty() {
             return;
         }
         clear_buffer_cpt_callbacks(buffer);
-        buffer.b_p_cpt_cb = fresh;
+        buffer.edit().b_p_cpt_cb = fresh;
     }
 
     /// Mark what the cache references with `copy_id`. Answers whether to
@@ -329,7 +329,8 @@ pub(crate) fn leading_number(text: &[u8]) -> c_int {
 /// The number of entries in `'complete'` — every non-empty comma-separated
 /// segment counts as one.
 pub(crate) fn get_cpt_sources_count() -> c_int {
-    c_int::try_from(cpt_entries(Buf::current().b_p_cpt.bytes()).count()).unwrap_or(c_int::MAX)
+    c_int::try_from(cpt_entries(Buf::current().read().b_p_cpt.bytes()).count())
+        .unwrap_or(c_int::MAX)
 }
 
 /// Parse the `'completefunc'` value and set the callback function; the value
@@ -337,14 +338,14 @@ pub(crate) fn get_cpt_sources_count() -> c_int {
 ///
 /// This is an `opt_did_set_cb` row in the generated option table.
 pub fn did_set_completefunc(args: &mut OptSet) -> Result<(), OptError> {
-    let mut buf = args.os_buf;
+    let buf = args.os_buf;
     let value = args
         .os_newval
         .as_string()
         .expect("the table installs this callback on a string option only")
         .as_cstr();
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        callback_from_option(value).map(|cb| install_callback(&mut buf.b_cfu_cb, cb))
+        callback_from_option(value).map(|cb| install_callback(&mut buf.edit().b_cfu_cb, cb))
     } else {
         let retval = cfu_cb().set_from_option(value);
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
@@ -362,21 +363,21 @@ pub fn did_set_completefunc(args: &mut OptSet) -> Result<(), OptError> {
 /// Copy the global `'completefunc'` callback into `buffer`'s local one.
 ///
 /// Safe: [`Buf`] is the live buffer whose own callback field this writes.
-pub fn set_buflocal_cfu_callback(mut buffer: Buf) {
-    cfu_cb().copy_to_buflocal(&mut buffer.b_cfu_cb);
+pub fn set_buflocal_cfu_callback(buffer: Buf) {
+    cfu_cb().copy_to_buflocal(&mut buffer.edit().b_cfu_cb);
 }
 
 /// Parse the `'omnifunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
 pub fn did_set_omnifunc(args: &mut OptSet) -> Result<(), OptError> {
-    let mut buf = args.os_buf;
+    let buf = args.os_buf;
     let value = args
         .os_newval
         .as_string()
         .expect("the table installs this callback on a string option only")
         .as_cstr();
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        callback_from_option(value).map(|cb| install_callback(&mut buf.b_ofu_cb, cb))
+        callback_from_option(value).map(|cb| install_callback(&mut buf.edit().b_ofu_cb, cb))
     } else {
         let retval = ofu_cb().set_from_option(value);
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
@@ -394,13 +395,13 @@ pub fn did_set_omnifunc(args: &mut OptSet) -> Result<(), OptError> {
 /// Copy the global `'omnifunc'` callback into `buffer`'s local one.
 ///
 /// Safe: [`Buf`] is the live buffer whose own callback field this writes.
-pub fn set_buflocal_ofu_callback(mut buffer: Buf) {
-    ofu_cb().copy_to_buflocal(&mut buffer.b_ofu_cb);
+pub fn set_buflocal_ofu_callback(buffer: Buf) {
+    ofu_cb().copy_to_buflocal(&mut buffer.edit().b_ofu_cb);
 }
 
 /// Free `buffer`'s `'complete'` `F{func}` callbacks.
-pub(crate) fn clear_buffer_cpt_callbacks(mut buffer: Buf) {
-    for mut cb in ::core::mem::take(&mut buffer.b_p_cpt_cb) {
+pub(crate) fn clear_buffer_cpt_callbacks(buffer: Buf) {
+    for mut cb in ::core::mem::take(&mut buffer.edit().b_p_cpt_cb) {
         cb.clear();
     }
 }
@@ -434,10 +435,10 @@ pub fn set_cpt_callbacks(local: bool) -> Result<(), Failed> {
         return Ok(());
     }
     // An entry nothing fills reads back as `Callback::None`.
-    Buf::current().b_p_cpt_cb = (0..count).map(|_| Callback::None).collect();
+    Buf::current().edit().b_p_cpt_cb = (0..count).map(|_| Callback::None).collect();
 
     // A copy: the walk writes the buffer's callback array.
-    let option = Buf::current().b_p_cpt.bytes().to_vec();
+    let option = Buf::current().read().b_p_cpt.bytes().to_vec();
     for (idx, entry) in cpt_entries(&option).enumerate() {
         let part = entry.part;
         if part.first() == Some(&b'F') && part.len() > 1 {
@@ -446,8 +447,8 @@ pub fn set_cpt_callbacks(local: bool) -> Result<(), Failed> {
             let name = XString::from_bytes(&part[1..end]);
             let cb = callback_from_option(name.as_cstr());
             // `idx` counts the entries, which is the array's length.
-            let mut buf = Buf::current();
-            if let Some(slot) = buf.b_p_cpt_cb.get_mut(idx) {
+            let buf = Buf::current();
+            if let Some(slot) = buf.edit().b_p_cpt_cb.get_mut(idx) {
                 match cb {
                     Ok(cb) => install_callback(slot, cb),
                     Err(_) => *slot = Callback::None,
@@ -459,7 +460,7 @@ pub fn set_cpt_callbacks(local: bool) -> Result<(), Failed> {
     if !local {
         // ':set' was used instead of ':setlocal': cache the callback array.
         let buf = Buf::current();
-        cpt_cb().replace_from(&buf.b_p_cpt_cb);
+        cpt_cb().replace_from(&buf.read().b_p_cpt_cb);
     }
     Ok(())
 }
@@ -467,18 +468,19 @@ pub fn set_cpt_callbacks(local: bool) -> Result<(), Failed> {
 /// Parse the `'thesaurusfunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
 pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Result<(), OptError> {
-    let mut buf = args.os_buf;
+    let buf = args.os_buf;
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         // Buffer-local option set.
         // A copy: evaluating the value may set the option again.
-        let value = buf.b_p_tsrfu.get();
-        callback_from_option(value.as_cstr()).map(|cb| install_callback(&mut buf.b_tsrfu_cb, cb))
+        let value = buf.read().b_p_tsrfu.get();
+        callback_from_option(value.as_cstr())
+            .map(|cb| install_callback(&mut buf.edit().b_tsrfu_cb, cb))
     } else {
         // Global option set. A copy, as above.
         let retval = tsrfu_cb().set_from_option(P_TSRFU.get().as_cstr());
         // When using :set, free the local callback.
         if !args.os_flags.has(OptionSetFlags::GLOBAL) {
-            callback_free(&mut buf.b_tsrfu_cb);
+            callback_free(&mut buf.edit().b_tsrfu_cb);
         }
         retval
     };
@@ -493,7 +495,7 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Result<(), OptError> {
 /// so they are not garbage collected.
 pub fn mark_cpt_callbacks(buffer: Buf, copy_id: c_int) -> bool {
     let mark = |slot: &Callback| set_ref_in_callback(slot, copy_id, None, None);
-    buffer.b_p_cpt_cb.iter().any(mark)
+    buffer.read().b_p_cpt_cb.iter().any(mark)
 }
 
 /// Mark the global `'completefunc'`, `'omnifunc'` and `'thesaurusfunc'`
@@ -510,10 +512,10 @@ pub fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
 pub(crate) fn get_complete_funcname(type_0: CtrlXMode) -> XString {
     let buf = Buf::current();
     let local = match type_0 {
-        CtrlXMode::Function => &buf.b_p_cfu,
-        CtrlXMode::Omni => &buf.b_p_ofu,
+        CtrlXMode::Function => &buf.read().b_p_cfu,
+        CtrlXMode::Omni => &buf.read().b_p_ofu,
         // The only one of the three with a global value to fall back to.
-        CtrlXMode::Thesaurus => return local_or_global(&buf.b_p_tsrfu, P_TSRFU).get(),
+        CtrlXMode::Thesaurus => return local_or_global(&buf.read().b_p_tsrfu, P_TSRFU).get(),
         _ => return XString::new(),
     };
     local.clone().unwrap_or_default()
@@ -524,14 +526,14 @@ pub(crate) fn get_complete_funcname(type_0: CtrlXMode) -> XString {
 pub(crate) fn get_insert_callback(type_0: CtrlXMode) -> HeldCallback {
     let buf = Buf::current();
     if type_0 == CtrlXMode::Function {
-        return HeldCallback::of(&buf.b_cfu_cb);
+        return HeldCallback::of(&buf.read().b_cfu_cb);
     }
     if type_0 == CtrlXMode::Omni {
-        return HeldCallback::of(&buf.b_ofu_cb);
+        return HeldCallback::of(&buf.read().b_ofu_cb);
     }
     // CtrlXMode::Thesaurus
-    if !buf.b_p_tsrfu.bytes().is_empty() {
-        HeldCallback::of(&buf.b_tsrfu_cb)
+    if !buf.read().b_p_tsrfu.bytes().is_empty() {
+        HeldCallback::of(&buf.read().b_tsrfu_cb)
     } else {
         tsrfu_cb().held()
     }
@@ -617,16 +619,17 @@ pub(crate) fn get_user_highlight_attr(hlname: Option<&CStr>) -> c_int {
 pub(crate) fn get_callback_if_cpt_func(entry: &[u8], idx: c_int) -> Option<HeldCallback> {
     let buffer = Buf::current();
     match entry.first() {
-        Some(b'o') => Some(HeldCallback::of(&buffer.b_ofu_cb)),
+        Some(b'o') => Some(HeldCallback::of(&buffer.read().b_ofu_cb)),
         Some(b'F') if !matches!(entry.get(1), None | Some(b',')) => {
             // 'F{func}' case. An index past the array (the option changed
             // since `set_cpt_callbacks` sized it) names no function.
+            let held = buffer.read();
             let slot = usize::try_from(idx)
                 .ok()
-                .and_then(|i| buffer.b_p_cpt_cb.get(i));
+                .and_then(|i| held.b_p_cpt_cb.get(i));
             slot.filter(|cb| cb.is_set()).map(HeldCallback::of)
         }
-        Some(b'F') => Some(HeldCallback::of(&buffer.b_cfu_cb)), // 'cfu'
+        Some(b'F') => Some(HeldCallback::of(&buffer.read().b_cfu_cb)), // 'cfu'
         _ => None,
     }
 }
@@ -656,7 +659,7 @@ fn cpt_function_start(idx: c_int, answer: Result<ColNr, Declined>) -> Option<Col
 /// start column each answers.
 pub(crate) fn prepare_cpt_compl_funcs() {
     // Make a copy of 'cpt' in case the buffer gets wiped out.
-    let cpt = strip_caret_numbers(Buf::current().b_p_cpt.bytes());
+    let cpt = strip_caret_numbers(Buf::current().read().b_p_cpt.bytes());
     for (idx, entry) in cpt_entries(&cpt).enumerate() {
         let idx = c_int::try_from(idx).unwrap_or(c_int::MAX);
         let Some(cb) = get_callback_if_cpt_func(entry.at, idx) else {
@@ -683,7 +686,7 @@ pub(crate) fn advance_cpt_sources_index_safe() -> Result<(), Failed> {
 /// Build the per-`'complete'`-entry state: the source letter and its `^N`
 /// max-matches limit.
 pub(crate) fn setup_cpt_sources() {
-    let option = Buf::current().b_p_cpt.bytes().to_vec();
+    let option = Buf::current().read().b_p_cpt.bytes().to_vec();
     let rows = cpt_entries(&option)
         .map(|entry| {
             let mut source = CptSource {
@@ -740,7 +743,7 @@ pub(crate) fn cpt_compl_refresh() {
     // Make the completion list linear (non-cyclic).
     ins_compl_make_linear();
     // Make a copy of 'cpt' in case the buffer gets wiped out.
-    let cpt = strip_caret_numbers(Buf::current().b_p_cpt.bytes());
+    let cpt = strip_caret_numbers(Buf::current().read().b_p_cpt.bytes());
 
     cpt_sources().set_index(0);
     for entry in cpt_entries(&cpt) {

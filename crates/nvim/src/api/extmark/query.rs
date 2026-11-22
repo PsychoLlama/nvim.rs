@@ -280,5 +280,5 @@ pub fn nvim__buf_debug_extmarks(
     let Some(b) = find_buffer_by_handle(buf)? else {
         return Ok(ApiString::NULL);
     };
-    Ok(mt_inspect(&b.b_marktree, keys, dot))
+    Ok(mt_inspect(&b.read().b_marktree, keys, dot))
 }

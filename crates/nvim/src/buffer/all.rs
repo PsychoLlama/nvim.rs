@@ -289,9 +289,9 @@ fn should_close(win: Win, had_tab: c_int) -> bool {
         win.w_width != COLUMNS.get()
     };
     let buf = win.buffer();
-    (buf.b_nwindows > 1 || win.w_floating || too_small || had_tab > 0 && win != first_win())
+    (buf.b_nwindows() > 1 || win.w_floating || too_small || had_tab > 0 && win != first_win())
         && first_win() != last_win()
-        && !(is_locked(win) || buf.b_locked > 0)
+        && !(is_locked(win) || buf.b_locked() > 0)
         && !is_aucmd(win)
 }
 
@@ -305,13 +305,13 @@ impl Buf {
         open_wins: &mut c_int,
     ) -> bool {
         // Check whether this buffer needs a window.
-        if !all && self.b_ml.ml_mfp.is_none() || self.b_p_bl == 0 {
+        if !all && self.ml().ml_mfp.is_none() || self.b_p_bl() == 0 {
             return true;
         }
 
         let wp = if had_tab != 0 {
             // With the ":tab" modifier don't move the window.
-            (self.b_nwindows > 0).then(last_win)
+            (self.b_nwindows() > 0).then(last_win)
         } else {
             // Check whether this buffer already has a window.
             let wp = windows().find(|win| !win.w_floating && win.w_buffer == self);

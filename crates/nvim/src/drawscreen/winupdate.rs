@@ -142,7 +142,7 @@ pub(crate) fn win_update(window: Win) {
         return;
     }
 
-    let mut buf = win.buffer();
+    let buf = win.buffer();
 
     // Reset `GOT_INT`, otherwise the regexp engine will not work.
     let save_got_int = GOT_INT.get();
@@ -170,7 +170,8 @@ pub(crate) fn win_update(window: Win) {
             redraw_later(win, UPD_NOT_VALID);
         }
     }
-    buf.b_signcols.last_max = buf.b_signcols.max;
+    let value = buf.read().b_signcols.max;
+    buf.edit().b_signcols.last_max = value;
 
     // Validate `w_virtcol` here: it can change the redraw type, which is
     // why the type is read again from the window afterwards.
@@ -291,7 +292,7 @@ fn add_suspended_terminal_note(buffer: Buf) {
         next: NO_ENTRY,
     };
     let vt = decor_put_vt(note, NO_ENTRY);
-    let last = buffer.b_ml.ml_line_count - 1;
+    let last = buffer.line_count() - 1;
     decor_range_add_virt(last.get(), 0, last.get(), 0, vt, true);
 }
 
@@ -338,17 +339,17 @@ fn find_changed_lines(win: Win, buffer: Buf, rg: &mut Regions) {
         LineNr::ZERO
     };
 
-    if buffer.b_mod_set {
-        if rg.mod_top == LineNr::ZERO || rg.mod_top > buffer.b_mod_top {
-            rg.mod_top = buffer.b_mod_top;
+    if buffer.b_mod_set() {
+        if rg.mod_top == LineNr::ZERO || rg.mod_top > buffer.b_mod_top() {
+            rg.mod_top = buffer.b_mod_top();
             // Lines above the change may be included in a pattern match.
             if syntax_present(win) {
-                rg.mod_top -= buffer.b_s.b_syn_sync_linebreaks;
+                rg.mod_top -= buffer.read().b_s.b_syn_sync_linebreaks;
                 rg.mod_top = rg.mod_top.max(LineNr::ONE);
             }
         }
-        if rg.mod_bot == LineNr::ZERO || rg.mod_bot < buffer.b_mod_bot {
-            rg.mod_bot = buffer.b_mod_bot;
+        if rg.mod_bot == LineNr::ZERO || rg.mod_bot < buffer.b_mod_bot() {
+            rg.mod_bot = buffer.b_mod_bot();
         }
 
         // With a multi-line 'hlsearch' or :match pattern, a change in one
@@ -449,7 +450,7 @@ fn plan_scroll(win: Win, buffer: Buf, rg: &mut Regions) {
     // it: `decor_conceal_line` invokes the decoration providers, so
     // skipping it on the non-scrollable path would be a change.
     let mut topline_conceal = win.w_topline;
-    while topline_conceal < buffer.b_ml.ml_line_count
+    while topline_conceal < buffer.line_count()
         && decor_conceal_line(win, (topline_conceal - 1).get(), false)
     {
         topline_conceal += 1;
@@ -847,12 +848,12 @@ fn finish_botline(mut window: Win, buffer: Buf, old_botline: LineNr, nrwidth_bef
             // A new redraw, either from a moved topline or a reset skipcol.
             if MUST_REDRAW.get() != 0 {
                 // Do not update for the buffer changes a second time.
-                let mod_set = Buf::current().b_mod_set;
-                Buf::current().b_mod_set = false;
+                let mod_set = Buf::current().b_mod_set();
+                Buf::current().set_b_mod_set(false);
                 curs_columns(Win::current(), c_int::from(true));
                 win_update(Win::current());
                 MUST_REDRAW.set(0);
-                Buf::current().b_mod_set = mod_set;
+                Buf::current().set_b_mod_set(mod_set);
             }
             RECURSIVE.set(false);
         }

@@ -255,7 +255,7 @@ fn do_filter(
         return; // no filter command
     }
 
-    let (orig_start, orig_end) = (Buf::current().b_op_start, Buf::current().b_op_end);
+    let (orig_start, orig_end) = (Buf::current().b_op_start(), Buf::current().b_op_end());
     let mut filter = Filter {
         line1,
         line2,
@@ -294,8 +294,8 @@ fn do_filter(
             c"E135: *Filter* Autocommands must not change current buffer",
         ));
     } else if cmdmod_has(CmdModFlags::LOCKMARKS) {
-        Buf::current().b_op_start = orig_start;
-        Buf::current().b_op_end = orig_end;
+        Buf::current().set_b_op_start(orig_start);
+        Buf::current().set_b_op_end(orig_end);
     }
 }
 
@@ -350,8 +350,8 @@ impl Filter {
         if !p_stmp() && (self.do_in || self.do_out) {
             if self.do_in {
                 self.shell_flags |= ShellOpts::WRITE;
-                Buf::current().b_op_start.lnum = self.line1;
-                Buf::current().b_op_end.lnum = self.line2;
+                Buf::current().edit().b_op_start.lnum = self.line1;
+                Buf::current().edit().b_op_end.lnum = self.line2;
             }
             if self.do_out {
                 self.shell_flags |= ShellOpts::READ;
@@ -438,7 +438,7 @@ impl Filter {
             }
             redraw_curbuf_later(UPD_VALID);
         }
-        let line_count_before = Buf::current().b_ml.ml_line_count;
+        let line_count_before = Buf::current().line_count();
 
         // Pass on the DO_OUT flag when the output is redirected.
         call_shell_text(&cmd_buf, ShellOpts::FILTER | self.shell_flags);
@@ -481,7 +481,7 @@ impl Filter {
             }
         }
 
-        let read_linecount = LineNr::new(Buf::current().b_ml.ml_line_count - line_count_before);
+        let read_linecount = LineNr::new(Buf::current().line_count() - line_count_before);
         self.take_output(read_linecount);
         Ran::Done
     }
@@ -492,8 +492,8 @@ impl Filter {
     fn take_output(&mut self, read_linecount: LineNr) {
         let (line1, line2) = (self.line1, self.line2);
         if self.shell_flags.has(ShellOpts::READ) {
-            Buf::current().b_op_start.lnum = line2 + 1;
-            Buf::current().b_op_end.lnum = Win::current().w_cursor.lnum;
+            Buf::current().edit().b_op_start.lnum = line2 + 1;
+            Buf::current().edit().b_op_end.lnum = Win::current().w_cursor.lnum;
             appended_lines_mark(line2, read_linecount.get());
         }
 
@@ -530,19 +530,19 @@ impl Filter {
             // Adjust '[ and '] (set by buf_write()).
             Win::current().w_cursor.lnum = line1;
             del_lines(linecount, true);
-            Buf::current().b_op_start.lnum -= linecount;
-            Buf::current().b_op_end.lnum -= linecount;
+            Buf::current().edit().b_op_start.lnum -= linecount;
+            Buf::current().edit().b_op_end.lnum -= linecount;
             // adjust last line for next write
             write_lnum_adjust(-linecount);
             fold_update(
                 Win::current(),
-                Buf::current().b_op_start.lnum,
-                Buf::current().b_op_end.lnum,
+                Buf::current().b_op_start().lnum,
+                Buf::current().b_op_end().lnum,
             );
         } else {
             // Put cursor on last new line for ":r !cmd".
-            self.linecount = Buf::current().b_op_end.lnum - Buf::current().b_op_start.lnum + 1;
-            Win::current().w_cursor.lnum = Buf::current().b_op_end.lnum;
+            self.linecount = Buf::current().b_op_end().lnum - Buf::current().b_op_start().lnum + 1;
+            Win::current().w_cursor.lnum = Buf::current().b_op_end().lnum;
         }
 
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);

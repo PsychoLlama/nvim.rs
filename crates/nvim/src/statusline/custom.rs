@@ -628,7 +628,7 @@ pub fn redraw_ruler() {
 /// The line number is 0 for an empty buffer, and the column is 0 outside
 /// Insert mode on an empty line -- which is what makes that read "0-1".
 fn ruler_position(win: Win, virtcol: ColNr) -> Vec<u8> {
-    let empty_buffer = win.buffer().b_ml.ml_flags.has(MlFlags::EMPTY);
+    let empty_buffer = win.buffer().ml_flags().has(MlFlags::EMPTY);
     let cursor_line_empty = win.buffer().lines().line(win.w_cursor.lnum).is_empty();
     let empty_line = STATE.get() & MODE_INSERT == 0 && cursor_line_empty;
     let lnum = if empty_buffer {
