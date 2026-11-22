@@ -354,21 +354,43 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   compare per dereference, release, codegen-units = 1, cachegrind Ir):
   mlbench +2.5 %, readbench +2.2 %, spellbench +2.1 %, scrbench +1.9 %,
   edbench +1.7 %, the rest ≤ 1 %.
-- **In progress — the graph handles' liveness (the floor laid):**
-  every `Window`, `Buffer` (the two unregistered ones too), `Tabpage` and
+- **Closed — the graph handles' liveness (check-always):** every
+  `Window`, `Buffer` (the two unregistered ones too), `Tabpage` and
   `Frame` lives in a slot of its type's `SlotPool`
-  (`winlayer/handles.rs`). The registries own a `SlotBox` (a window's,
-  which stays alive out of the registry while idle, its slot handle), and
-  a free ends the value in its slot at the moment the `xfree` ran -- the
-  destructor in place, the generation moved on -- with the deferred-free
-  order unchanged. `Win`/`Buf`/`TabPage`/`FrameRef` carry the slot's
-  generation beside their address and id (`Stamp`: one word, so a handle
-  still passes in two registers), from every constructor: registry
-  lookups, the current-object cells, and the slot header behind a bare
-  address. Nothing compares it on a dereference yet, so behaviour is
-  unchanged (battery identical); equality is still the address. Cost
-  (release, codegen-units = 1, cachegrind Ir): mlbench +0.77 %,
-  undobench +0.37 %, the other ten within ±0.2 %.
+  (`winlayer/handles.rs`), and a free ends the value in its slot at the
+  moment the `xfree` ran -- the destructor in place, the generation moved
+  on -- with the deferred-free order unchanged. `Win`/`Buf`/`TabPage`/
+  `FrameRef` carry the slot's generation beside their address and id
+  (`Stamp`: one word, generation low, so a handle still passes in two
+  registers and the compare needs no shift), and **every `Deref`/
+  `DerefMut` compares it with the slot header** (`winlayer/deref.rs`: one
+  load, one compare, a cold panic naming the re-entry rule and, through
+  `#[track_caller]`, the line). A slot's memory is never given back, so a
+  handle that outlived its object can no longer reach freed memory or the
+  slot's next tenant. Equality is slot _and_ generation, and so is
+  `is_current`. The list walks yield an element only while it is live and
+  end at one freed under them (a body's user code can free the neighbour
+  read ahead). Never fired across functional (9,361) and oldtest (4,684).
+  The autocmd-wipe sweep (every event × `:bwipe!`/`:bunload!`/`:close`/
+  `:hide`/`:tabclose`/`:only`/`:tabonly` of the current and of another
+  object, the API closes, and the same from `nvim_buf_attach`, decoration
+  provider, timer, `on_key`, `vim.ui_attach`, `'foldexpr'`,
+  `'statusline'`/`'tabline'`, completion, `'operatorfunc'`,
+  `'indentexpr'`/`'formatexpr'`/`'includeexpr'`, `'tagfunc'` and
+  `'quickfixtextfunc'` callbacks) stopped at one class: `DiffUpdated`,
+  fired from inside a recompute that `diff_check_with_linestatus`,
+  `did_set_diff` and `diff_redraw`'s walk run while holding a window; it
+  now fires with the window layout locked (E1312), and those callers
+  re-check. (It also found `:tabclose` retrying a float that refuses to
+  close for ever, an upstream loop.) Cost against the build before the
+  check (release, codegen-units = 1, cachegrind Ir), after the memline's
+  per-line paths took one borrow per walk: edbench +2.73 %, mlbench
+  +2.43 %, readbench +2.37 %, spellbench +2.07 %, scrbench +1.93 %,
+  markbench +1.41 %, undobench +1.25 %, rpcbench +0.91 %, evalbench
+  +0.41 %, rebench +0.39 %, inbench +0.23 %, parser +0.09 %, mkspellbench
+  −0.33 %. **Liveness is what closed; aliasing is not:** two copies still
+  lend overlapping `&mut` (the `edit()` + EDIT-bit slices), and `PosRef`,
+  `Live<T>`, `GridRef` and `Term` carry no generation yet.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with
@@ -381,10 +403,11 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   `Buf`~~;
   `GRID.with(|g| { grid_ref.cols = 0; g.cols })`; ~~`held_line`'s slice
   outliving the cache when a copy of the `Buf` reads another line~~.
-- **Breaks — liveness:** a handle held across a call that runs user code
-  (an autocommand, a Lua callback — the p45 hazard — Vimscript) and
-  dereferenced after `:bwipeout`/`:close` freed the object: use-after-free in
-  safe code. The re-entry rule in `winlayer`'s docs is the whole defence.
+- ~~**Breaks — liveness:**~~ (graph handles closed above) a handle held
+  across a call that runs user code (an autocommand, a Lua callback — the
+  p45 hazard — Vimscript) and dereferenced after `:bwipeout`/`:close` freed
+  the object: now a panic at the dereference, not a use-after-free. Still
+  open for `PosRef`/`Live<T>`/`GridRef`/`Term`.
 - **Closure:** restructure. Liveness: a handle is an id plus a generation
   checked against a side table on dereference (the object's own memory
   cannot carry it — it may be freed); a check-always that wants its own

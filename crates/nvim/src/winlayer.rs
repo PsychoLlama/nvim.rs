@@ -70,8 +70,9 @@
 //! afterwards, never reused. No `&mut` reached through one is held across
 //! such a call.** `:bwipeout` in a `BufLeave` handler frees the buffer a
 //! caller is holding; `WinClosed` closes windows; a Lua callback can do
-//! either. The value keeps pointing at memory that has gone back to the
-//! allocator, and the next field access is a use-after-free.
+//! either. The value keeps pointing at the object's slot, whose generation
+//! has moved on, and the next field access panics (`deref`): a stopped
+//! editor rather than a use-after-free, but a stopped editor all the same.
 //!
 //! ```ignore
 //! let id = win.id();                  // a field load; the address is dropped
