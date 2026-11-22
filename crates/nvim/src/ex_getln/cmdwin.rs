@@ -214,7 +214,7 @@ fn split_cmdwin(old_curwin: WinId, old_curbuf: &BufRef) -> Result<(), Key> {
     // Set the "cmdwin_*" variables before any autocommand can mess
     // things up.
     CMDWIN_TYPE.set(get_cmdline_type());
-    CMDWIN_LEVEL.set(Cc::current().level);
+    CMDWIN_LEVEL.set(Cc::current().level());
     CMDWIN_WIN.set(Some(Win::current().id()));
     CMDWIN_OLD_CURWIN.set(Some(old_curwin));
 
@@ -336,11 +336,11 @@ fn put_command_line_in_cmdwin() {
     let cc = Cc::current();
     if cc.in_use() {
         // A copy of the command line's text, up to its first NUL.
-        let text = cstr::until_nul(cc.bytes()).to_vec();
+        let text = cstr::until_nul(&cc.bytes()).to_vec();
         let _ = ml_replace_buf_text(Buf::current(), last, &text);
     }
     Win::current().w_cursor.lnum = Buf::current().b_ml.ml_line_count;
-    Win::current().w_cursor.col = ColNr::new(Cc::current().cmdpos);
+    Win::current().w_cursor.col = ColNr::new(Cc::current().cmdpos());
     changed_line_abv_curs();
     invalidate_botline_win(Win::current());
     ui_ext_cmdline_hide(false);
@@ -421,20 +421,20 @@ fn take_cmdwin_line(histtype: HistoryType) {
         Cc::current().set_text(Buf::current().lines().line(lnum));
     }
 
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     if !cc.in_use() {
         cc.set_text(&[]);
-        cc.cmdpos = 0;
+        cc.set_cmdpos(0);
         CMDWIN_RESULT.set(Key::CTRL_C);
     } else {
-        cc.cmdpos = Win::current().w_cursor.col.get();
+        cc.set_cmdpos(Win::current().w_cursor.col.get());
         // If the cursor is on the last character, it probably should be
         // after it.
-        if cc.cmdpos == cc.len() - 1 || cc.cmdpos > cc.len() {
-            cc.cmdpos = cc.len();
+        if cc.cmdpos() == cc.len() - 1 || cc.cmdpos() > cc.len() {
+            cc.set_cmdpos(cc.len());
         }
         if CMDWIN_RESULT.get() == SpecialKey::Ignore {
-            cc.cmdspos = cmd_screencol(cc.cmdpos);
+            cc.set_cmdspos(cmd_screencol(cc.cmdpos()));
             redrawcmd();
         }
     }

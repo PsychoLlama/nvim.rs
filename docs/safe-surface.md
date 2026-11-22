@@ -266,7 +266,7 @@ gains a `Cell` or a raw pointer fails to build.
 
 ### S5 — `Copy` object handles lending `&`/`&mut` (sound-by-convention)
 
-`Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, `Live<T>`, `GridRef`, `Term`:
+`Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, ~~`Live<T>`~~, `GridRef`, `Term`:
 `Deref`/`DerefMut` from a `Copy` value. Constructors are `unsafe` (or the
 registries, which check); every dereference after is safe and unchecked.
 Rows: the eight `Deref`/`DerefMut` pairs; `Win::syn_block`/~~`syn_block_mut`~~
@@ -315,8 +315,9 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   `'spellcapcheck'` program a match runs is taken out and put back, so no
   borrow of the block is held across `vim_regexec`. What is left is the
   read half (`syn_block()`'s `&SynBlock` held across a write through
-  another copy) and `Win::syntax()`, a `Live<SynBlock>` whose `DerefMut`
-  is the `Live<T>` users row below. No instruction cost: the same stores.
+  another copy) and `Win::syntax()`, a `SynBlockRef` whose `DerefMut` is
+  its owner handle's (the `Live<T>` row below). No instruction cost: the
+  same stores.
 - **Closed — `memline::held_line` (check-always):** ~~`held_line`~~ is
   gone. The matcher reads buffer lines through `HeldLines`
   (`memline/lines.rs`), which its match context owns: the slices it hands
@@ -397,8 +398,20 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   Functional, oldtest and the sweep (debug and release) ran unchanged with
   it: nothing read a parked object. **Liveness is what closed; aliasing is
   not:** two copies still lend overlapping `&mut` (the `edit()` + EDIT-bit
-  slices), and `PosRef`, `Live<T>`, `GridRef` and `Term` carry no
-  generation yet.
+  slices), and `PosRef`, `GridRef` and `Term` carry no generation yet.
+- **Closed — `Live<T>` (check-always):** ~~`Live<T>`~~ is deleted, with
+  the promise it recorded. Its last two users: the command line, `Cc`, is
+  now a place rather than an address (`ex_getln/line.rs`: the `CCLINE` cell,
+  or an entry of the saved stack by index) and every access is one leaf
+  borrow of that cell -- a getter and setter per scalar field, `with`/
+  `with_mut` for the rest, a copy of the text where it was held across
+  calls -- so two copies can no longer lend overlapping `&mut`s (the
+  tracker panics), the `CCLINE.ptr()` escape hatch is gone, and a `Cc`
+  kept past the saved line it named panics instead of reading a freed
+  `Box`. The syntax block, `SynBlockRef`, holds the handle of the object
+  that owns it (the buffer for its `b_s`, the window for an `:ownsyntax`
+  block) and dereferences through it, so it is checked as that handle is;
+  its aliasing is the owner handle's, closed with theirs.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with
@@ -415,7 +428,7 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   across a call that runs user code (an autocommand, a Lua callback — the
   p45 hazard — Vimscript) and dereferenced after `:bwipeout`/`:close` freed
   the object: now a panic at the dereference, not a use-after-free. Still
-  open for `PosRef`/`Live<T>`/`GridRef`/`Term`.
+  open for `PosRef`/`GridRef`/`Term`.
 - **Closure:** restructure. Liveness: a handle is an id plus a generation
   checked against a side table on dereference (the object's own memory
   cannot carry it — it may be freed); a check-always that wants its own
@@ -423,7 +436,7 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   through a checked handle, writes through a scoped, tracked `with_mut`
   (S1's tracker keyed by object). Order: ~~`GridRef` + `of_cell` (S)~~, ~~`Term`
   (S)~~, ~~`syn_block_mut` (13 sites, S)~~, ~~`held_line` (the matcher's line
-  cursor, M)~~, `Live<T>` users (M), then `Win`/`Buf`/`TabPage` (XL; 553 files
+  cursor, M)~~, ~~`Live<T>` users (M)~~, then `Win`/`Buf`/`TabPage` (XL; 553 files
   name them). **XL** overall.
 
 ### ~~S6 — value-handle edits~~ (closed: check-always, and a type for partials)

@@ -40,6 +40,7 @@ use crate::drawscreen::state::{
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_docmd::state::GLOBAL_BUSY;
+use crate::ex_getln::Cc;
 use crate::ex_getln::state::CMDLINE_WAS_LAST_DRAWN;
 use crate::ex_getln::{cmdline_screen_cleared, compute_cmdrow, redrawcmdline};
 use crate::fold::FoldInfo;
@@ -130,7 +131,7 @@ use crate::window::{
     global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages, win_fdccol_count,
     win_new_screensize, win_ui_flush,
 };
-use crate::winlayer::{self, Cc, Win};
+use crate::winlayer::{self, Win};
 
 // The carve of the transpiled module; see each child's docs.
 mod resize;

@@ -43,52 +43,52 @@ fn prev_char(line: &[u8], at: usize) -> usize {
 /// Answers [`KeyOutcome::GotoNormalMode`] when erasing emptied a bare `:`
 /// line, which leaves the command line altogether.
 pub(crate) fn command_line_erase_chars(s: &mut CommandLineState) -> KeyOutcome {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     if s.c == SpecialKey::Kdel {
         s.c = Key::from(SpecialKey::Del);
     }
 
     // Deleting the current character is the same as a backspace on the
     // next character, except at the end of the line.
-    if s.c == SpecialKey::Del && cc.cmdpos != cc.len() {
-        cc.cmdpos += 1;
+    if s.c == SpecialKey::Del && cc.cmdpos() != cc.len() {
+        cc.set_cmdpos(cc.cmdpos() + 1);
     }
     if s.c == SpecialKey::Del {
         // C's `mb_off_next`: forward to the start of the next character
         // when the cursor is inside one.
         let line = cc.bytes();
-        let at = usize::try_from(cc.cmdpos).unwrap_or(0).min(line.len());
-        let back = head_off(line, at);
+        let at = usize::try_from(cc.cmdpos()).unwrap_or(0).min(line.len());
+        let back = head_off(&line, at);
         let fwd = if back == 0 {
             0
         } else {
             c_cluster_len(&line[at - back..]) - back
         };
-        cc.cmdpos += len_as_int(fwd);
+        cc.set_cmdpos(cc.cmdpos() + len_as_int(fwd));
     }
 
-    if cc.cmdpos > 0 {
-        let j = cc.cmdpos;
+    if cc.cmdpos() > 0 {
+        let j = cc.cmdpos();
         let line = cc.bytes();
-        let mut p = prev_char(line, usize::try_from(j).unwrap_or(0).min(line.len()));
+        let mut p = prev_char(&line, usize::try_from(j).unwrap_or(0).min(line.len()));
 
         if s.c == Key::CTRL_W {
             while p > 0 && ascii_isspace(::core::ffi::c_int::from(line[p])) {
-                p = prev_char(line, p);
+                p = prev_char(&line, p);
             }
             let class = class_in(&line[p..], Buf::current());
             while p > 0 && class_in(&line[p..], Buf::current()) == class {
-                p = prev_char(line, p);
+                p = prev_char(&line, p);
             }
             if class_in(&line[p..], Buf::current()) != class {
                 p += c_cluster_len(&line[p..]);
             }
         }
 
-        cc.cmdpos = len_as_int(p);
+        cc.set_cmdpos(len_as_int(p));
         // Take the deleted bytes out; the tail and its terminator move down.
-        let pos = cc.cmdpos;
-        cc.cmdbuff.splice(pos, j, &[]);
+        let pos = cc.cmdpos();
+        cc.with_mut(|line| line.cmdbuff.splice(pos, j, &[]));
         if cc.is_empty() {
             s.is_state.search_start = s.is_state.save_cursor;
             // Save the view settings, so that the screen won't be
@@ -96,9 +96,13 @@ pub(crate) fn command_line_erase_chars(s: &mut CommandLineState) -> KeyOutcome {
             s.is_state.old_viewstate = s.is_state.init_viewstate.clone();
         }
         redrawcmd();
-    } else if cc.is_empty() && s.c != Key::CTRL_W && cc.cmdprompt.is_none() && s.indent == 0 {
+    } else if cc.is_empty()
+        && s.c != Key::CTRL_W
+        && cc.with(|line| line.cmdprompt.is_none())
+        && s.indent == 0
+    {
         // In ex and debug mode it doesn't make sense to return.
-        if EXMODE_ACTIVE.get() || cc.cmdfirstc == b'>' {
+        if EXMODE_ACTIVE.get() || cc.cmdfirstc() == b'>' {
             return KeyOutcome::NotChanged;
         }
 
@@ -151,7 +155,7 @@ pub(crate) fn command_line_toggle_langmap(s: &CommandLineState) {
 
 /// Handle CTRL-R: insert the contents of a numbered or named register.
 pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     let save_new_cmdpos = NEW_CMDPOS.get();
 
     putcmdline(b'"'.cast_signed(), true);
@@ -169,7 +173,7 @@ pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
     // Insert the result of an expression.
     NEW_CMDPOS.set(-1);
     if s.c.is('=') {
-        if cc.cmdfirstc == b'='  // can't do this recursively
+        if cc.cmdfirstc() == b'='  // can't do this recursively
             || CMDLINE_STAR.get() > 0
         // or when typing a password
         {
@@ -203,12 +207,12 @@ pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
         KEY_TYPED.set(false); // don't do 'wildchar' completion
         if NEW_CMDPOS.get() >= 0 {
             // set_cmdline_pos() was used.
-            cc.cmdpos = cc.len().min(NEW_CMDPOS.get());
+            cc.set_cmdpos(cc.len().min(NEW_CMDPOS.get()));
         }
     }
     NEW_CMDPOS.set(save_new_cmdpos);
 
-    cc.special_char = 0; // remove the double quote
+    cc.set_special_char(0); // remove the double quote
     redrawcmd();
 
     // With "literally" the command line has already changed; otherwise the
@@ -222,24 +226,24 @@ pub(crate) fn command_line_insert_reg(s: &mut CommandLineState) -> KeyOutcome {
 
 /// Handle a left or right mouse click: put the cursor where it landed.
 pub(crate) fn command_line_left_right_mouse(s: &mut CommandLineState) {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     s.ignore_drag_release = s.c == SpecialKey::Leftrelease || s.c == SpecialKey::Rightrelease;
 
-    cc.cmdspos = cmd_startcol();
-    cc.cmdpos = 0;
-    while cc.cmdpos < cc.len() {
-        let cells = cmdline_charsize(cc.cmdpos);
-        if MOUSE_ROW.get() <= CMDLINE_ROW.get() + cc.cmdspos / COLUMNS.get()
-            && MOUSE_COL.get() < cc.cmdspos % COLUMNS.get() + cells
+    cc.set_cmdspos(cmd_startcol());
+    cc.set_cmdpos(0);
+    while cc.cmdpos() < cc.len() {
+        let cells = cmdline_charsize(cc.cmdpos());
+        if MOUSE_ROW.get() <= CMDLINE_ROW.get() + cc.cmdspos() / COLUMNS.get()
+            && MOUSE_COL.get() < cc.cmdspos() % COLUMNS.get() + cells
         {
             break;
         }
 
         // Count ">" for a double-wide character that doesn't fit.
-        cc.cmdspos = correct_screencol(cc.cmdpos, cells, cc.cmdspos);
-        cc.cmdpos += cluster_len_at(cc, cc.cmdpos) - 1;
-        cc.cmdspos += cells;
-        cc.cmdpos += 1;
+        cc.set_cmdspos(correct_screencol(cc.cmdpos(), cells, cc.cmdspos()));
+        cc.set_cmdpos(cc.cmdpos() + cluster_len_at(cc, cc.cmdpos()) - 1);
+        cc.set_cmdspos(cc.cmdspos() + cells);
+        cc.set_cmdpos(cc.cmdpos() + 1);
     }
 }
 
@@ -316,9 +320,9 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             SpecialKey::Home | SpecialKey::Khome | SpecialKey::SHome | SpecialKey::CHome,
         )
         | KeyKind::Char(Key::CTRL_B) => {
-            let mut cc = Cc::current();
-            cc.cmdpos = 0;
-            cc.cmdspos = cmd_startcol();
+            let cc = Cc::current();
+            cc.set_cmdpos(0);
+            cc.set_cmdspos(cmd_startcol());
             Some(command_line_not_changed(s))
         }
         // End of the command line.
@@ -326,9 +330,9 @@ fn command_line_dispatch_key(s: &mut CommandLineState) -> Option<Step> {
             SpecialKey::End | SpecialKey::Kend | SpecialKey::SEnd | SpecialKey::CEnd,
         )
         | KeyKind::Char(Key::CTRL_E) => {
-            let mut cc = Cc::current();
-            cc.cmdpos = cc.len();
-            cc.cmdspos = cmd_screencol(cc.cmdpos);
+            let cc = Cc::current();
+            cc.set_cmdpos(cc.len());
+            cc.set_cmdspos(cmd_screencol(cc.cmdpos()));
             Some(command_line_not_changed(s))
         }
         KeyKind::Char(Key::CTRL_A) => key_complete_all(s),
@@ -382,8 +386,8 @@ fn step_after(s: &mut CommandLineState, outcome: KeyOutcome) -> Step {
 
 /// `<Insert>`: toggle between inserting and overstriking.
 fn key_toggle_overstrike(s: &mut CommandLineState) -> Step {
-    let mut cc = Cc::current();
-    cc.overstrike = !cc.overstrike;
+    let cc = Cc::current();
+    cc.set_overstrike(!cc.overstrike());
     ui_cursor_shape(); // may show a different cursor shape
     may_trigger_modechanged();
     status_redraw_curbuf();
@@ -393,12 +397,12 @@ fn key_toggle_overstrike(s: &mut CommandLineState) -> Step {
 
 /// CTRL-U: delete all characters left of the cursor.
 fn key_delete_to_start(s: &mut CommandLineState) -> Step {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     // Shift the tail down over everything left of the cursor; `set_len`
     // writes the terminator, so it comes after the move.
-    let j = cc.cmdpos;
-    cc.cmdbuff.splice(0, j, &[]);
-    cc.cmdpos = 0;
+    let j = cc.cmdpos();
+    cc.with_mut(|line| line.cmdbuff.splice(0, j, &[]));
+    cc.set_cmdpos(0);
     if cc.is_empty() {
         s.is_state.search_start = s.is_state.save_cursor;
     }
@@ -441,51 +445,50 @@ fn moves_by_word(c: Key, shifted: SpecialKey, controlled: SpecialKey) -> bool {
 
 /// `<Right>` and its word forms: move the cursor right.
 fn key_cursor_right(s: &mut CommandLineState) -> Step {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     let by_word = moves_by_word(s.c, SpecialKey::SRight, SpecialKey::CRight);
-    while cc.cmdpos < cc.len() {
-        let cells = cmdline_charsize(cc.cmdpos);
-        if KEY_TYPED.get() && cc.cmdspos + cells >= COLUMNS.get() * ROWS.get() {
+    while cc.cmdpos() < cc.len() {
+        let cells = cmdline_charsize(cc.cmdpos());
+        if KEY_TYPED.get() && cc.cmdspos() + cells >= COLUMNS.get() * ROWS.get() {
             break;
         }
-        cc.cmdspos += cells;
-        cc.cmdpos += cluster_len_at(cc, cc.cmdpos);
+        cc.set_cmdspos(cc.cmdspos() + cells);
+        cc.set_cmdpos(cc.cmdpos() + cluster_len_at(cc, cc.cmdpos()));
         if !(by_word
-            && cc
-                .cmdbuff
-                .raw_byte_at(usize::try_from(cc.cmdpos).unwrap_or(0))
-                != b' ')
+            && cc.with(|line| {
+                line.cmdbuff
+                    .raw_byte_at(usize::try_from(line.cmdpos).unwrap_or(0))
+            }) != b' ')
         {
             break;
         }
     }
-    cc.cmdspos = cmd_screencol(cc.cmdpos);
+    cc.set_cmdspos(cmd_screencol(cc.cmdpos()));
     command_line_not_changed(s)
 }
 
 /// `<Left>` and its word forms: move the cursor left.
 fn key_cursor_left(s: &mut CommandLineState) -> Step {
-    let mut cc = Cc::current();
-    if cc.cmdpos == 0 {
+    let cc = Cc::current();
+    if cc.cmdpos() == 0 {
         return command_line_not_changed(s);
     }
     let by_word = moves_by_word(s.c, SpecialKey::SLeft, SpecialKey::CLeft);
     loop {
-        cc.cmdpos -= 1;
+        cc.set_cmdpos(cc.cmdpos() - 1);
         // Move to the first byte of a possibly multibyte char.
-        cc.cmdpos -= len_as_int(head_off(
-            cc.bytes(),
-            usize::try_from(cc.cmdpos).unwrap_or(0),
-        ));
-        cc.cmdspos -= cmdline_charsize(cc.cmdpos);
-        if !(cc.cmdpos > 0 && by_word && cc.byte_at(cc.cmdpos - 1) != b' ') {
+        let back =
+            cc.with(|line| head_off(line.bytes(), usize::try_from(line.cmdpos).unwrap_or(0)));
+        cc.set_cmdpos(cc.cmdpos() - len_as_int(back));
+        cc.set_cmdspos(cc.cmdspos() - cmdline_charsize(cc.cmdpos()));
+        if !(cc.cmdpos() > 0 && by_word && cc.byte_at(cc.cmdpos() - 1) != b' ') {
             break;
         }
     }
 
-    cc.cmdspos = cmd_screencol(cc.cmdpos);
-    if cc.special_char != 0 {
-        putcmdline(cc.special_char, cc.special_shift);
+    cc.set_cmdspos(cmd_screencol(cc.cmdpos()));
+    if cc.special_char() != 0 {
+        putcmdline(cc.special_char(), cc.special_shift());
     }
     command_line_not_changed(s)
 }
@@ -505,15 +508,15 @@ fn key_paste_clipboard(s: &mut CommandLineState) -> Step {
 
 /// A left or right click, drag or release.
 fn key_click(s: &mut CommandLineState) -> Step {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     // Ignore drag and release events when the button-down wasn't seen
     // before.
     if s.c != SpecialKey::Leftmouse && s.c != SpecialKey::Rightmouse && s.ignore_drag_release {
         return command_line_not_changed(s);
     }
     // Return on a left click above a number prompt.
-    if s.c != SpecialKey::Rightmouse && cc.mouse_prompt && MOUSE_ROW.get() < CMDLINE_ROW.get() {
-        cc.mouse_used = true;
+    if s.c != SpecialKey::Rightmouse && cc.mouse_prompt() && MOUSE_ROW.get() < CMDLINE_ROW.get() {
+        cc.set_mouse_used(true);
         return Step::Leave;
     }
     command_line_left_right_mouse(s);
@@ -592,7 +595,7 @@ fn key_match_or_history(s: &mut CommandLineState) -> Option<Step> {
 /// CTRL-V or CTRL-Q: read the next key literally into `s.c`, to be inserted
 /// as ordinary text.
 fn key_read_literal(s: &mut CommandLineState) {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     s.ignore_drag_release = true;
     putcmdline(b'^'.cast_signed(), true);
 
@@ -601,14 +604,14 @@ fn key_read_literal(s: &mut CommandLineState) {
     s.c = get_literal(MOD_MASK.get().has(ModMask::SHIFT));
 
     s.do_abbr = false; // don't do abbreviation now
-    cc.special_char = 0;
+    cc.set_special_char(0);
     // May need to remove the ^ when a composing char was typed.
     if utf_iscomposing_first(s.c.code()) && !CMD_SILENT.get() {
         if ui_has(UI_CMDLINE) {
             // TODO(bfredl): why not make unputcmdline also work with true?
             unputcmdline();
         } else {
-            draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
+            draw_cmdline(cc.cmdpos(), cc.len() - cc.cmdpos());
             msg_put_ascii(b' ');
             cursorcmd();
         }
@@ -620,7 +623,7 @@ fn key_read_digraph(s: &mut CommandLineState) -> Option<Step> {
     s.ignore_drag_release = true;
     putcmdline(b'?'.cast_signed(), true);
     s.c = get_digraph(true);
-    Cc::current().special_char = 0;
+    Cc::current().set_special_char(0);
 
     if !s.c.is_nul() {
         return None;
@@ -631,12 +634,12 @@ fn key_read_digraph(s: &mut CommandLineState) -> Option<Step> {
 
 /// Any other key: a `q` that answers a number prompt, or ordinary text.
 fn key_other(s: &CommandLineState) -> Option<Step> {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     let c = s.c;
     // Number prompts use the mouse and return on a 'q' press; otherwise 'q'
     // FALLS THROUGH to the default arm.
-    if c.is('q') && cc.mouse_prompt {
-        cc.cmdbuff.set_byte(0, 0);
+    if c.is('q') && cc.mouse_prompt() {
+        cc.with_mut(|line| line.cmdbuff.set_byte(0, 0));
         return Some(Step::Leave);
     }
     // A normal character with no special meaning. Just set mod_mask to 0x0,
@@ -653,7 +656,7 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> Step {
     // For a one-key prompt, avoid putting ESC and Ctrl-C onto the cmdline.
     // For all other keys, just put it onto the cmdline and exit — which is
     // the C's `goto end`.
-    if !(cc.one_key && s.c != Key::ESC && s.c != Key::CTRL_C) {
+    if !(cc.one_key() && s.c != Key::ESC && s.c != Key::CTRL_C) {
         if let Some(rc) = command_line_dispatch_key(s) {
             return rc;
         }
@@ -679,7 +682,7 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> Step {
         let j = encode_char(s.c.code(), &mut ch);
         put_on_cmdline(&ch[..j], true);
     }
-    if Cc::current().one_key {
+    if Cc::current().one_key() {
         Step::Leave
     } else {
         command_line_changed(s)
@@ -689,15 +692,17 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> Step {
 /// The length of the character cluster at byte `i` of the command line: C's
 /// `utfc_ptr2len(cmdbuff + i)`, 0 at the end.
 pub(crate) fn cluster_len_at(cc: Cc, i: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    let line = cc.bytes();
-    let at = usize::try_from(i).unwrap_or(0).min(line.len());
-    let rest = &line[at..];
-    // An ASCII character with no composing character after it: what nearly
-    // every key typed on the command line is.
-    match rest {
-        [] => 0,
-        [first, next, ..] if (1..0x80).contains(first) && *next < 0x80 => 1,
-        [first] if (1..0x80).contains(first) => 1,
-        _ => len_as_int(c_cluster_len(rest)),
-    }
+    cc.with(|line| {
+        let line = line.bytes();
+        let at = usize::try_from(i).unwrap_or(0).min(line.len());
+        let rest = &line[at..];
+        // An ASCII character with no composing character after it: what
+        // nearly every key typed on the command line is.
+        match rest {
+            [] => 0,
+            [first, next, ..] if (1..0x80).contains(first) && *next < 0x80 => 1,
+            [first] if (1..0x80).contains(first) => 1,
+            _ => len_as_int(c_cluster_len(rest)),
+        }
+    })
 }

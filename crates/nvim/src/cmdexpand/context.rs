@@ -27,6 +27,7 @@ use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::ex_cmds::skip_vimgrep_pat_at;
 use crate::ex_docmd::{ends_excmd, excmd_get_cmdidx_bytes};
+use crate::ex_getln::Cc;
 use crate::ex_getln::parse_pattern_and_range_of;
 use crate::guard::Suppress;
 use crate::mbyte::Codepoint;
@@ -42,7 +43,6 @@ use crate::strings::has_char;
 use crate::syntax::set_context_in_echohl_cmd;
 use crate::types::LineNr;
 use crate::types::{CmdIdx, CmdLine, ExArg};
-use crate::winlayer::Cc;
 use core::ffi::{CStr, c_int};
 
 /// `ASCII_ISALPHA(c) || c == '*'` — the bytes a built-in command name is made
@@ -106,34 +106,34 @@ pub fn set_expand_context(expand: &mut Expand) {
     let ccline = Cc::current();
 
     // Handle search commands: '/' or '?'.
-    if (ccline.cmdfirstc == b'/' || ccline.cmdfirstc == b'?') && MAY_EXPAND_PATTERN.get() {
+    if (ccline.cmdfirstc() == b'/' || ccline.cmdfirstc() == b'?') && MAY_EXPAND_PATTERN.get() {
         expand.context = ExpandContext::PatternInBuf;
-        expand.search_dir = if ccline.cmdfirstc == b'/' {
+        expand.search_dir = if ccline.cmdfirstc() == b'/' {
             FORWARD
         } else {
             BACKWARD
         };
-        expand.line = owned(ccline.text_bytes());
+        expand.line = owned(&ccline.bytes());
         expand.pattern = 0;
         expand.has_pattern = true;
-        expand.pattern_len = usize::try_from(ccline.cmdpos).unwrap_or(0);
+        expand.pattern_len = usize::try_from(ccline.cmdpos()).unwrap_or(0);
         SEARCH_FIRST_LINE.set(LineNr::ZERO); // Search entire buffer
         return;
     }
 
     // Only handle ':', '>', or '=' command-lines, or expression input.
-    if ccline.cmdfirstc != b':'
-        && ccline.cmdfirstc != b'>'
-        && ccline.cmdfirstc != b'='
-        && !ccline.input_fn
+    if ccline.cmdfirstc() != b':'
+        && ccline.cmdfirstc() != b'>'
+        && ccline.cmdfirstc() != b'='
+        && !ccline.input_fn()
     {
         expand.context = ExpandContext::Nothing;
         return;
     }
 
     // Fallback to command-line expansion.
-    let line = ccline.text_bytes().to_vec();
-    set_cmd_context(expand, &line, ccline.cmdpos, true);
+    let line = ccline.bytes().to_vec();
+    set_cmd_context(expand, &line, ccline.cmdpos(), true);
 }
 
 /// Set the index of a built-in or user defined command at `cmd` in
@@ -685,12 +685,12 @@ pub(crate) fn set_context_with_pattern(expand: &mut Expand) {
     let Some((skiplen, patlen)) = parsed else {
         return;
     };
-    if ccline.cmdpos <= skiplen || ccline.cmdpos > skiplen + patlen {
+    if ccline.cmdpos() <= skiplen || ccline.cmdpos() > skiplen + patlen {
         return;
     }
 
     expand.pattern = usize::try_from(skiplen).unwrap_or(0);
-    expand.pattern_len = usize::try_from(ccline.cmdpos - skiplen).unwrap_or(0);
+    expand.pattern_len = usize::try_from(ccline.cmdpos() - skiplen).unwrap_or(0);
     expand.context = ExpandContext::PatternInBuf;
     expand.search_dir = FORWARD;
 }

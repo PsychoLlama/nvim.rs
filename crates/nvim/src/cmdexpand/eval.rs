@@ -23,6 +23,7 @@ use crate::eval::typval::{
     NumBuf, tv_check_for_string_arg, tv_dict_alloc_ret, tv_get_number_chk, tv_list_alloc,
     tv_list_alloc_ret,
 };
+use crate::ex_getln::Cc;
 use crate::lua::executor::nlua_expand_pat;
 use crate::menu::set_context_in_menu_cmd;
 use crate::message::{E_INVARG, emsg};
@@ -36,7 +37,6 @@ use crate::semsg;
 use crate::sign::set_context_in_sign_cmd;
 use crate::types::{TypVal, VAR_STRING, VarNumber};
 use crate::usercmd::{cmdcomplete_str_to_type, cmdcomplete_type_to_str};
-use crate::winlayer::Cc;
 
 /// What `getcompletion()` asks of every expansion: newline-separated so the
 /// caller can split it, quiet, and with `~/` restored.

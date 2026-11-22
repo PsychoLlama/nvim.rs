@@ -78,7 +78,7 @@ pub(crate) fn command_line_next_histidx(s: &mut CommandLineState, next_match: bo
 
 /// Handle Up, Down, PageUp, PageDown, CTRL-N and CTRL-P on the command line.
 pub(crate) fn command_line_browse_history(s: &mut CommandLineState) -> KeyOutcome {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     if s.histype == HIST_INVALID || get_hislen() == 0 || s.firstc == 0 {
         return KeyOutcome::NotChanged; // no history
     }
@@ -89,7 +89,7 @@ pub(crate) fn command_line_browse_history(s: &mut CommandLineState) -> KeyOutcom
     if s.lookfor.is_none() {
         // C's `xstrnsave(cmdbuff, cmdlen)` cut at the cursor.
         let line = cc.bytes();
-        let upto = usize::try_from(cc.cmdpos).unwrap_or(0).min(line.len());
+        let upto = usize::try_from(cc.cmdpos()).unwrap_or(0).min(line.len());
         s.lookfor = Some(cstr::until_nul(&line[..upto]).to_vec());
     }
 
@@ -144,8 +144,8 @@ pub(crate) fn command_line_browse_history(s: &mut CommandLineState) -> KeyOutcom
     };
     let len = ::core::ffi::c_int::try_from(line.len()).expect("a history entry fits a c_int");
     cc.open(len);
-    cc.cmdbuff.write_text(&line);
-    cc.cmdpos = len;
+    cc.with_mut(|l| l.cmdbuff.write_text(&line));
+    cc.set_cmdpos(len);
 
     redrawcmd();
     KeyOutcome::Changed

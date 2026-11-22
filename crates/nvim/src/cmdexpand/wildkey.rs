@@ -20,6 +20,7 @@ use crate::cmdexpand::state::{SAVED_STATUS_OPTS, WILD_MENU_SHOWING};
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::drawscreen::{redraw_statuslines, update_screen};
 use crate::ex_docmd::set_no_hlsearch;
+use crate::ex_getln::Cc;
 use crate::ex_getln::{put_on_cmdline, redrawcmd};
 use crate::getchar::state::KEY_TYPED;
 use crate::guard::Allow;
@@ -30,7 +31,7 @@ use crate::option::wildchar;
 use crate::path::{PATHSEP_BYTE, vim_ispathsep};
 use crate::types::Key;
 use crate::window::last_status;
-use crate::winlayer::{Cc, current_topframe};
+use crate::winlayer::current_topframe;
 use core::ffi::c_int;
 
 /// One directory level up, as it is spelled on the command line.
@@ -46,7 +47,7 @@ const _: () = assert!(PATHSEP_BYTE == b'/', "UPSEG hard-codes the path separator
 fn line_byte(cclp: Cc, i: c_int) -> u8 {
     usize::try_from(i)
         .ok()
-        .and_then(|i| cclp.text_bytes().get(i).copied())
+        .and_then(|i| cclp.with(|line| line.bytes().get(i).copied()))
         .unwrap_or(0)
 }
 
@@ -71,9 +72,9 @@ pub(crate) fn wildmenu_translate_key(
 
     // Hitting CR after "emenu Name.": complete the submenu.
     if context == ExpandContext::Menunames
-        && cclp.cmdpos > 1
-        && line_byte(cclp, cclp.cmdpos - 1) == b'.'
-        && line_byte(cclp, cclp.cmdpos - 2) != b'\\'
+        && cclp.cmdpos() > 1
+        && line_byte(cclp, cclp.cmdpos() - 1) == b'.'
+        && line_byte(cclp, cclp.cmdpos() - 2) != b'\\'
         && (c == Key::NL || c == Key::CAR || c == SpecialKey::Kenter)
     {
         c = Key::from(SpecialKey::Down);
@@ -82,11 +83,11 @@ pub(crate) fn wildmenu_translate_key(
 }
 
 /// Delete characters on the command line, from `from` to the current position.
-fn cmdline_del(mut cclp: Cc, from: c_int) {
-    debug_assert!(cclp.cmdpos <= cclp.len());
-    let cursor = cclp.cmdpos;
+fn cmdline_del(cclp: Cc, from: c_int) {
+    debug_assert!(cclp.cmdpos() <= cclp.len());
+    let cursor = cclp.cmdpos();
     cclp.replace_range(from, cursor, &[], 0);
-    cclp.cmdpos = from;
+    cclp.set_cmdpos(from);
 }
 
 /// Ask for a fresh completion of what is now on the command line.
@@ -101,7 +102,7 @@ fn recomplete() -> Key {
 /// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.
 fn wildmenu_process_key_menunames(cclp: Cc, key: Key, expand: &mut Expand) -> Key {
     let at = |k: c_int| line_byte(cclp, k);
-    if key == SpecialKey::Down && cclp.cmdpos > 0 && at(cclp.cmdpos - 1) == b'.' {
+    if key == SpecialKey::Down && cclp.cmdpos() > 0 && at(cclp.cmdpos() - 1) == b'.' {
         // Hitting <Down> after "emenu Name.": complete the submenu.
         return recomplete();
     }
@@ -151,19 +152,23 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: Key, expand: &Expand) -> Key {
     // Where the pattern being completed starts.
     let start = as_count(expand.pattern);
     // Step back from `j` to the start of the character before it.
-    let back_to_head =
-        |j: c_int| as_count(head_off(cclp.text_bytes(), usize::try_from(j).unwrap_or(0)));
+    let back_to_head = |j: c_int| {
+        as_count(cclp.with(|line| head_off(line.bytes(), usize::try_from(j).unwrap_or(0))))
+    };
     let starts_with_at = |j: c_int, what: &[u8]| {
-        usize::try_from(j)
-            .ok()
-            .and_then(|j| cclp.text_bytes().get(j..))
-            .is_some_and(|rest| rest.starts_with(what))
+        usize::try_from(j).ok().is_some_and(|j| {
+            cclp.with(|line| {
+                line.bytes()
+                    .get(j..)
+                    .is_some_and(|rest| rest.starts_with(what))
+            })
+        })
     };
 
     if key == SpecialKey::Down
-        && cclp.cmdpos > 0
-        && at(cclp.cmdpos - 1) == PATHSEP_BYTE
-        && (cclp.cmdpos < 3 || at(cclp.cmdpos - 2) != b'.' || at(cclp.cmdpos - 3) != b'.')
+        && cclp.cmdpos() > 0
+        && at(cclp.cmdpos() - 1) == PATHSEP_BYTE
+        && (cclp.cmdpos() < 3 || at(cclp.cmdpos() - 2) != b'.' || at(cclp.cmdpos() - 3) != b'.')
     {
         // Go down a directory.
         return recomplete();
@@ -176,7 +181,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: Key, expand: &Expand) -> Key {
         // In a direct ancestor: strip off one "../" to go down.  Walk
         // back to the separator that ends the "..".
         let mut found = false;
-        let mut j = cclp.cmdpos;
+        let mut j = cclp.cmdpos();
         loop {
             j -= 1;
             if j <= start {
@@ -207,7 +212,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: Key, expand: &Expand) -> Key {
     // what is deleted is the whole trailing path component.
     let mut found = false;
     let mut i = start;
-    let mut j = cclp.cmdpos - 1;
+    let mut j = cclp.cmdpos() - 1;
     loop {
         j -= 1;
         if j <= i {
@@ -238,7 +243,7 @@ fn wildmenu_process_key_filenames(cclp: Cc, key: Key, expand: &Expand) -> Key {
         // in machine-specific stuff here and in UPSEG.
         cmdline_del(cclp, j);
         put_on_cmdline(UPSEG_TAIL, false);
-    } else if cclp.cmdpos > i {
+    } else if cclp.cmdpos() > i {
         cmdline_del(cclp, i);
     }
 
@@ -269,7 +274,7 @@ pub(crate) fn wildmenu_cleanup(cclp: Cc) {
     }
 
     let skt = KEY_TYPED.get();
-    let redraw = cclp.input_fn.then(Allow::redraw);
+    let redraw = cclp.input_fn().then(Allow::redraw);
 
     // Clear highlighting applied during wildmenu activity.
     set_no_hlsearch(true);

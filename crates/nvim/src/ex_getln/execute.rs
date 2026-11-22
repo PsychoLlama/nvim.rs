@@ -56,7 +56,7 @@ const fn wildmenu_gesture(c: Key) -> Option<WildMode> {
 /// - `CTRL-\ CTRL-N` or `CTRL-\ CTRL-G` goes to Normal mode.
 /// - `CTRL-\ e` prompts for an expression.
 fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     s.c = {
         let _raw = Keys::unmapped_with_codes();
         plain_vgetc()
@@ -66,7 +66,7 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
     // in a mapping.
     if s.c != Key::CTRL_N
         && s.c != Key::CTRL_G
-        && (!s.c.is('e') || (cc.cmdfirstc == b'=' && KEY_TYPED.get()) || CMDLINE_STAR.get() > 0)
+        && (!s.c.is('e') || (cc.cmdfirstc() == b'=' && KEY_TYPED.get()) || CMDLINE_STAR.get() > 0)
     {
         vungetc(s.c);
         return CtrlBsl::ProcessNextKey;
@@ -80,10 +80,10 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
 
     // Replace the command line with the result of an expression. This
     // calls getcmdline() recursively, from get_expr_register().
-    NEW_CMDPOS.set(if cc.cmdpos == cc.len() {
+    NEW_CMDPOS.set(if cc.cmdpos() == cc.len() {
         99999 // keep it at the end
     } else {
-        cc.cmdpos
+        cc.cmdpos()
     });
 
     s.c = if get_expr_register() {
@@ -103,11 +103,11 @@ fn command_line_handle_ctrl_bsl(s: &mut CommandLineState) -> CtrlBsl {
             let text = p.as_cstr().to_bytes();
             let len = ::core::ffi::c_int::try_from(text.len()).unwrap_or(::core::ffi::c_int::MAX);
             realloc_cmdbuff(cc, len + 1);
-            cc.cmdbuff.write_text(text);
+            cc.with_mut(|line| line.cmdbuff.write_text(text));
 
             // Restore the cursor, or use the position set with
             // set_cmdline_pos().
-            cc.cmdpos = cc.len().min(NEW_CMDPOS.get());
+            cc.set_cmdpos(cc.len().min(NEW_CMDPOS.get()));
 
             KEY_TYPED.set(false); // don't do 'wildchar' completion
             redrawcmd();
@@ -159,16 +159,16 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
     }
 
     let display_tick_saved: DispTick = Win::current().w_display_tick;
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     s.c = key;
 
     // If the cmdline was replaced externally (e.g. by setcmdline() during
     // an <expr> mapping), clean up the wildmenu completion state so that
     // stale completion data is not used.
-    if cc.cmdbuff_replaced && match_count() > 0 {
+    if cc.cmdbuff_replaced() && match_count() > 0 {
         command_line_end_wildmenu(s, false, None);
     }
-    cc.cmdbuff_replaced = false;
+    cc.set_cmdbuff_replaced(false);
 
     // Skip the wildmenu during history navigation with Up/Down.
     if s.c == SpecialKey::Wild && s.did_hist_navigate {
@@ -298,7 +298,7 @@ fn command_line_handle_event(s: &mut CommandLineState, display_tick_saved: DispT
         may_do_incsearch_highlighting(s.firstc, s.count, &mut s.is_state);
     }
     // If f_setcmdline() changed the cmdline, treat it as such.
-    if Cc::current().cmdbuff_replaced {
+    if Cc::current().cmdbuff_replaced() {
         command_line_changed(s);
     }
 
@@ -445,9 +445,9 @@ fn command_line_end_key(s: &mut CommandLineState, cc: Cc) -> Option<Step> {
     // In Ex mode a backslash escapes a newline.
     if EXMODE_ACTIVE.get()
         && s.c != Key::ESC
-        && cc.cmdpos == cc.len()
-        && cc.cmdpos > 0
-        && cc.byte_at(cc.cmdpos - 1) == b'\\'
+        && cc.cmdpos() == cc.len()
+        && cc.cmdpos() > 0
+        && cc.byte_at(cc.cmdpos() - 1) == b'\\'
     {
         if s.c == SpecialKey::Kenter {
             s.c = Key::NL;
@@ -500,10 +500,10 @@ fn after_wildmenu_gesture(s: &mut CommandLineState) -> Step {
 }
 
 pub(crate) fn may_trigger_cursormovedc(s: &CommandLineState) {
-    let mut cc = Cc::current();
-    if cc.cmdpos != s.prev_cmdpos {
+    let cc = Cc::current();
+    if cc.cmdpos() != s.prev_cmdpos {
         trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CursorMovedC);
-        cc.redraw_state = cc.redraw_state.max(CMD_REDRAW_POS);
+        cc.set_redraw_state(cc.redraw_state().max(CMD_REDRAW_POS));
     }
 }
 
@@ -514,7 +514,7 @@ pub(crate) fn may_trigger_cursormovedc(s: &CommandLineState) {
 /// the line itself did change.
 pub(crate) fn command_line_not_changed(s: &mut CommandLineState) -> Step {
     may_trigger_cursormovedc(s);
-    s.prev_cmdpos = Cc::current().cmdpos;
+    s.prev_cmdpos = Cc::current().cmdpos();
     if !s.is_state.incsearch_postponed {
         return Step::Go;
     }
@@ -576,11 +576,11 @@ pub(crate) fn command_line_changed(s: &mut CommandLineState) -> Step {
         }
     }
 
-    if !cc.cmdbuff_replaced
-        && (cc.cmdpos != s.prev_cmdpos
+    if !cc.cmdbuff_replaced()
+        && (cc.cmdpos() != s.prev_cmdpos
             || s.prev_cmdbuff
                 .as_deref()
-                .is_some_and(|prev| prev != cstr::until_nul(cc.bytes())))
+                .is_some_and(|prev| prev != cstr::until_nul(&cc.bytes())))
     {
         do_autocmd_cmdlinechanged(if s.firstc > 0 { s.firstc } else { b'-' });
     }

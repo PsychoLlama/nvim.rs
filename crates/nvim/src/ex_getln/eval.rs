@@ -58,12 +58,12 @@ pub(crate) fn get_cmdline_type() -> u8 {
     let Some(p) = get_ccline_ptr() else {
         return 0;
     };
-    if p.cmdfirstc == 0 {
+    if p.cmdfirstc() == 0 {
         // No first character: `input()` reports '@', a `:insert` style
         // line-getter '-'.
-        return if p.input_fn { b'@' } else { b'-' };
+        return if p.input_fn() { b'@' } else { b'-' };
     }
-    p.cmdfirstc
+    p.cmdfirstc()
 }
 
 /// A copy of the current command line, up to its first NUL; `None` when
@@ -73,7 +73,7 @@ pub(crate) fn get_cmdline_str() -> Option<ThinCString> {
         return None;
     }
     let p = get_ccline_ptr()?;
-    Some(ThinCString::from_bytes(cstr::until_nul(p.bytes())))
+    Some(ThinCString::from_bytes(cstr::until_nul(&p.bytes())))
 }
 
 /// The completion state of the current command line, computed on demand:
@@ -113,12 +113,8 @@ pub fn f_getcmdcomplpat(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
     // what upstream's `xp_pattern` pointed into: after a match was
     // inserted, the match.
     let pattern = cmdline_completion_state(|cc, xpc, _| {
-        xpc.has_pattern.then(|| {
-            cc.text_bytes()
-                .get(xpc.pattern..)
-                .unwrap_or_default()
-                .to_vec()
-        })
+        xpc.has_pattern
+            .then(|| cc.bytes().get(xpc.pattern..).unwrap_or_default().to_vec())
     })
     .flatten();
     *result = match pattern {
@@ -146,21 +142,23 @@ pub fn f_getcmdline(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 
 /// `getcmdpos()` function.
 pub fn f_getcmdpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(get_ccline_ptr().map_or(0, |p| VarNumber::from(p.cmdpos + 1)));
+    result.write_number(get_ccline_ptr().map_or(0, |p| VarNumber::from(p.cmdpos() + 1)));
 }
 
 /// `getcmdprompt()` function.
 pub fn f_getcmdprompt(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     result.write_string(get_ccline_ptr().and_then(|p| {
-        p.cmdprompt
-            .as_ref()
-            .map(|prompt| ThinCString::from_cstr(prompt.as_cstr()))
+        p.with(|line| {
+            line.cmdprompt
+                .as_ref()
+                .map(|prompt| ThinCString::from_cstr(prompt.as_cstr()))
+        })
     }));
 }
 
 /// `getcmdscreenpos()` function.
 pub fn f_getcmdscreenpos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(get_ccline_ptr().map_or(0, |p| VarNumber::from(p.cmdspos + 1)));
+    result.write_number(get_ccline_ptr().map_or(0, |p| VarNumber::from(p.cmdspos() + 1)));
 }
 
 /// `getcmdtype()` function.
@@ -176,7 +174,7 @@ pub fn f_getcmdtype(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
 /// A negative or out-of-range `pos` means the end of the line.  Answers
 /// whether there was a command line to set.
 pub(crate) fn set_cmdline_str(text: &[u8], pos: ::core::ffi::c_int) -> bool {
-    let Some(mut p) = get_ccline_ptr() else {
+    let Some(p) = get_ccline_ptr() else {
         return false;
     };
 
@@ -186,13 +184,13 @@ pub(crate) fn set_cmdline_str(text: &[u8], pos: ::core::ffi::c_int) -> bool {
     // `set_cmdline_str`.
     p.set_text(text);
 
-    p.cmdpos = if pos < 0 || pos > p.len() {
+    p.set_cmdpos(if pos < 0 || pos > p.len() {
         p.len()
     } else {
         pos
-    };
-    NEW_CMDPOS.set(p.cmdpos);
-    p.cmdbuff_replaced = true;
+    });
+    NEW_CMDPOS.set(p.cmdpos());
+    p.set_cmdbuff_replaced(true);
 
     redrawcmd();
 
@@ -249,7 +247,7 @@ pub fn f_setcmdpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// The first character of the current command line (`:`, `/`, `?`, …).
 pub fn get_cmdline_firstc() -> u8 {
-    Cc::current().cmdfirstc
+    Cc::current().cmdfirstc()
 }
 
 /// `wildtrigger()` function: ask the key loop to complete, as if `'wildchar'`

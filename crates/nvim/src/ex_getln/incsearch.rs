@@ -127,7 +127,7 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
 
     // A copy of what is typed so far: the scan below only reads it, and an
     // offset into the copy is the same offset into the line.
-    let line = CmdLine::from_bytes(cstr::until_nul(Cc::current().bytes()));
+    let line = CmdLine::from_bytes(cstr::until_nul(&Cc::current().bytes()));
 
     // Default range: all lines.
     SEARCH_FIRST_LINE.set(LineNr::ZERO);

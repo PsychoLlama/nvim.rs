@@ -24,6 +24,7 @@ use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::eval::set_context_for_expression;
 use crate::ex_docmd::{excmd_get_argt, is_user_cmd, skip_cmd_arg_at, skip_range};
+use crate::ex_getln::Cc;
 use crate::getchar::beep_flush;
 use crate::highlight_group::set_context_in_highlight_cmd;
 use crate::mapping::set_context_in_map_cmd;
@@ -38,7 +39,6 @@ use crate::sign::set_context_in_sign_cmd;
 use crate::syntax::{set_context_in_echohl_cmd, set_context_in_syntax_cmd};
 use crate::types::{CmdAddr, CmdIdx, ExArg, ExArgt};
 use crate::usercmd::{set_context_in_user_cmd, set_context_in_user_cmdarg};
-use crate::winlayer::Cc;
 use core::ffi::{CStr, c_int, c_uint};
 
 /// Set the completion context in `expand` for command `cmd` with index `cmdidx`.
@@ -632,15 +632,15 @@ pub fn set_cmd_context(expand: &mut Expand, line: &[u8], col: c_int, use_ccline:
     let snapshot = expand.line.clone();
     let text = snapshot.as_cstr();
 
-    if use_ccline && ccline.cmdfirstc == b'=' {
+    if use_ccline && ccline.cmdfirstc() == b'=' {
         // Pass CmdIdx::SIZE because there is no real command.
         set_context_for_expression(expand, 0, CmdIdx::SIZE);
         expand.has_pattern = true;
-    } else if use_ccline && ccline.input_fn {
-        expand.context = ccline.xp_context;
+    } else if use_ccline && ccline.input_fn() {
+        expand.context = ccline.xp_context();
         expand.pattern = 0;
         expand.has_pattern = true;
-        expand.arg = ccline.xp_arg.clone();
+        expand.arg = ccline.with(|line| line.xp_arg.clone());
         if expand.context == ExpandContext::ShellCmdLine {
             let mut context = expand.context;
             set_context_for_wildcard_arg(None, text, 0, false, expand, &mut context);

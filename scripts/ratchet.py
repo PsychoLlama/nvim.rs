@@ -915,7 +915,7 @@ over-approximating in the *safe* direction: a call is accepted if **any** `fn`
 of that name in the tree answers with a place (a `&`/`*` type, or a newtype
 that `impl DerefMut`s, which is how `cur_buf()`/`cur_win()` write through a
 pointer — a `type` alias of such a newtype, as `ops::Op` is of
-`winlayer::Live`, counts as one too). So a same-named sibling can hide a real one; what it cannot do is
+`slot::SlotRef`, counts as one too). So a same-named sibling can hide a real one; what it cannot do is
 cry wolf, which is what would get it switched off.
 
 Everything is measured over a *masked* copy of the source, in which comments,
@@ -2224,6 +2224,7 @@ COPY_KEEPERS = {
     "crates/nvim/src/event/uv.rs": "ffi: libuv's structs, copied as C copies them",
     "crates/nvim/src/ex_cmds/mod.rs::SubResult": "value",
     "crates/nvim/src/ex_cmds/sort.rs::StringOrder": "value",
+    "crates/nvim/src/ex_getln/line.rs::Cc": "handle: which command line, as a saved-stack index",
     "crates/nvim/src/extmark/mod.rs::Extent": "value",
     "crates/nvim/src/getchar/mapmatch.rs::Candidate": "value",
     "crates/nvim/src/getchar/mod.rs::GotcharsState": "value",
@@ -2274,6 +2275,7 @@ COPY_KEEPERS = {
     "crates/nvim/src/spellsuggest/soundalike.rs::KeepCapLevel": "value",
     "crates/nvim/src/statusline/stl/arena.rs::StlItem": "value",
     "crates/nvim/src/strings/charindex.rs::CharLen": "value",
+    "crates/nvim/src/syntax/mod.rs::SynBlockRef": "handle: the block's owner handle and its address",
     "crates/nvim/src/syntax/mod.rs::SynGroup": "value",
     "crates/nvim/src/syntax/mod.rs::PatOffsets": "value",
     "crates/nvim/src/textformat/para.rs::Leader": "value",
@@ -2448,7 +2450,7 @@ DEREF_MUT = re.compile(
 DEREF_MUT_MACRO = re.compile(
     r"\bderef_to_field!\s*\(\s*(?:impl\[[^\]]*\]\s*)?([A-Za-z_][A-Za-z0-9_]*)[^=]*=>\s*mut\b"
 )
-# `type Op = Live<OpArg>;` — a family's name for a shared generic wrapper.
+# `type Op = SlotRef<OpArg>;` — a family's name for a shared generic wrapper.
 # The scan is keyed on names, so an alias of a `DerefMut` type is one too.
 TYPE_ALIAS = re.compile(
     r"\btype\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*=\s*"
@@ -2700,7 +2702,7 @@ def place_writes(tree):
         deref_mut.update(DEREF_MUT_MACRO.findall(masked))
         aliases.update(TYPE_ALIAS.findall(masked))
         fn_returns(masked, returns)
-    # Chase aliases to a fixed point: `Op` is a place because `Live<T>` is.
+    # Chase aliases to a fixed point: `Op` is a place because `SlotRef<T>` is.
     for _ in range(len(aliases)):
         grown = {name for name, base in aliases.items() if base in deref_mut}
         if grown <= deref_mut:
@@ -2771,7 +2773,8 @@ def check_deref_temporary_mutations(tree):
             "the dereference made, and the change is discarded:\n"
             + "\n".join(found)
             + "\nThe region has to cover the call: `unsafe { (*p).count."
-            "retain() }`, or wrap the pointer in a `winlayer::Live<T>` once."
+            "retain() }`, or give the pointee a checked handle once "
+            "(`slot::SlotRef`, the `winlayer` handles)."
         )
 
 
@@ -2827,8 +2830,8 @@ def check_deref_field_writes(tree):
             "discarded:\n"
             + "\n".join(found)
             + "\nThe region has to cover the assignment: "
-            "`unsafe { (*p).a = 42 }`, or wrap the pointer in a "
-            "`winlayer::Live<T>` once."
+            "`unsafe { (*p).a = 42 }`, or give the pointee a checked handle "
+            "once (`slot::SlotRef`, the `winlayer` handles)."
         )
 
 
@@ -2840,8 +2843,8 @@ def check_borrowed_derefs(tree):
             "expression, so the borrow names a temporary and every write "
             "through it is discarded:\n"
             + "\n".join(found)
-            + "\nWrap the pointer once instead -- `winlayer::Live<T>` and the "
-            "`Win`/`Buf` handles exist for this -- or, where the borrow really "
+            + "\nGive the pointee a checked handle instead -- `slot::SlotRef` and "
+            "the `Win`/`Buf` handles exist for this -- or, where the borrow really "
             "must be one, put it inside the block: `unsafe { &mut *p }`."
         )
 
@@ -5293,7 +5296,7 @@ SELF_TEST_PERIMETER = [
     ("crates/nvim/src/lua/stack/mod.rs", True),
     ("crates/nvim/src/os/fs/mod.rs", True),
     ("crates/nvim/src/memory/arena.rs", True),
-    ("crates/nvim/src/winlayer/live.rs", True),
+    ("crates/nvim/src/winlayer/deref.rs", True),
     # The editor proper, including modules that merely look raw.
     ("crates/nvim/src/memline/block0.rs", False),
     ("crates/nvim/src/memfile/swapfile.rs", False),

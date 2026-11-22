@@ -22,6 +22,7 @@ use crate::cmdexpand::defs::ExpandContext;
 use crate::cmdexpand::state::{SAVED_STATUS_OPTS, WILD_MENU_SHOWING};
 use crate::cstr;
 use crate::drawscreen::state::CMDLINE_ROW;
+use crate::ex_getln::Cc;
 use crate::ex_getln::cmd_screencol;
 use crate::grid::{
     default_gridview, grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start,
@@ -43,7 +44,7 @@ use crate::ui::state::{UI_CMDLINE, UI_POPUPMENU, UI_WILDMENU};
 use crate::ui::ui_has;
 use crate::window::{global_stl_height, last_status};
 use crate::winlayer::graph::CMDLINE_WIN;
-use crate::winlayer::{Cc, Win, current_topframe, last_window};
+use crate::winlayer::{Win, current_topframe, last_window};
 use core::ffi::{CStr, c_int, c_uint};
 use std::rc::Rc;
 
@@ -96,7 +97,7 @@ pub(crate) fn cmdline_pum_create(
     }));
 
     // Compute the popup menu starting column.
-    let line = ccline.text_bytes();
+    let line = ccline.bytes();
     let from = expand.pattern.min(line.len());
     let endpos = if showtail {
         from + showmatches_gettail(&line[from..], noselect)

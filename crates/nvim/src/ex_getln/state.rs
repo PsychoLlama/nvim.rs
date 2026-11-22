@@ -304,3 +304,10 @@ pub(crate) struct CmdlineInfo {
     pub(crate) mouse_prompt: bool,
     pub(crate) mouse_used: bool,
 }
+
+impl CmdlineInfo {
+    /// The line's own bytes: C's `cmdbuff[..cmdlen]`.
+    pub(crate) fn bytes(&self) -> &[u8] {
+        self.cmdbuff.bytes()
+    }
+}

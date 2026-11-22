@@ -6,9 +6,9 @@
 //! the register and abbreviation machinery, and the `*_fnameescape` helpers
 //! escape a file name on its way in.
 //!
-//! [`Cc`] is the command line itself: one wrapper over `ccline` whose `Deref`
-//! carries every field access in `ex_getln/` and its `cmdexpand/` neighbours,
-//! derived afresh at each use because the register and abbreviation machinery
+//! [`Cc`] (`line.rs`) names the command line itself; every field access in
+//! `ex_getln/` and its `cmdexpand/` neighbours goes through it, one borrow of
+//! its cell at a time, because the register and abbreviation machinery
 //! re-enters and can replace the whole structure.
 
 #![deny(
@@ -31,33 +31,21 @@ use core::ffi::CStr;
 // ---------------------------------------------------------------------------
 // The command line being edited.
 //
-// `Cc` is `Live<CmdlineInfo>`, declared beside `Live` itself; the projections
-// the command line needs are here, which an inherent impl on a local type may
-// be in any module of the defining crate. The whole of `ex_getln/` plus the
-// `cmdexpand/` entry points that used to take a `*mut CmdlineInfo` go through
-// the handle instead.
+// The projections the command line needs beyond its scalar fields (`line.rs`).
+// The whole of `ex_getln/` plus the `cmdexpand/` entry points that used to
+// take a `*mut CmdlineInfo` go through the handle instead.
 
 impl Cc {
-    /// Whether the command line is waiting for a single key: C's `one_key`.
-    pub(crate) fn one_key(self) -> bool {
-        self.one_key
-    }
-
-    /// Whether a `:[N]` style number prompt is up: C's `mouse_used != NULL`.
-    pub(crate) fn mouse_prompt(self) -> bool {
-        self.mouse_prompt
-    }
-
     /// Run `f` on the completion in progress, or on `None` when there is
     /// none, for a reader that runs no user code.
     ///
     /// The completion is moved out of the command line for the call, so `f`
     /// may read the rest of the line through any handle without reaching
     /// what it is handed.
-    pub(crate) fn with_xpc<R>(mut self, f: impl FnOnce(Option<&mut Expand>) -> R) -> R {
-        let mut xpc = self.xpc.take();
+    pub(crate) fn with_xpc<R>(self, f: impl FnOnce(Option<&mut Expand>) -> R) -> R {
+        let mut xpc = self.with_mut(|line| line.xpc.take());
         let answer = f(xpc.as_mut());
-        self.xpc = xpc;
+        self.with_mut(|line| line.xpc = xpc);
         answer
     }
 
@@ -70,31 +58,19 @@ impl Cc {
     /// holds it, it finds an empty one in its place instead of one this code
     /// holds mutably, which is what upstream's own readers would mostly have
     /// seen mid-expansion anyway.
-    pub(crate) fn with_completion<R>(mut self, f: impl FnOnce(&mut Expand) -> R) -> R {
-        let mut xpc = core::mem::take(self.xpc_mut());
+    pub(crate) fn with_completion<R>(self, f: impl FnOnce(&mut Expand) -> R) -> R {
+        let mut xpc = self.with_mut(|line| {
+            core::mem::take(line.xpc.as_mut().expect("a command line in its key loop"))
+        });
         let answer = f(&mut xpc);
         // Back into the line the loop is on: the cell, which a command line
         // the call suspended has been restored into by now.
-        if let Some(slot) = self.xpc.as_mut() {
-            *slot = xpc;
-        }
+        self.with_mut(|line| {
+            if let Some(slot) = line.xpc.as_mut() {
+                *slot = xpc;
+            }
+        });
         answer
-    }
-
-    /// The completion the key loop holds, for a read that runs no user code.
-    pub(crate) fn xpc(&self) -> &Expand {
-        self.xpc.as_ref().expect("a command line in its key loop")
-    }
-
-    /// [`Cc::xpc`] for a write.
-    pub(crate) fn xpc_mut(&mut self) -> &mut Expand {
-        self.xpc.as_mut().expect("a command line in its key loop")
-    }
-
-    /// The command line's own bytes, as bytes: [`Cc::bytes`] by its older
-    /// name, which the completion code reads by.
-    pub(crate) fn text_bytes(&self) -> &[u8] {
-        self.cmdbuff.bytes()
     }
 
     /// Replace `[from, to)` of the text with `with`, moving the rest of the
@@ -102,36 +78,37 @@ impl Cc {
     /// has: one completion inserted over the word it completes. The cursor
     /// is the caller's to move.
     pub(crate) fn replace_range(
-        mut self,
+        self,
         from: ::core::ffi::c_int,
         to: ::core::ffi::c_int,
         with: &[u8],
         extra: ::core::ffi::c_int,
     ) {
         realloc_cmdbuff(self, self.len() + extra);
-        self.cmdbuff.splice(from, to, with);
+        self.with_mut(|line| line.cmdbuff.splice(from, to, with));
     }
 
-    /// The command line's own bytes: C's `cmdbuff[..cmdlen]`.
+    /// A copy of the command line's own bytes: C's `cmdbuff[..cmdlen]`.
     ///
-    /// The borrow is of this handle, not of the line: the line moves under
-    /// [`Cc::reserve`] and [`put_on_cmdline`], and the register and
-    /// abbreviation machinery can replace it outright, so a reader takes the
-    /// slice inside the expression that reads it, or copies it, rather than
-    /// holding it across a call.
-    pub(crate) fn bytes(&self) -> &[u8] {
-        self.cmdbuff.bytes()
+    /// A copy, because the line moves under [`Cc::reserve`] and
+    /// [`put_on_cmdline`] and the register and abbreviation machinery can
+    /// replace it outright; a reader that wants no copy reads inside
+    /// [`Cc::with`].
+    pub(crate) fn bytes(self) -> Vec<u8> {
+        self.with(|line| line.bytes().to_vec())
     }
 
     /// The byte at `i`, the terminator and what follows it reading as NUL.
-    pub(crate) fn byte_at(&self, i: ::core::ffi::c_int) -> u8 {
-        self.cmdbuff
-            .byte_at(usize::try_from(i).unwrap_or(usize::MAX))
+    pub(crate) fn byte_at(self, i: ::core::ffi::c_int) -> u8 {
+        self.with(|line| {
+            line.cmdbuff
+                .byte_at(usize::try_from(i).unwrap_or(usize::MAX))
+        })
     }
 
     /// C's `cmdlen`.
     pub(crate) fn len(self) -> ::core::ffi::c_int {
-        self.cmdbuff.len()
+        self.with(|line| line.cmdbuff.len())
     }
 
     /// Whether the command line holds no text: C's `cmdlen == 0`.
@@ -144,28 +121,28 @@ impl Cc {
 
     /// Whether a command line is in use: C's `cmdbuff != NULL`.
     pub(crate) fn in_use(self) -> bool {
-        self.cmdbuff.in_use()
+        self.with(|line| line.cmdbuff.in_use())
     }
 
     /// C's `realloc_cmdbuff`: make room for `want` bytes, terminator
     /// included.
-    pub(crate) fn reserve(mut self, want: ::core::ffi::c_int) {
-        self.cmdbuff.reserve(want);
+    pub(crate) fn reserve(self, want: ::core::ffi::c_int) {
+        self.with_mut(|line| line.cmdbuff.reserve(want));
     }
 
     /// Replace the text, opening a command line if none was in use.
-    pub(crate) fn set_text(mut self, bytes: &[u8]) {
-        self.cmdbuff.set(bytes);
+    pub(crate) fn set_text(self, bytes: &[u8]) {
+        self.with_mut(|line| line.cmdbuff.set(bytes));
     }
 
     /// C's `alloc_cmdbuff`: an empty command line with room for `want` bytes.
-    pub(crate) fn open(mut self, want: ::core::ffi::c_int) {
-        self.cmdbuff.open(want);
+    pub(crate) fn open(self, want: ::core::ffi::c_int) {
+        self.with_mut(|line| line.cmdbuff.open(want));
     }
 
     /// C's `dealloc_cmdbuff`: no command line in use.
-    pub(crate) fn close(mut self) {
-        self.cmdbuff.close();
+    pub(crate) fn close(self) {
+        self.with_mut(|line| line.cmdbuff.close());
     }
 
     /// Hand the text to a caller that owns it, closing the command line.
@@ -177,7 +154,7 @@ impl Cc {
         if !self.in_use() {
             return None;
         }
-        let text = XString::from_bytes(cstr::until_nul(self.bytes()));
+        let text = self.with(|line| XString::from_bytes(cstr::until_nul(line.bytes())));
         self.close();
         Some(text)
     }
@@ -220,13 +197,13 @@ pub(crate) fn search_cmdline(firstc: u8, count: ::core::ffi::c_int) -> Option<XS
 }
 
 pub fn cmdline_overstrike() -> bool {
-    Cc::current().overstrike
+    Cc::current().overstrike()
 }
 
 /// Whether the cursor is at the end of the command line.
 pub fn cmdline_at_end() -> bool {
     let cc = Cc::current();
-    cc.cmdpos >= cc.len()
+    cc.cmdpos() >= cc.len()
 }
 
 // ---------------------------------------------------------------------------
@@ -260,7 +237,7 @@ pub(crate) fn save_cmdline() {
     // Both closures are leaves -- a move out of the cell and a push onto a
     // `Vec` -- so neither exclusive borrow can overlap another.
     let saved = CCLINE.with_mut(|cc| core::mem::replace(cc, CMDLINE_INFO_INIT));
-    SAVED_CMDLINES.with_mut(|stack| stack.push(Box::new(saved)));
+    SAVED_CMDLINES.with_mut(|stack| stack.push(saved));
 }
 
 /// Resume the command line [`save_cmdline`] suspended.
@@ -270,7 +247,7 @@ pub(crate) fn save_cmdline() {
 /// leave the wrong line current.
 pub(crate) fn restore_cmdline() {
     let saved = SAVED_CMDLINES.with_mut(|stack| stack.pop());
-    CCLINE.set(*saved.expect("restore_cmdline without save_cmdline"));
+    CCLINE.set(saved.expect("restore_cmdline without save_cmdline"));
 }
 
 /// The command line `depth` levels out: 0 is the one being edited, 1 the one
@@ -344,11 +321,11 @@ fn duplicate_word_len(arg: &[u8]) -> usize {
     let cc = Cc::current();
     let line = cc.bytes();
     // Locate the start of the last word in the cmd buffer.
-    let end = usize::try_from(cc.cmdpos).unwrap_or(0).min(line.len());
+    let end = usize::try_from(cc.cmdpos()).unwrap_or(0).min(line.len());
     let mut w = end;
     while w > 0 {
-        let len = head_off(line, w - 1) + 1;
-        if !vim_iswordc(Codepoint::new(c_char_info(line, w - len).value)) {
+        let len = head_off(&line, w - 1) + 1;
+        if !vim_iswordc(Codepoint::new(c_char_info(&line, w - len).value)) {
             break;
         }
         w -= len;
@@ -435,8 +412,8 @@ pub(crate) fn ccheck_abbr(c: Key, literal: bool) -> bool {
 
     // A copy of the line before the cursor: the expansion can run user code,
     // which may change the command line.
-    let col = usize::try_from(cc.cmdpos).unwrap_or(0);
-    let text = cc.text_bytes();
+    let col = usize::try_from(cc.cmdpos()).unwrap_or(0);
+    let text = cc.bytes();
     let text = text[..col.min(text.len())].to_vec();
     check_abbr(
         c,

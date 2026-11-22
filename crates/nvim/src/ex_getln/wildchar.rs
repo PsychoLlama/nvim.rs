@@ -74,7 +74,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
             let start = s.is_state.search_start;
             completion_mut(|xpc| xpc.pre_incsearch_pos = start);
         }
-        let cmdpos_before = cc.cmdpos;
+        let cmdpos_before = cc.cmdpos();
 
         // If 'wildmode' starts with "longest", get the longest common
         // part.
@@ -104,7 +104,7 @@ pub(crate) fn command_line_wildchar_complete(s: &mut CommandLineState) -> KeyOut
         // Display the matches.
         if res && match_count() > if wim_noselect { 0 } else { 1 } {
             if wim_longest {
-                let found_longest_prefix = cc.cmdpos != cmdpos_before;
+                let found_longest_prefix = cc.cmdpos() != cmdpos_before;
                 if wim_list || (p_wmnu() && wim_full) {
                     show_matches(p_wmnu(), wim_list, true);
                 } else if !found_longest_prefix {

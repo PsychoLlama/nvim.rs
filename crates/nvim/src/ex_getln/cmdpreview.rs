@@ -331,7 +331,7 @@ pub(crate) fn cmdpreview_may_show() -> bool {
     let mut ea: ExArg = EXARG_T_INIT;
     let mut cmdinfo: CmdParseInfo = CMD_PARSE_INFO_INIT;
     // A copy of the command line: the parse writes into it.
-    let line = CmdLine::from_bytes(crate::cstr::until_nul(Cc::current().bytes()));
+    let line = CmdLine::from_bytes(crate::cstr::until_nul(&Cc::current().bytes()));
 
     // Block errors while parsing the command line, and don't update
     // v:errmsg.

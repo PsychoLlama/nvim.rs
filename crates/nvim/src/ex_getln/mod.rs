@@ -8,7 +8,9 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+mod line;
 pub(crate) mod state;
+pub(crate) use self::line::Cc;
 use crate::api::extmark::nvim_create_namespace;
 use crate::api::private::helpers::TryState;
 use crate::api::private::helpers::{try_enter, try_leave};
@@ -175,7 +177,6 @@ use crate::window::{
     WSP_BOT, close_windows, global_stl_height, last_window, lastwin_nofloating, win_close,
     win_enter, win_goto, win_size_restore, win_size_save, win_split, win_valid,
 };
-use crate::winlayer::Cc;
 use crate::winlayer::graph::{
     CMDWIN_BUF, CMDWIN_LEVEL, CMDWIN_OLD_CURWIN, CMDWIN_RESULT, CMDWIN_TYPE, CMDWIN_WIN,
 };
@@ -518,8 +519,7 @@ pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
     save_view: Vec::new(),
 };
 
-/// The command line being edited. Reached through [`Cc::current`], whose
-/// constructor lives beside `Cc` in the handle perimeter.
+/// The command line being edited: the place [`Cc::current`] names.
 pub(crate) static CCLINE: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);
 /// The command lines suspended under [`ccline`], innermost last.
 ///
@@ -527,13 +527,8 @@ pub(crate) static CCLINE: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO
 /// whoever called `save_cmdline()`, so the chain is only as sound as every
 /// caller's promise to restore before returning. Here they are owned values
 /// on an explicit stack: [`save_cmdline`] pushes and [`restore_cmdline`]
-/// pops. The `Box` is what makes an entry's address stable, because the
-/// Vimscript face still answers about the enclosing command line by pointer.
-// The `Box` is the point, not an oversight: `get_ccline_ptr()` hands the
-// address of an entry to the Vimscript functions, and a bare `Vec` would move
-// every entry the next `save_cmdline` grows it.
-#[allow(clippy::vec_box)]
-pub(crate) static SAVED_CMDLINES: GlobalCell<Vec<Box<CmdlineInfo>>> = GlobalCell::new(Vec::new());
+/// pops. A [`Cc`] names an entry by its index, never by address.
+pub(crate) static SAVED_CMDLINES: GlobalCell<Vec<CmdlineInfo>> = GlobalCell::new(Vec::new());
 static NEW_CMDPOS: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static CMDLINE_BLOCK: GlobalCell<CmdlineBlock> = GlobalCell::new(CmdlineBlock::EMPTY);
 static GETLN_INTERRUPTED_HIGHLIGHT: GlobalCell<bool> = GlobalCell::new(false);

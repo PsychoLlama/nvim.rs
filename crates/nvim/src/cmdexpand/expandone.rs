@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::cmdexpand::defs::{ExpandContext, XpPrefix};
+use crate::ex_getln::Cc;
 use crate::ex_getln::{cursorcmd, redrawcmd};
 use crate::getchar::beep_flush;
 use crate::getchar::state::GOT_INT;
@@ -35,7 +36,6 @@ use crate::popupmenu::{pum_clear, pum_get_height};
 use crate::semsg;
 use crate::ui::state::{UI_CMDLINE, UI_WILDMENU};
 use crate::ui::{ui_flush, ui_has, vim_beep};
-use crate::winlayer::Cc;
 use core::ffi::{CStr, c_int};
 
 /// The index [`expand_one`] starts the selection at: the first match, or -1
@@ -77,16 +77,16 @@ pub(crate) fn nextwild(
     options: WildOpts,
     escape: bool,
 ) -> bool {
-    let mut ccline = Cc::current();
+    let ccline = Cc::current();
     let from_wildtrigger_func = options.has(WildOpts::FUNC_TRIGGER);
     let wild_navigate = mode.navigates();
 
     if expand.matches.is_none() {
         PRE_INCSEARCH_POS.set(expand.pre_incsearch_pos);
-        if ccline.input_fn && ccline.xp_context == ExpandContext::Commands {
+        if ccline.input_fn() && ccline.xp_context() == ExpandContext::Commands {
             // Expand commands typed in the input() function.
-            let line = ccline.text_bytes().to_vec();
-            set_cmd_context(expand, &line, ccline.cmdpos, false);
+            let line = ccline.bytes().to_vec();
+            set_cmd_context(expand, &line, ccline.cmdpos(), false);
         } else {
             MAY_EXPAND_PATTERN.set(options.has(WildOpts::MAY_EXPAND_PATTERN));
             set_expand_context(expand);
@@ -112,8 +112,8 @@ pub(crate) fn nextwild(
     // Where the pattern starts within the command line: the context's own
     // copy of the line was taken from it, so the offset is the same.
     let at = as_count(expand.pattern);
-    debug_assert!(ccline.cmdpos >= at);
-    expand.pattern_len = usize::try_from(ccline.cmdpos - at).unwrap_or(0);
+    debug_assert!(ccline.cmdpos() >= at);
+    expand.pattern_len = usize::try_from(ccline.cmdpos() - at).unwrap_or(0);
 
     // Skip showing matches if the prefix is invalid during wildtrigger().
     let context = expand.context;
@@ -138,7 +138,7 @@ pub(crate) fn nextwild(
         p = expand_one(expand, None, None, WildOpts::NONE, mode);
     } else {
         let typed = ccline
-            .text_bytes()
+            .bytes()
             .get(expand.pattern..expand.pattern + expand.pattern_len)
             .unwrap_or_default()
             .to_vec();
@@ -182,7 +182,7 @@ pub(crate) fn nextwild(
 
     // Save the command line before inserting the selected item.
     if !wild_navigate && ccline.in_use() {
-        CMDLINE_ORIG.set(Some(owned(ccline.text_bytes())));
+        CMDLINE_ORIG.set(Some(owned(&ccline.bytes())));
     }
 
     if let Some(text) = &p
@@ -193,9 +193,9 @@ pub(crate) fn nextwild(
         // A packed tag match is inserted only as far as its name.
         let text = text.as_cstr().to_bytes();
         let difflen = as_count(text.len()) - as_count(expand.pattern_len);
-        let cursor = ccline.cmdpos;
+        let cursor = ccline.cmdpos();
         ccline.replace_range(at, cursor, text, difflen + 4);
-        ccline.cmdpos += difflen;
+        ccline.set_cmdpos(ccline.cmdpos() + difflen);
     }
 
     redrawcmd();

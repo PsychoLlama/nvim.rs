@@ -21,6 +21,7 @@ use crate::cmdexpand::defs::ExpandContext;
 use crate::cstr;
 use crate::drawscreen::state::CMDLINE_ROW;
 use crate::env::{expand_env, home_to_tilde};
+use crate::ex_getln::Cc;
 use crate::getchar::state::GOT_INT;
 use crate::highlight_group::{HLF_D, HLF_T};
 use crate::lua::executor::nlua_expand_pat;
@@ -38,7 +39,6 @@ use crate::popupmenu::pum_clear;
 use crate::ui::state::COLUMNS;
 use crate::ui::state::UI_MESSAGES;
 use crate::ui::{ui_flush, ui_has};
-use crate::winlayer::Cc;
 use core::ffi::c_int;
 
 /// Whether the match is a name the listing highlights when it is a
@@ -160,7 +160,7 @@ pub fn showmatches(
         if expand.context == ExpandContext::Lua {
             nlua_expand_pat(expand);
         }
-        let (retval, matches) = expand_cmdline(expand, ccline.cmdpos);
+        let (retval, matches) = expand_cmdline(expand, ccline.cmdpos());
         if retval != Expanded::Ok {
             return retval;
         }

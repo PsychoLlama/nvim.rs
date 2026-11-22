@@ -302,10 +302,10 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 
 ### `winlayer.rs`, `winlayer/` — the window, buffer, grid and terminal handles
 
-- **What:** `Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, `Live<T>`, the
+- **What:** `Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, the
   screen grid handle `GridRef` and the terminal handle `Term` — each a
-  `Copy` value over one pointer (`winlayer.rs` 14, `graph.rs` 17, `live.rs`
-  4, `deref.rs` 3 — the checked dereference —, `grid.rs` 2, `terminal.rs` 2). Building one from an address is the
+  `Copy` value over one pointer (`winlayer.rs` 12, `graph.rs` 17,
+  `deref.rs` 3 — the checked dereference —, `grid.rs` 2, `terminal.rs` 2). Building one from an address is the
   unsafe step; dereferencing it is not. `curwin`/`CURBUF`/`CURTAB` are cells
   holding a raw pointer (`curwin` is a C symbol a functional spec reads).
 - **Contract:** the constructor's caller promises the object is live when

@@ -86,7 +86,7 @@ use crate::regexp::{RegMMatch, RegMatch};
 use crate::runtime::{do_source, source_runtime};
 use crate::types::{ColNr, ExArg, LPos, LineNr, OptInt, ProfTime, SynBlock, SynTime};
 use crate::ui::state::{COLUMNS, ROWS};
-use crate::winlayer::{Live, Win};
+use crate::winlayer::Win;
 use ::std::rc::Rc;
 
 mod error;
@@ -496,13 +496,115 @@ pub(crate) fn cur_pattern_count() -> ::core::ffi::c_int {
 pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
     count_as_int(cur_syn_block().clusters().len())
 }
-/// A syntax block — a window's or a buffer's `SynBlock`, whose holder has
-/// promised it outlives the value.
+/// A syntax block -- a buffer's own `b_s`, or the block `:ownsyntax` gave a
+/// window -- reached through the handle of the object that owns it.
 ///
-/// The promise is discharged by the window or buffer that owns the block: a
-/// `w_s` is either the buffer's `b_s` or an `:ownsyntax` block the window
-/// frees with itself.
-pub(crate) type SynBlockRef = Live<SynBlock>;
+/// Every access dereferences the owner's handle, so it is checked as that
+/// handle is: a `SynBlockRef` kept past its buffer or window (the parser's
+/// `parsed` is kept between calls) panics at its next use instead of
+/// reading freed memory. The block's address is kept beside the owner for
+/// identity alone ([`SynBlockRef::raw`]) and is never dereferenced.
+///
+/// Aliasing is the owner handle's: two copies lend overlapping `&mut`s as
+/// two copies of a [`Buf`] do.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SynBlockRef {
+    owner: SynOwner,
+    at: *const SynBlock,
+}
+
+/// Who owns a [`SynBlockRef`]'s block.
+#[derive(Clone, Copy, Debug)]
+enum SynOwner {
+    /// The buffer's own `b_s`.
+    Buffer(Buf),
+    /// The window's `w_own_syntax` (`:ownsyntax`).
+    Window(Win),
+}
+
+impl PartialEq for SynBlockRef {
+    fn eq(&self, other: &Self) -> bool {
+        core::ptr::eq(self.at, other.at)
+    }
+}
+
+impl Eq for SynBlockRef {}
+
+impl SynBlockRef {
+    /// The block's address, for comparing with a `w_s`. Reads nothing.
+    #[inline]
+    pub(crate) fn raw(self) -> *mut SynBlock {
+        self.at.cast_mut()
+    }
+}
+
+impl core::ops::Deref for SynBlockRef {
+    type Target = SynBlock;
+
+    #[inline]
+    #[track_caller]
+    fn deref(&self) -> &SynBlock {
+        match &self.owner {
+            SynOwner::Buffer(buffer) => &buffer.b_s,
+            SynOwner::Window(window) => window
+                .w_own_syntax
+                .as_deref()
+                .expect("an :ownsyntax block outlives its handles"),
+        }
+    }
+}
+
+impl core::ops::DerefMut for SynBlockRef {
+    #[inline]
+    #[track_caller]
+    fn deref_mut(&mut self) -> &mut SynBlock {
+        match &mut self.owner {
+            SynOwner::Buffer(buffer) => &mut buffer.b_s,
+            SynOwner::Window(window) => window
+                .w_own_syntax
+                .as_deref_mut()
+                .expect("an :ownsyntax block outlives its handles"),
+        }
+    }
+}
+
+impl Buf {
+    /// The buffer's own syntax block, as a handle.
+    #[inline]
+    pub(crate) fn syntax(self) -> SynBlockRef {
+        SynBlockRef {
+            owner: SynOwner::Buffer(self),
+            at: self.syntax_block(),
+        }
+    }
+}
+
+impl Win {
+    /// The syntax block the window uses -- its buffer's, or the one
+    /// `:ownsyntax` gave it -- as a handle the syntax code reaches every
+    /// field through.
+    ///
+    /// # Panics
+    /// When `w_s` names neither (a window between buffers).
+    #[track_caller]
+    pub(crate) fn syntax(self) -> SynBlockRef {
+        let at = self.w_s;
+        let buffer = self.w_buffer;
+        if !buffer.is_null() && core::ptr::eq(at, buffer.syntax_block()) {
+            return buffer.syntax();
+        }
+        assert!(
+            self.w_own_syntax
+                .as_deref()
+                .is_some_and(|own| core::ptr::eq(own, at)),
+            "a window's w_s is its buffer's block or its own"
+        );
+        SynBlockRef {
+            owner: SynOwner::Window(self),
+            at,
+        }
+    }
+}
 
 /// `StateItem::si_idx` for a keyword, which has no pattern.
 pub(crate) const KEYWORD_IDX: ::core::ffi::c_int = -1;
@@ -559,4 +661,57 @@ pub(crate) fn id16(id: ::core::ffi::c_int) -> int16_t {
 /// An `SPTYPE_*` kind as the `c_char` a pattern keeps it in.
 pub(crate) fn sp_type_char(kind: ::core::ffi::c_int) -> ::core::ffi::c_char {
     ::core::ffi::c_char::try_from(kind).expect("the SPTYPE_ kinds fit a c_char")
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::buffer::{bare_buffer, free_bare_buffer};
+    use crate::global_cell::editor_state_lock;
+    use crate::window::{bare_window, free_bare_window};
+
+    /// A window that uses its buffer's syntax block: the window's handle and
+    /// the buffer's name one block, at the address inside the buffer.
+    #[test]
+    fn a_window_and_its_buffer_share_one_syntax_block() {
+        let _held = editor_state_lock();
+        let mut win = bare_window();
+        let buffer = bare_buffer();
+        win.w_buffer = buffer;
+        win.w_s = buffer.syntax_block();
+        let mut through_window = win.syntax();
+        let through_buffer = buffer.syntax();
+        assert_eq!(through_window, through_buffer);
+        through_window.b_syn_ic = 1;
+        assert_eq!(through_buffer.b_syn_ic, 1);
+        win.set_syn_error();
+        assert!(buffer.syntax().b_syn_error);
+        assert_eq!(win.syn_block().b_syn_ic, 1);
+        win.w_s = ::core::ptr::null_mut();
+        free_bare_window(win);
+        free_bare_buffer(buffer);
+    }
+
+    /// A window with its own block reaches that one, and its handle says
+    /// it is not the buffer's.
+    #[test]
+    fn an_ownsyntax_block_is_reached_through_its_window() {
+        let _held = editor_state_lock();
+        let mut win = bare_window();
+        let buffer = bare_buffer();
+        win.w_buffer = buffer;
+        let own: *mut crate::types::SynBlock = &mut **win
+            .w_own_syntax
+            .insert(Box::new(crate::types::SynBlock::new()));
+        win.w_s = own;
+        let mut block = win.syntax();
+        assert_ne!(block, buffer.syntax());
+        assert_eq!(block.raw(), own);
+        block.b_syn_ic = 1;
+        assert_eq!(buffer.syntax().b_syn_ic, 0);
+        assert_eq!(win.syn_block().b_syn_ic, 1);
+        win.w_s = ::core::ptr::null_mut();
+        win.w_own_syntax = None;
+        free_bare_window(win);
+        free_bare_buffer(buffer);
+    }
 }

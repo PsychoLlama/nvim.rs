@@ -117,8 +117,8 @@
 //! earlier is **invalidated by the next write through the handle**. Nothing
 //! warns but Miri, and only if a test walks that path (p23-5). So when a body
 //! holds an interior raw pointer across writes through a `Win`/`Buf`, derive
-//! the address with [`Win::cursor`], or from [`Live::raw`] plus the field's
-//! offset, which compute it from the base without forming a `&mut`, or
+//! the address with [`Win::cursor`], or from the handle's `raw()` plus the
+//! field's offset, which compute it from the base without forming a `&mut`, or
 //! re-derive it after each write.
 //! Retyping a `*mut Window` parameter to `Win` is not by itself enough.
 //!
@@ -150,13 +150,10 @@ mod frame;
 pub mod graph;
 mod grid;
 mod handles;
-mod live;
 mod terminal;
 mod walk;
 
-use crate::syntax::SynBlockRef;
 pub(crate) use frame::{current_topframe, new_frame};
-pub(crate) use live::{Cc, Live};
 
 pub use grid::GridRef;
 pub(crate) use grid::{GridCell, grid_of_view, try_grid_of_view};
@@ -479,16 +476,6 @@ impl Win {
         unsafe { &*self.w_s }
     }
 
-    /// The syntax block the window uses -- its buffer's, or the one
-    /// `:ownsyntax` gave it -- as a handle the syntax code reaches every
-    /// field through.
-    #[inline]
-    pub(crate) fn syntax(self) -> SynBlockRef {
-        // SAFETY: as `syn_block`: `w_s` names either the window's own block
-        // or its buffer's, and both outlive the window that points at them.
-        unsafe { Live::new(self.w_s) }
-    }
-
     /// The window's cursor, which lives inside the window.
     #[inline(always)]
     pub fn cursor(self) -> PosRef {
@@ -642,14 +629,6 @@ impl Buf {
         self.ptr
             .wrapping_byte_add(offset_of!(Buffer, changedtick_di))
             .cast()
-    }
-
-    /// The buffer's own syntax block, as a handle: [`Buf::syntax_block`]
-    /// with the promise made.
-    #[inline]
-    pub(crate) fn syntax(self) -> SynBlockRef {
-        // SAFETY: a buffer's `b_s` lives as long as the buffer.
-        unsafe { Live::new(self.syntax_block()) }
     }
 
     /// Whether this is the null buffer: a window between losing a buffer

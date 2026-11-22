@@ -34,6 +34,7 @@ use crate::edit::{InsertState, insert_check, insert_execute};
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::r#loop::run_next_main_event;
 use crate::ex_docmd::state::GLOBAL_BUSY;
+use crate::ex_getln::Cc;
 use crate::ex_getln::cmdline_overstrike;
 use crate::ex_getln::{CommandLineState, command_line_check, command_line_execute};
 use crate::getchar::state::{GOT_INT, MOD_MASK};
@@ -61,7 +62,7 @@ use crate::state::mode::{
 };
 use crate::terminal::{TerminalState, terminal_check, terminal_execute};
 use crate::ui::ui_flush;
-use crate::winlayer::{Cc, Win};
+use crate::winlayer::Win;
 
 /// The editor-mode bitmask `State` carries, and the masks that read it.
 pub type ModeFlags = c_int;

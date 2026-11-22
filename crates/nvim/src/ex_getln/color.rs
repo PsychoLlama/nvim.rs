@@ -31,9 +31,10 @@ use core::ffi::CStr;
 /// Colour a `=` expression command line with the Vimscript expression parser,
 /// filling the gaps the parser leaves uncoloured with `hl_id` 0, into the
 /// line's own chunk list.
-pub(crate) fn color_expr_cmdline(mut colored_ccline: Cc) {
+pub(crate) fn color_expr_cmdline(colored_ccline: Cc) {
+    let bytes = colored_ccline.bytes();
     let colors = {
-        let text = cstr::until_nul(colored_ccline.bytes());
+        let text = cstr::until_nul(&bytes);
         let line = [text];
         let mut pstate = ParserState::new(&line, true);
         let _ = viml_pexpr_parse(&mut pstate, EXPR_FLAGS_DISALLOW_EOC.cast_signed());
@@ -42,9 +43,7 @@ pub(crate) fn color_expr_cmdline(mut colored_ccline: Cc) {
 
     // C's `kv_resize`: reserve exactly what the parser produced. The
     // gap-filling chunks below may still push past it.
-    let chunks = &mut colored_ccline.last_colors;
-    chunks.reserve_chunks(colors.len());
-
+    let mut chunks = Vec::with_capacity(colors.len() + 1);
     let mut prev_end: size_t = 0;
     for chunk in &colors {
         if chunk.start.col != prev_end {
@@ -63,12 +62,20 @@ pub(crate) fn color_expr_cmdline(mut colored_ccline: Cc) {
     }
     let len = colored_ccline.len();
     if prev_end < usize::try_from(len).unwrap_or(0) {
-        colored_ccline.last_colors.push(CmdlineColorChunk {
+        chunks.push(CmdlineColorChunk {
             start: len_as_int(prev_end),
             end: len,
             hl_id: 0,
         });
     }
+    colored_ccline.with_mut(|line| {
+        // C's `kv_resize`: reserve exactly what the parser produced. The
+        // gap-filling chunks may still push past it.
+        line.last_colors.reserve_chunks(colors.len());
+        for chunk in chunks {
+            line.last_colors.push(chunk);
+        }
+    });
 }
 
 /// Why the colouring stopped short of a full set of chunks.
@@ -130,20 +137,17 @@ struct Colouring {
 ///
 /// Answers true if [`super::draw::draw_cmdline`] may proceed, false if there
 /// is nothing for it to do.
-pub(crate) fn color_cmdline(mut colored_ccline: Cc) -> bool {
+pub(crate) fn color_cmdline(colored_ccline: Cc) -> bool {
     // Is the result of the previous call still valid?
-    if colored_ccline
-        .last_colors
-        .is_current(colored_ccline.prompt_id, colored_ccline.cmdbuff.bytes())
-    {
+    if colored_ccline.with(|line| line.last_colors.is_current(line.prompt_id, line.bytes())) {
         return true;
     }
 
-    colored_ccline.last_colors.clear_chunks();
+    colored_ccline.with_mut(|line| line.last_colors.clear_chunks());
 
     if !colored_ccline.in_use() || colored_ccline.byte_at(0) == 0 {
         // Nothing to do.
-        colored_ccline.last_colors.forget();
+        colored_ccline.with_mut(|line| line.last_colors.forget());
         return true;
     }
 
@@ -174,24 +178,24 @@ impl Colouring {
     /// for `:`, or none (a `=` line is coloured here and now). A prompt
     /// whose callback has failed too often gets none.
     fn take_callback(&mut self, colored_ccline: Cc) -> Result<(), Stop> {
-        if colored_ccline.prompt_id != PREV_PROMPT_ID.get() {
+        if colored_ccline.prompt_id() != PREV_PROMPT_ID.get() {
             PREV_PROMPT_ERRORS.set(0);
-            PREV_PROMPT_ID.set(colored_ccline.prompt_id);
+            PREV_PROMPT_ID.set(colored_ccline.prompt_id());
         } else if PREV_PROMPT_ERRORS.get() >= MAX_CB_ERRORS {
             return Err(Stop::Done);
         }
 
         let mut dgc_ret = true;
-        if colored_ccline.highlight_callback.is_set() {
+        if colored_ccline.with(|line| line.highlight_callback.is_set()) {
             // Currently this should only happen while processing input()
             // prompts.
-            debug_assert!(colored_ccline.input_fn);
+            debug_assert!(colored_ccline.input_fn());
             // A reference of this frame's own, rather than upstream's bit
             // copy: the callback is user code, and the command line it
             // came from is a global it can reach.
-            self.color_cb = colored_ccline.highlight_callback.duplicate();
+            self.color_cb = colored_ccline.with(|line| line.highlight_callback.duplicate());
             self.can_free_cb = true;
-        } else if colored_ccline.cmdfirstc == b':' {
+        } else if colored_ccline.cmdfirstc() == b':' {
             // C's TRY_WRAP.
             let mut tstate: TryState = TryState::INIT;
             try_enter(&mut tstate);
@@ -205,7 +209,7 @@ impl Colouring {
             .is_ok();
             self.err.absorb(try_leave(&tstate));
             self.can_free_cb = true;
-        } else if colored_ccline.cmdfirstc == b'=' {
+        } else if colored_ccline.cmdfirstc() == b'=' {
             color_expr_cmdline(colored_ccline);
         }
         if self.err.is_set() || !dgc_ret {
@@ -219,14 +223,14 @@ impl Colouring {
 
     /// Call the callback with a copy of the line, into [`Self::tv`].
     fn call_callback(&mut self, colored_ccline: Cc) -> Result<(), Stop> {
-        if colored_ccline
-            .cmdbuff
-            .raw_byte_at(usize::try_from(colored_ccline.len()).unwrap_or(0))
-            != 0
+        if colored_ccline.with(|line| {
+            line.cmdbuff
+                .raw_byte_at(usize::try_from(line.cmdbuff.len()).unwrap_or(0))
+        }) != 0
         {
             self.arg_allocated = true;
         }
-        self.arg = TypVal::string_from(colored_ccline.text_bytes());
+        self.arg = TypVal::string_from(&colored_ccline.bytes());
         // msg_start(), called by e.g. :echo, may shift the command line to
         // the first column even under msg_silent. Two ways round it
         // without altering message.c: use full_screen, or save and restore
@@ -267,7 +271,7 @@ impl Colouring {
 
     /// Check the callback's `[start, end, group]` chunks and push them, with
     /// uncoloured chunks over the gaps between them and after the last.
-    fn take_chunks(&mut self, mut colored_ccline: Cc) -> Result<(), Stop> {
+    fn take_chunks(&mut self, colored_ccline: Cc) -> Result<(), Stop> {
         let Some(chunks) = self.tv.list_ref() else {
             return Err(Stop::Done);
         };
@@ -308,10 +312,12 @@ impl Colouring {
             }
 
             if start != prev_end {
-                colored_ccline.last_colors.push(CmdlineColorChunk {
-                    start: number_as_int(prev_end),
-                    end: number_as_int(start),
-                    hl_id: 0,
+                colored_ccline.with_mut(|line| {
+                    line.last_colors.push(CmdlineColorChunk {
+                        start: number_as_int(prev_end),
+                        end: number_as_int(start),
+                        hl_id: 0,
+                    })
                 });
             }
 
@@ -334,11 +340,12 @@ impl Colouring {
             let group = numbuf
                 .string_chk(&chunk[2].li_tv)
                 .map_err(|_| Stop::Error)?;
-            colored_ccline.last_colors.push(CmdlineColorChunk {
+            let chunk = CmdlineColorChunk {
                 start: number_as_int(start),
                 end: number_as_int(end),
                 hl_id: syn_name2id(group),
-            });
+            };
+            colored_ccline.with_mut(|line| line.last_colors.push(chunk));
         }
 
         if prev_end < len {
@@ -347,7 +354,7 @@ impl Colouring {
                 end: colored_ccline.len(),
                 hl_id: 0,
             };
-            colored_ccline.last_colors.push(tail);
+            colored_ccline.with_mut(|line| line.last_colors.push(tail));
         }
         PREV_PROMPT_ERRORS.set(0);
         Ok(())
@@ -355,7 +362,7 @@ impl Colouring {
 
     /// `color_cmdline_error`: report what was thrown, count the failure
     /// against the prompt, drop the chunks and redraw.
-    fn fail(&mut self, mut colored_ccline: Cc) {
+    fn fail(&mut self, colored_ccline: Cc) {
         if self.err.is_set() {
             let why = msg_cstr(self.err.message_or_empty());
             let template = gettext(self.err_errmsg);
@@ -364,12 +371,12 @@ impl Colouring {
         }
         debug_assert!(self.printed_errmsg);
         PREV_PROMPT_ERRORS.set(PREV_PROMPT_ERRORS.get() + 1);
-        colored_ccline.last_colors.clear_chunks();
+        colored_ccline.with_mut(|line| line.last_colors.clear_chunks());
         redrawcmdline();
     }
 
     /// `color_cmdline_end`: release the callback and cache the answer.
-    fn finish(mut self, mut colored_ccline: Cc) {
+    fn finish(mut self, colored_ccline: Cc) {
         debug_assert!(!self.err.is_set());
         if self.can_free_cb {
             callback_free(&mut self.color_cb);
@@ -381,15 +388,20 @@ impl Colouring {
         // callback may since have edited -- and the line itself otherwise.
         // C took ownership of `arg`'s copy here; the cache owns its bytes
         // now, so the copy is released with `arg` instead.
-        let id = colored_ccline.prompt_id;
+        let id = colored_ccline.prompt_id();
         if self.arg_allocated {
-            colored_ccline
-                .last_colors
-                .remember(id, self.arg.string_bytes());
+            let text = self.arg.string_bytes();
+            colored_ccline.with_mut(|line| line.last_colors.remember(id, text));
         } else {
             // Two fields of the one line: the cache takes a copy of the text.
-            let line = &mut *colored_ccline;
-            line.last_colors.remember(id, line.cmdbuff.bytes());
+            colored_ccline.with_mut(|line| {
+                let CmdlineInfo {
+                    last_colors,
+                    cmdbuff,
+                    ..
+                } = line;
+                last_colors.remember(id, cmdbuff.bytes());
+            });
         }
         tv_clear(&mut self.tv);
     }

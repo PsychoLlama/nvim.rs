@@ -25,8 +25,8 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
         // Obscured (`inputsecret()`): one '*' per *character*.
         content = Vec::with_capacity(1);
         let stars = {
-            let cc = Cc::current();
-            let line = cstr::until_nul(cc.bytes());
+            let bytes = Cc::current().bytes();
+            let line = cstr::until_nul(&bytes);
             let mut len: size_t = 0;
             let mut p = 0;
             while p < line.len() {
@@ -42,11 +42,10 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
             Object::integer(0),
         ];
         content.push(Object::array(item));
-    } else if !line.last_colors.chunks().is_empty() {
-        content = Vec::with_capacity(line.last_colors.chunks().len());
-        let mut i: size_t = 0;
-        while i < line.last_colors.chunks().len() {
-            let chunk: CmdlineColorChunk = line.last_colors.chunks()[i];
+    } else if !line.with(|l| l.last_colors.chunks().is_empty()) {
+        let (chunks, text) = line.with(|l| (l.last_colors.chunks().to_vec(), l.bytes().to_vec()));
+        content = Vec::with_capacity(chunks.len());
+        for chunk in chunks {
             let mut item = Vec::with_capacity(3);
             item.push(Object::integer(if chunk.hl_id == 0 {
                 0
@@ -55,7 +54,6 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
             }));
 
             debug_assert!(chunk.end >= chunk.start);
-            let text = line.bytes();
             let from = usize::try_from(chunk.start).unwrap_or(0).min(text.len());
             let to = usize::try_from(chunk.end)
                 .unwrap_or(0)
@@ -63,37 +61,38 @@ pub(crate) fn ui_ext_cmdline_show(line: Cc) {
             item.push(Object::string(ApiString::from_bytes(&text[from..to])));
             item.push(Object::integer(Integer::from(chunk.hl_id)));
             content.push(Object::array(item));
-            i += 1;
         }
     } else {
         let item = vec![
             Object::integer(0),
-            Object::string(ApiString::from_bytes(cstr::until_nul(line.bytes()))),
+            Object::string(ApiString::from_bytes(cstr::until_nul(&line.bytes()))),
             Object::integer(0),
         ];
         content = vec![Object::array(item)];
     }
 
     // The low byte, as C's `(char)` cast took it.
-    let firstc = [line.cmdfirstc.to_le_bytes()[0]];
+    let firstc = [line.cmdfirstc().to_le_bytes()[0]];
     // C's `cstr_to_string`: the null string when there is no prompt.
-    let prompt = line.cmdprompt.as_ref().map_or(ApiString::NULL, |prompt| {
-        ApiString::from_bytes(prompt.as_cstr().to_bytes())
+    let prompt = line.with(|l| {
+        l.cmdprompt.as_ref().map_or(ApiString::NULL, |prompt| {
+            ApiString::from_bytes(prompt.as_cstr().to_bytes())
+        })
     });
     ui_call_cmdline_show(
         content.into(),
-        Integer::from(line.cmdpos),
+        Integer::from(line.cmdpos()),
         ApiString::from_bytes(cstr::until_nul(&firstc)),
         prompt,
-        Integer::from(line.cmdindent),
-        Integer::from(line.level),
-        Integer::from(line.hl_id),
+        Integer::from(line.cmdindent()),
+        Integer::from(line.level()),
+        Integer::from(line.hl_id()),
     );
-    if line.special_char != 0 {
+    if line.special_char() != 0 {
         ui_call_cmdline_special_char(
-            ApiString::from_bytes(&[line.special_char.cast_unsigned()]),
-            line.special_shift as Boolean,
-            Integer::from(line.level),
+            ApiString::from_bytes(&[line.special_char().cast_unsigned()]),
+            line.special_shift() as Boolean,
+            Integer::from(line.level()),
         );
     }
 }
@@ -177,16 +176,16 @@ pub fn cmdline_screen_cleared() {
     }
 
     // Every command line suspended under this one wants redrawing too.
-    let mut prev_level = Cc::current().level - 1;
+    let mut prev_level = Cc::current().level() - 1;
     let mut depth = 1;
     while prev_level > 0 {
-        let Some(mut line) = cmdline_at(depth) else {
+        let Some(line) = cmdline_at(depth) else {
             break;
         };
-        if line.level == prev_level {
+        if line.level() == prev_level {
             // Don't redraw a command line already shown in the cmdline window.
             if prev_level != CMDWIN_LEVEL.get() {
-                line.redraw_state = CMD_REDRAW_ALL;
+                line.set_redraw_state(CMD_REDRAW_ALL);
             }
             prev_level -= 1;
         }
@@ -201,20 +200,20 @@ pub fn cmdline_ui_flush() {
     if !ui_has(UI_CMDLINE) {
         return;
     }
-    let mut level = Cc::current().level;
+    let mut level = Cc::current().level();
     let mut depth = 0;
     while level > 0 {
-        let Some(mut line) = cmdline_at(depth) else {
+        let Some(line) = cmdline_at(depth) else {
             break;
         };
-        if line.level == level {
-            let redraw_state = line.redraw_state;
-            line.redraw_state = CMD_REDRAW_NONE;
+        if line.level() == level {
+            let redraw_state = line.redraw_state();
+            line.set_redraw_state(CMD_REDRAW_NONE);
             if redraw_state == CMD_REDRAW_ALL {
                 CMDLINE_WAS_LAST_DRAWN.set(true);
                 ui_ext_cmdline_show(line);
             } else if redraw_state == CMD_REDRAW_POS && CMDLINE_WAS_LAST_DRAWN.get() {
-                ui_call_cmdline_pos(Integer::from(line.cmdpos), Integer::from(line.level));
+                ui_call_cmdline_pos(Integer::from(line.cmdpos()), Integer::from(line.level()));
             }
             level -= 1;
         }

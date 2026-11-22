@@ -61,13 +61,12 @@ pub(crate) fn expand_completion(options: WildOpts, mode: WildMode) -> Option<XSt
 /// The command line's completion, for a read that runs no user code: C's
 /// `s->xpc`.
 pub(crate) fn completion<R>(f: impl FnOnce(&Expand) -> R) -> R {
-    f(Cc::current().xpc())
+    Cc::current().with(|line| f(line.xpc.as_ref().expect("a command line in its key loop")))
 }
 
 /// [`completion`] for a write.
 pub(crate) fn completion_mut<R>(f: impl FnOnce(&mut Expand) -> R) -> R {
-    let mut cc = Cc::current();
-    f(cc.xpc_mut())
+    Cc::current().with_mut(|line| f(line.xpc.as_mut().expect("a command line in its key loop")))
 }
 
 /// How many matches the command line's completion holds: C's
@@ -111,35 +110,38 @@ fn command_line_state_init() -> CommandLineState {
 
 /// Initialize the current command-line info.
 pub(crate) fn init_ccline(firstc: u8, indent: ::core::ffi::c_int) {
-    let mut cc = Cc::current();
-    cc.overstrike = false; // always start in insert mode
+    let cc = Cc::current();
+    cc.set_overstrike(false); // always start in insert mode
     debug_assert!(indent >= 0);
 
     // Set some variables for redrawcmd().
-    cc.cmdfirstc = if firstc == b'@' { 0 } else { firstc };
-    cc.cmdindent = if firstc > 0 { indent } else { 0 };
+    cc.set_cmdfirstc(if firstc == b'@' { 0 } else { firstc });
+    cc.set_cmdindent(if firstc > 0 { indent } else { 0 });
 
     // Allocate the initial command-line buffer.
     cc.open(indent + 50);
-    cc.cmdpos = 0;
+    cc.set_cmdpos(0);
 
-    cc.last_colors = ColoredCmdline::NONE;
+    cc.with_mut(|line| line.last_colors = ColoredCmdline::NONE);
     sb_text_start_cmdline();
 
     // Autoindent for :insert and :append.
     if firstc == 0 {
-        cc.cmdbuff.fill(usize::try_from(indent).unwrap_or(0), b' ');
-        cc.cmdpos = indent;
-        cc.cmdspos = indent;
+        cc.with_mut(|line| {
+            line.cmdbuff
+                .fill(usize::try_from(indent).unwrap_or(0), b' ')
+        });
+        cc.set_cmdpos(indent);
+        cc.set_cmdspos(indent);
     }
 }
 
 pub(crate) fn ui_ext_cmdline_hide(abort: bool) {
     if ui_has(UI_CMDLINE) {
         CMDLINE_WAS_LAST_DRAWN.set(false);
-        let mut cc = Cc::current();
-        cc.redraw_state = CMD_REDRAW_NONE;
-        ui_call_cmdline_hide(Integer::from(cc.level), abort);
+        let cc = Cc::current();
+        cc.set_redraw_state(CMD_REDRAW_NONE);
+        ui_call_cmdline_hide(Integer::from(cc.level()), abort);
     }
 }
 
@@ -152,7 +154,7 @@ pub(crate) fn cmdline_event_dict(save_v_event: &mut SaveVEvent, cmdtype: &CStr) 
     let _ = dict.edit().add_str(b"cmdtype", Some(cmdtype));
     let _ = dict
         .edit()
-        .add_number(b"cmdlevel", VarNumber::from(Cc::current().level));
+        .add_number(b"cmdlevel", VarNumber::from(Cc::current().level()));
     dict.edit().set_keys_readonly();
     dict
 }
@@ -192,7 +194,7 @@ pub(crate) fn command_line_enter(
     s.save_p_icm = p_icm(XString::from_cstr);
     init_incsearch_state(&mut s.is_state);
 
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     let mut did_save_ccline = false;
     if cc.in_use() {
         // Currently ccline can never be in use if clear_ccline is false;
@@ -210,8 +212,8 @@ pub(crate) fn command_line_enter(
     debug_assert!(cc.in_use());
     let prompt_id = LAST_PROMPT_ID.get();
     LAST_PROMPT_ID.set(prompt_id.wrapping_add(1));
-    cc.prompt_id = prompt_id;
-    cc.level = CMDLINE_LEVEL.get();
+    cc.set_prompt_id(prompt_id);
+    cc.set_level(CMDLINE_LEVEL.get());
 
     if CMDLINE_LEVEL.get() == 50 {
         // Somehow got into a loop recursively calling getcmdline(), bail
@@ -253,13 +255,13 @@ pub(crate) fn command_line_enter(
 
     // C's `theend:`; the saved 'inccommand' goes with the state.
     // C's pair of `xfree`s and the three fields it nulled after them.
-    cc.last_colors = ColoredCmdline::NONE;
+    cc.with_mut(|line| line.last_colors = ColoredCmdline::NONE);
 
     if ui_has(UI_CMDLINE) {
         // Emit cmdline_block in Ex mode unless there is no command line,
         // which happens with <C-\><C-N> (upstream #39021).
         if EXMODE_ACTIVE.get() && cc.in_use() {
-            ui_ext_cmdline_block_append(0, cstr::until_nul(cc.bytes()));
+            ui_ext_cmdline_block_append(0, cstr::until_nul(&cc.bytes()));
         }
         ui_ext_cmdline_hide(s.gotesc);
     }
@@ -283,8 +285,8 @@ pub(crate) fn command_line_enter(
 
 /// Set the fresh command line up for typing: its completion, the prompt,
 /// the mode and the `:lmap` state, and the type `v:event` will name.
-fn prepare_command_line(s: &mut CommandLineState, mut cc: Cc) {
-    cc.xpc = Some(Expand::new());
+fn prepare_command_line(s: &mut CommandLineState, cc: Cc) {
+    cc.with_mut(|line| line.xpc = Some(Expand::new()));
     clear_cmdline_orig();
 
     CMDMSG_RL.set(
@@ -299,18 +301,20 @@ fn prepare_command_line(s: &mut CommandLineState, mut cc: Cc) {
     if !CMD_SILENT.get() {
         gotocmdline(true);
         redrawcmdprompt(); // draw the prompt or the indent
-        cc.cmdspos = cmd_startcol();
+        cc.set_cmdspos(cmd_startcol());
     }
-    let (input_fn, xp_context, xp_arg) = (cc.input_fn, cc.xp_context, cc.xp_arg.clone());
-    let xpc = cc.xpc_mut();
-    xpc.context = ExpandContext::Nothing;
-    xpc.backslash = BackslashEscape::NONE;
-    xpc.shell = false;
-    if input_fn {
-        xpc.context = xp_context;
-        xpc.pattern = 0;
-        xpc.arg = xp_arg;
-    }
+    cc.with_mut(|line| {
+        let (input_fn, xp_context, xp_arg) = (line.input_fn, line.xp_context, line.xp_arg.clone());
+        let xpc = line.xpc.as_mut().expect("a command line in its key loop");
+        xpc.context = ExpandContext::Nothing;
+        xpc.backslash = BackslashEscape::NONE;
+        xpc.shell = false;
+        if input_fn {
+            xpc.context = xp_context;
+            xpc.pattern = 0;
+            xpc.arg = xp_arg;
+        }
+    });
 
     // Avoid scrolling when called by a recursive do_cmdline(), e.g.
     // when doing ":@0" and register 0 doesn't contain a CR.
@@ -438,7 +442,7 @@ fn fire_cmdline_leave(s: &mut CommandLineState) -> Error {
 /// We could have reached here without a chance to clean up the wildmenu, if
 /// a special key like <Esc> or <C-\> was used as 'wildchar'. Clean up
 /// anyway, to avoid memory corruption.
-fn drop_completion(s: &mut CommandLineState, mut cc: Cc) {
+fn drop_completion(s: &mut CommandLineState, cc: Cc) {
     if cmdline_pum_active() {
         cmdline_pum_remove(false);
     } else {
@@ -449,7 +453,7 @@ fn drop_completion(s: &mut CommandLineState, mut cc: Cc) {
     s.did_wild_list = false;
     s.wim_index = 0;
 
-    if let Some(mut xpc) = cc.xpc.take() {
+    if let Some(mut xpc) = cc.with_mut(|line| line.xpc.take()) {
         expand_cleanup(&mut xpc);
     }
     clear_cmdline_orig();
@@ -465,7 +469,7 @@ fn remember_command_line(s: &CommandLineState, cc: Cc) {
     {
         add_to_history(
             s.histype,
-            cc.bytes(),
+            &cc.bytes(),
             true,
             if s.histype == HIST_SEARCH {
                 s.firstc
@@ -474,7 +478,7 @@ fn remember_command_line(s: &CommandLineState, cc: Cc) {
             },
         );
         if s.firstc == b':' {
-            NEW_LAST_CMDLINE.set(Some(XString::from_bytes(cstr::until_nul(cc.bytes()))));
+            NEW_LAST_CMDLINE.set(Some(XString::from_bytes(cstr::until_nul(&cc.bytes()))));
         }
     }
 
@@ -531,7 +535,7 @@ fn restore_after_command_line(s: &CommandLineState, mut err: Error, save_cmdprev
 pub(crate) fn command_line_check(s: &mut CommandLineState) -> Step {
     let cc = Cc::current();
 
-    s.prev_cmdpos = cc.cmdpos;
+    s.prev_cmdpos = cc.cmdpos();
     // The copy below reuses the room the last one had.
     let mut prev = s.prev_cmdbuff.take().unwrap_or_default();
 
@@ -558,7 +562,7 @@ pub(crate) fn command_line_check(s: &mut CommandLineState) -> Step {
     if cc.in_use() {
         // C's `xstrdup(ccline.cmdbuff)`: the line up to its first NUL.
         prev.clear();
-        prev.extend_from_slice(cstr::until_nul(cc.bytes()));
+        prev.extend_from_slice(cstr::until_nul(&cc.bytes()));
         s.prev_cmdbuff = Some(prev);
     }
 
@@ -578,7 +582,7 @@ pub(crate) fn abandon_cmdline() {
         compute_cmdrow();
     }
     // Avoid overwriting a key prompt.
-    if !Cc::current().one_key {
+    if !Cc::current().one_key() {
         msg(c"", 0);
         REDRAW_CMDLINE.set(true);
     }
@@ -654,7 +658,7 @@ pub fn getcmdline_prompt(
     mouse_used: Option<&mut bool>,
 ) -> Option<XString> {
     let msg_col_save = MSG_COL.get();
-    let mut cc = Cc::current();
+    let cc = Cc::current();
 
     let mut did_save_ccline = false;
     if cc.in_use() {
@@ -666,28 +670,29 @@ pub fn getcmdline_prompt(
     }
     let prompt_id = LAST_PROMPT_ID.get();
     LAST_PROMPT_ID.set(prompt_id.wrapping_add(1));
-    cc.prompt_id = prompt_id;
-    cc.cmdprompt = prompt.map(XString::from_cstr);
-    cc.hl_id = hl_id;
-    cc.xp_context = xp_context;
-    cc.xp_arg = xp_arg.map(XString::from_cstr);
-    cc.input_fn = firstc == Some(b'@');
-    cc.highlight_callback = highlight_callback;
-    cc.one_key = one_key;
-    cc.mouse_prompt = mouse_used.is_some();
-    cc.mouse_used = false;
+    cc.set_prompt_id(prompt_id);
+    cc.with_mut(|line| line.cmdprompt = prompt.map(XString::from_cstr));
+    cc.set_hl_id(hl_id);
+    cc.set_xp_context(xp_context);
+    cc.with_mut(|line| line.xp_arg = xp_arg.map(XString::from_cstr));
+    cc.set_input_fn(firstc == Some(b'@'));
+    cc.with_mut(|line| line.highlight_callback = highlight_callback);
+    cc.set_one_key(one_key);
+    cc.set_mouse_prompt(mouse_used.is_some());
+    cc.set_mouse_used(false);
 
     let cmd_silent_saved = CMD_SILENT.get();
     let loud = Allow::messages();
     CMD_SILENT.set(false); // want to see the prompt
 
     let ret = command_line_enter(firstc, 1, 0, false);
-    cc.redraw_state = CMD_REDRAW_NONE;
+    cc.set_redraw_state(CMD_REDRAW_NONE);
     if let Some(clicked) = mouse_used {
-        *clicked = cc.mouse_used;
+        *clicked = cc.mouse_used();
     }
     // Out of the line before the line it suspended comes back.
-    let mut highlight_callback = ::core::mem::replace(&mut cc.highlight_callback, Callback::None);
+    let mut highlight_callback =
+        cc.with_mut(|line| ::core::mem::replace(&mut line.highlight_callback, Callback::None));
     if did_save_ccline {
         restore_cmdline();
     }

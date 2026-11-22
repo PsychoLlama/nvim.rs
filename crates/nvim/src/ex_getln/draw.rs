@@ -27,16 +27,17 @@ pub(crate) fn cmdline_charsize(idx: ::core::ffi::c_int) -> ::core::ffi::c_int {
         // Showing '*': always one position.
         return 1;
     }
-    let cc = Cc::current();
-    let line = cc.bytes();
-    ptr2cells_at(&line[usize::try_from(idx).unwrap_or(0).min(line.len())..])
+    Cc::current().with(|line| {
+        let line = line.bytes();
+        ptr2cells_at(&line[usize::try_from(idx).unwrap_or(0).min(line.len())..])
+    })
 }
 
 /// The screen column the command line's first byte occupies: the indent, plus
 /// one for the `:` / `/` / `?` when there is one.
 pub(crate) fn cmd_startcol() -> ::core::ffi::c_int {
     let cc = Cc::current();
-    cc.cmdindent + i32::from(cc.cmdfirstc != 0)
+    cc.cmdindent() + i32::from(cc.cmdfirstc() != 0)
 }
 
 /// The screen column for a byte position on the command line.
@@ -83,14 +84,13 @@ pub(crate) fn correct_screencol(
     cells: ::core::ffi::c_int,
     col: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
-    let cc = Cc::current();
-    let line = cc.bytes();
-    let at = &line[usize::try_from(idx).unwrap_or(0).min(line.len())..];
-    // An ASCII character takes one cell, composing characters or not.
-    if at.first().is_none_or(|&b| b < 0x80) {
-        return col;
-    }
-    if c_cluster_len(at) > 1 && c_cells_at(at) > 1 && col % COLUMNS.get() + cells > COLUMNS.get() {
+    let wide_at_edge = Cc::current().with(|line| {
+        let line = line.bytes();
+        let at = &line[usize::try_from(idx).unwrap_or(0).min(line.len())..];
+        // An ASCII character takes one cell, composing characters or not.
+        at.first().is_some_and(|&b| b >= 0x80) && c_cluster_len(at) > 1 && c_cells_at(at) > 1
+    });
+    if wide_at_edge && col % COLUMNS.get() + cells > COLUMNS.get() {
         col + 1
     } else {
         col
@@ -100,14 +100,14 @@ pub(crate) fn correct_screencol(
 /// Draw `len` bytes of the command line from `start`, at the cursor position
 /// — or stars, when `CMDLINE_STAR` is set.
 pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     if !cc.in_use() || !color_cmdline(cc) {
         return;
     }
 
     if ui_has(UI_CMDLINE) {
-        cc.special_char = 0;
-        cc.redraw_state = CMD_REDRAW_ALL;
+        cc.set_special_char(0);
+        cc.set_redraw_state(CMD_REDRAW_ALL);
         return;
     }
 
@@ -118,13 +118,13 @@ pub(crate) fn draw_cmdline(start: ::core::ffi::c_int, len: ::core::ffi::c_int) {
             msg_put_ascii(b'*');
             i += cluster_len_at(cc, start + i).max(1);
         }
-    } else if !cc.last_colors.chunks().is_empty() {
+    } else if !cc.with(|line| line.last_colors.chunks().is_empty()) {
         // Indexed rather than iterated: `msg_display_bytes` re-enters the
         // editor, which can replace the whole command line, so no borrow
         // of it may outlive one access.
         let mut i: size_t = 0;
-        while i < cc.last_colors.chunks().len() {
-            let chunk: CmdlineColorChunk = cc.last_colors.chunks()[i];
+        while i < cc.with(|line| line.last_colors.chunks().len()) {
+            let chunk: CmdlineColorChunk = cc.with(|line| line.last_colors.chunks()[i]);
             if chunk.end > start {
                 let chunk_start = chunk.start.max(start);
                 display_span(cc, chunk_start, chunk.end - chunk_start, chunk.hl_id);
@@ -172,24 +172,24 @@ pub fn putcmdline(c: ::core::ffi::c_char, shift: bool) {
     if CMD_SILENT.get() {
         return;
     }
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     if !ui_has(UI_CMDLINE) {
         MSG_NO_MORE.set(true);
         msg_putchar(Codepoint::new(i32::from(c)));
         if shift {
-            draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
+            draw_cmdline(cc.cmdpos(), cc.len() - cc.cmdpos());
         }
         MSG_NO_MORE.set(false);
-    } else if cc.redraw_state != CMD_REDRAW_ALL {
+    } else if cc.redraw_state() != CMD_REDRAW_ALL {
         ui_call_cmdline_special_char(
             ApiString::from_bytes(cstr::until_nul(&[c.cast_unsigned()])),
             shift as Boolean,
-            Integer::from(cc.level),
+            Integer::from(cc.level()),
         );
     }
     cursorcmd();
-    cc.special_char = c;
-    cc.special_shift = shift;
+    cc.set_special_char(c);
+    cc.set_special_shift(shift);
     ui_cursor_shape();
 }
 
@@ -198,16 +198,16 @@ pub fn unputcmdline() {
     if CMD_SILENT.get() {
         return;
     }
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     MSG_NO_MORE.set(true);
-    if cc.len() == cc.cmdpos && !ui_has(UI_CMDLINE) {
+    if cc.len() == cc.cmdpos() && !ui_has(UI_CMDLINE) {
         msg_put_ascii(b' ');
     } else {
-        draw_cmdline(cc.cmdpos, cluster_len_at(cc, cc.cmdpos));
+        draw_cmdline(cc.cmdpos(), cluster_len_at(cc, cc.cmdpos()));
     }
     MSG_NO_MORE.set(false);
     cursorcmd();
-    cc.special_char = 0;
+    cc.set_special_char(0);
     ui_cursor_shape();
 }
 
@@ -219,12 +219,12 @@ pub fn unputcmdline() {
 pub fn put_on_cmdline(text: &[u8], redraw: bool) {
     let mut len = ::core::ffi::c_int::try_from(text.len()).expect("a command line fits a c_int");
 
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     realloc_cmdbuff(cc, cc.len() + len + 1);
 
-    let pos = cc.cmdpos;
-    if !cc.overstrike {
-        cc.cmdbuff.splice(pos, pos, text);
+    let pos = cc.cmdpos();
+    if !cc.overstrike() {
+        cc.with_mut(|line| line.cmdbuff.splice(pos, pos, text));
     } else {
         // Count the characters in the new string.
         let mut m = 0;
@@ -241,18 +241,18 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
             i += cluster_len_at(cc, i).max(1);
         }
         let to = i.min(cc.len());
-        cc.cmdbuff.splice(pos, to, text);
+        cc.with_mut(|line| line.cmdbuff.splice(pos, to, text));
     }
 
     // When the inserted text starts with a composing character, back up
     // to the character before it.
-    if cc.cmdpos > 0 && cc.byte_at(cc.cmdpos) >= 0x80 {
-        let back = head_off(cc.bytes(), usize::try_from(cc.cmdpos).unwrap_or(0));
+    if cc.cmdpos() > 0 && cc.byte_at(cc.cmdpos()) >= 0x80 {
+        let back = head_off(&cc.bytes(), usize::try_from(cc.cmdpos()).unwrap_or(0));
         let back = ::core::ffi::c_int::try_from(back).unwrap_or(0);
         if back != 0 {
-            cc.cmdpos -= back;
+            cc.set_cmdpos(cc.cmdpos() - back);
             len += back;
-            cc.cmdspos = cmd_screencol(cc.cmdpos);
+            cc.set_cmdspos(cmd_screencol(cc.cmdpos()));
         }
     }
 
@@ -260,9 +260,9 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
         MSG_NO_MORE.set(true);
         let row_before = CMDLINE_ROW.get();
         cursorcmd();
-        draw_cmdline(cc.cmdpos, cc.len() - cc.cmdpos);
+        draw_cmdline(cc.cmdpos(), cc.len() - cc.cmdpos());
         // Avoid clearing the rest of the line too often.
-        if CMDLINE_ROW.get() != row_before || cc.overstrike {
+        if CMDLINE_ROW.get() != row_before || cc.overstrike() {
             msg_clr_eos();
         }
         MSG_NO_MORE.set(false);
@@ -278,17 +278,17 @@ pub fn put_on_cmdline(text: &[u8], redraw: bool) {
 
     let mut i = 0;
     while i < len {
-        let mut c = cmdline_charsize(cc.cmdpos);
+        let mut c = cmdline_charsize(cc.cmdpos());
         // Count ">" for a double-wide character that doesn't fit.
-        cc.cmdspos = correct_screencol(cc.cmdpos, c, cc.cmdspos);
+        cc.set_cmdspos(correct_screencol(cc.cmdpos(), c, cc.cmdspos()));
         // Stop the cursor at the end of the screen, but do advance the
         // insert position, so that entering a very long command works
         // even though it cannot all be seen.
-        if cc.cmdspos + c < m {
-            cc.cmdspos += c;
+        if cc.cmdspos() + c < m {
+            cc.set_cmdspos(cc.cmdspos() + c);
         }
-        c = (cluster_len_at(cc, cc.cmdpos) - 1).min(len - i - 1);
-        cc.cmdpos += c + 1;
+        c = (cluster_len_at(cc, cc.cmdpos()) - 1).min(len - i - 1);
+        cc.set_cmdpos(cc.cmdpos() + c + 1);
         i += c + 1;
     }
 
@@ -316,24 +316,24 @@ pub(crate) fn redrawcmdprompt() {
     if CMD_SILENT.get() {
         return;
     }
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     if ui_has(UI_CMDLINE) {
-        cc.redraw_state = CMD_REDRAW_ALL;
+        cc.set_redraw_state(CMD_REDRAW_ALL);
         return;
     }
-    if cc.cmdfirstc != 0 {
-        msg_putchar(Codepoint::from(cc.cmdfirstc));
+    if cc.cmdfirstc() != 0 {
+        msg_putchar(Codepoint::from(cc.cmdfirstc()));
     }
     // A copy: the message code re-enters the editor.
-    if let Some(prompt) = cc.cmdprompt.clone() {
-        msg_str_hl(prompt.as_cstr(), cc.hl_id, false);
-        cc.cmdindent = MSG_COL.get() + (MSG_ROW.get() - CMDLINE_ROW.get()) * COLUMNS.get();
+    if let Some(prompt) = cc.with(|line| line.cmdprompt.clone()) {
+        msg_str_hl(prompt.as_cstr(), cc.hl_id(), false);
+        cc.set_cmdindent(MSG_COL.get() + (MSG_ROW.get() - CMDLINE_ROW.get()) * COLUMNS.get());
         // The reverse of cmd_startcol().
-        if cc.cmdfirstc != 0 {
-            cc.cmdindent -= 1;
+        if cc.cmdfirstc() != 0 {
+            cc.set_cmdindent(cc.cmdindent() - 1);
         }
     } else {
-        let mut i = cc.cmdindent;
+        let mut i = cc.cmdindent();
         while i > 0 {
             msg_put_ascii(b' ');
             i -= 1;
@@ -347,7 +347,7 @@ pub fn redrawcmd() {
         return;
     }
 
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     if ui_has(UI_CMDLINE) {
         draw_cmdline(0, cc.len());
         return;
@@ -373,10 +373,10 @@ pub fn redrawcmd() {
     msg_clr_eos();
     MSG_NO_MORE.set(false);
 
-    cc.cmdspos = cmd_screencol(cc.cmdpos);
+    cc.set_cmdspos(cmd_screencol(cc.cmdpos()));
 
-    if cc.special_char != 0 {
-        putcmdline(cc.special_char, cc.special_shift);
+    if cc.special_char() != 0 {
+        putcmdline(cc.special_char(), cc.special_shift());
     }
 
     // An earlier emsg() may have set msg_scroll; in command-line mode it
@@ -412,7 +412,7 @@ pub fn cursorcmd() {
         return;
     }
 
-    let cmdspos = Cc::current().cmdspos;
+    let cmdspos = Cc::current().cmdspos();
     MSG_ROW.set(CMDLINE_ROW.get() + cmdspos / COLUMNS.get());
     MSG_COL.set(cmdspos % COLUMNS.get());
     MSG_ROW.set(MSG_ROW.get().min(ROWS.get() - 1));
