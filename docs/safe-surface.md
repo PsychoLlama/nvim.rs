@@ -497,7 +497,16 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   pattern list across matches that take a pattern's program out, so a
   counted borrow refuses the engine itself. Closing it needs the program in
   a cell of its own (`sp_prog`, `b_syn_linecont_prog`); then the block can
-  ride on the buffer's read/edit like any other field.
+  ride on the buffer's read/edit like any other field. Left for the `Win`
+  slices: a window's `:ownsyntax` block lives in the `Window`, which has no
+  counted guards yet, so only the buffer half could close now. Plan: (1)
+  the two programs become a take/put cell (`Cell<Option<RegProg>>`-shaped,
+  taken for a match and put back) so the engine needs only a read of the
+  block; (2) `SynBlockRef::read` = the owner's `read()` narrowed to the
+  block (`ReadPart`), `edit` = `EditPart`; (3) the engine's walks that now
+  hold a `SynEdit` across a match take a read instead. The `:syntax list`
+  printers already copy out before printing (they held block reads across
+  messages).
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with

@@ -87,7 +87,7 @@ unsafe_placement` lists any misplaced attribute (none);
 | `allocator.rs`                              | memory   |     1 |         16 |            4 | the global allocator                             |
 | `memory/`                                   | memory   |     4 |         99 |           36 | `xmalloc`, the block pool, owned C strings       |
 | `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
-| `slot.rs`                                   | memory   |     1 |         32 |            7 | type-stable slots and their checked handles      |
+| `slot.rs`, `slot/`                          | memory   |     2 |         41 |            7 | type-stable slots and their checked handles      |
 | `winlayer.rs`, `winlayer/`                  | memory   |     6 |         49 |            9 | window, buffer, grid and terminal handles        |
 | `eval/typval/handle.rs`                     | memory   |     1 |         50 |            8 | Vimscript value handles                          |
 | `vterm/abi/`                                | test ABI |     3 |         90 |           31 | libvterm's C interface                           |
@@ -273,14 +273,15 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   holds by address, and the cell's own tests).
 - **Retires:** never; it is the replacement.
 
-### `slot.rs` — type-stable slots
+### `slot.rs`, `slot/` — type-stable slots
 
 - **What:** `SlotPool<T>`, which allocates each slot once and never gives
   its memory back, `SlotRef<T>`, a `Copy` handle of the slot's address and
   the generation its value was handed out under, and `SlotBox<T>`, the one
-  owner of a value in its type's pool, and the two guards a value is lent
-  through, `SlotEdit` (the edit bit) and `SlotRead` (a counted borrow)
-  (32): the header reads (generation, index, reader count; 3), the value's
+  owner of a value in its type's pool, and the guards a value is lent
+  through (`slot/guards.rs`): `SlotEdit` (the edit bit), `SlotRead` (a
+  counted borrow) and `SlotPart` (one interior part lent mutably beside
+  reads of the rest -- a buffer's memline) (41): the header reads (generation, index, reader count; 3), the value's
   writes, reads and drops as it enters and leaves a slot (7), the
   dereferences of a live handle, a detached slot, a vacant place being
   filled, the pool's own borrow and the two guards (9), and the `unsafe
@@ -301,7 +302,12 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
   (`SlotRef::raw`). The generation's top bit is the edit bit: `edit_at`
   sets it while its guard lends the value, so every exact compare refuses
   meanwhile; `read_at` counts its guard, and an edit, `check_write` or
-  emptying the slot refuses while the count is not zero. Exclusivity holds
+  emptying the slot refuses while the count is not zero. `lend_part_at`
+  counts one reader and sets the reader word's top bit, so a second part
+  loan and a part read (`check_part_unlent`) refuse; the part lives in an
+  `UnsafeCell` and is reached only through these. `abandon_loans` zeroes
+  every guard's mark, for the emergency exits alone (their guards' frames
+  never resume). Exclusivity holds
   only for what is lent through those guards (`TabPage`, `FrameRef`,
   `PosRef`): a `SlotRef`'s and `Win`/`Buf`'s `DerefMut` through two
   copies still lend overlapping `&mut` ([safe-surface.md](safe-surface.md)
