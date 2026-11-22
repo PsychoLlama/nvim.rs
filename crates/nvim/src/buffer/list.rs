@@ -878,12 +878,12 @@ mod tests {
     fn a_fresh_window_holds_valid_owners() {
         let _held = editor_state_lock();
         let window = bare_window();
+        assert!(!window.grid_alloc().is_allocated());
+        assert!(!window.grid_alloc().tracks_dirty_cols());
         {
             let held = window.read();
             let w: &crate::types::Window = &held;
             assert!(w.w_ns_set.is_empty());
-            assert!(!w.w_grid_alloc.is_allocated());
-            assert!(!w.w_grid_alloc.tracks_dirty_cols());
             for opt in [&w.w_onebuf_opt, &w.w_allbuf_opt] {
                 for value in [
                     &opt.wo_briopt,

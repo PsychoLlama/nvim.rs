@@ -4235,6 +4235,7 @@ static const int STACK_SIZE = 254;
 static const int STARTUP_DELAY_MS = 100;
 static const int START_OF_FILE_PENALTY = 1;
 static const int STAR_REGISTER = 37;
+static const int STATIC_OWNER = 0;
 static const int STATUS_HEIGHT = 1;
 static const int STAT_BUF_LEN = 16;
 static const int STDIN_CHUNK = 64;

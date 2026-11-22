@@ -584,7 +584,7 @@ impl Pager {
         {
             // A throttled scroll here would be undone by the flush, so
             // discount it instead.
-            if msg_do_throttle() && !msg_grid_ref().throttled {
+            if msg_do_throttle() && !msg_grid_ref().throttled() {
                 MSG_SCROLLED_AT_FLUSH.set(MSG_SCROLLED_AT_FLUSH.get() - 1);
                 MSG_GRID_SCROLL_DISCOUNT.set(MSG_GRID_SCROLL_DISCOUNT.get() + 1);
             }

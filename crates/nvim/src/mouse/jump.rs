@@ -379,8 +379,8 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
 
     let win = Win::current();
     if pos.grid == 0 {
-        pos.row -= win.grid_alloc().comp_row + win.w_grid().row_offset;
-        pos.col -= win.grid_alloc().comp_col + win.w_grid().col_offset;
+        pos.row -= win.grid_alloc().comp_row() + win.w_grid().row_offset;
+        pos.col -= win.grid_alloc().comp_col() + win.w_grid().col_offset;
     } else if pos.grid != DEFAULT_GRID_HANDLE.get() {
         pos.row -= win.w_grid().row_offset;
         pos.col -= win.w_grid().col_offset;

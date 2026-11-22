@@ -120,7 +120,12 @@ pub(crate) fn win_update(window: Win) {
     let win = window;
     // Return early when the window would overflow a shrunk terminal, which
     // would draw out of bounds and trip an assertion.
-    if win.w_grid().target == default_grid_ref().raw() && win.w_wincol() >= COLUMNS.get() {
+    if win
+        .w_grid()
+        .target
+        .is_some_and(|g| g.same(default_grid_ref()))
+        && win.w_wincol() >= COLUMNS.get()
+    {
         return;
     }
 
@@ -821,7 +826,7 @@ fn send_win_extmarks(window: Win) {
     WIN_EXTMARK_ARR.with(|marks| {
         for m in marks {
             ui_call_win_extmark(
-                Integer::from(window.grid_alloc().handle),
+                Integer::from(window.grid_alloc().handle()),
                 window.handle() as WindowHandle,
                 Integer::from(m.ns_id),
                 m.mark_id.cast_signed(),

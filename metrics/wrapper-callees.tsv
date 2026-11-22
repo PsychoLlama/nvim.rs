@@ -3,8 +3,8 @@ count	callee	no_raw	defs	def
 31	CStr::from_ptr	0	0	
 20	from_raw_parts	0	0	
 17	zeroed	0	0	
+16	.as_ref	0	0	
 16	Reader::new	0	1	crates/nvim/src/event/rstream.rs
-13	.as_ref	0	0	
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 10	Box::from_raw	0	6	
 10	notify	0	0	
@@ -50,6 +50,7 @@ count	callee	no_raw	defs	def
 3	proc_free	0	1	crates/nvim/src/event/proc.rs
 3	proc_get_exepath	0	1	crates/nvim/src/event/proc.rs
 3	process_events	0	1	crates/nvim/src/event/loop.rs
+3	read_at	0	1	crates/nvim/src/slot/guards.rs
 3	rstream_init	0	1	crates/nvim/src/event/rstream.rs
 3	rstream_may_close	0	1	crates/nvim/src/event/rstream.rs
 3	state_terminal	0	1	crates/nvim/src/vterm/abi/mod.rs
@@ -102,7 +103,6 @@ count	callee	no_raw	defs	def
 2	proc_wait	0	1	crates/nvim/src/event/proc.rs
 2	push_c_string	0	1	crates/nvim/src/lua/treesitter/mod.rs
 2	query_string	0	1	crates/nvim/src/lua/treesitter/query.rs
-2	read_at	0	1	crates/nvim/src/slot/guards.rs
 2	rstream_init_fd	0	1	crates/nvim/src/event/rstream.rs
 2	rstream_start	0	1	crates/nvim/src/event/rstream.rs
 2	screen_terminal	0	1	crates/nvim/src/vterm/abi/mod.rs
@@ -122,6 +122,7 @@ count	callee	no_raw	defs	def
 2	uv_signal_start	0	0	
 2	uv_signal_stop	0	0	
 2	uv_sleep	0	0	
+2	word_at	0	1	crates/nvim/src/slot.rs
 2	write	0	0	
 2	wstream_init	0	1	crates/nvim/src/event/wstream.rs
 2	wstream_write	0	1	crates/nvim/src/event/wstream.rs
@@ -329,7 +330,6 @@ count	callee	no_raw	defs	def
 1	uv_unref	0	0	
 1	uv_uptime	0	0	
 1	waitpid	0	0	
-1	word_at	0	1	crates/nvim/src/slot.rs
 1	wstream_init_fd	0	1	crates/nvim/src/event/wstream.rs
 1	wstream_set_write_cb	0	1	crates/nvim/src/event/wstream.rs
 1	xcalloc_retry	0	1	crates/nvim/src/memory/mod.rs

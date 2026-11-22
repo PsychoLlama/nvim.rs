@@ -27,7 +27,6 @@
 use crate::keycodes::SpecialKey;
 use crate::types::Key;
 use core::ffi::CStr;
-use core::ptr;
 use std::ffi::CString;
 
 use super::*;
@@ -52,7 +51,7 @@ pub(crate) fn pum_select_mouse_pos() {
         find_win_outer(&mut pos);
     }
 
-    if pos.grid == pum_grid_ref().handle.get() {
+    if pos.grid == pum_grid_ref().handle().get() {
         // On the menu itself. A box border (width 2) takes the top row.
         let border_offset = c_int::from(pum_border_width() == 2);
         let item = pos.row - border_offset;
@@ -299,8 +298,12 @@ pub fn pum_make_popup(path_name: &CStr, use_mouse_pos: c_int) {
             // Only under multigrid is the window's own grid guaranteed to
             // have been allocated -- headless it can still be null, which is
             // why this read stays inside the branch.
-            MOUSE_GRID.set(grid_of_view(win.w_grid()).handle.get());
-        } else if !ptr::eq(win.w_grid().target, default_grid_ref().raw()) {
+            MOUSE_GRID.set(grid_of_view(win.w_grid()).handle().get());
+        } else if !win
+            .w_grid()
+            .target
+            .is_some_and(|g| g.same(default_grid_ref()))
+        {
             // Without multigrid the window's own grid is composed onto the
             // screen, so the position has to be screen-relative.
             MOUSE_GRID.set(0);

@@ -244,10 +244,14 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     }
 
     if let Some(target) = target_win {
-        PUM_ANCHOR_GRID.set(grid_of_view(target.w_grid()).handle.get());
+        PUM_ANCHOR_GRID.set(grid_of_view(target.w_grid()).handle().get());
         win_row += target.w_grid().row_offset;
         cursor_col += target.w_grid().col_offset;
-        if target.w_grid().target != default_grid_ref().raw() {
+        if !target
+            .w_grid()
+            .target
+            .is_some_and(|g| g.same(default_grid_ref()))
+        {
             win_row += target.w_winrow();
             cursor_col += target.w_wincol();
             if ui_has(UI_MULTIGRID) {
@@ -423,8 +427,8 @@ pub fn pum_check_clear() {
     } else {
         ui_comp_remove_grid(grid);
         if ui_has(UI_MULTIGRID) {
-            ui_call_win_close(Integer::from(grid.handle));
-            ui_call_grid_destroy(Integer::from(grid.handle));
+            ui_call_win_close(Integer::from(grid.handle()));
+            ui_call_grid_destroy(Integer::from(grid.handle()));
         }
         // TODO(bfredl): consider keeping float grids allocated.
         grid.free();
@@ -535,17 +539,17 @@ fn pum_send_float_pos() {
     let row_off = if above { -PUM_HEIGHT.get() } else { 0 };
     let anchor = ApiString::from_cstr(anchor);
     ui_call_win_float_pos(
-        Integer::from(grid.handle),
+        Integer::from(grid.handle()),
         Handle::new(-1),
         anchor,
         Integer::from(PUM_ANCHOR_GRID.get()),
         Float::from(PUM_ROW.get() - row_off - PUM_WIN_ROW_OFFSET.get()),
         Float::from(PUM_LEFT_COL.get() - PUM_WIN_COL_OFFSET.get()),
         false,
-        Integer::from(grid.zindex),
-        crate::narrow::len_as_integer(grid.comp_index),
-        Integer::from(grid.comp_row),
-        Integer::from(grid.comp_col),
+        Integer::from(grid.zindex()),
+        crate::narrow::len_as_integer(grid.comp_index()),
+        Integer::from(grid.comp_row()),
+        Integer::from(grid.comp_col()),
     );
 }
 
@@ -556,8 +560,8 @@ pub fn pum_ui_flush() {
     if ui_has(UI_MULTIGRID)
         && PUM_IS_DRAWN.get()
         && !PUM_EXTERNAL.get()
-        && grid.handle != Handle::NONE
-        && grid.pending_comp_index_update
+        && grid.handle() != Handle::NONE
+        && grid.pending_comp_index_update()
     {
         pum_send_float_pos();
         grid.set_pending_comp_index_update(false);

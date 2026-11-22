@@ -15,7 +15,6 @@
 )]
 
 use super::*;
-use crate::grid::try_grid_of_view;
 use crate::guard::Allow;
 use crate::optionstr::OptString;
 use crate::winlayer::Buf;
@@ -156,7 +155,7 @@ pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
         flush_ui = true;
     }
     let cwin = win.unwrap_or_else(Win::current);
-    let stale_grid = try_grid_of_view(cwin.w_grid()).is_none_or(|grid| !grid.valid);
+    let stale_grid = cwin.w_grid().target.is_none_or(|grid| !grid.valid());
     let cursor = opts.cursor.unwrap_or(false);
     if cursor && stale_grid {
         flush = true;

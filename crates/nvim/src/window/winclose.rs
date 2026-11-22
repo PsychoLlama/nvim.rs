@@ -243,7 +243,7 @@ impl Closing {
     fn free_window(&self, win: Win) -> Freed {
         let was_floating = win.w_floating();
         if ui_has(UI_MULTIGRID) {
-            ui_call_win_close(Integer::from(win.grid_alloc().handle));
+            ui_call_win_close(Integer::from(win.grid_alloc().handle()));
         }
         if win.w_floating() {
             drop_grid(win);
@@ -723,7 +723,7 @@ fn free_in_tab(win: Win, tabpage: TabPage) -> Result<(), Stopped> {
     // must hear that its grid closed, and the compositor must not keep
     // a float's grid it would otherwise draw from after the free.
     if ui_has(UI_MULTIGRID) {
-        ui_call_win_close(Integer::from(win.grid_alloc().handle));
+        ui_call_win_close(Integer::from(win.grid_alloc().handle()));
     }
     if win.w_floating() {
         drop_grid(win);

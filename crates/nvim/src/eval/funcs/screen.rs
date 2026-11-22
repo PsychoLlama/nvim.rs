@@ -61,14 +61,14 @@ impl Cell {
         // the pending message scroll has to reach the grid first.
         msg_scroll_flush();
         let grid = ui_comp_get_grid_at_coord(row, col);
-        row -= grid.comp_row;
-        col -= grid.comp_col;
+        row -= grid.comp_row();
+        col -= grid.comp_col();
         Cell { grid, row, col }
     }
 
     /// Whether the cell is on the grid it was rebased onto.
     fn on_grid(&self) -> bool {
-        self.row >= 0 && self.row < self.grid.rows && self.col >= 0 && self.col < self.grid.cols
+        self.row >= 0 && self.row < self.grid.rows() && self.col >= 0 && self.col < self.grid.cols()
     }
 
     /// The cell's character, as the grid's packed representation.

@@ -160,7 +160,7 @@ pub(crate) fn ins_redraw(ready: bool) {
 /// Nothing is stored in a buffer, so the next real redraw removes it.
 pub(crate) fn edit_putchar(c: Key, highlight: bool) {
     let win = Win::current();
-    if !win.read().w_grid_alloc.is_allocated() && !default_grid_ref().is_allocated() {
+    if !win.grid_alloc().is_allocated() && !default_grid_ref().is_allocated() {
         return;
     }
 

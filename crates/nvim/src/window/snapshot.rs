@@ -398,16 +398,16 @@ fn tab_and_win_number(id: Handle) -> Option<(c_int, c_int)> {
 pub fn win_ui_flush(validate: bool) {
     for tp in tabs() {
         for wp in windows_in_tab(tp) {
-            let moved = wp.w_pos_changed() || wp.grid_alloc().pending_comp_index_update;
-            if moved && wp.read().w_grid_alloc.is_allocated() {
+            let moved = wp.w_pos_changed() || wp.grid_alloc().pending_comp_index_update();
+            if moved && wp.grid_alloc().is_allocated() {
                 if tp.is_current() {
                     ui_ext_win_position(wp, validate);
                 } else {
                     // A window of another tab page is not on the screen.
-                    ui_call_win_hide(Integer::from(wp.grid_alloc().handle));
+                    ui_call_win_hide(Integer::from(wp.grid_alloc().handle()));
                     wp.set_w_pos_changed(false);
                 }
-                wp.edit().w_grid_alloc.pending_comp_index_update = false;
+                wp.grid_alloc().set_pending_comp_index_update(false);
             }
             if tp.is_current() {
                 ui_ext_win_viewport(wp);

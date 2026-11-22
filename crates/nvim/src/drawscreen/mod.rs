@@ -224,8 +224,8 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
     // The part of the message grid that is not displayed is invalid.
     let mg = msg_grid_ref();
     if mg.is_allocated() {
-        for i in 0..scrollsize.min(mg.rows) {
-            let (off, cols) = (mg.row_start(i), mg.cols);
+        for i in 0..scrollsize.min(mg.rows()) {
+            let (off, cols) = (mg.row_start(i), mg.cols());
             mg.clear_line(off, cols, OptInt::from(i) < p_ch());
         }
     }
@@ -341,9 +341,8 @@ pub fn update_screen() -> Result<(), Failed> {
     SearchHl::current().forget_regprog();
 
     for wp in winlayer::windows() {
-        if wp.w_redr_type() == UPD_CLEAR && wp.w_floating() && wp.read().w_grid_alloc.is_allocated()
-        {
-            wp.edit().w_grid_alloc.invalidate();
+        if wp.w_redr_type() == UPD_CLEAR && wp.w_floating() && wp.grid_alloc().is_allocated() {
+            wp.grid_alloc().invalidate();
             wp.set_w_redr_type(UPD_NOT_VALID);
         }
 
@@ -456,7 +455,7 @@ fn begin_redraw(is_stl_global: bool) -> (c_int, bool) {
         MSG_SCROLLED_AT_FLUSH.set(0);
     }
 
-    if redr_type >= UPD_CLEAR || !default_grid_ref().valid {
+    if redr_type >= UPD_CLEAR || !default_grid_ref().valid() {
         ui_comp_set_screen_valid(false);
     }
 
@@ -485,7 +484,7 @@ fn begin_redraw(is_stl_global: bool) -> (c_int, bool) {
         redr_type = UPD_NOT_VALID;
         // `MUST_REDRAW` may have been set indirectly; avoid another redraw.
         MUST_REDRAW.set(0);
-    } else if !default_grid_ref().valid {
+    } else if !default_grid_ref().valid() {
         default_grid_ref().revalidate();
     }
 
@@ -646,9 +645,9 @@ pub fn setcursor_mayforce(window: Win, force: bool) {
     }
 
     // A window whose view is not resolved yet has no cursor to place.
-    if !window.w_grid().target.is_null() {
+    if window.w_grid().target.is_some() {
         let grid = grid_adjust(window.w_grid(), &mut row, &mut col);
-        ui_grid_cursor_goto(grid.handle, row, col);
+        ui_grid_cursor_goto(grid.handle(), row, col);
     }
 }
 

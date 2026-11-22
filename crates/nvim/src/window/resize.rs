@@ -399,7 +399,7 @@ pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
     if ui_has(UI_MULTIGRID) {
         {
             ui_call_win_viewport_margins(
-                Integer::from(window.grid_alloc().handle),
+                Integer::from(window.grid_alloc().handle()),
                 window.handle() as WindowHandle,
                 Integer::from(window.w_winrow_off()),
                 Integer::from(window.w_border_adj()[2]),

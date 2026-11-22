@@ -160,13 +160,13 @@ fn ext_win_position(window: Win, validate: bool) {
     wp.set_w_pos_changed(false);
     if !wp.w_floating() {
         if ui_has(UI_MULTIGRID) {
-            wp.edit().w_grid_alloc.comp_col = wp.w_wincol();
-            wp.edit().w_grid_alloc.comp_row = wp.w_winrow();
+            wp.grid_alloc().set_comp_col(wp.w_wincol());
+            wp.grid_alloc().set_comp_row(wp.w_winrow());
         }
         // Tell the UI where the window is.
         {
             ui_call_win_pos(
-                Integer::from(wp.grid_alloc().handle),
+                Integer::from(wp.grid_alloc().handle()),
                 wp.handle() as WindowHandle,
                 Integer::from(wp.w_winrow()),
                 Integer::from(wp.w_wincol()),
@@ -179,7 +179,7 @@ fn ext_win_position(window: Win, validate: bool) {
     let c = wp.config();
     if c.external {
         ui_call_win_external_pos(
-            Integer::from(wp.grid_alloc().handle),
+            Integer::from(wp.grid_alloc().handle()),
             wp.handle() as WindowHandle,
         );
         return;
@@ -200,12 +200,12 @@ fn ext_win_position(window: Win, validate: bool) {
 
     // A changed 'zindex' means the float has to move within the compositor's
     // stack of layers.
-    let resort = wp.grid_alloc().comp_index != 0 as size_t
-        && wp.read().w_grid_alloc.zindex != wp.config_zindex();
-    let raise = resort && wp.read().w_grid_alloc.zindex < wp.config_zindex();
-    wp.edit().w_grid_alloc.zindex = wp.config_zindex();
+    let resort = wp.grid_alloc().comp_index() != 0 as size_t
+        && wp.grid_alloc().zindex() != wp.config_zindex();
+    let raise = resort && wp.grid_alloc().zindex() < wp.config_zindex();
+    wp.grid_alloc().set_zindex(wp.config_zindex());
     if resort {
-        ui_comp_layers_adjust(wp.grid_alloc().comp_index, raise);
+        ui_comp_layers_adjust(wp.grid_alloc().comp_index(), raise);
     }
 
     let valid = wp.w_redr_type() == 0 || ui_has(UI_MULTIGRID);
@@ -224,8 +224,8 @@ fn ext_win_position(window: Win, validate: bool) {
     } else {
         0
     };
-    comp_row += grid.comp_row;
-    comp_col += grid.comp_col;
+    comp_row += grid.comp_row();
+    comp_col += grid.comp_col();
     comp_row = comp_row
         .min(ROWS.get() - wp.w_height_outer() - above_ch)
         .max(0);
@@ -237,7 +237,7 @@ fn ext_win_position(window: Win, validate: bool) {
 
     if c.hide {
         if ui_has(UI_MULTIGRID) {
-            ui_call_win_hide(Integer::from(wp.grid_alloc().handle));
+            ui_call_win_hide(Integer::from(wp.grid_alloc().handle()));
         }
         ui_comp_remove_grid(wp.grid_alloc());
         return;
@@ -246,25 +246,25 @@ fn ext_win_position(window: Win, validate: bool) {
     ui_comp_put_grid(wp.grid_alloc(), comp_row, comp_col, h, w, valid, false);
     if ui_has(UI_MULTIGRID) {
         let anchor = ApiString::from_cstr(FLOAT_ANCHOR_STR[as_index(c.anchor)]);
-        let anchor_grid = grid.handle;
+        let anchor_grid = grid.handle();
         ui_call_win_float_pos(
-            Integer::from(wp.grid_alloc().handle),
+            Integer::from(wp.grid_alloc().handle()),
             wp.handle() as WindowHandle,
             anchor,
             Integer::from(anchor_grid),
             row,
             col,
             c.mouse as Boolean,
-            Integer::from(wp.grid_alloc().zindex),
-            Integer::from(len_as_int(wp.grid_alloc().comp_index)),
+            Integer::from(wp.grid_alloc().zindex()),
+            Integer::from(len_as_int(wp.grid_alloc().comp_index())),
             Integer::from(wp.w_winrow()),
             Integer::from(wp.w_wincol()),
         );
     }
-    ui_check_cursor_grid(wp.grid_alloc().handle);
-    wp.edit().w_grid_alloc.mouse_enabled = wp.config_mouse();
+    ui_check_cursor_grid(wp.grid_alloc().handle());
+    wp.grid_alloc().set_mouse_enabled(wp.config_mouse());
     if !valid {
-        wp.edit().w_grid_alloc.valid = false;
+        wp.grid_alloc().set_valid(false);
         wp.redraw_later(UPD_NOT_VALID);
     }
 }
@@ -285,8 +285,7 @@ fn anchor_to_window(
     row: &mut Float,
     col: &mut Float,
 ) {
-    if parent.w_pos_changed() && parent.read().w_grid_alloc.is_allocated() && win_valid(parent.id())
-    {
+    if parent.w_pos_changed() && parent.grid_alloc().is_allocated() && win_valid(parent.id()) {
         ext_win_position(parent, validate);
     }
     let (mut row_off, mut col_off) = (0, 0);
@@ -383,7 +382,7 @@ fn ext_win_viewport(window: Win) {
     }
     {
         ui_call_win_viewport(
-            Integer::from(window.grid_alloc().handle),
+            Integer::from(window.grid_alloc().handle()),
             window.handle() as WindowHandle,
             i64::from(window.w_topline() - 1),
             i64::from(ev_botline),

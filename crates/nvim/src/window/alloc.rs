@@ -40,7 +40,6 @@ use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::buflist_new;
 use crate::eval::vars::{new_var_scope, release_var_scope, vars_clear};
 use crate::fold::clear_folding;
-use crate::grid::defs::ScreenGrid;
 use crate::grid::grid_assign_handle;
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
@@ -55,6 +54,7 @@ use crate::ui::state::UI_MULTIGRID;
 use crate::ui::state::{COLUMNS, ROWS};
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
+use crate::winlayer::OwnedGrid;
 use crate::winlayer::graph::{FIRSTWIN, LASTWIN, PREVWIN, TOPFRAME, leave_curbuf};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, buffers, defer_free_window, forget_window, register_window,
@@ -254,11 +254,11 @@ fn zeroed_window() -> Win {
             w_tagstackidx: 0,
             w_tagstacklen: 0,
             w_grid: GridView {
-                target: ::core::ptr::null_mut(),
+                target: None,
                 row_offset: 0,
                 col_offset: 0,
             },
-            w_grid_alloc: ScreenGrid::empty(),
+            w_grid_alloc: OwnedGrid::empty(),
             w_pos_changed: false,
             w_floating: false,
             w_float_is_info: false,
@@ -410,7 +410,7 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     LAST_WIN_ID.set(LAST_WIN_ID.get() + 1);
     new_wp.set_handle(Handle::new(LAST_WIN_ID.get()));
     register_window(new_wp);
-    new_wp.edit().w_grid_alloc.mouse_enabled = true;
+    new_wp.grid_alloc().set_mouse_enabled(true);
     grid_assign_handle(new_wp.grid_alloc());
     // The window's `w:` scope.
     new_wp.edit().w_winvar = new_var_scope(VAR_SCOPE);
@@ -570,12 +570,12 @@ pub fn win_free_grid(window: Win, reinit: bool) {
 
 /// Give up the window's own grid, optionally leaving it zeroed for reuse.
 pub(crate) fn free_grid(window: Win, reinit: bool) {
-    if window.grid_alloc().handle != Handle::NONE && ui_has(UI_MULTIGRID) {
-        ui_call_grid_destroy(Integer::from(window.grid_alloc().handle));
+    if window.grid_alloc().handle() != Handle::NONE && ui_has(UI_MULTIGRID) {
+        ui_call_grid_destroy(Integer::from(window.grid_alloc().handle()));
     }
-    window.edit().w_grid_alloc.free();
+    window.grid_alloc().free();
     if reinit {
-        window.edit().w_grid_alloc = ScreenGrid::empty();
+        window.grid_alloc().reset();
     }
 }
 

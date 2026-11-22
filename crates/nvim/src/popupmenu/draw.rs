@@ -692,12 +692,12 @@ pub fn pum_redraw() {
     MUST_REDRAW_PUM.set(false);
 
     let (rows, cols) = (PUM_HEIGHT.get() + border.width, grid_width + border.width);
-    if !grid.is_allocated() || grid.rows != rows || grid.cols != cols {
+    if !grid.is_allocated() || grid.rows() != rows || grid.cols() != cols {
         grid_alloc(grid, rows, cols, !invalid_grid, false);
         ui_call_grid_resize(
-            Integer::from(grid.handle),
-            Integer::from(grid.cols),
-            Integer::from(grid.rows),
+            Integer::from(grid.handle()),
+            Integer::from(grid.cols()),
+            Integer::from(grid.rows()),
         );
     } else if invalid_grid {
         grid.invalidate();

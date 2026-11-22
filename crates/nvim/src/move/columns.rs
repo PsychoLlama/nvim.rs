@@ -204,7 +204,7 @@ fn curs_columns_win(win: Win, may_scroll: bool) {
         // TODO(bfredl): this is very suspicious when not called by
         // `win_update()`. We should not randomly alter screen state outside
         // of `update_screen()` :(
-        if !win.w_grid().target.is_null() {
+        if win.w_grid().target.is_some() {
             win.scroll_grid_lines(scrolled);
         }
     } else if win.wo_sms() == 0 {

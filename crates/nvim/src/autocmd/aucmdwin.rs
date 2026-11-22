@@ -225,10 +225,10 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
         // The window is given back, not freed, so it goes out of the
         // registry rather than being forgotten by a free path.
         hide_window(auc.handle());
-        if auc.read().w_grid_alloc.is_allocated() {
+        if auc.grid_alloc().is_allocated() {
             ui_comp_remove_grid(auc.grid_alloc());
-            ui_call_win_hide(Integer::from(auc.grid_alloc().handle));
-            auc.edit().w_grid_alloc.free();
+            ui_call_win_hide(Integer::from(auc.grid_alloc().handle()));
+            auc.grid_alloc().free();
         }
 
         // The window is given back, not freed: it is used again.

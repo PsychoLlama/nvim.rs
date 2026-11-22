@@ -150,7 +150,7 @@ fn set_must_redraw_unchecked(redr_type: c_int) {
 pub fn screen_invalidate_highlights() {
     for wp in winlayer::windows() {
         redraw_later(wp, UPD_NOT_VALID);
-        wp.edit().w_grid_alloc.valid = false;
+        wp.grid_alloc().set_valid(false);
     }
 }
 

@@ -178,14 +178,14 @@ pub fn ui_comp_layers_adjust(mut layer_idx: usize, raise: bool) {
     let size = layer_count();
     let layer = layer_at(layer_idx);
     if raise {
-        while layer_idx < size - 1 && layer.zindex > layer_at(layer_idx + 1).zindex {
+        while layer_idx < size - 1 && layer.zindex() > layer_at(layer_idx + 1).zindex() {
             let above = layer_at(layer_idx + 1);
             LAYERS.with_mut(|stack| stack[layer_idx] = above);
             above.set_comp_index(layer_idx);
             layer_idx += 1;
         }
     } else {
-        while layer_idx > 0 && layer.zindex < layer_at(layer_idx - 1).zindex {
+        while layer_idx > 0 && layer.zindex() < layer_at(layer_idx - 1).zindex() {
             let below = layer_at(layer_idx - 1);
             LAYERS.with_mut(|stack| stack[layer_idx] = below);
             below.set_comp_index(layer_idx);
@@ -210,13 +210,13 @@ pub fn ui_comp_put_grid(
     let moved;
     grid.set_pending_comp_index_update(true);
 
-    if grid.comp_index != 0 {
-        moved = row != grid.comp_row || col != grid.comp_col;
+    if grid.comp_index() != 0 {
+        moved = row != grid.comp_row() || col != grid.comp_col();
         if ui_comp_should_draw() {
             // Redraw what the old position covered and the new one does not.
             // Disabling the grid keeps `compose_area` off it.
-            let (old_row, old_col) = (grid.comp_row, grid.comp_col);
-            let (old_bot, old_right) = (old_row + grid.comp_height, old_col + grid.comp_width);
+            let (old_row, old_col) = (grid.comp_row(), grid.comp_col());
+            let (old_bot, old_right) = (old_row + grid.comp_height(), old_col + grid.comp_width());
             let (top, bot) = (row.max(old_row), (row + height).min(old_bot));
             grid.set_comp_disabled(true);
             compose_area(old_row, row, old_col, old_right);
@@ -241,7 +241,7 @@ pub fn ui_comp_put_grid(
         );
 
         let mut insert_at = layer_count();
-        while insert_at > 0 && layer_at(insert_at - 1).zindex > grid.zindex {
+        while insert_at > 0 && layer_at(insert_at - 1).zindex() > grid.zindex() {
             insert_at -= 1;
         }
 
@@ -256,7 +256,7 @@ pub fn ui_comp_put_grid(
         {
             let below = layer_at(insert_at - 1);
             let curwin_grid = win.grid_alloc();
-            if below.same(curwin_grid) && below.zindex == grid.zindex {
+            if below.same(curwin_grid) && below.zindex() == grid.zindex() {
                 insert_at -= 1;
             }
         }
@@ -283,14 +283,14 @@ pub fn ui_comp_put_grid(
 /// Take `grid` off the layer stack, if it is on it.
 pub fn ui_comp_remove_grid(grid: GridRef) {
     debug_assert!(!grid.same(default_layer()), "grid != &default_grid");
-    if grid.comp_index == 0 {
+    if grid.comp_index() == 0 {
         return; // The grid was not a layer.
     }
     if CURGRID.get().is_some_and(|cur| cur.same(grid)) {
         CURGRID.set(Some(default_layer()));
     }
 
-    let removed_at = grid.comp_index;
+    let removed_at = grid.comp_index();
     LAYERS.with_mut(|stack| {
         stack.remove(removed_at);
     });
@@ -309,17 +309,17 @@ pub fn ui_comp_remove_grid(grid: GridRef) {
 
 /// Selects the layer `handle` names as the one coordinates are relative to.
 pub fn ui_comp_set_grid(handle: Handle) -> bool {
-    if CURGRID.get().is_some_and(|cur| cur.handle == handle) {
+    if CURGRID.get().is_some_and(|cur| cur.handle() == handle) {
         return true;
     }
-    let found = LAYERS.with(|stack| stack.iter().find(|layer| layer.handle == handle).copied());
+    let found = LAYERS.with(|stack| stack.iter().find(|layer| layer.handle() == handle).copied());
     found.inspect(|&grid| CURGRID.set(Some(grid))).is_some()
 }
 
 /// Moves `grid` up to `new_index`, sliding everything it passes down one,
 /// then recomposes each overlap it uncovered.
 fn raise_grid(grid: GridRef, new_index: usize) {
-    let old_index = grid.comp_index;
+    let old_index = grid.comp_index();
     for i in old_index..new_index {
         let above = layer_at(i + 1);
         LAYERS.with_mut(|stack| stack[i] = above);
@@ -330,10 +330,10 @@ fn raise_grid(grid: GridRef, new_index: usize) {
 
     for i in old_index..new_index {
         let other = layer_at(i);
-        let top = grid.comp_row.max(other.comp_row);
-        let bot = (grid.comp_row + grid.rows).min(other.comp_row + other.rows);
-        let left = grid.comp_col.max(other.comp_col);
-        let right = (grid.comp_col + grid.cols).min(other.comp_col + other.cols);
+        let top = grid.comp_row().max(other.comp_row());
+        let bot = (grid.comp_row() + grid.rows()).min(other.comp_row() + other.rows());
+        let left = grid.comp_col().max(other.comp_col());
+        let right = (grid.comp_col() + grid.cols()).min(other.comp_col() + other.cols());
         compose_area(top, bot, left, right);
     }
 }
@@ -342,23 +342,23 @@ pub fn ui_comp_grid_cursor_goto(grid_handle: Integer, r: Integer, c: Integer) {
     if !ui_comp_set_grid(Handle::new(number_as_int(grid_handle))) {
         return;
     }
-    let cursor_row = cur_layer().comp_row + number_as_int(r);
-    let cursor_col = cur_layer().comp_col + number_as_int(c);
+    let cursor_row = cur_layer().comp_row() + number_as_int(r);
+    let cursor_col = cur_layer().comp_col() + number_as_int(c);
 
     // Upstream's TODO: for efficiency all grids should be configured before
     // `win_update` runs, rather than here.
     if !cur_layer().same(default_layer()) {
         let mut new_index = layer_count() - 1;
-        while new_index > 1 && layer_at(new_index).zindex > cur_layer().zindex {
+        while new_index > 1 && layer_at(new_index).zindex() > cur_layer().zindex() {
             new_index -= 1;
         }
-        if cur_layer().comp_index < new_index {
+        if cur_layer().comp_index() < new_index {
             raise_grid(cur_layer(), new_index);
         }
     }
 
     let default = default_layer();
-    if cursor_col >= default.cols || cursor_row >= default.rows {
+    if cursor_col >= default.cols() || cursor_row >= default.rows() {
         return; // Upstream's TODO: this happens with 'writedelay'.
     }
     ui_composed_call_grid_cursor_goto(1, cursor_row.into(), cursor_col.into());
@@ -367,7 +367,7 @@ pub fn ui_comp_grid_cursor_goto(grid_handle: Integer, r: Integer, c: Integer) {
 /// The grid that owns screen cell (`row`, `col`) for mouse purposes, if any
 /// does.
 pub(crate) fn ui_comp_mouse_focus(row: c_int, col: c_int) -> Option<GridRef> {
-    if let Some(grid) = topmost_at(row, col, |grid| grid.mouse_enabled) {
+    if let Some(grid) = topmost_at(row, col, |grid| grid.mouse_enabled()) {
         return Some(grid);
     }
     if ui_has(UI_MULTIGRID) {
@@ -376,11 +376,11 @@ pub(crate) fn ui_comp_mouse_focus(row: c_int, col: c_int) -> Option<GridRef> {
         for wp in windows_in_curtab() {
             let grid = wp.grid_alloc();
             let (winrow, wincol) = (wp.w_winrow(), wp.w_wincol());
-            if grid.mouse_enabled
+            if grid.mouse_enabled()
                 && row >= winrow
-                && row < winrow + grid.rows
+                && row < winrow + grid.rows()
                 && col >= wincol
-                && col < wincol + grid.cols
+                && col < wincol + grid.cols()
             {
                 return Some(grid);
             }
@@ -423,7 +423,7 @@ fn compose_line(row: Integer, startcol: Integer, endcol: Integer, mut flags: Lin
         startcol -= 1;
         skipstart = 1;
     }
-    if endcol < Integer::from(default.cols) && flags & LINE_FLAG_INVALID != 0 {
+    if endcol < Integer::from(default.cols()) && flags & LINE_FLAG_INVALID != 0 {
         endcol += 1;
         skipend = 1;
     }
@@ -436,8 +436,9 @@ fn compose_line(row: Integer, startcol: Integer, endcol: Integer, mut flags: Lin
     debug_assert!(row < CHK_HEIGHT.get().into(), "row < chk_height");
 
     // A line keeps its wrap flag only if it came from a full-width layer.
-    if !top.is_some_and(|top| top.same(default) || (top.comp_col == 0 && top.cols == COLUMNS.get()))
-    {
+    if !top.is_some_and(|top| {
+        top.same(default) || (top.comp_col() == 0 && top.cols() == COLUMNS.get())
+    }) {
         flags &= !LINE_FLAG_WRAP;
     }
 
@@ -470,7 +471,6 @@ fn compose_into(
     let attrbuf = &mut bufs.attrs[..width];
     // The backdrop 'winblend' and 'pumblend' blend against.
     let bg_off = default.row_start(number_as_int(row)) + as_index(start);
-    let bg = default.cells(bg_off, width);
 
     let mut col = start;
     while col < end {
@@ -482,33 +482,34 @@ fn compose_into(
                 // the resize landed, so trust the smaller of the allocated
                 // and the composed size — cells the resize invalidated must
                 // not reach the scratch line.
-                let grid_width = g.cols.min(g.comp_width);
-                let grid_height = g.rows.min(g.comp_height);
-                if Integer::from(g.comp_row) > row
-                    || row >= Integer::from(g.comp_row + grid_height)
-                    || g.comp_disabled
+                let grid_width = g.cols().min(g.comp_width());
+                let grid_height = g.rows().min(g.comp_height());
+                if Integer::from(g.comp_row()) > row
+                    || row >= Integer::from(g.comp_row() + grid_height)
+                    || g.comp_disabled()
                 {
                     continue;
                 }
-                if g.comp_col <= col && col < g.comp_col + grid_width {
+                if g.comp_col() <= col && col < g.comp_col() + grid_width {
                     top = Some(g);
-                    until = g.comp_col + grid_width;
-                } else if g.comp_col > col {
-                    until = until.min(g.comp_col);
+                    until = g.comp_col() + grid_width;
+                } else if g.comp_col() > col {
+                    until = until.min(g.comp_col());
                 }
             }
         });
         until = until.min(end);
 
         debug_assert!(until > col, "until > col");
-        debug_assert!(until <= default.cols, "until <= default_grid.cols");
+        debug_assert!(until <= default.cols(), "until <= default_grid.cols");
         let at = as_index(col - start);
         let n = as_index(until - col);
 
         // The default grid covers every column of every row it has, and is
         // the bottom layer, so some layer always won the column above.
         let mut grid = top.expect("a layer covers the column");
-        if Integer::from(MSG_SEP_ROW.get()) == row && grid.comp_index <= msg_layer().comp_index {
+        if Integer::from(MSG_SEP_ROW.get()) == row && grid.comp_index() <= msg_layer().comp_index()
+        {
             // Upstream's TODO: once floats have borders, the separator can
             // just be one around the message grid.
             grid = msg_layer();
@@ -517,12 +518,13 @@ fn compose_into(
             line[at..at + n].fill(MSG_SEP_CHAR.get());
             attrbuf[at..at + n].fill(sep_attr);
         } else {
-            let grid_row = row - Integer::from(grid.comp_row);
-            let off = grid.row_start(number_as_int(grid_row)) + as_index(col - grid.comp_col);
-            let (chars, attrs) = grid.cells(off, n);
-            line[at..at + n].copy_from_slice(chars);
-            attrbuf[at..at + n].copy_from_slice(attrs);
-            if grid.comp_col + grid.cols > until && grid.char_at(off + n) == 0 {
+            let grid_row = row - Integer::from(grid.comp_row());
+            let off = grid.row_start(number_as_int(grid_row)) + as_index(col - grid.comp_col());
+            grid.with_cells(off, n, |chars, attrs| {
+                line[at..at + n].copy_from_slice(chars);
+                attrbuf[at..at + n].copy_from_slice(attrs);
+            });
+            if grid.comp_col() + grid.cols() > until && grid.char_at(off + n) == 0 {
                 // The run ends on the left half of a double-width character;
                 // show a space instead.
                 line[at + n - 1] = schar_from_ascii(b' ');
@@ -532,8 +534,17 @@ fn compose_into(
             }
         }
 
-        if grid.blending {
-            blend(line, attrbuf, bg, at..at + n, width, blend_attrs);
+        if grid.blending() {
+            default.with_cells(bg_off, width, |chars, attrs| {
+                blend(
+                    line,
+                    attrbuf,
+                    (chars, attrs),
+                    at..at + n,
+                    width,
+                    blend_attrs,
+                );
+            });
         }
 
         // Tricky: an overlap that cut a double-width character in half must
@@ -573,8 +584,8 @@ fn compose_debug(rows: (Integer, Integer), cols: (Integer, Integer), syn_id: c_i
         return;
     }
     let default = default_layer();
-    endrow = endrow.min(default.rows.into());
-    endcol = endcol.min(default.cols.into());
+    endrow = endrow.min(default.rows().into());
+    endcol = endcol.min(default.cols().into());
     let attr = Integer::from(syn_id2attr(syn_id));
 
     if delay {
@@ -607,8 +618,8 @@ fn compose_area<T: Into<Integer>>(startrow: T, endrow: T, startcol: T, endcol: T
     let recompose = DBGHL_RECOMPOSE.get();
     compose_debug((startrow, endrow), (startcol, endcol), recompose, true);
     let default = default_layer();
-    let endrow = endrow.min(default.rows.into());
-    let endcol = endcol.min(default.cols.into());
+    let endrow = endrow.min(default.rows().into());
+    let endcol = endcol.min(default.cols().into());
     if endcol <= startcol {
         return;
     }
@@ -619,9 +630,9 @@ fn compose_area<T: Into<Integer>>(startrow: T, endrow: T, startcol: T, endcol: T
 
 /// Recomposes the area under `grid`.
 fn compose_under(grid: GridRef) {
-    let bot = grid.comp_row + grid.rows;
-    let right = grid.comp_col + grid.cols;
-    compose_area(grid.comp_row, bot, grid.comp_col, right);
+    let bot = grid.comp_row() + grid.rows();
+    let right = grid.comp_col() + grid.cols();
+    compose_area(grid.comp_row(), bot, grid.comp_col(), right);
 }
 
 /// C's `DLOG`, for the two geometry complaints below.
@@ -653,10 +664,10 @@ pub fn ui_comp_raw_line(
         return;
     }
     let cur = cur_layer();
-    let row = row + Integer::from(cur.comp_row);
-    let startcol = startcol + Integer::from(cur.comp_col);
-    let mut endcol = endcol + Integer::from(cur.comp_col);
-    let mut clearcol = clearcol + Integer::from(cur.comp_col);
+    let row = row + Integer::from(cur.comp_row());
+    let startcol = startcol + Integer::from(cur.comp_col());
+    let mut endcol = endcol + Integer::from(cur.comp_col());
+    let mut clearcol = clearcol + Integer::from(cur.comp_col());
     if !cur.same(default_layer()) {
         flags &= !LINE_FLAG_WRAP;
     }
@@ -665,23 +676,23 @@ pub fn ui_comp_raw_line(
     // Upstream's TODO: this should not be necessary, but on some resize paths
     // a window is drawn against the older, larger screen size.
     let default = default_layer();
-    if row >= Integer::from(default.rows) {
+    if row >= Integer::from(default.rows()) {
         dlog(580, "row", row, grid);
         return;
     }
-    if clearcol > Integer::from(default.cols) {
+    if clearcol > Integer::from(default.cols()) {
         dlog(585, "last column", clearcol, grid);
-        if startcol >= Integer::from(default.cols) {
+        if startcol >= Integer::from(default.cols()) {
             return;
         }
-        clearcol = default.cols.into();
+        clearcol = default.cols().into();
         endcol = endcol.min(clearcol);
     }
 
     let covered = curgrid_covered_above(number_as_int(row));
     // Upstream's TODO: `compose_line` should learn to respect clearing, and
     // be optimized for uncovered lines.
-    if flags & LINE_FLAG_INVALID != 0 || covered || cur.blending {
+    if flags & LINE_FLAG_INVALID != 0 || covered || cur.blending() {
         let composed = DBGHL_COMPOSED.get();
         compose_debug((row, row + 1), (startcol, clearcol), composed, true);
         compose_line(row, startcol, clearcol, flags);
@@ -736,13 +747,13 @@ pub fn ui_comp_msg_set_pos(
     let was_at = MSG_CURRENT_ROW.get();
     if row > Integer::from(was_at) && ui_comp_should_draw() {
         let first_row = Integer::from((was_at - 1).max(0));
-        compose_area(first_row, row, 0, default_layer().cols.into());
+        compose_area(first_row, row, 0, default_layer().cols().into());
     } else if row < Integer::from(was_at)
         && ui_comp_should_draw()
         && (was_at < ROWS.get() || (scrolled && !MSG_WAS_SCROLLED.get()))
     {
         let delta = was_at - number_as_int(row);
-        if msg.blending {
+        if msg.blending() {
             let first_row = (number_as_int(row) - c_int::from(scrolled)).max(0);
             compose_area(first_row, ROWS.get() - delta, 0, COLUMNS.get());
         } else {
@@ -766,7 +777,7 @@ pub fn ui_comp_msg_set_pos(
 fn curgrid_covered_above(row: c_int) -> bool {
     let above_msg = layer_at(layer_count() - 1).same(msg_layer())
         && row < MSG_CURRENT_ROW.get() - c_int::from(MSG_WAS_SCROLLED.get());
-    layer_count() - usize::from(above_msg) > cur_layer().comp_index + 1
+    layer_count() - usize::from(above_msg) > cur_layer().comp_index() + 1
 }
 
 pub fn ui_comp_grid_scroll(
@@ -782,13 +793,13 @@ pub fn ui_comp_grid_scroll(
         return;
     }
     let cur = cur_layer();
-    let top = top + Integer::from(cur.comp_row);
-    let bot = bot + Integer::from(cur.comp_row);
-    let left = left + Integer::from(cur.comp_col);
-    let right = right + Integer::from(cur.comp_col);
+    let top = top + Integer::from(cur.comp_row());
+    let bot = bot + Integer::from(cur.comp_row());
+    let left = left + Integer::from(cur.comp_col());
+    let right = right + Integer::from(cur.comp_col());
     let covered = curgrid_covered_above(number_as_int(bot - rows.max(0)));
 
-    if covered || cur.blending {
+    if covered || cur.blending() {
         // Upstream's TODO: check whether the rectangles overlap at all, and
         // work out the subareas that could still scroll.
         let recompose = DBGHL_RECOMPOSE.get();
@@ -796,8 +807,8 @@ pub fn ui_comp_grid_scroll(
         for r in number_as_int(top + (-rows).max(0))..number_as_int(bot - rows.max(0)) {
             // Upstream's TODO: a workaround for `win_update` scrolling twice
             // in a row, the second over space the first invalidated.
-            let row_off = cur.row_start(r - cur.comp_row);
-            let off = row_off + as_index(number_as_int(left)) - as_index(cur.comp_col);
+            let row_off = cur.row_start(r - cur.comp_row());
+            let off = row_off + as_index(number_as_int(left)) - as_index(cur.comp_col());
             if cur.attr_at(off) >= 0 {
                 compose_line(r.into(), left, right, 0);
             }

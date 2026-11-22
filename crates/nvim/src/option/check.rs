@@ -294,7 +294,7 @@ pub(crate) fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
 pub(crate) fn check_blending(window: Win) {
     let blending =
         window.wo_winbl() > 0 as OptInt || (window.w_floating() && window.config_shadow());
-    window.edit().w_grid_alloc.blending = blending;
+    window.grid_alloc().set_blending(blending);
 }
 
 /// Parse 'winhighlight' — a comma-separated list of `from:to` group pairs —

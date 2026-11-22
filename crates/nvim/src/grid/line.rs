@@ -158,7 +158,7 @@ pub fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
         grid: Some(grid),
         row,
         coloff: col,
-        maxcol: grid.cols.min(grid.cols - col),
+        maxcol: grid.cols().min(grid.cols() - col),
         first: count_as_int(width),
         last: 0,
         clear_to: 0,
@@ -326,7 +326,7 @@ pub fn grid_line_clear_end(start_col: c_int, end_col: c_int, bg_attr: c_int, cle
 pub fn grid_line_cursor_goto(col: c_int) {
     let (grid, row) = BATCH.with(|b| (b.grid, b.row));
     let grid = grid.expect("a batch is in progress");
-    ui_grid_cursor_goto(grid.handle, row, col);
+    ui_grid_cursor_goto(grid.handle(), row, col);
 }
 
 /// Reverse the batch for a 'rightleft' window.
@@ -397,7 +397,7 @@ pub fn grid_line_flush() {
 /// A stopgap until message.c has been refactored to behave.
 pub fn grid_line_flush_if_valid_row() {
     let (row, grid) = BATCH.with(|b| (b.row, b.grid));
-    if row < 0 || row >= grid.expect("a batch is in progress").rows {
+    if row < 0 || row >= grid.expect("a batch is in progress").rows() {
         if RDB_FLAGS.get() & OPT_RDB_FLAG_INVALID != 0 {
             std::process::abort();
         }
@@ -421,7 +421,7 @@ pub fn grid_clear(
         grid_line_start(view, row);
         let (maxcol, batch_row, grid) = BATCH.with(|b| (b.maxcol, b.row, b.grid));
         end_col = end_col.min(maxcol);
-        if batch_row >= grid.expect("a batch is in progress").rows || start_col >= end_col {
+        if batch_row >= grid.expect("a batch is in progress").rows() || start_col >= end_col {
             // TODO(bfredl): make callers behave instead.
             BATCH.with_mut(|b| b.grid = None);
             return;
@@ -720,12 +720,15 @@ pub fn grid_put_linebuf(
         mut endcol,
         mut clear_width,
     } = span;
-    debug_assert!(0 <= row && row < grid.rows, "0 <= row && row < grid->rows");
+    debug_assert!(
+        0 <= row && row < grid.rows(),
+        "0 <= row && row < grid->rows"
+    );
     // TODO(bfredl): check all callsites and eliminate.
-    endcol = endcol.min(grid.cols);
+    endcol = endcol.min(grid.cols());
 
     // Safety check; avoids clang warnings down the call stack.
-    if !grid.is_allocated() || row >= grid.rows || coloff >= grid.cols {
+    if !grid.is_allocated() || row >= grid.rows() || coloff >= grid.cols() {
         logmsg!(
             LOGLVL_DBG,
             c"grid_put_linebuf",
@@ -738,7 +741,7 @@ pub fn grid_put_linebuf(
     let invalid_row = !grid.same(default_grid_ref()) && grid.invalid_row(row) && col == 0;
     // The row from `coloff` on: every column below indexes into it.
     let off_to = grid.cell_offset(row, coloff);
-    let span_width = as_index(grid.cols - coloff);
+    let span_width = as_index(grid.cols() - coloff);
 
     // At the start of the text, overwriting the right half of a two-cell
     // character already on the grid truncates it into a '>'.
@@ -797,7 +800,7 @@ pub fn grid_put_linebuf(
     let mut clear_end = cleared.end;
 
     if flags & SLF_RIGHTLEFT != 0 && start_dirty != -1 && cleared.start != -1 {
-        if grid.throttled || cleared.start >= start_dirty - 5 {
+        if grid.throttled() || cleared.start >= start_dirty - 5 {
             // Cannot draw now, or too small to be worth a separate
             // "clear" event.
             start_dirty = cleared.start;
@@ -826,7 +829,7 @@ pub fn grid_put_linebuf(
     }
 
     if clear_end > start_dirty {
-        if !grid.throttled {
+        if !grid.throttled() {
             ui_line(
                 grid,
                 row,

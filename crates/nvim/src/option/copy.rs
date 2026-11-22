@@ -252,7 +252,7 @@ pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
     check_blending(window);
     let _ = set_winbar_win(window, false, valid_cursor);
     let _ = check_window_signcolumn(window);
-    w.edit().w_grid_alloc.blending = w.wo_winbl() > 0 as OptInt;
+    w.grid_alloc().set_blending(w.wo_winbl() > 0 as OptInt);
 }
 
 /// Attribute a buffer-local option to whatever script set the global value

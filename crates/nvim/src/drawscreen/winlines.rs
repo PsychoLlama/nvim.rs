@@ -754,8 +754,8 @@ pub fn win_scroll_lines(window: Win, row: c_int, line_count: c_int) {
     // The bounds are the grid's rather than the window's because
     // `curs_columns` reaches here from outside `update_screen`, when the
     // two may disagree.
-    let checked_width = (grid.cols - col).min(window.w_view_width());
-    let checked_height = (grid.rows - row_off).min(window.w_view_height());
+    let checked_width = (grid.cols() - col).min(window.w_view_width());
+    let checked_height = (grid.rows() - row_off).min(window.w_view_height());
 
     // Nothing would be moved; the caller draws over the whole area.
     if row + line_count.abs() >= checked_height {

@@ -148,20 +148,20 @@ pub fn nvim_get_proc(pid: Integer) -> Result<Object, Error> {
 pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<Array, Error> {
     let mut ret = Vec::new();
     let mut g: GridRef = default_grid_ref();
-    if grid == Integer::from(pum_grid_ref().handle) {
+    if grid == Integer::from(pum_grid_ref().handle()) {
         g = pum_grid_ref();
     } else if grid > 1 as Integer {
         let wp = get_win_by_grid_handle(handle_arg(c"grid handle", grid)?)
-            .filter(|wp| wp.read().w_grid_alloc.is_allocated());
+            .filter(|wp| wp.grid_alloc().is_allocated());
         let Some(wp) = wp else {
             return Err(err_bad_number(c"grid handle", grid));
         };
         g = wp.grid_alloc();
     }
     if row < 0 as Integer
-        || row >= Integer::from(g.rows)
+        || row >= Integer::from(g.rows())
         || col < 0 as Integer
-        || col >= Integer::from(g.cols)
+        || col >= Integer::from(g.cols())
     {
         return Ok(ret.into());
     }

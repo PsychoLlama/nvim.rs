@@ -67,7 +67,7 @@ use crate::ui::{
     ui_line,
 };
 pub use crate::winlayer::GridRef;
-pub(crate) use crate::winlayer::{GridCell, grid_of_view, try_grid_of_view};
+pub(crate) use crate::winlayer::{GridCell, grid_of_view};
 use crate::winlayer::{Win, windows};
 
 use core::ffi::{c_char, c_int};
@@ -127,7 +127,7 @@ pub(crate) fn default_grid_ref() -> GridRef {
 /// [`msg_grid_view`]: crate::message::msg_grid_view
 pub(crate) fn default_gridview() -> GridView {
     GridView {
-        target: default_grid_ref().raw(),
+        target: Some(default_grid_ref()),
         row_offset: 0,
         col_offset: 0,
     }
@@ -153,7 +153,7 @@ pub fn grid_getchar(
     attrp: Option<&mut c_int>,
 ) -> ScreenChar {
     // Safety check.
-    if !grid.is_allocated() || row >= grid.rows || col >= grid.cols {
+    if !grid.is_allocated() || row >= grid.rows() || col >= grid.cols() {
         return 0;
     }
 
@@ -186,7 +186,7 @@ pub fn win_grid_alloc(window: Win) {
     // A window only gets a grid of its own when the UI asked for
     // multigrid, or when it is a float (which needs one to be composed).
     let want_allocation = ui_has(UI_MULTIGRID) || window.w_floating();
-    let has_allocation = window.read().w_grid_alloc.is_allocated();
+    let has_allocation = window.grid_alloc().is_allocated();
 
     let rows = usize::try_from(window.w_view_height()).unwrap_or(0) + 1;
     if rows > window.read().w_lines.len() {
@@ -197,11 +197,11 @@ pub fn win_grid_alloc(window: Win) {
     let mut was_resized = false;
     if want_allocation
         && (!has_allocation
-            || window.grid_alloc().rows != total_rows
-            || window.grid_alloc().cols != total_cols)
+            || window.grid_alloc().rows() != total_rows
+            || window.grid_alloc().cols() != total_cols)
     {
         let grid = window.grid_alloc();
-        let copy = grid.valid;
+        let copy = grid.valid();
         grid_alloc(grid, total_rows, total_cols, copy, false);
         grid.set_valid(true);
         if window.w_floating() && window.read().w_config.border {
@@ -214,18 +214,17 @@ pub fn win_grid_alloc(window: Win) {
         window.grid_alloc().free();
         window.grid_alloc().set_valid(false);
         was_resized = true;
-    } else if want_allocation && has_allocation && !window.grid_alloc().valid {
+    } else if want_allocation && has_allocation && !window.grid_alloc().valid() {
         window.grid_alloc().revalidate();
     }
 
     if want_allocation {
-        let mut edit = window.edit();
-        edit.w_grid.target = &raw mut edit.w_grid_alloc;
-        drop(edit);
+        let own = window.grid_alloc();
+        window.edit().w_grid.target = Some(own);
         window.edit().w_grid.row_offset = window.w_winrow_off();
         window.edit().w_grid.col_offset = window.w_wincol_off();
     } else {
-        window.edit().w_grid.target = default_grid_ref().raw();
+        window.edit().w_grid.target = Some(default_grid_ref());
         window.edit().w_grid.row_offset = window.w_winrow() + window.w_winrow_off();
         window.edit().w_grid.col_offset = window.w_wincol() + window.w_wincol_off();
     }
@@ -233,20 +232,20 @@ pub fn win_grid_alloc(window: Win) {
     // Send a grid resize event when a grid was just resized, or when
     // screen_resize asked for every size to be re-sent.
     if (RESIZING_SCREEN.get() || was_resized) && want_allocation {
-        let grid = &window.read().w_grid_alloc;
+        let grid = window.grid_alloc();
         ui_call_grid_resize(
-            Integer::from(grid.handle),
-            Integer::from(grid.cols),
-            Integer::from(grid.rows),
+            Integer::from(grid.handle()),
+            Integer::from(grid.cols()),
+            Integer::from(grid.rows()),
         );
-        ui_check_cursor_grid(window.grid_alloc().handle);
+        ui_check_cursor_grid(window.grid_alloc().handle());
     }
 }
 
 /// Give `grid` a handle if it has none. The grid need not be allocated.
 pub fn grid_assign_handle(grid: GridRef) {
     static LAST_GRID_HANDLE: GlobalCell<c_int> = GlobalCell::new(DEFAULT_GRID_HANDLE.get());
-    if grid.handle == Handle::NONE {
+    if grid.handle() == Handle::NONE {
         LAST_GRID_HANDLE.set(LAST_GRID_HANDLE.get() + 1);
         grid.set_handle(Handle::new(LAST_GRID_HANDLE.get()));
     }
@@ -276,7 +275,7 @@ pub fn grid_ins_lines(
     // Shift the row offsets down by line_count and clear the new lines.
     for i in 0..line_count {
         let mut j = end - 1 - i;
-        if width != grid.cols {
+        if width != grid.cols() {
             // Only part of each line moves.
             loop {
                 j -= line_count;
@@ -300,14 +299,14 @@ pub fn grid_ins_lines(
                 grid.set_row_start(j + line_count, off);
             }
             grid.set_row_start(j + line_count, temp);
-            let cols = grid.cols;
+            let cols = grid.cols();
             grid.clear_line(temp, cols, false);
         }
     }
 
-    if !grid.throttled {
+    if !grid.throttled() {
         ui_call_grid_scroll(
-            Integer::from(grid.handle),
+            Integer::from(grid.handle()),
             Integer::from(row),
             Integer::from(end),
             Integer::from(col),
@@ -337,7 +336,7 @@ pub fn grid_del_lines(
     // Shift the row offsets up by line_count and clear the vacated lines.
     for i in 0..line_count {
         let mut j = row + i;
-        if width != grid.cols {
+        if width != grid.cols() {
             // Only part of each line moves.
             loop {
                 j += line_count;
@@ -361,14 +360,14 @@ pub fn grid_del_lines(
                 grid.set_row_start(j - line_count, off);
             }
             grid.set_row_start(j - line_count, temp);
-            let cols = grid.cols;
+            let cols = grid.cols();
             grid.clear_line(temp, cols, false);
         }
     }
 
-    if !grid.throttled {
+    if !grid.throttled() {
         ui_call_grid_scroll(
-            Integer::from(grid.handle),
+            Integer::from(grid.handle()),
             Integer::from(row),
             Integer::from(end),
             Integer::from(col),
@@ -381,5 +380,5 @@ pub fn grid_del_lines(
 
 /// The window in the current tab whose own grid has `handle`, if any.
 pub fn get_win_by_grid_handle(handle: Handle) -> Option<Win> {
-    windows().find(|wp| wp.grid_alloc().handle == handle)
+    windows().find(|wp| wp.grid_alloc().handle() == handle)
 }

@@ -12,7 +12,7 @@
 use super::*;
 use crate::arglist::ArgListId;
 use crate::eval::typval::ScopeDictItem;
-use crate::grid::defs::{GridView, ScreenGrid};
+use crate::grid::defs::GridView;
 use crate::mark::defs::{FileMark, FileMarkView, XFileMark};
 use crate::memory::XString;
 use crate::r#move::WinValid;
@@ -20,7 +20,7 @@ use crate::os::libc::{int64_t, uint8_t, uint16_t, uint32_t};
 use crate::quickfix::model::QfId;
 use crate::registry::IdSet;
 use crate::statusline::defs::WinClickDefs;
-use crate::winlayer::{Buf, BufId, FrameId, TabId, WinId};
+use crate::winlayer::{Buf, BufId, FrameId, OwnedGrid, TabId, WinId};
 
 /// `Default` is the zeroed state a caller declares before handing it to
 /// `switch_win`, which fills every field.
@@ -311,7 +311,7 @@ pub struct Window {
     pub w_tagstackidx: ::core::ffi::c_int,
     pub w_tagstacklen: ::core::ffi::c_int,
     pub w_grid: GridView,
-    pub w_grid_alloc: ScreenGrid,
+    pub w_grid_alloc: OwnedGrid,
     pub w_pos_changed: bool,
     pub w_floating: bool,
     pub w_float_is_info: bool,

@@ -204,7 +204,7 @@ impl Cells {
         f: &mut LineFrame<'_>,
         grid: GridView,
     ) -> Step {
-        let grid_width = grid_of_view(window.w_grid()).cols;
+        let grid_width = grid_of_view(window.w_grid()).cols();
         let wrap = self.is_wrapped                        // wrapping, not a folded line
             && wlv.filler_todo <= 0                       // not drawing filler
             && self.lcs_eol_todo                          // the "eol" is still to come

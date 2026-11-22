@@ -229,7 +229,7 @@ pub(crate) fn pum_compute_horizontal_placement(
 /// `PUM_SIZE` outright and only shrinks when a screen edge says so.
 /// `min_width` is the width the caller wants even for narrow items.
 pub(crate) fn pum_position_at_mouse(min_width: c_int) {
-    let pum_handle = pum_grid_ref().handle;
+    let pum_handle = pum_grid_ref().handle();
     let (min_row, min_col) = (0, 0);
     let mut max_row = ROWS.get();
     let mut max_col = COLUMNS.get();

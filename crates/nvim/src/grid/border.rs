@@ -111,8 +111,8 @@ pub fn grid_draw_border(
         core::array::from_fn(|i| schar_from_str(cstr::in_bytes(&config.border_chars[i])));
 
     // Interior size, i.e. the window minus whichever sides it has.
-    let irow = grid.rows - adj[0] - adj[2];
-    let icol = grid.cols - adj[1] - adj[3];
+    let irow = grid.rows() - adj[0] - adj[2];
+    let icol = grid.cols() - adj[1] - adj[3];
 
     if side(0) {
         screengrid_line_start(grid, 0, 0);

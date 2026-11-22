@@ -7,8 +7,11 @@
     clippy::ptr_as_ptr
 )]
 
+use core::cell::Cell;
+
 use crate::os::libc::size_t;
 use crate::types::{ColNr, Handle, ScreenAttr, ScreenChar};
+use crate::winlayer::GridRef;
 
 /// The `grid_line` message being decoded, mid-flight.
 ///
@@ -25,7 +28,7 @@ pub struct GridLineEvent {
 }
 #[derive(Copy, Clone, Debug)]
 pub struct GridView {
-    pub target: *mut ScreenGrid,
+    pub target: Option<GridRef>,
     pub row_offset: ::core::ffi::c_int,
     pub col_offset: ::core::ffi::c_int,
 }
@@ -63,6 +66,10 @@ pub struct ScreenGrid {
     pub comp_index: size_t,
     pub comp_disabled: bool,
     pub pending_comp_index_update: bool,
+    /// How many `GridRef::with_cells` loans of the cells are out: every
+    /// write through a handle refuses while it is not zero. Only the handle
+    /// touches it.
+    pub(crate) lent: Cell<u32>,
 }
 
 /// A run of cells, as the three parallel slices that make one up. Handed out
@@ -109,7 +116,13 @@ impl ScreenGrid {
             comp_index: 0,
             comp_disabled: false,
             pending_comp_index_update: true,
+            lent: Cell::new(0),
         }
+    }
+
+    /// Back to [`empty`](ScreenGrid::empty), cells and all.
+    pub(crate) fn reset(&mut self) {
+        *self = ScreenGrid::empty();
     }
 
     /// Whether the grid has cells. The C spelling was `!grid->chars`, and it
@@ -171,9 +184,15 @@ impl ScreenGrid {
         self.attrs[off] = attr;
     }
 
-    /// `n` cells from `off`: what the compositor and the UI layer read.
-    pub(crate) fn cells(&self, off: size_t, n: size_t) -> (&[ScreenChar], &[ScreenAttr]) {
-        (&self.chars[off..off + n], &self.attrs[off..off + n])
+    /// `n` cells from `off`, lent to `f`: what the compositor and the UI
+    /// layer read (through `GridRef::with_cells`, which counts the loan).
+    pub(crate) fn with_cells<R>(
+        &self,
+        off: size_t,
+        n: size_t,
+        f: impl FnOnce(&[ScreenChar], &[ScreenAttr]) -> R,
+    ) -> R {
+        f(&self.chars[off..off + n], &self.attrs[off..off + n])
     }
 
     /// `n` cells from `off`, writable. See [`GridCells`].

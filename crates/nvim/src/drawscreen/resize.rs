@@ -47,7 +47,8 @@ pub fn default_grid_alloc() -> bool {
     RESIZING.set(true);
 
     let grid = default_grid_ref();
-    let unchanged = grid.is_allocated() && ROWS.get() == grid.rows && COLUMNS.get() == grid.cols;
+    let unchanged =
+        grid.is_allocated() && ROWS.get() == grid.rows() && COLUMNS.get() == grid.cols();
     if unchanged || ROWS.get() == 0 || COLUMNS.get() == 0 {
         RESIZING.set(false);
         return false;
@@ -83,8 +84,8 @@ pub fn screenclear() {
     }
 
     let grid = default_grid_ref();
-    for row in 0..grid.rows {
-        let (off, cols) = (grid.row_start(row), grid.cols);
+    for row in 0..grid.rows() {
+        let (off, cols) = (grid.row_start(row), grid.cols());
         grid.clear_line(off, cols, true);
     }
     ui_call_grid_clear(1);

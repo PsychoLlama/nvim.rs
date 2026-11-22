@@ -565,7 +565,7 @@ pub fn ui_line(
     clearattr: c_int,
     wrap: bool,
 ) {
-    assert!((0..grid.rows).contains(&row), "row is outside the grid");
+    assert!((0..grid.rows()).contains(&row), "row is outside the grid");
 
     let mut flags: LineFlags = if wrap { LINE_FLAG_WRAP } else { 0 };
     if startcol == 0 && invalid_row {
@@ -574,22 +574,25 @@ pub fn ui_line(
     ui_may_set_default_colors();
 
     let off = grid.cell_offset(row, startcol);
-    let (chars, attrs) = grid.cells(off, as_index(grid.cols - startcol));
-    let handle = Integer::from(grid.handle);
+    let handle = Integer::from(grid.handle());
     let (at_row, from) = (Integer::from(row), Integer::from(startcol));
     let (to, clear_from) = (Integer::from(endcol), Integer::from(clearcol));
     let clear_attr = Integer::from(clearattr);
-    ui_call_raw_line(
-        handle, at_row, from, to, clear_from, clear_attr, flags, chars, attrs,
-    );
+    // The cells stay lent across the call: the compositor reads grids back
+    // (this one among them) but writes none of them.
+    grid.with_cells(off, as_index(grid.cols() - startcol), |chars, attrs| {
+        ui_call_raw_line(
+            handle, at_row, from, to, clear_from, clear_attr, flags, chars, attrs,
+        );
+    });
 
     // 'writedelay' with `redrawdebug=line`: park the cursor at the end of
     // the line just drawn and pause, so the draw order is watchable.
     if p_wd() != 0 && RDB_FLAGS.get() & OPT_RDB_FLAG_LINE != 0 {
         ui_call_grid_cursor_goto(
-            Integer::from(grid.handle),
+            Integer::from(grid.handle()),
             Integer::from(row),
-            Integer::from(clearcol.min(grid.cols - 1)),
+            Integer::from(clearcol.min(grid.cols() - 1)),
         );
         ui_call_flush();
         os_sleep(p_wd().unsigned_abs());

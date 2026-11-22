@@ -158,7 +158,7 @@ mod walk;
 pub(crate) use frame::{current_topframe, new_frame};
 
 pub use grid::GridRef;
-pub(crate) use grid::{GridCell, grid_of_view, try_grid_of_view};
+pub(crate) use grid::{GridCell, OwnedGrid, grid_of_view};
 
 pub use handles::BufId;
 pub(crate) use handles::Stamp;
