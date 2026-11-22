@@ -45,9 +45,8 @@
     clippy::ptr_as_ptr
 )]
 
-use core::cell::{RefCell, RefMut};
+use core::cell::UnsafeCell;
 use core::ffi::{c_char, c_int};
-use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 use core::ptr::{self, NonNull};
@@ -293,38 +292,12 @@ slot_fields! {
     }
 }
 
-/// A buffer's memline, lent for a walk ([`Buf::ml`]): a read of the buffer
-/// -- no edit and no free while it is held, other reads welcome -- and the
-/// memline's own cell borrowed mutably, so two walks of one memline at once
-/// panic at the second.
-pub(crate) struct MlRef<'a> {
-    // Declared first, dropped first: the cell's borrow ends before the read
-    // that keeps the buffer in its slot.
-    ml: RefMut<'a, MemLine>,
-    _read: SlotRead<'a, Buffer>,
-}
-
-impl Deref for MlRef<'_> {
-    type Target = MemLine;
-
-    #[inline(always)]
-    fn deref(&self) -> &MemLine {
-        &self.ml
-    }
-}
-
-impl DerefMut for MlRef<'_> {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut MemLine {
-        &mut self.ml
-    }
-}
-
-impl fmt::Debug for MlRef<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("MlRef")
-    }
-}
+/// A buffer's memline, lent for a walk ([`Buf::ml`]): one guard that
+/// counts as a read of the buffer -- no edit and no free while it is held,
+/// other reads welcome -- and carries the slot's part bit, so two walks of
+/// one memline at once panic at the second, and so does a copy out of it
+/// ([`Buf::line_count`] and its siblings) while a walk holds it.
+pub(crate) type MlRef<'a> = slot::SlotPart<'a, Buffer, MemLine>;
 
 /// The memline: [`Buf::ml`] for a walk, the line count and flags by value,
 /// and the line text a memline cache holds, lent past the check that
@@ -342,47 +315,50 @@ impl Buf {
     #[inline(always)]
     #[track_caller]
     pub(crate) fn ml<'a>(self) -> MlRef<'a> {
-        let read = self.read();
-        // SAFETY: the read keeps the buffer in its slot and refuses every
-        // edit while it is held, and `MlRef` drops the cell's borrow first;
-        // the reference is to the cell alone, which the read's shared
-        // borrow of the buffer allows.
-        let cell: &'a RefCell<MemLine> = unsafe { &(*self.ptr).b_ml };
-        MlRef {
-            ml: cell.borrow_mut(),
-            _read: read,
-        }
+        // SAFETY: `ptr` is the slot's value address (as `edit`), and the
+        // memline is the buffer's one part in an `UnsafeCell`, reached only
+        // through this loan, `ml_unlent`/`ml_unlent_mut` (which ask the part
+        // bit and the reader count first) and an edit of the whole buffer.
+        unsafe { slot::lend_part_at(self.ptr, self.stamp.generation(), self.ml_place()) }
+    }
+
+    /// The memline's place in the buffer's slot, computed without reading
+    /// anything.
+    #[inline(always)]
+    fn ml_place(self) -> NonNull<MemLine> {
+        // A place projection through the slot's address (in bounds of the
+        // slot's memory, which is never given back) and the cell's own
+        // address-to-content step: no read, no reference formed.
+        let cell = self
+            .ptr
+            .wrapping_byte_add(core::mem::offset_of!(Buffer, b_ml));
+        let place = UnsafeCell::raw_get(cell.cast::<UnsafeCell<MemLine>>());
+        // SAFETY: an offset into a slot, which is never at address zero.
+        unsafe { NonNull::new_unchecked(place) }
     }
 
     /// The memline, for a copy out of it while nothing holds it.
     #[inline(always)]
     #[track_caller]
     fn ml_unlent<'a>(self) -> &'a MemLine {
-        self.check_live();
-        // SAFETY: live and lent to no edit; `try_borrow_unguarded` refuses
-        // while a walk holds the cell. The reference lives as long as the
-        // caller's one read of a field (the getters below) or the line
-        // cache's loan (the `lend_` family).
-        unsafe { (*self.ptr).b_ml.try_borrow_unguarded() }
-            .expect("the memline was read while a walk held it: read it through the walk's MlRef")
+        // SAFETY: as `ml`.
+        unsafe { slot::check_part_unlent(self.ptr, self.stamp.generation()) };
+        // SAFETY: live, lent to no edit and no walk (just asked). The
+        // reference lives as long as the caller's one read of a field (the
+        // getters below) or the line cache's loan (the `lend_` family).
+        unsafe { self.ml_place().as_ref() }
     }
 
     /// The memline, writable in place while nothing holds it.
     #[inline(always)]
     #[track_caller]
     fn ml_unlent_mut<'a>(self) -> &'a mut MemLine {
-        // SAFETY: as `edit`: the slot's value address.
+        // SAFETY: as `edit`: the slot's value address. No reader out means
+        // no walk either (a walk counts as one).
         unsafe { slot::check_write(self.ptr, self.stamp.generation()) };
-        // SAFETY: live, lent to no edit and read by no guard; the cell is
-        // asked whether a walk holds it before the reference is formed.
-        let cell = unsafe { &(*self.ptr).b_ml };
-        assert!(
-            cell.try_borrow_mut().is_ok(),
-            "the memline was written while a walk held it"
-        );
-        // SAFETY: no borrow of the cell is out (just asked), and the
-        // reference lives as long as the caller's one write.
-        unsafe { &mut *cell.as_ptr() }
+        // SAFETY: live, lent to no edit, no read guard and no walk (just
+        // asked), and the reference lives as long as the caller's one write.
+        unsafe { self.ml_place().as_mut() }
     }
 
     /// Whether the memline is open (has a memfile), asked without lending it.

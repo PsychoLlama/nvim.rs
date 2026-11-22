@@ -168,9 +168,9 @@ pub(crate) use terminal::Term;
 
 pub(crate) use graph::forget_window;
 pub(crate) use handles::{
-    FrameId, TabId, WinId, buffer, defer_free_buffer, defer_free_window, forget_buffer,
-    forget_frame, forget_tabpage, free_deferred, hide_window, register_buffer, register_frame,
-    register_tabpage, register_window, tabpage, window,
+    FrameId, TabId, WinId, abandon_loans, buffer, defer_free_buffer, defer_free_window,
+    forget_buffer, forget_frame, forget_tabpage, free_deferred, hide_window, register_buffer,
+    register_frame, register_tabpage, register_window, tabpage, window,
 };
 
 pub(crate) use walk::{

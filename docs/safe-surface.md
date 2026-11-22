@@ -477,10 +477,11 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   `EditPart`, a guard narrowed to the part. The guards take the handle by
   value: the slot's own count keeps the buffer in place, so a guard may
   outlive the handle it came from. The memline is a cell of its own,
-  `b_ml: RefCell<MemLine>`, lent for a walk by `Buf::ml()` (a counted
-  read of the buffer plus the cell's borrow): a line read fills the line
-  cache, and must not be refused by a read of another field held across
-  it. `line_count()`/`ml_flags()` refuse while a walk holds the cell; the
+  `b_ml: UnsafeCell<MemLine>`, lent for a walk by `Buf::ml()`
+  (`slot::lend_part_at`: one reader of the buffer plus the slot's part
+  bit, in one word): a line read fills the line cache, and must not be
+  refused by a read of another field held across it.
+  `line_count()`/`ml_flags()` refuse while a walk holds it; the
   line text `Lines`/`HeldLines` lend is the line cache's loan (S5b), formed
   from the raw place by `Buf::lend_cached_line*`. Hot walks (`fetch_line`,
   `ml_find_line`, `ml_append_int`, `update_line_chunks`,

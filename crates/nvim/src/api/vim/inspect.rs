@@ -202,23 +202,53 @@ pub fn nvim__unpack(str: ApiString) -> Result<Object, Error> {
 
 /// Panic with `message`, on purpose: the functional suite's way to see a
 /// panic end the process the way `docs/panic-policy.md` says it does (the
-/// swap files preserved, the message in the log). With `thread`, the panic
-/// is on a new thread and this returns, so the main thread is in its loop
-/// when the hook hands it the cleanup. Nothing else calls it.
+/// swap files preserved, the message in the log). `at` says where:
+///
+/// - `"main"`: on the main thread, holding nothing;
+/// - `"thread"`: on a new thread, and this returns, so the main thread is in
+///   its loop when the hook hands it the cleanup;
+/// - `"edit"`: holding an `edit()` of the current buffer;
+/// - `"memline"`: holding a walk of the current buffer's memline;
+/// - `"match"`: holding a match's pin on the current buffer's memfile
+///   (line 1 read through it).
+///
+/// The last three are the guards the swap-file sync goes through: the hook
+/// must abandon them. Nothing else calls it.
 // `nvim__panic` is an API method's own name, published over msgpack-RPC.
 #[allow(non_snake_case)]
 #[expect(
     clippy::disallowed_methods,
     reason = "the thread only panics; the panic hook hands the cleanup to the main thread"
 )]
-pub fn nvim__panic(message: ApiString, thread: Boolean) {
+pub fn nvim__panic(message: ApiString, at: ApiString) -> Result<(), Error> {
     let message = String::from_utf8_lossy(message.as_bytes()).into_owned();
-    if thread {
-        // Not joined: the hook aborts the process from either thread.
-        _ = std::thread::Builder::new()
-            .name("nvim__panic".to_owned())
-            .spawn(move || panic!("nvim__panic: {message}"));
-        return;
+    let buf = crate::winlayer::Buf::current();
+    match at.as_bytes() {
+        b"main" => panic!("nvim__panic: {message}"),
+        b"thread" => {
+            // Not joined: the hook aborts the process from either thread.
+            _ = std::thread::Builder::new()
+                .name("nvim__panic".to_owned())
+                .spawn(move || panic!("nvim__panic: {message}"));
+            Ok(())
+        }
+        b"edit" => {
+            let _held = buf.edit();
+            panic!("nvim__panic: {message}")
+        }
+        b"memline" => {
+            let _held = buf.ml();
+            panic!("nvim__panic: {message}")
+        }
+        b"match" => {
+            let held = crate::memline::HeldLines::new(buf);
+            _ = held.line(LineNr::new(1));
+            panic!("nvim__panic: {message}")
+        }
+        _ => Err(api_error!(
+            ERROR_TYPE_VALIDATION,
+            "Invalid 'at': {}",
+            String::from_utf8_lossy(at.as_bytes())
+        )),
     }
-    panic!("nvim__panic: {message}");
 }

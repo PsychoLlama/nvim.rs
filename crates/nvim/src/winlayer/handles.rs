@@ -98,6 +98,17 @@ impl Pooled for Frame {
     }
 }
 
+/// Forget every guard out on a window, buffer, tab page or frame -- an
+/// `edit()`, a `read()`, a memline walk -- as if each had been dropped
+/// ([`SlotPool::abandon_loans`]). Only for the emergency exits, whose
+/// frames holding those guards never resume.
+pub(crate) fn abandon_loans() {
+    WINDOW_SLOTS.with(SlotPool::abandon_loans);
+    BUFFER_SLOTS.with(SlotPool::abandon_loans);
+    TABPAGE_SLOTS.with(SlotPool::abandon_loans);
+    FRAME_SLOTS.with(SlotPool::abandon_loans);
+}
+
 /// Every live window, by handle.
 static WINDOWS: GlobalCell<HandleRegistry<SlotRef<Window>>> =
     GlobalCell::new(HandleRegistry::new());

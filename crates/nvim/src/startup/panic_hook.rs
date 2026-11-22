@@ -35,7 +35,7 @@ use std::thread::{self, ThreadId};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use super::UI_CLIENT_CHANNEL_ID;
-use super::exit::{begin_emergency_exit, preserve_swap_files, restore_stdin};
+use super::exit::{abandon_loans, begin_emergency_exit, preserve_swap_files, restore_stdin};
 use crate::event::r#loop::schedule_fast_job;
 use crate::ui_client::ui_client_stop;
 
@@ -99,10 +99,11 @@ fn on_panic(info: &PanicHookInfo<'_>, report: &(dyn Fn(&PanicHookInfo<'_>) + Syn
         hand_off_to_main(text, clean_up_after_another_thread);
     }
 
-    // The panic may have fired inside a `GlobalCell::with`/`with_mut`. Its
-    // owner never runs again, so the borrow is dead; abandon it, or the
-    // first cell the cleanup touches would panic on the borrow check.
-    crate::global_cell::abandon_borrows();
+    // The panic may have fired inside a `GlobalCell::with`/`with_mut`, or
+    // with a buffer's `edit()` or memline walk held. Their owner never runs
+    // again, so they are dead; abandon them, or the first cell or buffer the
+    // cleanup touches would panic on its borrow check.
+    abandon_loans();
 
     if !begin_emergency_exit() {
         // The panic fired on a way out that has already started preserving
@@ -154,7 +155,7 @@ pub(super) fn hand_off_to_main(text: String, cleanup: fn()) -> ! {
 /// queue.
 fn clean_up_after_another_thread() {
     // Whatever the loop was inside of never resumes: see `on_panic`.
-    crate::global_cell::abandon_borrows();
+    abandon_loans();
     if !begin_emergency_exit() {
         // A deadly signal or an out-of-memory exit is already preserving,
         // and ends the process itself.

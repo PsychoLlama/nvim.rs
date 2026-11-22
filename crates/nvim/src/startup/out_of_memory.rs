@@ -45,7 +45,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
-use super::exit::begin_emergency_exit;
+use super::exit::{abandon_loans, begin_emergency_exit};
 use super::panic_hook::{
     append_to_log, clean_up, hand_off_to_main, log_line_start, main_thread_is_current,
     print_off_thread_report,
@@ -126,9 +126,9 @@ pub(crate) fn allocation_failed(size: usize) {
         hand_off_to_main(text, exit_after_another_thread);
     }
     // Whatever the main thread was inside of never resumes, and may have
-    // held a `GlobalCell` borrow: abandon it, as the panic hook does, so the
-    // cleanup does not trip the borrow check.
-    crate::global_cell::abandon_borrows();
+    // held a `GlobalCell` borrow or a buffer guard: abandon them, as the
+    // panic hook does, so the cleanup does not trip a borrow check.
+    abandon_loans();
     if !begin_emergency_exit() {
         // A deadly signal or a panic is already on its way out, and this
         // allocation cannot be answered.
@@ -140,7 +140,7 @@ pub(crate) fn allocation_failed(size: usize) {
 /// The main thread's half of an allocation failure on another thread, run
 /// from its loop's fast queue.
 fn exit_after_another_thread() {
-    crate::global_cell::abandon_borrows();
+    abandon_loans();
     if !begin_emergency_exit() {
         // A deadly signal or a panic is already on its way out, and ends
         // the process itself.

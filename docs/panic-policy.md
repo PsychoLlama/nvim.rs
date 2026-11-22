@@ -71,9 +71,16 @@ In order:
 at <file>:<line>:<col>:`. In a release binary the backtrace has function
    names but no line numbers (`strip = "debuginfo"`).
 2. **On the main thread:**
-   - The `GlobalCell` borrow tracker is cleared (debug builds). The panic may
-     have fired inside a `with_mut`, and the cleanup below must not trip over
-     a borrow whose owner never runs again.
+   - Every borrow and loan the interrupted code held is abandoned
+     (`startup::exit::abandon_loans`): the `GlobalCell` borrow tracker stops
+     treating a conflict as an error, every buffer, window, tab page and
+     frame slot drops its edit bit, read count and memline loan
+     (`SlotPool::abandon_loans`), and every memfile drops its matches' pins.
+     The panic may have fired inside a `with_mut`, under a buffer's `edit()`
+     or in a memline walk, and the swap-file sync below goes through all of
+     them; it must not trip over a guard whose owner never runs again. The
+     functional cases `panic under a buffer edit`/`under a memline walk`
+     (`nvim__panic`'s `at`) keep it so.
    - `begin_emergency_exit()`: if a deadly signal, an out-of-memory exit or an
      earlier panic is already preserving, the hook goes straight to `abort()`.
      Otherwise deadly signals are ignored from here on.
@@ -185,8 +192,8 @@ to allocate <N> bytes` (no backtrace: symbolising one allocates
 4. **Off the main thread**, hands the rest to the main thread exactly as
    a panic does ([above](#off-the-main-thread)), with the same 5 s / 10 s
    graces and the same gap.
-5. **On the main thread**, runs the panic hook's cleanup: forget the debug
-   borrow tracker, `ui_client_stop()` in a TUI client, print `E41: Out of
+5. **On the main thread**, runs the panic hook's cleanup: abandon every borrow
+   and loan (as above), `ui_client_stop()` in a TUI client, print `E41: Out of
 memory!`, write the swap files out (`Nvim: preserving files...`), put
    stdin back.
 6. **Exits 1**, upstream's status for `E41` (`preserve_exit` → `getout(1)`),

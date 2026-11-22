@@ -1171,6 +1171,8 @@ PERIMETER = {
     "crates/nvim/src/slot.rs": "type-stable slots: values in memory never "
     "given back, so a handle's generation check reads live memory however "
     "long it outlives its value",
+    "crates/nvim/src/slot/": "the same, split out: the guards a slot lends "
+    "its value through",
     "crates/nvim/src/winlayer.rs": "the window/buffer/position handles, the "
     "screen grid handle and the terminal handle: constructing one is the "
     "unsafe step, dereferencing it is not",
@@ -4429,6 +4431,7 @@ MIRI_PERIMETER_FILES = (
     "crates/nvim/src/memory/",
     "crates/nvim/src/global_cell.rs",
     "crates/nvim/src/slot.rs",
+    "crates/nvim/src/slot/",
     "crates/nvim/src/winlayer.rs",
     "crates/nvim/src/winlayer/",
     "crates/nvim/src/eval/typval/handle.rs",

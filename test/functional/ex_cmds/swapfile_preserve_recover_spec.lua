@@ -215,12 +215,18 @@ describe("preserve and (R)ecover with custom 'directory'", function()
   -- (docs/panic-policy.md): the server writes its swap files out and aborts,
   -- the TUI client gives the terminal back and exits with the server's
   -- status, and the log has the panic's message. A panic on another thread
-  -- hands the cleanup to the main thread, with the same result.
+  -- hands the cleanup to the main thread, with the same result. A panic
+  -- while a guard on the buffer is held (an edit, a memline walk, a match's
+  -- pin on the memfile) leaves that guard held forever: the hook abandons
+  -- it, or the sync would panic again on it and abort with nothing written.
   for _, case in ipairs({
-    { thread = false, name = 'main' },
-    { thread = true, name = 'nvim__panic' },
+    { at = 'main', name = 'main', where = 'in the server' },
+    { at = 'thread', name = 'nvim__panic', where = 'off the main thread' },
+    { at = 'edit', name = 'main', where = 'under a buffer edit' },
+    { at = 'memline', name = 'main', where = 'under a memline walk' },
+    { at = 'match', name = 'main', where = "under a match's memfile pin" },
   }) do
-    local where = case.thread and 'off the main thread' or 'in the server'
+    local where = case.where
     it('panic ' .. where .. ' preserves the swap file and logs the message', function()
       local testlog = uv.cwd() .. '/Xtest_panic_log'
       finally(function()
@@ -238,7 +244,7 @@ describe("preserve and (R)ecover with custom 'directory'", function()
       local swappath1 = setup_swapname()
       -- The insert is below 'updatecount', so only the hook's sync can have
       -- put it in the swap file.
-      n.async_meths.nvim__panic('on purpose', case.thread)
+      n.async_meths.nvim__panic('on purpose', case.at)
       set_session(nvim0)
       -- 128 + SIGABRT: the server aborted, and the client passes its status on.
       screen0:expect({ any = '%[Process exited 134%]' })

@@ -490,7 +490,7 @@ pub(crate) fn alloc_unregistered_buffer() -> SlotBox<Buffer> {
         unsafe { (&raw mut (*at).b_wininfo).write(Vec::new()) };
         unsafe { (&raw mut (*at).b_p_cpt_cb).write(Vec::new()) };
         unsafe { (&raw mut (*at).b_s).write(crate::types::SynBlock::new()) };
-        unsafe { (&raw mut (*at).b_ml).write(core::cell::RefCell::new(MemLine::closed())) };
+        unsafe { (&raw mut (*at).b_ml).write(core::cell::UnsafeCell::new(MemLine::closed())) };
         unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
         unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
         unsafe { (&raw mut (*at).additional_data).write(None) };

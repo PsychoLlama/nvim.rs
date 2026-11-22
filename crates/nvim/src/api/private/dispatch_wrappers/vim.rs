@@ -321,10 +321,10 @@ pub fn handle_nvim__panic(channel_id: uint64_t, args: Array) -> Result<Object, E
     let Some(arg_1) = as_string(args[0].take()) else {
         return Err(wrong_type(1, c"nvim__panic", c"String"));
     };
-    let Some(arg_2) = as_boolean(args[1].take()) else {
-        return Err(wrong_type(2, c"nvim__panic", c"Boolean"));
+    let Some(arg_2) = as_string(args[1].take()) else {
+        return Err(wrong_type(2, c"nvim__panic", c"String"));
     };
-    nvim__panic(arg_1, arg_2);
+    nvim__panic(arg_1, arg_2)?;
     Ok(Object::Nil)
 }
 

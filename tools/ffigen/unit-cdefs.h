@@ -4127,6 +4127,7 @@ static const int SLF_RIGHTLEFT = 1;
 static const int SLF_WRAP = 2;
 static const int SLOTS = 10;
 static const unsigned int SLOT_EDIT_BIT = 2147483648u;
+static const unsigned int SLOT_PART_BIT = 2147483648u;
 static const int SL_SIZE = 10;
 static const int SMALLBUFSIZE = 256;
 static const int SMT_ALL = 0;

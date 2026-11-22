@@ -290,6 +290,22 @@ pub(super) fn restore_stdin() {
     }
 }
 
+/// Forget every borrow and loan the interrupted code held, for an emergency
+/// exit (a panic, a failed allocation) on the main thread: whatever it was
+/// inside of never resumes, so a `GlobalCell` borrow, a buffer, window or
+/// tab page guard (an `edit()`, a `read()`, a memline walk) or a match's
+/// memfile pin is dead, and [`preserve_swap_files`] must not trip over one
+/// on its way to every buffer.
+pub(super) fn abandon_loans() {
+    crate::global_cell::abandon_borrows();
+    crate::winlayer::abandon_loans();
+    for buf in buffers() {
+        if let Some(memfile) = buf.ml().ml_mfp.as_deref_mut() {
+            memfile.abandon_pins();
+        }
+    }
+}
+
 /// Write every swap file out and close the memfiles without deleting them,
 /// so that the buffers can be recovered after the process is gone. Says so
 /// on stderr when `announce`.
