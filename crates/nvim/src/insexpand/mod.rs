@@ -41,8 +41,8 @@ use crate::edit::{
 };
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
-    callback_free, dict_find, dict_get_number, dict_get_tv, tv_clear, tv_dict_alloc,
-    tv_dict_alloc_lock, tv_dict_alloc_ret, tv_get_number_chk, tv_list_alloc,
+    dict_find, dict_get_number, dict_get_tv, tv_clear, tv_dict_alloc, tv_dict_alloc_lock,
+    tv_dict_alloc_ret, tv_get_number_chk, tv_list_alloc,
 };
 use crate::eval::userfunc::callback_call_retnr;
 use crate::eval::vars::set_vim_var_dict;
@@ -74,7 +74,9 @@ use crate::option::vars::{
     COT_FLAGS, P_IC, P_SCS, P_WS, p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js,
     p_paste, p_scs, p_smd, p_tsr, p_tsrfu, p_wic, p_ws,
 };
-use crate::option::{callback_from_option, can_bs, install_callback, magic_isset, shortmess};
+use crate::option::{
+    callback_from_option, can_bs, install_buf_callback, install_callback, magic_isset, shortmess,
+};
 use crate::options::{
     OPT_BO_FLAG_COMPLETE, OPT_COT_FLAG_FUZZY, OPT_COT_FLAG_LONGEST, OPT_COT_FLAG_MENU,
     OPT_COT_FLAG_MENUONE, OPT_COT_FLAG_NEAREST, OPT_COT_FLAG_NOINSERT, OPT_COT_FLAG_NOSELECT,
@@ -97,6 +99,7 @@ use crate::search::{
     BACKWARD, FORWARD, SEARCH_KEEP, SEARCH_NFMSG, find_pattern_in_path, ignorecase,
     search_for_exact_line, searchit,
 };
+use crate::slot::EditPart;
 use crate::spell::{
     SMT_ALL, expand_spelling, spell_dump_compl, spell_expand_check_cap, spell_word_start,
 };
@@ -108,8 +111,8 @@ use crate::state::{MODE_INSERT, REPLACE_FLAG, may_trigger_modechanged};
 use crate::tag::state::G_TAG_AT_CURSOR;
 use crate::textformat::auto_format;
 use crate::types::{
-    ApiString, BoolVarValue, Callback, ColNr, Dict, Direction, LineNr, List, OptInt, Pos, TypVal,
-    VarNumber, Vv,
+    ApiString, BoolVarValue, Buffer, Callback, ColNr, Dict, Direction, LineNr, List, OptInt, Pos,
+    TypVal, VarNumber, Vv,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;

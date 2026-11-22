@@ -54,7 +54,7 @@ use crate::option::vars::{
     FDO_FLAGS, JOP_FLAGS, P_IC, P_SCS, P_WS, SWB_FLAGS, TC_FLAGS, p_enc, p_ic, p_scs, p_sft, p_tbs,
     p_tgst, p_tl, p_tr, p_verbose, p_ws,
 };
-use crate::option::{callback_from_option, install_callback, magic_isset};
+use crate::option::{callback_from_option, install_buf_callback, install_callback, magic_isset};
 use crate::options::{
     OPT_FDO_FLAG_TAG, OPT_JOP_FLAG_VIEW, OPT_SWB_FLAG_NEWTAB, OPT_SWB_FLAG_USEOPEN,
     OPT_SWB_FLAG_USETAB, OPT_SWB_FLAG_VSPLIT,

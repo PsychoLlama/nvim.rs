@@ -83,9 +83,10 @@ pub use check::{
     spell_to_word_end, spell_valid_case, spell_word_start,
 };
 pub use dump::{ex_spelldump, ex_spellinfo, spell_dump_compl};
+pub(crate) use lang::compile_cap_prog;
 pub use lang::{
-    compile_cap_prog, did_set_spell_option, parse_spelllang, spell_delete_wordlist, spell_enc,
-    spell_free_all, spell_reload, valid_spellfile, valid_spelllang,
+    did_set_spell_option, parse_spelllang, spell_delete_wordlist, spell_enc, spell_free_all,
+    spell_reload, valid_spellfile, valid_spelllang,
 };
 pub(crate) use lookup::compound_flag;
 pub use lookup::{can_compound, match_checkcompoundpattern, match_compoundrule, valid_word_prefix};

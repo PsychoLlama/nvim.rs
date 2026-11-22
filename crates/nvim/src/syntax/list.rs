@@ -203,9 +203,8 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
 
     // The keywords of `id`, from both tables.
     if !syncing {
-        let block = cur_syn_block();
-        did_header = syn_list_keywords(id, &block.read().b_keywtab, false);
-        did_header = syn_list_keywords(id, &block.read().b_keywtab_ic, did_header);
+        did_header = syn_list_keywords(id, false, false);
+        did_header = syn_list_keywords(id, true, did_header);
     }
 
     // The patterns of `id`. The item's options are read off its *first*
@@ -226,23 +225,34 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
         did_header = true;
         idx = put_item_patterns(first);
 
-        let held = block.read();
-        let spp = &held.patterns()[first];
-        syn_list_flags(&ITEM_FLAG_NAMES, spp.sp_flags, LIST_HL);
-        if !spp.sp_cont_list.is_none() {
-            put_id_list(c"contains", spp.sp_cont_list.ids(), LIST_HL);
+        // Copied out before printing, as everything this listing prints:
+        // a message may prompt or redraw, and the block is not held
+        // across it.
+        let (flags, sync_idx, contains, contained_in, next) = {
+            let held = block.read();
+            let spp = &held.patterns()[first];
+            (
+                spp.sp_flags,
+                spp.sp_sync_idx,
+                (!spp.sp_cont_list.is_none()).then(|| spp.sp_cont_list.ids().to_vec()),
+                (!spp.sp_cont_in_list.is_none()).then(|| spp.sp_cont_in_list.ids().to_vec()),
+                (!spp.sp_next_list.is_none()).then(|| spp.sp_next_list.ids().to_vec()),
+            )
+        };
+        syn_list_flags(&ITEM_FLAG_NAMES, flags, LIST_HL);
+        if let Some(ids) = contains {
+            put_id_list(c"contains", &ids, LIST_HL);
         }
-        if !spp.sp_cont_in_list.is_none() {
-            put_id_list(c"containedin", spp.sp_cont_in_list.ids(), LIST_HL);
+        if let Some(ids) = contained_in {
+            put_id_list(c"containedin", &ids, LIST_HL);
         }
-        if !spp.sp_next_list.is_none() {
-            put_id_list(c"nextgroup", spp.sp_next_list.ids(), LIST_HL);
-            syn_list_flags(&NEXTGROUP_FLAG_NAMES, spp.sp_flags, LIST_HL);
+        if let Some(ids) = next {
+            put_id_list(c"nextgroup", &ids, LIST_HL);
+            syn_list_flags(&NEXTGROUP_FLAG_NAMES, flags, LIST_HL);
         }
-        if spp.sp_flags.has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE) {
-            put_sync_group(spp.sp_flags, spp.sp_sync_idx);
+        if flags.has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE) {
+            put_sync_group(flags, sync_idx);
         }
-        drop(held);
         idx += 1;
     }
 
@@ -262,36 +272,62 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
 /// A match is one pattern; a region is a run of consecutive entries —
 /// start(s), an optional skip, then end(s) — which are printed together.
 fn put_item_patterns(mut idx: usize) -> usize {
+    // What to print, copied out of the block first: printing may prompt or
+    // redraw, and the block is not held across it.
+    let mut parts: Vec<(&CStr, u8, PatView)> = Vec::new();
+    {
+        let block = cur_syn_block();
+        let held = block.read();
+        let pats = held.patterns();
+        let sp_type = |i: usize| c_int::from(pats[i].sp_type);
+        if sp_type(idx) == SPTYPE_MATCH {
+            parts.push((c"match", b' ', PatView::of(&pats[idx])));
+        } else if sp_type(idx) == SPTYPE_START {
+            // The three loops bound themselves on the array; upstream
+            // bounds only the last of them and reads past it if a
+            // region's END entries are ever missing.
+            while idx < pats.len() && sp_type(idx) == SPTYPE_START {
+                parts.push((c"start", b'=', PatView::of(&pats[idx])));
+                idx += 1;
+            }
+            if idx < pats.len() && sp_type(idx) == SPTYPE_SKIP {
+                parts.push((c"skip", b'=', PatView::of(&pats[idx])));
+                idx += 1;
+            }
+            while idx < pats.len() && sp_type(idx) == SPTYPE_END {
+                parts.push((c"end", b'=', PatView::of(&pats[idx])));
+                idx += 1;
+            }
+            idx -= 1;
+        }
+    }
     let mut last_matchgroup = 0;
-    let block = cur_syn_block();
-    let held = block.read();
-    let pats = held.patterns();
-    let sp_type = |i: usize| c_int::from(pats[i].sp_type);
-
-    if sp_type(idx) == SPTYPE_MATCH {
-        put_pattern(&mut last_matchgroup, c"match", b' ', &pats[idx]);
-        msg_put_ascii(b' ');
-    } else if sp_type(idx) == SPTYPE_START {
-        // The three loops bound themselves on the array; upstream bounds
-        // only the last of them and reads past it if a region's END
-        // entries are ever missing.
-        while idx < pats.len() && sp_type(idx) == SPTYPE_START {
-            put_pattern(&mut last_matchgroup, c"start", b'=', &pats[idx]);
-            idx += 1;
-        }
-        if idx < pats.len() && sp_type(idx) == SPTYPE_SKIP {
-            put_pattern(&mut last_matchgroup, c"skip", b'=', &pats[idx]);
-            idx += 1;
-        }
-        while idx < pats.len() && sp_type(idx) == SPTYPE_END {
-            put_pattern(&mut last_matchgroup, c"end", b'=', &pats[idx]);
-            idx += 1;
-        }
-        idx -= 1;
+    for (name, c, view) in &parts {
+        put_pattern(&mut last_matchgroup, name, *c, view);
+    }
+    if !parts.is_empty() {
         msg_put_ascii(b' ');
     }
-    drop(held);
     idx
+}
+
+/// What [`put_pattern`] prints of one pattern, copied out of the block.
+struct PatView {
+    match_id: c_int,
+    pattern: Option<std::ffi::CString>,
+    off_flags: c_int,
+    offsets: [c_int; 7],
+}
+
+impl PatView {
+    fn of(spp: &SynPat) -> Self {
+        PatView {
+            match_id: c_int::from(spp.sp_syn_match_id),
+            pattern: spp.sp_pattern.clone(),
+            off_flags: c_int::from(spp.sp_off_flags),
+            offsets: spp.sp_offsets,
+        }
+    }
 }
 
 /// Print `grouphere`/`groupthere` and the region item it names.
@@ -316,11 +352,18 @@ fn put_sync_group(flags: SynFlags, sync_idx: c_int) {
 fn syn_list_cluster(id: c_int) {
     // Slight hack: roughly duplicate the guts of `syn_list_header`.
     let mut endcol = 15;
-    let block = cur_syn_block();
-    let held = block.read();
-    let cluster = &held.clusters()[as_index(id)];
+    // Copied out before printing: see `put_item_patterns`.
+    let (name, list) = {
+        let block = cur_syn_block();
+        let held = block.read();
+        let cluster = &held.clusters()[as_index(id)];
+        (
+            cluster.scl_name.clone(),
+            (!cluster.scl_list.is_none()).then(|| cluster.scl_list.ids().to_vec()),
+        )
+    };
     msg_put_ascii(b'\n');
-    msg_display(&cluster.scl_name, 0, false);
+    msg_display(&name, 0, false);
 
     if MSG_COL.get() >= endcol {
         endcol = MSG_COL.get() + 1; // output at least one space
@@ -330,11 +373,11 @@ fn syn_list_cluster(id: c_int) {
     }
     msg_advance(endcol);
 
-    if cluster.scl_list.is_none() {
+    if let Some(ids) = list {
+        put_id_list(c"cluster", &ids, LIST_HL);
+    } else {
         msg_str_hl(c"cluster", LIST_HL, false);
         msg_str(c"=NONE");
-    } else {
-        put_id_list(c"cluster", cluster.scl_list.ids(), LIST_HL);
     }
 }
 
@@ -356,11 +399,11 @@ fn put_id_list(name: &CStr, ids: &[int16_t], hl_id: c_int) {
         } else if (SYNID_CONTAINED..SYNID_CLUSTER).contains(&item) {
             msg_str(c"CONTAINED");
         } else if item >= SYNID_CLUSTER {
-            let block = cur_syn_block();
-            let held = block.read();
-            let name = &held.clusters()[as_index(item - SYNID_CLUSTER)].scl_name;
+            let name = cur_syn_block().read().clusters()[as_index(item - SYNID_CLUSTER)]
+                .scl_name
+                .clone();
             msg_put_ascii(b'@');
-            msg_display(name, 0, false);
+            msg_display(&name, 0, false);
         } else {
             msg_display(syn_id2name(item), 0, false);
         }
@@ -379,10 +422,10 @@ const SEPCHARS: &[u8] = b"/+=-#@\"|'^&";
 ///
 /// `last_matchgroup` carries the `matchgroup=` in force across the patterns of
 /// one item, so a change is printed once rather than per pattern.
-fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: u8, spp: &SynPat) {
+fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: u8, spp: &PatView) {
     // May have to write "matchgroup=group".
-    if *last_matchgroup != c_int::from(spp.sp_syn_match_id) {
-        *last_matchgroup = c_int::from(spp.sp_syn_match_id);
+    if *last_matchgroup != spp.match_id {
+        *last_matchgroup = spp.match_id;
         msg_str_hl(c"matchgroup", LIST_HL, false);
         msg_put_ascii(b'=');
         if *last_matchgroup == 0 {
@@ -399,7 +442,7 @@ fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: u8, spp: &SynPat) {
 
     // The pattern, wrapped in the first delimiter it does not itself
     // contain — or the first one of all, if it contains every one.
-    let pattern = spp.sp_pattern.as_deref().unwrap_or(c"");
+    let pattern = spp.pattern.as_deref().unwrap_or(c"");
     let mut i = 0;
     while pattern.to_bytes().contains(&SEPCHARS[i]) {
         i += 1;
@@ -417,22 +460,22 @@ fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: u8, spp: &SynPat) {
 }
 
 /// Print the `ms=s+1,he=e-2,lc=3` offsets of one pattern.
-fn put_pattern_offsets(spp: &SynPat) {
+fn put_pattern_offsets(spp: &PatView) {
     let mut first = true;
     for i in 0..SPO_COUNT {
         // A start offset and an end offset share one name; the flag word
         // holds the start half in its low `SPO_COUNT` bits.
         let mask = 1 << i;
-        if c_int::from(spp.sp_off_flags) & (mask + (mask << SPO_COUNT)) == 0 {
+        if spp.off_flags & (mask + (mask << SPO_COUNT)) == 0 {
             continue;
         }
         if !first {
             msg_put_ascii(b','); // separate with commas
         }
         msg_str(SPO_NAME_TAB[as_index(i)]);
-        let n = spp.sp_offsets[as_index(i)];
+        let n = spp.offsets[as_index(i)];
         if i != SPO_LC_OFF {
-            if c_int::from(spp.sp_off_flags) & mask != 0 {
+            if spp.off_flags & mask != 0 {
                 msg_put_ascii(b's');
             } else {
                 msg_put_ascii(b'e');
@@ -501,20 +544,35 @@ impl KeywordOpts {
     }
 }
 
-/// List the keywords of group `id` in `table`, answering whether a header
+/// List the keywords of group `id` in the current block's table (the
+/// ignore-case one with `ignore_case`), answering whether a header
 /// has now been printed.
 ///
 /// The keywords come out in hash order, not alphabetically, which is why the
 /// options are re-printed whenever two neighbours disagree.
-fn syn_list_keywords(id: c_int, table: &KeywordTable, mut did_header: bool) -> bool {
+fn syn_list_keywords(id: c_int, ignore_case: bool, mut did_header: bool) -> bool {
+    // Copied out first: printing may prompt or redraw, and the block is not
+    // held across it.
+    let keywords: Vec<(Vec<u8>, KeywordOpts)> = {
+        let block = cur_syn_block();
+        let held = block.read();
+        let table = if ignore_case {
+            &held.b_keywtab_ic
+        } else {
+            &held.b_keywtab
+        };
+        table
+            .entries()
+            .filter(|(_, entry)| c_int::from(entry.syn.id) == id)
+            .map(|(keyword, entry)| (keyword.to_vec(), KeywordOpts::of(entry)))
+            .collect()
+    };
     let mut prev = KeywordOpts::none();
-    for (keyword, entry) in table.entries() {
+    for (keyword, opts) in &keywords {
         if GOT_INT.get() {
             break;
         }
-        if c_int::from(entry.syn.id) == id {
-            did_header = put_keyword(keyword, entry, id, did_header, &mut prev);
-        }
+        did_header = put_keyword(keyword, opts, id, did_header, &mut prev);
     }
     did_header
 }
@@ -528,13 +586,12 @@ fn syn_list_keywords(id: c_int, table: &KeywordTable, mut did_header: bool) -> b
 /// printing an empty one.
 fn put_keyword(
     keyword: &[u8],
-    entry: &KeyEntry,
+    opts: &KeywordOpts,
     id: c_int,
     did_header: bool,
     prev: &mut KeywordOpts,
 ) -> bool {
-    let opts = KeywordOpts::of(entry);
-    let force_newline = opts != *prev;
+    let force_newline = *opts != *prev;
     let outlen = if force_newline {
         0
     } else {

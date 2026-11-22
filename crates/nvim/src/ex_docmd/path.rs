@@ -52,7 +52,7 @@ use crate::runtime::state::CURRENT_SCTX;
 
 use crate::message_fmt::msg_cstr;
 
-use crate::option::{cpo_has, option_last_set};
+use crate::option::{cpo_has, install_buf_callback, option_last_set};
 
 use crate::options::OPT_FINDFUNC;
 
@@ -186,7 +186,7 @@ pub fn did_set_findfunc(args: &mut OptSet) -> Result<(), OptError> {
             // Setting it globally without `:setglobal` clears the local
             // one.
             if !args.os_flags.has(OptionSetFlags::GLOBAL) {
-                callback_free(&mut buf.edit().b_ffu_cb);
+                install_buf_callback(buf.edit().map(|b| &mut b.b_ffu_cb), None);
             }
         })
     };

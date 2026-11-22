@@ -232,7 +232,7 @@ pub fn did_set_optexpr(args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_spellcapcheck(args: &mut OptSet) -> Result<(), OptError> {
-    compile_cap_prog(&mut win(args).syntax().edit())
+    compile_cap_prog(win(args).syntax())
 }
 
 pub fn did_set_spellfile(args: &mut OptSet) -> Result<(), OptError> {

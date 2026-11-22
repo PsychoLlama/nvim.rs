@@ -155,7 +155,7 @@ pub(crate) fn didset_options() {
     didset_string_options();
     let _ = spell_check_msm();
     let _ = spell_check_sps();
-    let _ = compile_cap_prog(&mut Win::current().syntax().edit());
+    let _ = compile_cap_prog(Win::current().syntax());
     let _ = did_set_spell_option();
     // The two callbacks these stand in for read no frame at all, and the
     // startup sweep has none to give.

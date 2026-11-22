@@ -721,7 +721,7 @@
     "crates/nvim/src/spell/chartab.rs": {"pub_items": 11},
     "crates/nvim/src/spell/check.rs": {"pub_items": 8},
     "crates/nvim/src/spell/dump.rs": {"pub_items": 3},
-    "crates/nvim/src/spell/lang.rs": {"pub_items": 9},
+    "crates/nvim/src/spell/lang.rs": {"pub_items": 8},
     "crates/nvim/src/spell/lookup.rs": {"pub_items": 4},
     "crates/nvim/src/spell/mod.rs": {"pub_items": 49},
     "crates/nvim/src/spell/navigate.rs": {"pub_items": 1},

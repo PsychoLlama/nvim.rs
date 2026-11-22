@@ -65,7 +65,7 @@ use crate::spell::{LangId, LangP, SpellLang};
 use crate::spellfile::spell_load_file;
 use crate::startup::starting;
 use crate::strings::concat;
-use crate::types::SynBlock;
+use crate::syntax::SynBlockRef;
 use crate::window::win_valid_any_tab;
 
 use super::chartab::init_spell_chartab;
@@ -764,17 +764,22 @@ pub fn did_set_spell_option() -> Result<(), OptError> {
 ///
 /// Returns an error message when the pattern does not compile, leaving the
 /// previous program in place.
-pub fn compile_cap_prog(synblock: &mut SynBlock) -> Result<(), OptError> {
-    if synblock.b_p_spc.bytes().is_empty() {
-        synblock.b_cap_prog = None;
+///
+/// The pattern is copied out and compiled with the block let go: a pattern
+/// that does not compile gives a message, and a message may redraw.
+pub(crate) fn compile_cap_prog(block: SynBlockRef) -> Result<(), OptError> {
+    let spc = block.read().b_p_spc.bytes().to_vec();
+    let prog = if spc.is_empty() {
+        None
     } else {
-        let re = concat(b"^", synblock.b_p_spc.bytes());
+        let re = concat(b"^", &spc);
         // A pattern that does not compile keeps the previous program.
         let Some(prog) = vim_regcomp(re.as_cstr(), RE_MAGIC as c_int) else {
             return Err(E_INVARG.into());
         };
-        synblock.b_cap_prog = Some(prog);
-    }
+        Some(prog)
+    };
+    block.edit().b_cap_prog = prog;
     Ok(())
 }
 

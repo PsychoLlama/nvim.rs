@@ -94,10 +94,9 @@ impl CompleteFuncCb {
 
     /// Copy this callback into the buffer-local slot `bufcb`, freeing what
     /// was there.
-    pub(crate) fn copy_to_buflocal(self, bufcb: &mut Callback) {
+    pub(crate) fn copy_to_buflocal(self, bufcb: EditPart<'_, Buffer, Callback>) {
         let copy = self.0.with(Callback::duplicate);
-        bufcb.clear();
-        *bufcb = copy;
+        install_buf_callback(bufcb, Some(copy));
     }
 
     /// Mark what this callback references with `copy_id`, so the garbage
@@ -345,7 +344,8 @@ pub fn did_set_completefunc(args: &mut OptSet) -> Result<(), OptError> {
         .expect("the table installs this callback on a string option only")
         .as_cstr();
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        callback_from_option(value).map(|cb| install_callback(&mut buf.edit().b_cfu_cb, cb))
+        callback_from_option(value)
+            .map(|cb| install_buf_callback(buf.edit().map(|b| &mut b.b_cfu_cb), cb))
     } else {
         let retval = cfu_cb().set_from_option(value);
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
@@ -364,7 +364,7 @@ pub fn did_set_completefunc(args: &mut OptSet) -> Result<(), OptError> {
 ///
 /// Safe: [`Buf`] is the live buffer whose own callback field this writes.
 pub fn set_buflocal_cfu_callback(buffer: Buf) {
-    cfu_cb().copy_to_buflocal(&mut buffer.edit().b_cfu_cb);
+    cfu_cb().copy_to_buflocal(buffer.edit().map(|b| &mut b.b_cfu_cb));
 }
 
 /// Parse the `'omnifunc'` value and set the callback function; an
@@ -377,7 +377,8 @@ pub fn did_set_omnifunc(args: &mut OptSet) -> Result<(), OptError> {
         .expect("the table installs this callback on a string option only")
         .as_cstr();
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        callback_from_option(value).map(|cb| install_callback(&mut buf.edit().b_ofu_cb, cb))
+        callback_from_option(value)
+            .map(|cb| install_buf_callback(buf.edit().map(|b| &mut b.b_ofu_cb), cb))
     } else {
         let retval = ofu_cb().set_from_option(value);
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
@@ -396,12 +397,15 @@ pub fn did_set_omnifunc(args: &mut OptSet) -> Result<(), OptError> {
 ///
 /// Safe: [`Buf`] is the live buffer whose own callback field this writes.
 pub fn set_buflocal_ofu_callback(buffer: Buf) {
-    ofu_cb().copy_to_buflocal(&mut buffer.edit().b_ofu_cb);
+    ofu_cb().copy_to_buflocal(buffer.edit().map(|b| &mut b.b_ofu_cb));
 }
 
 /// Free `buffer`'s `'complete'` `F{func}` callbacks.
 pub(crate) fn clear_buffer_cpt_callbacks(buffer: Buf) {
-    for mut cb in ::core::mem::take(&mut buffer.edit().b_p_cpt_cb) {
+    // Taken out first: a `for` head's temporaries (the edit) would live
+    // through the body, and releasing a callback must not run under it.
+    let callbacks = ::core::mem::take(&mut buffer.edit().b_p_cpt_cb);
+    for mut cb in callbacks {
         cb.clear();
     }
 }
@@ -474,13 +478,13 @@ pub fn did_set_thesaurusfunc(args: &mut OptSet) -> Result<(), OptError> {
         // A copy: evaluating the value may set the option again.
         let value = buf.read().b_p_tsrfu.get();
         callback_from_option(value.as_cstr())
-            .map(|cb| install_callback(&mut buf.edit().b_tsrfu_cb, cb))
+            .map(|cb| install_buf_callback(buf.edit().map(|b| &mut b.b_tsrfu_cb), cb))
     } else {
         // Global option set. A copy, as above.
         let retval = tsrfu_cb().set_from_option(P_TSRFU.get().as_cstr());
         // When using :set, free the local callback.
         if !args.os_flags.has(OptionSetFlags::GLOBAL) {
-            callback_free(&mut buf.edit().b_tsrfu_cb);
+            install_buf_callback(buf.edit().map(|b| &mut b.b_tsrfu_cb), None);
         }
         retval
     };

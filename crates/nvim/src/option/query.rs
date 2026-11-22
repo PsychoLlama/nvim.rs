@@ -42,8 +42,9 @@ use crate::os::env::env_set;
 use crate::os::libc::{int64_t, uint8_t};
 use crate::path::{full_name_save, tail_index};
 use crate::search::state::MAGIC_OVERRULED;
+use crate::slot::EditPart;
 use crate::state::mode::STATE;
-use crate::types::{Callback, ExArg, Failed, OptInt, ScriptId, TypVal};
+use crate::types::{Buffer, Callback, ExArg, Failed, OptInt, ScriptId, TypVal};
 
 use super::{
     OPT_SCOPE_BUF, OPT_SCOPE_WIN, get_option, get_varp, option_has_scope, set_option_direct,
@@ -190,6 +191,16 @@ pub(crate) fn install_callback(slot: &mut Callback, cb: Option<Callback>) {
     if let Some(cb) = cb {
         *slot = cb;
     }
+}
+
+/// [`install_callback`] for a buffer's callback, lent by its edit
+/// (`buf.edit().map(|b| &mut b.b_cfu_cb)`): the edit is let go before the
+/// old callback is released, since releasing one may free a function, a
+/// partial and its dict, or a Lua reference.
+pub(crate) fn install_buf_callback(mut slot: EditPart<'_, Buffer, Callback>, cb: Option<Callback>) {
+    let mut old = core::mem::replace(&mut *slot, cb.unwrap_or(Callback::None));
+    drop(slot);
+    callback_free(&mut old);
 }
 
 /// Whether 'backspace' allows backspacing over `what`. A prompt buffer never

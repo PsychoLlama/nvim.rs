@@ -477,7 +477,7 @@ fn copy_spell_options(b: Buf) {
     b.edit().b_s.b_syn_isk = None;
     b.edit().b_s.b_p_spc = p_spc(dup);
     copy_sctx(b, BUF_OPT_SPELLCAPCHECK);
-    let _ = compile_cap_prog(&mut b.edit().b_s);
+    let _ = compile_cap_prog(b.syntax());
     b.edit().b_s.b_p_spf = p_spf(dup);
     copy_sctx(b, BUF_OPT_SPELLFILE);
     b.edit().b_s.b_p_spl = p_spl(dup);

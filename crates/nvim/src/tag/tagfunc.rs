@@ -51,7 +51,7 @@ pub fn did_set_tagfunc(args: &mut OptSet) -> Result<(), OptError> {
     // expression, and evaluating it may set the option again.
     let cb = callback_from_option(value);
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
-        cb.map(|cb| install_callback(&mut buf.edit().b_tfu_cb, cb))
+        cb.map(|cb| install_buf_callback(buf.edit().map(|b| &mut b.b_tfu_cb), cb))
     } else {
         let retval = cb.map(|cb| GLOBAL_TAGFUNC.with_mut(|slot| install_callback(slot, cb)));
         if retval.is_ok() && !args.os_flags.has(OptionSetFlags::GLOBAL) {
@@ -77,7 +77,7 @@ pub fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
 /// Safe: the buffer is live by [`Buf`]'s promise, and the global callback
 /// lives in a static.
 pub fn set_buflocal_tfu_callback(buffer: Buf) {
-    callback_free(&mut buffer.edit().b_tfu_cb);
+    install_buf_callback(buffer.edit().map(|b| &mut b.b_tfu_cb), None);
     GLOBAL_TAGFUNC.with(|global| {
         if global.is_set() {
             callback_copy(&mut buffer.edit().b_tfu_cb, global);
