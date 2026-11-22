@@ -404,6 +404,21 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
     if had_diffs || !tp.tp_diff.is_empty() {
         diff_redraw(true);
         let buffer = Buf::current_or_none();
-        apply_autocmds(AutoEvent::DiffUpdated, None, None, false, buffer);
+        fire_diff_updated(buffer);
     }
+}
+
+/// Fire `DiffUpdated` with the window layout locked.
+///
+/// A recompute is asked for from deep inside other work -- a redraw's
+/// filler count (`diff_check_with_linestatus`), `'diff'` being set on a
+/// window, a `:diffget` -- and every one of those callers holds the
+/// window it is working on across it. A handler that closed windows
+/// (`:close`, `:only`, a wipe of a diffed buffer) freed them under the
+/// caller, so it is refused here instead (E1312), as for the other
+/// events fired from the middle of a layout change.
+pub(crate) fn fire_diff_updated(buffer: Option<Buf>) {
+    crate::window::window_layout_lock();
+    apply_autocmds(AutoEvent::DiffUpdated, None, None, false, buffer);
+    crate::window::window_layout_unlock();
 }

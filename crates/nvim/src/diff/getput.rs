@@ -255,7 +255,7 @@ pub fn ex_diffgetput(excmd: &mut ExArg) {
     } else {
         diff_redraw(false);
         let here = Buf::current_or_none();
-        apply_autocmds(AutoEvent::DiffUpdated, None, None, false, here);
+        fire_diff_updated(here);
     }
 }
 

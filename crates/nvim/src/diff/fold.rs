@@ -54,8 +54,17 @@ pub fn diff_redraw(dofold: bool) {
             fold_update_all(wp);
         }
         // Only the current window's topfill may *grow*, and only up
-        // to what the block at its topline needs.
-        let n = diff_check_fill(wp, wp.w_topline);
+        // to what the block at its topline needs. Both the fold update
+        // and the check can run user code (a `'foldexpr'`, `DiffUpdated`
+        // when the diff is brought up to date) that closes the window.
+        let n = if wp.is_live() {
+            diff_check_fill(wp, wp.w_topline)
+        } else {
+            0
+        };
+        if !wp.is_live() {
+            continue;
+        }
         if !wp.is_current() && wp.w_topfill > 0 || n > 0 {
             if wp.w_topfill > n {
                 wp.w_topfill = n.max(0);
@@ -72,7 +81,7 @@ pub fn diff_redraw(dofold: bool) {
     }
 
     // Whichever window took the larger filler count drives the other.
-    if let Some(other) = wp_other
+    if let Some(other) = wp_other.filter(|w| w.is_live())
         && Win::current().w_onebuf_opt.wo_scb != 0
     {
         let pair = if used_max_fill_curwin {
@@ -95,12 +104,17 @@ pub fn diff_redraw(dofold: bool) {
 /// or [`LINE_INSERTED`], and zero when the line is not part of a change at
 /// all. The two are independent: a line can carry filler *and* be changed.
 pub fn diff_check_with_linestatus(window: Win, lnum: LineNr) -> (c_int, c_int) {
+    if TabPage::current().tp_diff_invalid != 0 {
+        diff_update(None);
+        // `DiffUpdated` runs user code, which may have closed the window
+        // (or its tab page) being asked about: it has no status left.
+        if !window.is_live() {
+            return (0, 0);
+        }
+    }
     let tp = TabPage::current();
     // A live window's buffer is live; a diffed window always has one.
     let buf = window.buffer();
-    if tp.tp_diff_invalid != 0 {
-        diff_update(None);
-    }
     if tp.tp_diff.is_empty() || window.w_onebuf_opt.wo_diff == 0 {
         return (0, 0);
     }
