@@ -318,7 +318,6 @@ pub fn ui_ext_win_viewport(window: Win) {
 /// Tell the UI which part of its buffer `window` shows, and how far the text
 /// scrolled since the last time it was told.
 fn ext_win_viewport(window: Win) {
-    let window = window;
     if !((window.is_current() || ui_has(UI_MULTIGRID))
         && window.w_viewport_invalid()
         && window.w_redr_type() == 0)

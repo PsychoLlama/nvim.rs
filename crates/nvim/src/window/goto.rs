@@ -60,7 +60,6 @@ pub fn win_goto(window: Win) {
 
 /// Make `window` the current window and redraw what the move uncovers.
 pub(crate) fn goto_win(window: Win) {
-    let window = window;
     let owp = Win::current();
     if text_or_buf_locked() {
         beep();

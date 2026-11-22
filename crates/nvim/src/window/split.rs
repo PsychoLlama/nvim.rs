@@ -184,7 +184,6 @@ fn split_ins(
     if !room.did_set_fraction {
         save_fraction(oldwin);
     }
-    let wp = wp;
     wp.set_w_fraction(oldwin.w_fraction());
     if vertical {
         size_vertical(
@@ -592,7 +591,6 @@ fn split_frame(
         match inner.win() {
             // `oldwin`'s frame moved: it now lives one level down.
             Some(_) => {
-                let oldwin = oldwin;
                 oldwin.set_w_frame(Some(inner.id()));
             }
             None => {

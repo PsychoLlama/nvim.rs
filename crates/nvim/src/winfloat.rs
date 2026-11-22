@@ -405,7 +405,6 @@ pub(crate) fn win_new_float(
 
 /// Strip a float of everything that decorates a normal window.
 pub(crate) fn win_set_minimal_style(win: Win) {
-    let win = win;
     win.set_wo_nu(0);
     win.set_wo_rnu(0);
     win.set_wo_cul(0);

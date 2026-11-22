@@ -683,7 +683,6 @@ impl Win {
 
         // The cursor in windows other than the current one is not always
         // up to date, because of autocommands and timers.
-        let win = win;
         let buf = win.buffer();
         let lnum = win.cursor().lnum().min(buf.line_count());
         win.cursor().set_lnum(lnum);

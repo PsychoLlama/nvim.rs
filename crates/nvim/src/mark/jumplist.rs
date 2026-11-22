@@ -153,7 +153,6 @@ pub fn get_jumplist(win: Win, mut count: c_int) -> Option<FileMark> {
 ///
 /// Returns a copy of the mark, `None` if out of bounds.
 pub fn get_changelist(buffer: Buf, win: Win, count: c_int) -> Option<FileMark> {
-    let win = win;
     if buffer.b_changelistlen() == 0 {
         return None;
     }

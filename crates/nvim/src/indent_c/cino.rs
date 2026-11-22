@@ -40,7 +40,6 @@ pub fn parse_cino(buffer: Buf) {
     // A copy of the option: the fields below are written through the same
     // handle the value would be borrowed from.
     let cino = buffer.read().b_p_cino.get();
-    let buffer = buffer;
 
     // The defaults.  A `sw` here means the option tracks 'shiftwidth'
     // unless 'cinoptions' overrides it.

@@ -325,7 +325,6 @@ pub fn win_setheight_win(height: c_int, win: Win) {
 
 /// Give `win` height `height`, moving the other windows around it to fit.
 pub(crate) fn setheight_win(height: c_int, win: Win) {
-    let win = win;
     // Always keep the current window at least one line high, even when
     // 'winminheight' is zero; two when it has a window bar.
     let floor = number_as_int(if win.is_current() {
@@ -360,7 +359,6 @@ pub fn win_setwidth_win(width: c_int, window: Win) {
 
 /// Give `window` width `width`, moving the other windows around it to fit.
 pub(crate) fn setwidth_win(width: c_int, window: Win) {
-    let window = window;
     // Always keep the current window at least one column wide, even when
     // 'winminwidth' is zero.
     let width = if window.is_current() {

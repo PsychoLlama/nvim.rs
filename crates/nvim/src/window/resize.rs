@@ -119,7 +119,6 @@ pub fn set_fraction(window: Win) {
 /// Remember where the cursor is as a fraction of the window's height, so a
 /// resize can put it back in the same relative place.
 pub(crate) fn save_fraction(window: Win) {
-    let window = window;
     if window.w_view_height() > 1 {
         window.set_w_fraction(arith::cursor_fraction(
             window.w_wrow(),
@@ -231,7 +230,6 @@ pub fn win_new_height(window: Win, height: c_int) {
 
 /// Give window `window` height `height`.
 pub(crate) fn new_win_height(window: Win, height: c_int) {
-    let window = window;
     // Don't want a negative height: happens when splitting a tiny window, and
     // is equalized away soon after.
     let height = height.max(0);
@@ -250,7 +248,6 @@ pub fn scroll_to_fraction(window: Win, prev_height: c_int) {
 /// Put the cursor back at the [`save_fraction`] of the window it was at before
 /// the resize, scrolling the view to suit.
 pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
-    let window = window;
     let height = window.w_view_height();
     // Don't change `w_topline` when the window has no height, when
     // `'scrollbind'` is set on a window that is not current, or when the whole
@@ -341,7 +338,6 @@ pub fn win_set_inner_size(window: Win, valid_cursor: bool) {
 /// Give the window's *text area* the size its frame now implies, and tell the
 /// UI, the terminal and the view about it.
 pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
-    let window = window;
     let mut width = window.w_width_request();
     if width == 0 {
         width = window.w_width();
@@ -421,7 +417,6 @@ pub fn win_new_width(window: Win, width: c_int) {
 
 /// Give window `window` width `width`.
 pub(crate) fn new_win_width(window: Win, width: c_int) {
-    let window = window;
     window.set_w_width(width.max(0));
     window.set_w_pos_changed(true);
     set_inner_size(window, true);
@@ -444,7 +439,6 @@ pub fn win_comp_scroll(window: Win) {
 /// Recompute `'scroll'` after a resize, marking it as set by the layout rather
 /// than by the user.
 pub(crate) fn comp_scroll(window: Win) {
-    let window = window;
     let old = window.wo_scr();
     window.set_wo_scr(default_scroll(window));
     if window.wo_scr() != old {
@@ -623,7 +617,6 @@ pub fn win_remove_status_line(window: Win, add_hsep: bool) {
 /// Take `window`'s status line away, giving its row either to a horizontal
 /// separator or back to the window's text.
 pub(crate) fn remove_status_line(window: Win, add_hsep: bool) {
-    let window = window;
     window.set_w_status_height(0);
     if add_hsep {
         window.set_w_hsep_height(1);
@@ -656,7 +649,6 @@ pub(crate) fn set_winbar_win(
     make_room: bool,
     valid_cursor: bool,
 ) -> Result<(), WinbarRefused> {
-    let window = window;
     let global = p_wbr(|value| c_int::from(value.to_bytes().first().copied().unwrap_or(0)));
     let local = c_int::from(window.read().w_onebuf_opt.wo_wbr.first_byte());
     let winbar_height = if window.w_floating() {

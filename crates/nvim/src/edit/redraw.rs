@@ -90,7 +90,6 @@ pub(crate) fn ins_redraw(ready: bool) {
         // The tick is the buffer's the insert is in, which the autocommand
         // may have left: it is written through the handle, not held.
         let tick = buf_get_changedtick(Buf::current());
-        let buf = buf;
         if popup {
             buf.set_b_last_changedtick_pum(tick);
         } else {

@@ -316,7 +316,6 @@ fn popup_translation(which_button: &mut c_int, is_click: bool) -> ControlFlow<bo
 /// Open or close the fold the click landed on, keeping the cursor where it
 /// was when the click stayed in the same window.
 fn fold_click(win: Win, jump_flags: c_int, old_curwin: Win, save_cursor: Pos) {
-    let win = win;
     let fold: fn(Pos, c_int) = if jump_flags & MOUSE_FOLD_OPEN != 0 {
         open_fold
     } else {

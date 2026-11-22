@@ -432,7 +432,6 @@ enum Leave {
 /// Leave `win`, which is the current window and about to close: fire
 /// `BufLeave` and `WinLeave`, guarding the window across both.
 fn leave_closing_window(win: Win) -> Leave {
-    let win = win;
     leave_window(Win::current());
 
     // Guess which window is going to be the new current one. This may change

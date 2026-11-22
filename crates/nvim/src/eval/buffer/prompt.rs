@@ -98,7 +98,6 @@ pub fn f_prompt_appendbuf(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncD
         }
     }
     if result.number_or_zero() == 0 {
-        let buf = buf;
         let value = if lines.v_type() == VAR_LIST {
             match list_items(lines.list_ref().as_deref()).last() {
                 Some(last) => ends_in_newline(numbuf3.bytes(&last.li_tv)),

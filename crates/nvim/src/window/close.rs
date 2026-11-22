@@ -102,7 +102,6 @@ pub fn win_init_empty(window: Win) {
 
 /// Point `window` at the top of an empty buffer.
 pub(crate) fn init_empty(window: Win) {
-    let window = window;
     window.redraw_later(UPD_NOT_VALID);
     window.set_w_lines_valid(0);
     window.cursor().set_lnum(LineNr::ONE);
@@ -326,7 +325,6 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
 ///
 /// Answers whether `close_buffer()` decremented `b_nwindows`.
 pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> bool {
-    let win = win;
     let Some(buf) = win.buffer_or_none() else {
         return false;
     };
@@ -361,7 +359,6 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
 /// `bufref` names `win->w_buffer` from before that call, and `did_decrement`
 /// says whether it decremented `b_nwindows`.
 pub(crate) fn unclose_win_buffer(win: Win, bufref: BufRef, did_decrement: bool) {
-    let win = win;
     let Some(buf) = win.buffer_or_none() else {
         // The buffer was removed from the window: it has to be given one.
         let first = first_buffer().expect("a window means a buffer list");

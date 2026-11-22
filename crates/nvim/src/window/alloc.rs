@@ -369,7 +369,6 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
 
 /// Give `window` a fresh leaf frame of its own.
 pub(crate) fn attach_frame(window: Win) -> FrameRef {
-    let window = window;
     let frp = new_frame();
     window.set_w_frame(Some(frp.id()));
     frp.set_fr_layout(c_char::try_from(FR_LEAF).unwrap_or(0));
@@ -460,7 +459,6 @@ pub fn free_wininfo(entry: &mut WinInfo) {
 }
 
 pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
-    let window = window;
     clear_folding(window);
     alist_unlink(window.w_alist());
     // Don't execute autocommands while the window is halfway deleted.
@@ -538,7 +536,6 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
 /// two entries that would then have no window: only the first such entry is
 /// ever used again.
 fn forget_wininfo(buffer: Buf, window: Win) {
-    let buffer = buffer;
     let infos = &mut buffer.edit().b_wininfo;
     let len = infos.len();
     let mut pos_wip = len;
@@ -573,7 +570,6 @@ pub fn win_free_grid(window: Win, reinit: bool) {
 
 /// Give up the window's own grid, optionally leaving it zeroed for reuse.
 pub(crate) fn free_grid(window: Win, reinit: bool) {
-    let window = window;
     if window.grid_alloc().handle != Handle::NONE && ui_has(UI_MULTIGRID) {
         ui_call_grid_destroy(Integer::from(window.grid_alloc().handle));
     }
@@ -589,7 +585,6 @@ pub(crate) fn free_grid(window: Win, reinit: bool) {
 /// Put `window` in the window list of `tabpage` (or of the current tab page) after
 /// `after`, or at the front when there is no `after`.
 pub(crate) fn win_append(after: Option<Win>, window: Win, tabpage: Option<TabPage>) {
-    let window = window;
     debug_assert!(
         tabpage.is_none_or(|tp| !tp.is_current()),
         "tp == NULL || tp != curtab"
