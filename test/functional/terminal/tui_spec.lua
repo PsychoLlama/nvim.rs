@@ -4798,7 +4798,10 @@ describe('TUI client', function()
       ffi.C.ui_call_set_title(to_api_string(('a'):rep(65536)))
     ]])
     screen_client:expect_unchanged()
-    assert_log('set_title: title string too long!', testlog)
+    -- The client keeps logging redraw batches (DBG lines in a debug build)
+    -- after the error, and under load more of them land before the read:
+    -- look past the default tail, as the chdir case below does.
+    assert_log('set_title: title string too long!', testlog, 100)
     eq(old_title, api.nvim_buf_get_var(0, 'term_title'))
 
     -- Following escape sequences are not affected.
