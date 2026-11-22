@@ -440,7 +440,10 @@ impl FrameId {
 // What a handle carries beside its address
 
 /// A handle's identity and its slot's generation, packed in one word: the
-/// handle in the low half, the generation in the high.
+/// generation in the low half, the handle in the high. The generation is
+/// what every dereference compares with the slot's header, and in the low
+/// half that is one `cmp` of the register's low 32 bits against memory, with
+/// no shift.
 ///
 /// One word rather than two fields so that a handle is a pointer and a
 /// scalar, which the Rust ABI passes in two registers. With a third field a
@@ -456,18 +459,18 @@ impl Stamp {
 
     #[inline(always)]
     pub(crate) fn new(handle: Handle, generation: u32) -> Self {
-        Stamp((u64::from(generation) << 32) | u64::from(handle.get().cast_unsigned()))
+        Stamp((u64::from(handle.get().cast_unsigned()) << 32) | u64::from(generation))
     }
 
     #[inline(always)]
     pub(crate) fn handle(self) -> Handle {
-        let low = u32::try_from(self.0 & 0xFFFF_FFFF).unwrap_or_default();
-        Handle::new(low.cast_signed())
+        let high = u32::try_from(self.0 >> 32).unwrap_or_default();
+        Handle::new(high.cast_signed())
     }
 
     #[inline(always)]
     pub(crate) fn generation(self) -> u32 {
-        u32::try_from(self.0 >> 32).unwrap_or_default()
+        u32::try_from(self.0 & 0xFFFF_FFFF).unwrap_or_default()
     }
 }
 
