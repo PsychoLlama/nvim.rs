@@ -354,6 +354,21 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   compare per dereference, release, codegen-units = 1, cachegrind Ir):
   mlbench +2.5 %, readbench +2.2 %, spellbench +2.1 %, scrbench +1.9 %,
   edbench +1.7 %, the rest ≤ 1 %.
+- **In progress — the graph handles' liveness (the floor laid):**
+  every `Window`, `Buffer` (the two unregistered ones too), `Tabpage` and
+  `Frame` lives in a slot of its type's `SlotPool`
+  (`winlayer/handles.rs`). The registries own a `SlotBox` (a window's,
+  which stays alive out of the registry while idle, its slot handle), and
+  a free ends the value in its slot at the moment the `xfree` ran -- the
+  destructor in place, the generation moved on -- with the deferred-free
+  order unchanged. `Win`/`Buf`/`TabPage`/`FrameRef` carry the slot's
+  generation beside their address and id (`Stamp`: one word, so a handle
+  still passes in two registers), from every constructor: registry
+  lookups, the current-object cells, and the slot header behind a bare
+  address. Nothing compares it on a dereference yet, so behaviour is
+  unchanged (battery identical); equality is still the address. Cost
+  (release, codegen-units = 1, cachegrind Ir): mlbench +0.77 %,
+  undobench +0.37 %, the other ten within ±0.2 %.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with

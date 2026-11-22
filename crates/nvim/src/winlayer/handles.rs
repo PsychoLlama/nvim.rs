@@ -66,25 +66,33 @@ static TABPAGE_SLOTS: GlobalCell<SlotPool<Tabpage>> = GlobalCell::new(SlotPool::
 /// The slots frames live in, the snapshot trees' included.
 static FRAME_SLOTS: GlobalCell<SlotPool<Frame>> = GlobalCell::new(SlotPool::new());
 
+// `inline(never)` on all four: a small leaf method of a trait impl for a
+// `pub` type is shippable cross-crate, and a shippable body that names a
+// static exports it (`just state-exports`). The pools are reached on
+// allocation and free only.
 impl Pooled for Window {
+    #[inline(never)]
     fn pool() -> &'static GlobalCell<SlotPool<Self>> {
         &WINDOW_SLOTS
     }
 }
 
 impl Pooled for Buffer {
+    #[inline(never)]
     fn pool() -> &'static GlobalCell<SlotPool<Self>> {
         &BUFFER_SLOTS
     }
 }
 
 impl Pooled for Tabpage {
+    #[inline(never)]
     fn pool() -> &'static GlobalCell<SlotPool<Self>> {
         &TABPAGE_SLOTS
     }
 }
 
 impl Pooled for Frame {
+    #[inline(never)]
     fn pool() -> &'static GlobalCell<SlotPool<Self>> {
         &FRAME_SLOTS
     }
