@@ -25,8 +25,8 @@
 
 use core::num::NonZero;
 
-use crate::allocator::Owned;
 use crate::global_cell::GlobalCell;
+use crate::slot::{SlotBox, SlotRef};
 use crate::types::{Frame, Handle};
 use crate::winlayer::graph::TOPFRAME;
 use crate::winlayer::{FrameId, FrameRef, Win, WinId, forget_frame, frames, register_frame};
@@ -49,7 +49,7 @@ pub(crate) fn new_frame() -> FrameRef {
     static LAST_FRAME_ID: GlobalCell<Handle> = GlobalCell::new(Handle::NONE);
     LAST_FRAME_ID.set(LAST_FRAME_ID.get().next());
     let handle = LAST_FRAME_ID.get();
-    let frame = Owned::new(Box::new(Frame {
+    let frame = SlotBox::new(Frame {
         handle,
         fr_layout: 0,
         fr_width: 0,
@@ -61,7 +61,7 @@ pub(crate) fn new_frame() -> FrameRef {
         fr_prev: None,
         fr_child: None,
         fr_win: None,
-    }));
+    });
     register_frame(handle, frame)
 }
 
@@ -85,18 +85,25 @@ impl FrameRef {
     /// [`FrameId`] still naming it answer `None` from here on, and dropping what
     /// the registry hands back is the free itself — at the point the `xfree` was.
     pub(crate) fn free(self) {
-        drop(forget_frame(self.handle()));
+        drop(forget_frame(self));
     }
 }
 
 impl FrameRef {
     /// [`Win::at`] for a frame.
     #[inline(always)]
-    pub(super) const fn at(raw: *mut Frame, handle: Handle) -> Self {
+    pub(super) fn at(r: SlotRef<Frame>, handle: Handle) -> Self {
         Self {
-            ptr: raw,
+            ptr: r.raw(),
             id: handle,
+            generation: r.generation(),
         }
+    }
+
+    /// The generation of the slot this was made from. [`crate::slot`].
+    #[inline(always)]
+    pub(crate) fn generation(self) -> u32 {
+        self.generation
     }
 
     #[inline(always)]

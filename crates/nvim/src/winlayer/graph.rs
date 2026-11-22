@@ -35,16 +35,17 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use super::{Buf, BufId, FrameId, TabId, TabPage, Win, WinId};
-use crate::allocator::Owned;
 use crate::global_cell::GlobalCell;
 use crate::marktree::MarkTree;
 use crate::memline::state::MemLine;
 use crate::memory::XString;
 use crate::optionstr::BUF_STRING_OPTIONS;
 use crate::registry::id_map;
+use crate::slot::{Pooled, SlotBox, SlotRef};
 use crate::types::{BufName, Buffer, Handle, Key, Tabpage, Window};
 use core::ffi::c_int;
 use core::mem::MaybeUninit;
+use core::num::NonZero;
 
 pub(crate) static FIRSTWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static LASTWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
@@ -116,17 +117,43 @@ pub unsafe extern "C" fn win_col_off(window: *mut Window) -> c_int {
 // They are written together, always, by the funnel below. Nothing else in
 // the tree writes either half.
 
+/// Which object is current: its identity, and the generation of its slot
+/// when it was made current -- the two halves of a handle the mirror's
+/// address does not hold. Eight bytes, so reading it is one load.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Current {
+    id: NonZero<c_int>,
+    generation: u32,
+}
+
+impl Current {
+    /// The identity and generation `handle`/`generation` spell.
+    #[inline(always)]
+    fn of(handle: Handle, generation: u32, what: &str) -> Self {
+        Current {
+            id: NonZero::new(handle.get())
+                .unwrap_or_else(|| panic!("a current {what} has a handle")),
+            generation,
+        }
+    }
+
+    #[inline(always)]
+    fn handle(self) -> Handle {
+        Handle::new(self.id.get())
+    }
+}
+
 /// The window the editor is working in, as the registry names it.
 ///
 /// `None` only before `win_alloc_first` and after the last window goes.
-pub(super) static CURRENT_WIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
+pub(super) static CURRENT_WIN: GlobalCell<Option<Current>> = GlobalCell::new(None);
 
 /// The buffer the editor is working in. `None` where [`leave_curbuf`] left
 /// it -- the editor really has none for those few statements.
-pub(super) static CURRENT_BUF: GlobalCell<Option<BufId>> = GlobalCell::new(None);
+pub(super) static CURRENT_BUF: GlobalCell<Option<Current>> = GlobalCell::new(None);
 
 /// The tab page the editor is working in. [`CURRENT_WIN`].
-pub(super) static CURRENT_TAB: GlobalCell<Option<TabId>> = GlobalCell::new(None);
+pub(super) static CURRENT_TAB: GlobalCell<Option<Current>> = GlobalCell::new(None);
 
 // ---------------------------------------------------------------------------
 // Becoming current
@@ -156,7 +183,11 @@ impl Win {
     /// that move only one half mean it.
     #[inline]
     pub fn make_current(self) {
-        CURRENT_WIN.set(Some(self.id()));
+        CURRENT_WIN.set(Some(Current::of(
+            self.handle(),
+            self.generation(),
+            "window",
+        )));
         curwin.set(self.raw());
     }
 }
@@ -165,7 +196,11 @@ impl Buf {
     /// Make this the buffer the editor is working in. [`Win::make_current`].
     #[inline]
     pub fn make_current(self) {
-        CURRENT_BUF.set(Some(self.id()));
+        CURRENT_BUF.set(Some(Current::of(
+            self.handle(),
+            self.generation(),
+            "buffer",
+        )));
         CURBUF.set(self.raw());
     }
 }
@@ -174,7 +209,11 @@ impl TabPage {
     /// Make this the tab page the editor is working in.
     #[inline]
     pub(crate) fn make_current(self) {
-        CURRENT_TAB.set(Some(self.id()));
+        CURRENT_TAB.set(Some(Current::of(
+            self.handle(),
+            self.generation(),
+            "tab page",
+        )));
         CURTAB.set(self.raw());
     }
 }
@@ -232,7 +271,7 @@ pub(crate) fn leave_curwin() {
 pub(super) fn current_win() -> Option<Win> {
     CURRENT_WIN
         .get()
-        .map(|id| Win::at(curwin.get(), Handle::new(id.0.get())))
+        .map(|cur| Win::from_parts(curwin.get(), cur.handle(), cur.generation))
 }
 
 /// [`current_win`] for the buffer. `None` where [`leave_curbuf`] left it.
@@ -240,7 +279,7 @@ pub(super) fn current_win() -> Option<Win> {
 pub(super) fn current_buf() -> Option<Buf> {
     CURRENT_BUF
         .get()
-        .map(|id| Buf::at(CURBUF.get(), Handle::new(id.0.get())))
+        .map(|cur| Buf::from_parts(CURBUF.get(), cur.handle(), cur.generation))
 }
 
 /// [`current_win`] for the tab page.
@@ -248,7 +287,7 @@ pub(super) fn current_buf() -> Option<Buf> {
 pub(super) fn current_tab() -> Option<TabPage> {
     CURRENT_TAB
         .get()
-        .map(|id| TabPage::at(CURTAB.get(), Handle::new(id.0.get())))
+        .map(|cur| TabPage::from_parts(CURTAB.get(), cur.handle(), cur.generation))
 }
 
 /// The window the mirror names, whatever its identity.
@@ -259,13 +298,13 @@ pub(super) fn current_tab() -> Option<TabPage> {
 /// the editor between windows, which `Saved::restore` puts back as it found.
 #[inline(always)]
 fn current_window() -> Win {
-    current_win().unwrap_or(Win::at(::core::ptr::null_mut::<Window>(), Handle::NONE))
+    current_win().unwrap_or(Win::NULL)
 }
 
 /// [`current_window`] for the buffer mirror.
 #[inline(always)]
 fn current_buffer() -> Buf {
-    current_buf().unwrap_or(Buf::at(::core::ptr::null_mut::<Buffer>(), Handle::NONE))
+    current_buf().unwrap_or(Buf::NULL)
 }
 
 /// Stand in `win` and the buffer it shows, until [`Saved::restore`].
@@ -372,27 +411,33 @@ impl Saved {
     }
 }
 
-/// The block of a window the editor has given up, owned until it goes back.
+/// The slot of a window the editor has given up, held until it is emptied.
 ///
 /// By the time a window is freed its fields have been released one by one
 /// (`win_free`), its handle has left the registry and it is off every list,
-/// so what is left is the memory [`Win::alloc`] took over -- a `Box` of a
-/// `Window` whose contents no longer count. That is what this owns, as
-/// `MaybeUninit`: dropping it gives the block back and runs no destructor.
-/// The free path either drops it at once or parks it in the deferred-free
-/// set while an autocommand runs ([`super::defer_free_window`]).
+/// so what is left is the slot [`Win::alloc`] filled, with a `Window` whose
+/// contents no longer count. That is what this holds: dropping it empties
+/// the slot -- every handle to the window goes stale -- and runs no
+/// destructor, as the `xfree` of the block did not. The free path either
+/// drops it at once or parks it in the deferred-free set while an
+/// autocommand runs ([`super::defer_free_window`]).
 ///
-/// The one way to get one is [`forget_window`], so the only blocks freed
+/// The one way to get one is [`forget_window`], so the only windows emptied
 /// this way are the ones the window registry held.
 #[derive(Debug)]
 pub(crate) struct ParkedWindow {
-    /// Held for its drop alone, which is the free.
-    _block: Box<MaybeUninit<Window>>,
+    slot: SlotRef<Window>,
 }
 
-/// Take the window `handle` names out of the registry for good, answering
-/// its block: dropping the answer frees it. `None` when nothing is
-/// registered under `handle`.
+impl Drop for ParkedWindow {
+    fn drop(&mut self) {
+        Window::pool().with_mut(|pool| pool.forget(self.slot));
+    }
+}
+
+/// Take `win` out of the registry for good, answering its slot: dropping
+/// the answer empties it. `None` when nothing is registered under its
+/// handle.
 ///
 /// The caller must have released the window's fields and unlinked it from
 /// every list first, and must not use any `Win` of it afterwards -- the
@@ -400,24 +445,22 @@ pub(crate) struct ParkedWindow {
 /// window that stays alive out of the registry (the idle autocommand
 /// window) goes through [`super::hide_window`] instead.
 #[must_use = "dropping the answer is the free; ignoring it frees the window at once"]
-pub(crate) fn forget_window(handle: Handle) -> Option<ParkedWindow> {
-    let raw = super::handles::unregister_window(handle)?;
-    // SAFETY: the registry holds only the addresses `register_window` was
-    // given, each a window's block that `Win::alloc` took from a `Box`
-    // (a `Box<MaybeUninit<Window>>` has the same layout); the entry is gone,
-    // so the block is handed out once.
-    Some(ParkedWindow {
-        _block: unsafe { Box::from_raw(raw.cast::<MaybeUninit<Window>>()) },
-    })
+pub(crate) fn forget_window(win: Win) -> Option<ParkedWindow> {
+    super::handles::unregister_window(win).map(|slot| ParkedWindow { slot })
 }
 
 impl Win {
-    /// The handle of a freshly built window, before the allocator has given
-    /// it a handle -- so nothing is read and the handle is zero until
-    /// [`Win::set_handle`]. The block is the window list's from here on:
-    /// [`forget_window`] gives it back, without running its destructor.
-    pub(crate) fn alloc(window: Box<Window>) -> Self {
-        Self::at(Box::into_raw(window), Handle::NONE)
+    /// A window built **in its slot** by `init` (a window is several
+    /// kilobytes; building one and moving it in was a `memcpy` of all of
+    /// it), before the allocator has given it a handle -- so nothing is read
+    /// and the handle is zero until [`Win::set_handle`]. The slot is the
+    /// window list's from here on: [`forget_window`] empties it, without
+    /// running the window's destructor.
+    pub(crate) fn alloc(init: impl FnOnce(&mut MaybeUninit<Window>) -> &mut Window) -> Self {
+        Self::at(
+            Window::pool().with_mut(|pool| pool.insert_with(init)),
+            Handle::NONE,
+        )
     }
 }
 
@@ -439,49 +482,56 @@ impl Win {
 /// Most fields stay zero and are *not* valid buffer state: string options
 /// are null, there are no `b:` variables and no undo information. Only what
 /// the caller fills in afterwards may be read.
-pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
-    let mut storage = Box::<Buffer>::new_zeroed();
-    let at = storage.as_mut_ptr();
-    // The fields a zeroed `Buffer` is *not* a valid value for -- an empty
-    // `Vec` holds a non-null dangling pointer, not a zero one, a `HashMap`
-    // holds a seeded hasher, and an `Option<XString>`'s niche is the
-    // vector's capacity, so all-zero bytes are `Some` of a null vector --
-    // are the user-command list, the keymap, the remembered window
-    // positions, the `'complete'` function callbacks, the buffer's syntax block (`SynBlock::new`), what the
-    // memline owns, the two
-    // extmark tables, the ShaDa extra data (a vector inside an `Option`), the
-    // `U` line, the two 'vartabstop' arrays, the string options and the file
-    // name. The unit case
-    // `buffer::a_fresh_buffer_holds_valid_owners` reads each of them back.
-    // SAFETY: all are inside the block just allocated, nothing has read or
-    // dropped them, and `write` does not drop what was there.
-    unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
-    unsafe { (&raw mut (*at).b_kmap_ga).write(Vec::new()) };
-    unsafe { (&raw mut (*at).b_wininfo).write(Vec::new()) };
-    unsafe { (&raw mut (*at).b_p_cpt_cb).write(Vec::new()) };
-    unsafe { (&raw mut (*at).b_s).write(crate::types::SynBlock::new()) };
-    unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
-    unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
-    unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
-    unsafe { (&raw mut (*at).additional_data).write(None) };
-    unsafe { (&raw mut (*at).b_u_line).write(None) };
-    // The 'vartabstop' arrays: a boxed slice's `None` is a null data
-    // pointer, but only a `Sized` box's niche is promised.
-    unsafe { (&raw mut (*at).b_p_vts_array).write(None) };
-    unsafe { (&raw mut (*at).b_p_vsts_array).write(None) };
-    // ... and the string options, which are `Option<XString>`s.
-    for field in BUF_STRING_OPTIONS {
-        let slot = at.wrapping_byte_add(field.field_offset());
-        // SAFETY: as above; the selector names one such field of the block.
-        unsafe { slot.cast::<Option<XString>>().write(None) };
-    }
-    // ... and the file name, for the same reason: `BufName` holds two of
-    // those `Option<XString>`s and an enum whose niche is one of them.
-    // SAFETY: as above.
-    unsafe { (&raw mut (*at).name).write(BufName::default()) };
-    // SAFETY: all-zero bytes are otherwise what upstream's
-    // `xcalloc(1, sizeof(Buffer))` hands a fresh buffer.
-    Owned::new(unsafe { storage.assume_init() })
+pub(crate) fn alloc_unregistered_buffer() -> SlotBox<Buffer> {
+    SlotBox::new_with(|storage: &mut MaybeUninit<Buffer>| {
+        // A reused slot holds whatever its last tenant left: zero it first,
+        // as `xcalloc` would have.
+        // SAFETY: the place is the slot's, handed over vacant; all-zero bytes
+        // are written over it, and nothing reads them as a `Buffer` until the
+        // fields below are made valid.
+        unsafe { storage.as_mut_ptr().write_bytes(0, 1) };
+        let at = storage.as_mut_ptr();
+        // The fields a zeroed `Buffer` is *not* a valid value for -- an empty
+        // `Vec` holds a non-null dangling pointer, not a zero one, a `HashMap`
+        // holds a seeded hasher, and an `Option<XString>`'s niche is the
+        // vector's capacity, so all-zero bytes are `Some` of a null vector --
+        // are the user-command list, the keymap, the remembered window
+        // positions, the `'complete'` function callbacks, the buffer's syntax
+        // block (`SynBlock::new`), what the memline owns, the two extmark
+        // tables, the ShaDa extra data (a vector inside an `Option`), the `U`
+        // line, the two 'vartabstop' arrays, the string options and the file
+        // name. The unit case `buffer::a_fresh_buffer_holds_valid_owners`
+        // reads each of them back.
+        // SAFETY: all are inside the place just zeroed, nothing has read or
+        // dropped them, and `write` does not drop what was there.
+        unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
+        unsafe { (&raw mut (*at).b_kmap_ga).write(Vec::new()) };
+        unsafe { (&raw mut (*at).b_wininfo).write(Vec::new()) };
+        unsafe { (&raw mut (*at).b_p_cpt_cb).write(Vec::new()) };
+        unsafe { (&raw mut (*at).b_s).write(crate::types::SynBlock::new()) };
+        unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
+        unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
+        unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
+        unsafe { (&raw mut (*at).additional_data).write(None) };
+        unsafe { (&raw mut (*at).b_u_line).write(None) };
+        // The 'vartabstop' arrays: a boxed slice's `None` is a null data
+        // pointer, but only a `Sized` box's niche is promised.
+        unsafe { (&raw mut (*at).b_p_vts_array).write(None) };
+        unsafe { (&raw mut (*at).b_p_vsts_array).write(None) };
+        // ... and the string options, which are `Option<XString>`s.
+        for field in BUF_STRING_OPTIONS {
+            let slot = at.wrapping_byte_add(field.field_offset());
+            // SAFETY: as above; the selector names one such field of the place.
+            unsafe { slot.cast::<Option<XString>>().write(None) };
+        }
+        // ... and the file name, for the same reason: `BufName` holds two of
+        // those `Option<XString>`s and an enum whose niche is one of them.
+        // SAFETY: as above.
+        unsafe { (&raw mut (*at).name).write(BufName::default()) };
+        // SAFETY: all-zero bytes are otherwise what upstream's
+        // `xcalloc(1, sizeof(Buffer))` hands a fresh buffer.
+        unsafe { storage.assume_init_mut() }
+    })
 }
 
 #[cfg(test)]
@@ -537,7 +587,7 @@ mod tests {
         assert_eq!(id.get(), Some(gone));
         free_bare_window(gone);
         assert_eq!(id.get(), None);
-        assert!(forget_window(gone.handle()).is_none(), "freed once");
+        assert!(forget_window(gone).is_none(), "freed once");
         stays.w_cursor.col = ColNr::new(3);
         assert_eq!(
             stays.id().get().map(|win| win.w_cursor.col),

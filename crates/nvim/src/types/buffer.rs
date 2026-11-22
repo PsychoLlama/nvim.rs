@@ -395,7 +395,7 @@ impl BufName {
 }
 
 /// Neither `Copy` nor `Clone`, and now the *owner* of what hangs off it.
-/// The registry holds a buffer as an `allocator::Owned<Buffer>`, so this
+/// The registry holds a buffer as a `slot::SlotBox<Buffer>`, so this
 /// struct is dropped rather than `xfree`d and a field with a destructor
 /// works: the buffer-local user commands are a `Vec` and every `b_p_*`
 /// string option is an `Option<XString>`. Each raw pointer that is left is

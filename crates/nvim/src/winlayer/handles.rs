@@ -37,15 +37,62 @@
 use core::ffi::c_int;
 use core::num::NonZero;
 
-use crate::allocator::Owned;
 use crate::global_cell::GlobalCell;
 use crate::registry::{HandleRegistry, OwnedRegistry, PendingFree};
+use crate::slot::{Pooled, SlotBox, SlotPool, SlotRef};
 use crate::types::{Buffer, Frame, Handle, Tabpage, Window};
 use crate::winlayer::graph::ParkedWindow;
 use crate::winlayer::{Buf, FrameRef, TabPage, Win};
 
+// ---------------------------------------------------------------------------
+// Where the objects live
+//
+// Every window, buffer, tab page and frame is a value in a type-stable slot
+// of its type's pool (`crate::slot`): the slot's memory is never given back,
+// so a handle that outlives its object still points at a slot, whose
+// generation word says whether the object it was made for is still there.
+// Freeing one ends the value in its slot at the moment the `xfree` used to
+// run and moves the generation on.
+
+/// The slots windows live in.
+static WINDOW_SLOTS: GlobalCell<SlotPool<Window>> = GlobalCell::new(SlotPool::new());
+
+/// The slots buffers live in, the two unregistered ones included.
+static BUFFER_SLOTS: GlobalCell<SlotPool<Buffer>> = GlobalCell::new(SlotPool::new());
+
+/// The slots tab pages live in.
+static TABPAGE_SLOTS: GlobalCell<SlotPool<Tabpage>> = GlobalCell::new(SlotPool::new());
+
+/// The slots frames live in, the snapshot trees' included.
+static FRAME_SLOTS: GlobalCell<SlotPool<Frame>> = GlobalCell::new(SlotPool::new());
+
+impl Pooled for Window {
+    fn pool() -> &'static GlobalCell<SlotPool<Self>> {
+        &WINDOW_SLOTS
+    }
+}
+
+impl Pooled for Buffer {
+    fn pool() -> &'static GlobalCell<SlotPool<Self>> {
+        &BUFFER_SLOTS
+    }
+}
+
+impl Pooled for Tabpage {
+    fn pool() -> &'static GlobalCell<SlotPool<Self>> {
+        &TABPAGE_SLOTS
+    }
+}
+
+impl Pooled for Frame {
+    fn pool() -> &'static GlobalCell<SlotPool<Self>> {
+        &FRAME_SLOTS
+    }
+}
+
 /// Every live window, by handle.
-static WINDOWS: GlobalCell<HandleRegistry<Window>> = GlobalCell::new(HandleRegistry::new());
+static WINDOWS: GlobalCell<HandleRegistry<SlotRef<Window>>> =
+    GlobalCell::new(HandleRegistry::new());
 
 /// Every live buffer, by number. The registry **owns** them.
 static BUFFERS: GlobalCell<OwnedRegistry<Buffer>> = GlobalCell::new(OwnedRegistry::new());
@@ -71,7 +118,7 @@ pub(crate) fn window(handle: Handle) -> Option<Win> {
     // window: a lookup answers about an object it never touches.
     WINDOWS
         .with(|reg| reg.get(handle))
-        .map(|raw| Win::at(raw, handle))
+        .map(|slot| Win::at(slot, handle))
 }
 
 /// The buffer numbered `handle`, `None` once it has been wiped.
@@ -80,7 +127,7 @@ pub(crate) fn buffer(handle: Handle) -> Option<Buf> {
     // As [`window`].
     BUFFERS
         .with(|reg| reg.get(handle))
-        .map(|raw| Buf::at(raw, handle))
+        .map(|slot| Buf::at(slot, handle))
 }
 
 /// The tab page `handle` names, `None` once it has been closed.
@@ -89,7 +136,7 @@ pub(crate) fn tabpage(handle: Handle) -> Option<TabPage> {
     // As [`window`].
     TABPAGES
         .with(|reg| reg.get(handle))
-        .map(|raw| TabPage::at(raw, handle))
+        .map(|slot| TabPage::at(slot, handle))
 }
 
 /// The frame `handle` names, `None` once it has been freed.
@@ -98,7 +145,7 @@ pub(crate) fn frame(handle: Handle) -> Option<FrameRef> {
     // As [`window`].
     FRAMES
         .with(|reg| reg.get(handle))
-        .map(|raw| FrameRef::at(raw, handle))
+        .map(|slot| FrameRef::at(slot, handle))
 }
 
 /// Record `win` as the live window its handle names.
@@ -106,8 +153,12 @@ pub(crate) fn frame(handle: Handle) -> Option<FrameRef> {
 /// Called by the window allocator, and again by `aucmd_prepbuf` when it puts
 /// the reused autocommand window back on a list.
 pub(crate) fn register_window(win: Win) {
-    let (handle, raw) = (win.handle(), win.raw());
-    WINDOWS.with_mut(|reg| reg.register(handle, raw));
+    let slot = win.slot().expect("a window being registered is not null");
+    assert!(
+        slot.is_live(),
+        "a window being registered is live in its slot"
+    );
+    WINDOWS.with_mut(|reg| reg.register(win.handle(), slot));
 }
 
 /// Take the window `handle` names out of the registry while it stays alive:
@@ -116,10 +167,15 @@ pub(crate) fn hide_window(handle: Handle) {
     let _ = WINDOWS.with_mut(|reg| reg.forget(handle));
 }
 
-/// Take the window `handle` names out of the registry, answering the address
-/// it held: the free path's half of [`super::graph::forget_window`].
-pub(super) fn unregister_window(handle: Handle) -> Option<*mut Window> {
-    WINDOWS.with_mut(|reg| reg.forget(handle))
+/// Take `win` out of the registry, answering its slot: the free path's half
+/// of [`super::graph::forget_window`].
+pub(super) fn unregister_window(win: Win) -> Option<SlotRef<Window>> {
+    let slot = WINDOWS.with_mut(|reg| reg.forget(win.handle()))?;
+    assert!(
+        same_value(slot, win.raw(), win.generation()),
+        "the window being freed is the one registered under its handle"
+    );
+    Some(slot)
 }
 
 /// Hand `buffer` to the buffer registry, which owns it from here on, and answer
@@ -127,24 +183,35 @@ pub(super) fn unregister_window(handle: Handle) -> Option<*mut Window> {
 ///
 /// Called by the allocator once the buffer's number is assigned — `handle`
 /// is that number, which the caller has already written into the buffer.
-pub(crate) fn register_buffer(handle: Handle, buffer: Owned<Buffer>) -> Buf {
+pub(crate) fn register_buffer(handle: Handle, buffer: SlotBox<Buffer>) -> Buf {
     Buf::at(BUFFERS.with_mut(|reg| reg.register(handle, buffer)), handle)
 }
 
-/// Take the buffer `handle` names out of the registry, handing its
-/// allocation back.
+/// Take `buffer` out of the registry, handing its owner back.
 ///
 /// The first thing a free path does, so that nothing can find the buffer
 /// while it is being torn down. Dropping what this answers is the free
 /// itself; `free_buffer` holds it until the point the `xfree` used to be,
 /// and hands it to [`defer_free_buffer`] when an autocommand is running.
 #[must_use = "dropping the answer is the free; ignoring it leaks the buffer"]
-pub(crate) fn forget_buffer(handle: Handle) -> Option<Owned<Buffer>> {
-    BUFFERS.with_mut(|reg| reg.forget(handle))
+pub(crate) fn forget_buffer(buffer: Buf) -> Option<SlotBox<Buffer>> {
+    let owned = BUFFERS.with_mut(|reg| reg.forget(buffer.handle()))?;
+    assert!(
+        same_value(owned.handle(), buffer.raw(), buffer.generation()),
+        "the buffer being freed is the one registered under its number"
+    );
+    Some(owned)
+}
+
+/// Whether `slot` is the value a handle of address `raw` and generation
+/// `generation` was made for: what the free paths check of the handle they
+/// were given against the registry's.
+fn same_value<T>(slot: SlotRef<T>, raw: *mut T, generation: u32) -> bool {
+    core::ptr::eq(slot.raw(), raw) && slot.generation() == generation
 }
 
 /// [`register_buffer`] for a tab page.
-pub(crate) fn register_tabpage(handle: Handle, tabpage: Owned<Tabpage>) -> TabPage {
+pub(crate) fn register_tabpage(handle: Handle, tabpage: SlotBox<Tabpage>) -> TabPage {
     TabPage::at(
         TABPAGES.with_mut(|reg| reg.register(handle, tabpage)),
         handle,
@@ -153,20 +220,30 @@ pub(crate) fn register_tabpage(handle: Handle, tabpage: Owned<Tabpage>) -> TabPa
 
 /// [`forget_buffer`] for a tab page.
 #[must_use = "dropping the answer is the free; ignoring it leaks the tab page"]
-pub(crate) fn forget_tabpage(handle: Handle) -> Option<Owned<Tabpage>> {
-    TABPAGES.with_mut(|reg| reg.forget(handle))
+pub(crate) fn forget_tabpage(tabpage: TabPage) -> Option<SlotBox<Tabpage>> {
+    let owned = TABPAGES.with_mut(|reg| reg.forget(tabpage.handle()))?;
+    assert!(
+        same_value(owned.handle(), tabpage.raw(), tabpage.generation()),
+        "the tab page being freed is the one registered under its handle"
+    );
+    Some(owned)
 }
 
 /// [`register_buffer`] for a frame. `handle` is the number
 /// `window::new_frame` took from the frame counter and wrote into it.
-pub(crate) fn register_frame(handle: Handle, frame: Owned<Frame>) -> FrameRef {
+pub(crate) fn register_frame(handle: Handle, frame: SlotBox<Frame>) -> FrameRef {
     FrameRef::at(FRAMES.with_mut(|reg| reg.register(handle, frame)), handle)
 }
 
 /// [`forget_buffer`] for a frame.
 #[must_use = "dropping the answer is the free; ignoring it leaks the frame"]
-pub(crate) fn forget_frame(handle: Handle) -> Option<Owned<Frame>> {
-    FRAMES.with_mut(|reg| reg.forget(handle))
+pub(crate) fn forget_frame(frame: FrameRef) -> Option<SlotBox<Frame>> {
+    let owned = FRAMES.with_mut(|reg| reg.forget(frame.handle()))?;
+    assert!(
+        same_value(owned.handle(), frame.raw(), frame.generation()),
+        "the frame being freed is the one registered under its handle"
+    );
+    Some(owned)
 }
 
 // ---------------------------------------------------------------------------
@@ -187,8 +264,8 @@ pub(crate) fn forget_frame(handle: Handle) -> Option<Owned<Frame>> {
 // order within each is still last-deferred-first-freed.
 
 /// Buffers whose allocation is waiting for the outermost autocommand. The
-/// set owns them: it took the [`Owned`] the registry gave the free path.
-static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<Owned<Buffer>>> =
+/// set owns them: it took the [`SlotBox`] the registry gave the free path.
+static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<SlotBox<Buffer>>> =
     GlobalCell::new(PendingFree::new());
 
 /// Windows whose block is waiting for the outermost autocommand. The set
@@ -201,7 +278,7 @@ static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<ParkedWindow>> =
 /// Everything else about the buffer is torn down already and its handle is
 /// out of the registry; what is left is the memory, which this set owns until
 /// [`free_deferred`] drops it. The caller must not use the buffer again.
-pub(crate) fn defer_free_buffer(buffer: Owned<Buffer>) {
+pub(crate) fn defer_free_buffer(buffer: SlotBox<Buffer>) {
     PENDING_FREE_BUFFERS.with_mut(|pending| pending.park(buffer));
 }
 
@@ -220,9 +297,9 @@ pub(crate) fn defer_free_window(block: ParkedWindow) {
 pub(crate) fn free_deferred() {
     // Each allocation was given up by its owner and nothing has reached it
     // since: the handle left the registry before it was parked. Dropping the
-    // buffer's `Owned` runs `Buffer`'s destructor and gives the memory back,
-    // and dropping a `ParkedWindow` gives its block back; both outside the
-    // `with_mut`, so that nothing is borrowed while they run.
+    // buffer's `SlotBox` runs `Buffer`'s destructor in its slot and empties
+    // it, and dropping a `ParkedWindow` empties its window's; both outside
+    // the `with_mut`, so that nothing is borrowed while they run.
     while let Some(buf) = PENDING_FREE_BUFFERS.with_mut(PendingFree::take_next) {
         drop(buf);
     }

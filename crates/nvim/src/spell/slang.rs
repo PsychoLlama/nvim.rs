@@ -36,12 +36,12 @@ use core::cell::{Cell, RefCell};
 use core::ffi::c_int;
 use std::collections::HashMap;
 
-use crate::allocator::Owned;
 use crate::buffer::alloc_unregistered_buffer;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::mbyte::{c_cluster_len, char_at};
 use crate::memline::{ml_close, ml_open, ml_open_file};
 use crate::os::libc::{uint8_t, uint16_t};
+use crate::slot::SlotBox;
 use crate::spell::SpellLang;
 
 use super::{MAXWLEN, MAXWLEN_INT, MAXWORDCOUNT, SY_MAXLEN, SylItem, WordEnd, WordTree};
@@ -398,7 +398,7 @@ pub(crate) fn free_langs() {
 /// it: this value is its only owner. Dropping it closes the memline
 /// (deleting the swap file) and frees the buffer.
 #[derive(Debug)]
-pub struct SpellBuf(Owned<Buffer>);
+pub struct SpellBuf(SlotBox<Buffer>);
 
 impl SpellBuf {
     /// The buffer, to read and append lines through. Live while `self` is.
@@ -410,7 +410,7 @@ impl SpellBuf {
 impl Drop for SpellBuf {
     fn drop(&mut self) {
         ml_close(self.buf(), 1);
-        // The `Owned` frees the buffer once this returns.
+        // The `SlotBox` frees the buffer once this returns.
     }
 }
 

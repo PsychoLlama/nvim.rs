@@ -9,7 +9,7 @@ have to change for it to go.
 
 Rust checks memory safety at compile time everywhere except inside `unsafe`
 code, where the programmer promises what the compiler cannot verify. In this
-tree that code is confined to **65 files**, holding **1,610 unchecked
+tree that code is confined to **65 files**, holding **1,614 unchecked
 statements** — every one of them on the _perimeter_ ([docs/perimeter.md](perimeter.md)),
 the list of modules where the program meets something it does not own. The
 other 1,287 source files of the editor (`crates/nvim/src`, 1,352 files) contain
@@ -84,11 +84,11 @@ unsafe_placement` lists any misplaced attribute (none);
 | `tui/{tui,input,output,events}.rs`          | foreign  |     4 |         69 |            6 | the terminal's libuv handles                     |
 | `xdiff/`                                    | foreign  |     1 |          1 |            0 | `isspace(3)`'s table                             |
 | `os/`                                       | OS       |    14 |        237 |           15 | system calls                                     |
-| `allocator.rs`                              | memory   |     1 |         20 |            4 | the global allocator                             |
+| `allocator.rs`                              | memory   |     1 |         16 |            4 | the global allocator                             |
 | `memory/`                                   | memory   |     4 |         99 |           36 | `xmalloc`, the block pool, owned C strings       |
 | `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
-| `slot.rs`                                   | memory   |     1 |         12 |            0 | type-stable slots and their checked handles      |
-| `winlayer.rs`, `winlayer/`                  | memory   |     5 |         50 |           10 | window, buffer, grid and terminal handles        |
+| `slot.rs`                                   | memory   |     1 |         19 |            2 | type-stable slots and their checked handles      |
+| `winlayer.rs`, `winlayer/`                  | memory   |     5 |         51 |           10 | window, buffer, grid and terminal handles        |
 | `eval/typval/handle.rs`                     | memory   |     1 |         50 |            8 | Vimscript value handles                          |
 | `vterm/abi/`                                | test ABI |     3 |         90 |           31 | libvterm's C interface                           |
 | `harness.rs`                                | test ABI |     1 |          8 |            5 | editor symbols the harnesses resolve             |
@@ -224,7 +224,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 ### `allocator.rs` — the global allocator
 
 - **What:** Rust's global allocator over the same libc `malloc` the
-  `xmalloc` family uses (`malloc`, `posix_memalign`, `realloc`, `free`; 20).
+  `xmalloc` family uses (`malloc`, `posix_memalign`, `realloc`, `free`; 16).
 - **Contract:** because both sides draw from one allocator, a block can cross
   the C boundary in either direction without a copy; adopting a `malloc`
   block as a smaller-capacity `Vec` is sound because `free` and `realloc`
@@ -276,24 +276,29 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 ### `slot.rs` — type-stable slots
 
 - **What:** `SlotPool<T>`, which allocates each slot once and never gives
-  its memory back, and `SlotRef<T>`, a `Copy` handle of the slot's address
-  and the generation its value was handed out under (12): the header reads
-  (generation, index; 2), the value's writes, reads and drop as it enters
-  and leaves a slot (5), and the dereferences of a live handle, a detached
-  slot and the pool's own borrow (5). `IdTable` (`id_table.rs`, forbid) is
-  built on it: its views (the quickfix stacks, the normal-mode frames'
-  operators) are `SlotRef`s.
+  its memory back, `SlotRef<T>`, a `Copy` handle of the slot's address and
+  the generation its value was handed out under, and `SlotBox<T>`, the one
+  owner of a value in its type's pool (19): the header reads (generation,
+  index; 2), the value's writes, reads and drops as it enters and leaves a
+  slot (7), the dereferences of a live handle, a detached slot, a vacant
+  place being filled and the pool's own borrow (6), and the two `unsafe fn`s
+  that take a value address apart (`generation_at`, `SlotRef::from_parts`;
+  the graph handles' constructors from a bare address) with their tests (4).
+  `IdTable` (`id_table.rs`, forbid) is built on it, and so are the window,
+  buffer, tab page and frame pools (`winlayer/handles.rs`, forbid).
 - **Contract:** a slot's value is initialised exactly while its generation
   is odd; every handle is handed an odd generation, and emptying a slot
   moves it on (to even, or to zero for a slot that reached the limit, which
   is never reused). Because the memory stays a `Slot<T>` for the rest of the
   run, reading the generation through any handle ever made is sound, so a
   dereference is one load and one compare, and a stale one panics. A pool
-  has no destructor: every pool is a field of a static. What it does not
-  hold is exclusivity — two copies may lend overlapping `&mut`, as the
-  `winlayer` handles do ([safe-surface.md](safe-surface.md) S5).
+  has no destructor: every pool is a field of a static. A value address
+  handed to `generation_at`/`from_parts` must be a slot's (`SlotRef::raw`).
+  What it does not hold is exclusivity — two copies may lend overlapping
+  `&mut`, as the `winlayer` handles do ([safe-surface.md](safe-surface.md)
+  S5).
 - **Retires:** never; it is the floor the window, buffer and tab page
-  handles move onto.
+  handles stand on.
 
 ### `winlayer.rs`, `winlayer/` — the window, buffer, grid and terminal handles
 

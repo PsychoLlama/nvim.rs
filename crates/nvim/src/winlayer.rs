@@ -27,14 +27,25 @@
 //!
 //! # Who owns the object
 //!
-//! **The buffer and tab page registries own what they hold.** A `Buffer` and
-//! a `Tabpage` are `Box`es the registry took (`allocator::Owned`), so the
-//! free path takes the allocation back with the handle and *drops* it where
-//! the `xfree` used to be — which is what lets a `Buffer` hold a `Vec`.
-//! **Windows are not there yet**: `aucmd_restbuf` takes the autocommand
-//! window out of the registry while it stays alive and `aucmd_prepbuf` puts
-//! it back, so "registered" and "owned" are different lifetimes for a
-//! `Window`. `registry`'s two types say which is which.
+//! **Every window, buffer, tab page and frame lives in a type-stable slot**
+//! of its type's pool ([`crate::slot`], the pools in [`handles`]): the
+//! slot's memory is never given back, so whatever handle outlives its object
+//! still points at a slot, and the slot's generation word says whether the
+//! object the handle was made for is still in it. Each handle carries that
+//! generation beside its address and identity (the 16 bytes it always took);
+//! nothing compares it on a dereference yet.
+//!
+//! **The buffer, tab page and frame registries own what they hold.** Each
+//! holds its objects' [`SlotBox`]es, so the free path takes the owner back
+//! with the handle and *drops* it where the `xfree` used to be -- the value's
+//! destructor runs in its slot, which is what lets a `Buffer` hold a `Vec`,
+//! and the generation moves on. **Windows are not there yet**:
+//! `aucmd_restbuf` takes the autocommand window out of the registry while
+//! it stays alive and `aucmd_prepbuf` puts it back, so "registered" and
+//! "owned" are different lifetimes for a `Window`; its registry holds the
+//! slot's handle, and [`forget_window`] empties the slot without running a
+//! destructor, as the block's `xfree` did. `registry`'s two types say which
+//! is which.
 //!
 //! **The list links are handles all the same.** `b_next`/`b_prev`,
 //! `w_next`/`w_prev` and `tp_next`, and the anchors `FIRSTBUF`/`LASTBUF`,
@@ -47,10 +58,10 @@
 //! before it leaves the registry.** `buflist_new` and `aucmd_prepbuf` were
 //! both the other way round and were swapped for this.
 //!
-//! None of that moves a [`Buf`] or a [`Win`]: `Owned::address` hands back the
-//! pointer it was born with rather than borrowing the table, so the
-//! registry's copy, `CURBUF` and every `w_buffer` are the same pointer. That
-//! is why the table holds an `Owned` rather than a `Box` — see its docs.
+//! None of that moves a [`Buf`] or a [`Win`]: a slot never moves, and a
+//! [`SlotBox`] holds its slot's raw address rather than a `Box` (which would
+//! retag on every move and invalidate the pointers that escaped), so the
+//! registry's copy, `CURBUF` and every `w_buffer` are the same pointer.
 //!
 //! # The re-entry rule
 //!
@@ -169,10 +180,10 @@ use core::num::NonZero;
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 
-use crate::allocator::Owned;
 use crate::drawscreen::redraw_later;
 use crate::mark::mark_mb_adjustpos;
 use crate::memline::ml_get_buf_len;
+use crate::slot::{self, SlotBox, SlotRef};
 use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, SynBlock, Tabpage, Window};
 use crate::winlayer::graph::{CURBUF, CURTAB, curwin};
 
@@ -206,6 +217,10 @@ pub struct Win {
     /// the allocator has not assigned yet — which is what [`Win::id`]
     /// refuses.
     id: Handle,
+    /// The generation of the window's slot when this was made: the value the
+    /// slot's header holds for exactly as long as this window is in it
+    /// ([`crate::slot`]). Zero for a null [`Win`], which no slot holds.
+    generation: u32,
 }
 
 /// A buffer the caller has promised is live. [`Win`]'s shape.
@@ -219,6 +234,8 @@ pub struct Buf {
     ptr: *mut Buffer,
     /// The buffer's number, read while it was live. [`Win`]'s `id`.
     id: Handle,
+    /// Its slot's generation. [`Win`]'s `generation`.
+    generation: u32,
 }
 
 /// A frame of the window layout tree the caller has promised is live.
@@ -232,6 +249,8 @@ pub struct FrameRef {
     ptr: *mut Frame,
     /// The frame's handle, read while it was live. [`Win`]'s `id`.
     id: Handle,
+    /// Its slot's generation. [`Win`]'s `generation`.
+    generation: u32,
 }
 
 /// A tab page the caller has promised is live. [`Win`]'s shape.
@@ -240,6 +259,8 @@ pub struct TabPage {
     ptr: *mut Tabpage,
     /// The tab page's handle, read while it was live. [`Win`]'s `id`.
     id: Handle,
+    /// Its slot's generation. [`Win`]'s `generation`.
+    generation: u32,
 }
 
 // Address equality for all three, hand-written. A derive would compare the
@@ -359,8 +380,9 @@ impl DerefMut for PosRef {
 impl Win {
     /// The window at `raw`, with its identity taken from it.
     ///
-    /// **This reads the window** — its handle — which is exactly what the
-    /// caller's promise makes sound, and is the only read the value will ever
+    /// **This reads the window** — its handle, and its slot's generation —
+    /// which is exactly what the caller's promise makes sound (every window
+    /// lives in a slot of its pool), and is the only read the value will ever
     /// need. A null `raw` is tolerated and carries handle zero: the family's
     /// "or null" spellings route through here.
     ///
@@ -369,13 +391,13 @@ impl Win {
     /// used.
     #[inline(always)]
     pub unsafe fn new(raw: *mut Window) -> Self {
-        // SAFETY: the caller's promise, and the null test that precedes it.
-        let id = if raw.is_null() {
-            Handle::NONE
-        } else {
-            unsafe { (*raw).handle }
-        };
-        Self { ptr: raw, id }
+        if raw.is_null() {
+            return Self::from_parts(raw, Handle::NONE, 0);
+        }
+        // SAFETY: the caller's promise: a live object, which lives in a slot
+        // of its type's pool.
+        let (id, generation) = unsafe { ((*raw).handle, slot::generation_at(raw)) };
+        Self::from_parts(raw, id, generation)
     }
 
     /// The window `raw` names, `None` for null.
@@ -390,16 +412,41 @@ impl Win {
     }
 
     /// The null window. [`Buf::NULL`].
-    pub(crate) const NULL: Self = Self::at(ptr::null_mut(), Handle::NONE);
+    pub(crate) const NULL: Self = Self::from_parts(ptr::null_mut(), Handle::NONE, 0);
 
-    /// The window at `raw` with `handle` already known — a registry entry —
+    /// The window in slot `r` with `handle` already known — a registry entry —
     /// so **nothing is read**.
     #[inline(always)]
-    pub(super) const fn at(raw: *mut Window, handle: Handle) -> Self {
+    pub(super) fn at(r: SlotRef<Window>, handle: Handle) -> Self {
+        Self::from_parts(r.raw(), handle, r.generation())
+    }
+
+    /// The handle with every part already known: the current-window mirror
+    /// and its identity, or the null handle.
+    #[inline(always)]
+    pub(super) const fn from_parts(raw: *mut Window, handle: Handle, generation: u32) -> Self {
         Self {
             ptr: raw,
             id: handle,
+            generation,
         }
+    }
+
+    /// The generation of the slot this was made from. [`crate::slot`].
+    #[inline(always)]
+    pub(crate) fn generation(self) -> u32 {
+        self.generation
+    }
+
+    /// The slot this was made from, under the generation it was made with;
+    /// `None` for the null handle.
+    #[inline(always)]
+    pub(super) fn slot(self) -> Option<SlotRef<Window>> {
+        // SAFETY: every non-null handle's address is its slot's value
+        // address: `at` takes it from a `SlotRef`, `new` from a live object
+        // (which lives in its pool), and `from_parts` from the mirror the
+        // funnel wrote out of a handle.
+        (!self.ptr.is_null()).then(|| unsafe { SlotRef::from_parts(self.ptr, self.generation) })
     }
 
     /// The window the editor is working in.
@@ -575,13 +622,13 @@ impl Buf {
     /// used.
     #[inline(always)]
     pub unsafe fn new(raw: *mut Buffer) -> Self {
-        // SAFETY: the caller's promise, and the null test that precedes it.
-        let id = if raw.is_null() {
-            Handle::NONE
-        } else {
-            unsafe { (*raw).handle }
-        };
-        Self { ptr: raw, id }
+        if raw.is_null() {
+            return Self::from_parts(raw, Handle::NONE, 0);
+        }
+        // SAFETY: the caller's promise: a live object, which lives in a slot
+        // of its type's pool.
+        let (id, generation) = unsafe { ((*raw).handle, slot::generation_at(raw)) };
+        Self::from_parts(raw, id, generation)
     }
 
     /// The buffer `raw` names, `None` for null.
@@ -599,22 +646,38 @@ impl Buf {
     /// that never will be. The owner keeps it live, so reading its number is
     /// sound; the handle is good for as long as the owner is kept.
     #[inline]
-    pub(crate) fn owned_by(owner: &Owned<Buffer>) -> Self {
-        // SAFETY: an `Owned` holds a live allocation until it is dropped.
-        unsafe { Self::new(owner.address()) }
+    pub(crate) fn owned_by(owner: &SlotBox<Buffer>) -> Self {
+        let r = owner.handle();
+        // SAFETY: a `SlotBox` holds a live value until it is dropped.
+        let id = unsafe { (*r.raw()).handle };
+        Self::at(r, id)
     }
 
     /// The null buffer: the initial value of a context field that a caller
     /// fills in before anything reads it.
-    pub(crate) const NULL: Self = Self::at(ptr::null_mut(), Handle::NONE);
+    pub(crate) const NULL: Self = Self::from_parts(ptr::null_mut(), Handle::NONE, 0);
 
     /// [`Win::at`] for a buffer.
     #[inline(always)]
-    pub(super) const fn at(raw: *mut Buffer, handle: Handle) -> Self {
+    pub(super) fn at(r: SlotRef<Buffer>, handle: Handle) -> Self {
+        Self::from_parts(r.raw(), handle, r.generation())
+    }
+
+    /// The handle with every part already known: the current-window mirror
+    /// and its identity, or the null handle.
+    #[inline(always)]
+    pub(super) const fn from_parts(raw: *mut Buffer, handle: Handle, generation: u32) -> Self {
         Self {
             ptr: raw,
             id: handle,
+            generation,
         }
+    }
+
+    /// The generation of the slot this was made from. [`crate::slot`].
+    #[inline(always)]
+    pub(crate) fn generation(self) -> u32 {
+        self.generation
     }
 
     /// The buffer the editor is working in. [`Win::current`].
@@ -767,29 +830,45 @@ impl TabPage {
     /// is used.
     #[inline(always)]
     pub unsafe fn new(raw: *mut Tabpage) -> Self {
-        // SAFETY: the caller's promise, and the null test that precedes it.
-        let id = if raw.is_null() {
-            Handle::NONE
-        } else {
-            unsafe { (*raw).handle }
-        };
-        Self { ptr: raw, id }
+        if raw.is_null() {
+            return Self::from_parts(raw, Handle::NONE, 0);
+        }
+        // SAFETY: the caller's promise: a live object, which lives in a slot
+        // of its type's pool.
+        let (id, generation) = unsafe { ((*raw).handle, slot::generation_at(raw)) };
+        Self::from_parts(raw, id, generation)
     }
 
     /// [`Buf::owned_by`] for a tab page.
     #[inline]
-    pub(crate) fn owned_by(owner: &Owned<Tabpage>) -> Self {
-        // SAFETY: an `Owned` holds a live allocation until it is dropped.
-        unsafe { Self::new(owner.address()) }
+    pub(crate) fn owned_by(owner: &SlotBox<Tabpage>) -> Self {
+        let r = owner.handle();
+        // SAFETY: a `SlotBox` holds a live value until it is dropped.
+        let id = unsafe { (*r.raw()).handle };
+        Self::at(r, id)
     }
 
     /// [`Win::at`] for a tab page.
     #[inline(always)]
-    pub(super) const fn at(raw: *mut Tabpage, handle: Handle) -> Self {
+    pub(super) fn at(r: SlotRef<Tabpage>, handle: Handle) -> Self {
+        Self::from_parts(r.raw(), handle, r.generation())
+    }
+
+    /// The handle with every part already known: the current-window mirror
+    /// and its identity, or the null handle.
+    #[inline(always)]
+    pub(super) const fn from_parts(raw: *mut Tabpage, handle: Handle, generation: u32) -> Self {
         Self {
             ptr: raw,
             id: handle,
+            generation,
         }
+    }
+
+    /// The generation of the slot this was made from. [`crate::slot`].
+    #[inline(always)]
+    pub(crate) fn generation(self) -> u32 {
+        self.generation
     }
 
     /// The tab page `raw` names, `None` for null — which is how the window

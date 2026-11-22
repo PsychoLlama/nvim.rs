@@ -112,10 +112,9 @@ mod write {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     use std::path::PathBuf;
 
+    use neovim::buffer::ScratchBuffer;
     use neovim::memory::XString;
     use neovim::option::vars::P_UDIR;
-    use neovim::optionstr::BUF_STRING_OPTIONS;
-    use neovim::types::{BufName, Buffer};
     use neovim::undo::format::UF_START_MAGIC;
     use neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
     use neovim::winlayer::Buf;
@@ -133,7 +132,7 @@ mod write {
         // other and against nothing else.
         _guard: Editor,
         dir: PathBuf,
-        buf: Box<Buffer>,
+        buf: ScratchBuffer,
         hash: [u8; UNDO_HASH_SIZE as usize],
         // Owns the bytes `p_udir` points at for the case's life; the
         // buffer's own name it owns itself.
@@ -154,26 +153,10 @@ mod write {
             // `buflist_new()` leaves a fresh buffer synced with no undo
             // header; the spec then set `b_u_numhead` to pretend the buffer
             // had been changed, which is what makes the writer write.
-            let mut buf: Box<Buffer> = {
-                let mut storage = Box::<Buffer>::new_zeroed();
-                // SAFETY: all-zero bytes are what upstream's `xcalloc` hands
-                // a fresh buffer, except for `b_ucmds`, whose empty `Vec`
-                // holds a non-null dangling pointer, and the string
-                // options and the `U` line, whose `Option<XString>` reads as
-                // a `Some` over a null pointer when zeroed. Both are written before
-                // anything can read or drop them -- and this fixture's
-                // buffer *is* dropped, so a garbage `Some` would be freed.
-                unsafe {
-                    (&raw mut (*storage.as_mut_ptr()).b_ucmds).write(Vec::new());
-                    (&raw mut (*storage.as_mut_ptr()).name).write(BufName::default());
-                    (&raw mut (*storage.as_mut_ptr()).b_u_line).write(None);
-                    for field in BUF_STRING_OPTIONS {
-                        let at = storage.as_mut_ptr().wrapping_byte_add(field.field_offset());
-                        at.cast::<Option<XString>>().write(None);
-                    }
-                    storage.assume_init()
-                }
-            };
+            // A zeroed buffer nobody numbers or lists, freed with the
+            // fixture.
+            let scratch = ScratchBuffer::new();
+            let mut buf = scratch.buf();
             buf.b_u_synced = true;
             buf.b_u_numhead = 1;
 
@@ -192,14 +175,13 @@ mod write {
             let mut fixture = Fixture {
                 _guard: guard,
                 dir,
-                buf,
+                buf: scratch,
                 hash: [0; UNDO_HASH_SIZE as usize],
                 _udir: udir,
                 old_udir,
                 old_synced,
             };
-            // SAFETY: the buffer is live.
-            let buf = unsafe { Buf::new(&raw mut *fixture.buf) };
+            let buf = fixture.buf.buf();
             u_compute_hash(buf, &mut fixture.hash);
             fixture
         }
@@ -212,12 +194,12 @@ mod write {
         /// absolute name, which is what `u_get_undo_file_name` mangles.
         fn set_ffname(&mut self, path: &std::path::Path) {
             let ffname = CString::new(path.to_str().unwrap()).unwrap();
-            self.buf.name.set(XString::from_cstr(&ffname), None);
+            self.buf.buf().name.set(XString::from_cstr(&ffname), None);
         }
 
         /// Where `u_write_undo(NULL, ..)` puts this buffer's undo file.
         fn undo_file_name(&self) -> PathBuf {
-            let name = u_get_undo_file_name(self.buf.name.full(), false)
+            let name = u_get_undo_file_name(self.buf.buf().name.full(), false)
                 .expect("no undo file name for the buffer");
             PathBuf::from(String::from_utf8(name.to_vec()).unwrap())
         }
@@ -225,8 +207,7 @@ mod write {
         /// `u_write_undo(name, forceit, buf, hash)`.
         fn write(&mut self, name: Option<&std::path::Path>, forceit: bool) {
             let name = name.map(|p| CString::new(p.to_str().unwrap()).unwrap());
-            // SAFETY: the buffer is the fixture's, and live.
-            let buf = unsafe { Buf::new(&raw mut *self.buf) };
+            let buf = self.buf.buf();
             u_write_undo(name.as_deref(), forceit, buf, &self.hash);
         }
     }
@@ -350,7 +331,7 @@ mod write {
         let first = fs::File::open(&written).unwrap();
         let first_meta = first.metadata().unwrap();
 
-        fixture.buf.b_u_numhead = 1; // Mark it as if there are changes again.
+        fixture.buf.buf().b_u_numhead = 1; // Mark it as if there are changes again.
         fixture.write(None, false);
 
         let replaced = first.metadata().unwrap();
@@ -366,7 +347,7 @@ mod write {
     fn nothing_is_written_when_the_buffer_has_no_undo_information() {
         let mut fixture = Fixture::new("nothing");
         fixture.set_ffname(&fixture.path("Xtest-unit-undo"));
-        fixture.buf.b_u_numhead = 0;
+        fixture.buf.buf().b_u_numhead = 0;
 
         let written = fixture.undo_file_name();
         assert!(!written.exists());

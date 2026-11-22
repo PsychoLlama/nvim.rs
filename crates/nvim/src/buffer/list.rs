@@ -24,7 +24,6 @@ use crate::cstr;
 use core::ffi::{CStr, c_int};
 
 use super::*;
-use crate::allocator::Owned;
 use crate::cursor::{check_cursor_col, check_cursor_lnum};
 use crate::diff::diff_mode_buf;
 use crate::eval::typval::callback_free;
@@ -56,6 +55,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::RE_MAGIC;
 use crate::regexp::RegMatch;
 use crate::semsg;
+use crate::slot::SlotBox;
 use crate::types::{
     Buffer, Callback, ColNr, Failed, Handle, LineNr, OptInt, Pos, Timestamp, VAR_SCOPE, WinInfo,
 };
@@ -279,7 +279,7 @@ fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> Option<Buf> {
 ///
 /// The allocation is the caller's until [`Buf::append_to_list`] hands it to the
 /// registry, which owns every buffer that has a number.
-fn new_buffer() -> Owned<Buffer> {
+fn new_buffer() -> SlotBox<Buffer> {
     // A zeroed `Buffer` is what upstream starts one from; `append_to_list`
     // gives it its number and puts it in the registry.
     let owned = alloc_unregistered_buffer();
@@ -289,6 +289,31 @@ fn new_buffer() -> Owned<Buffer> {
     buf.b_bufvar = new_var_scope(VAR_SCOPE);
     buf_init_changedtick(buf);
     owned
+}
+
+/// A zeroed buffer nobody numbers, registers or lists -- what
+/// [`alloc_unregistered_buffer`] makes -- freed (its destructor run) when this
+/// is dropped. For the unit suite's fixtures, which hand a callee a buffer
+/// the editor's lists know nothing of.
+#[derive(Debug)]
+pub struct ScratchBuffer(SlotBox<Buffer>);
+
+impl ScratchBuffer {
+    /// A fresh one.
+    pub fn new() -> Self {
+        ScratchBuffer(alloc_unregistered_buffer())
+    }
+
+    /// The buffer, live while `self` is.
+    pub fn buf(&self) -> Buf {
+        Buf::owned_by(&self.0)
+    }
+}
+
+impl Default for ScratchBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// A registered buffer holding nothing — no memline, no `b:` dictionary —
@@ -309,7 +334,7 @@ pub(crate) fn bare_buffer() -> Buf {
 #[cfg(test)]
 pub(crate) fn free_bare_buffer(buffer: Buf) {
     free_buf_options(buffer, true);
-    drop(crate::winlayer::forget_buffer(buffer.handle));
+    drop(crate::winlayer::forget_buffer(buffer));
 }
 
 impl Buf {
@@ -320,7 +345,7 @@ impl Buf {
     /// the number it was built with, and the caller's was built before there was
     /// one, so it must take this one back or its `id()` names nothing.
     #[must_use = "the caller's Buf predates the number; use the one this answers"]
-    fn append_to_list(mut self, owned: Owned<Buffer>) -> Buf {
+    fn append_to_list(mut self, owned: SlotBox<Buffer>) -> Buf {
         // The number and the registry entry come first, ahead of upstream's
         // order: from here on `buffer.id()` names the buffer, and the list links
         // are made of exactly that. Nothing between the two reads either.

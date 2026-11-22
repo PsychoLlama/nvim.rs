@@ -35,7 +35,6 @@ use crate::winlayer::WinId;
 use core::ffi::c_int;
 
 use super::*;
-use crate::allocator::Owned;
 use crate::autocmd::aubuflocal_remove;
 use crate::autocmd::state::AUTOCMD_BUSY;
 use crate::buffer_updates::{buf_free_callbacks, buf_updates_unload};
@@ -52,6 +51,7 @@ use crate::normal::visual_active;
 use crate::optionstr::OptString;
 use crate::pos::MAXLNUM;
 use crate::semsg;
+use crate::slot::SlotBox;
 use crate::startup::EXITING;
 use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
@@ -217,10 +217,10 @@ fn forget_autocmds(buffer: Buf) {
 /// promise that everything in it is live. Dropping what this answers is the
 /// free; [`free_buffer`] holds it until the point the `xfree` used to be.
 #[must_use = "dropping the answer is the free"]
-fn forget_handle(fnum: Handle) -> Owned<Buffer> {
+fn forget_handle(buffer: Buf) -> SlotBox<Buffer> {
     // Every buffer reaching a free path was registered when it was given its
     // number, and a number is given exactly once.
-    forget_buffer(fnum).expect("a buffer being freed is a registered buffer")
+    forget_buffer(buffer).expect("a buffer being freed is a registered buffer")
 }
 
 // ---------------------------------------------------------------------------
@@ -741,7 +741,7 @@ fn announce_unload(mut buffer: Buf, flags: c_int) -> Option<Buf> {
 fn free_buffer(mut buffer: Buf) {
     // The allocation, out of the registry from here on. `buffer` is still the
     // address to work through; `owned` is only who gives the memory back.
-    let owned = forget_handle(buffer.handle());
+    let owned = forget_handle(buffer);
     note_buffer_freed();
     // b:changedtick uses an item in Buffer.
     free_buffer_stuff(buffer, BFF_CLEAR_WIN_INFO);

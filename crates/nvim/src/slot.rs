@@ -53,9 +53,11 @@
 
 use core::cell::{Cell, UnsafeCell};
 use core::fmt;
-use core::mem::{MaybeUninit, offset_of};
+use core::mem::{ManuallyDrop, MaybeUninit, offset_of};
 use core::ops::{Deref, DerefMut};
-use core::ptr::NonNull;
+use core::ptr::{self, NonNull};
+
+use crate::global_cell::GlobalCell;
 
 /// The highest generation a slot is handed out under; emptying a slot that
 /// reached it retires the slot.
@@ -111,6 +113,27 @@ fn index_of<T>(slot: NonNull<Slot<T>>) -> u32 {
             .cast::<u32>()
             .read()
     }
+}
+
+/// The generation word of the slot whose value is at `value`, read now.
+///
+/// For the constructors that are handed a bare value address (`Win::new`
+/// and its siblings): what they promise is a live value, and a live value's
+/// slot holds the generation it was handed out under.
+///
+/// # Safety
+/// `value` must be the address of a slot's value -- [`SlotRef::raw`] of a
+/// handle of some `SlotPool<T>`, or derived from it with its provenance --
+/// and nothing else.
+#[inline(always)]
+pub(crate) unsafe fn generation_at<T>(value: *const T) -> u32 {
+    let slot = value
+        .wrapping_byte_sub(offset_of!(Slot<T>, value))
+        .cast::<Cell<u32>>();
+    // SAFETY: the caller's promise makes `slot` a slot's address, carrying
+    // the slot's provenance (`value_ptr` derived the value's address from
+    // it); a slot's memory is never given back, and its header is a `Cell`.
+    unsafe { (*slot).get() }
 }
 
 #[cold]
@@ -187,6 +210,28 @@ impl<T> SlotRef<T> {
         value_ptr(self.slot)
     }
 
+    /// The handle to the slot whose value is at `value`, under
+    /// `generation`: the parts [`SlotRef::raw`] and
+    /// [`SlotRef::generation`] took apart, put back together. Reads
+    /// nothing; whether the value is still there is [`SlotRef::is_live`]'s
+    /// question, as for any handle.
+    ///
+    /// # Safety
+    /// `value` must be [`SlotRef::raw`] of a handle of some `SlotPool<T>`
+    /// (or derived from it with its provenance).
+    #[inline(always)]
+    pub(crate) unsafe fn from_parts(value: *mut T, generation: u32) -> Self {
+        let slot = value
+            .wrapping_byte_sub(offset_of!(Slot<T>, value))
+            .cast::<Slot<T>>();
+        SlotRef {
+            // SAFETY: the caller's promise makes it a slot's address, which
+            // is never null.
+            slot: unsafe { NonNull::new_unchecked(slot) },
+            generation,
+        }
+    }
+
     /// Panic unless the value is still there.
     #[inline(always)]
     #[track_caller]
@@ -256,6 +301,18 @@ impl<T> Drop for Detached<T> {
         // nothing reads it after, as no handle names the slot and it is on
         // no vacant list.
         unsafe { value_ptr(self.slot).drop_in_place() }
+    }
+}
+
+impl<T> Detached<T> {
+    /// Drop the value where it is, answering the slot, now vacant and named
+    /// by nothing, for [`SlotPool::reclaim`].
+    fn empty(self) -> NonNull<Slot<T>> {
+        let slot = ManuallyDrop::new(self).slot;
+        // SAFETY: as `Drop`: initialised, owned by this alone, and read by
+        // nothing after (the generation already moved on in `detach`).
+        unsafe { value_ptr(slot).drop_in_place() };
+        slot
     }
 }
 
@@ -352,6 +409,34 @@ impl<T> SlotPool<T> {
         Self::occupy(slot)
     }
 
+    /// Take a value built **in its slot** by `init`, answering its handle:
+    /// for values large enough that building one and moving it in would be a
+    /// copy of all of it. `init` is handed the vacant place (whatever bytes a
+    /// previous tenant left there) and answers it initialised -- the
+    /// reference `MaybeUninit::write` or `assume_init_mut` gives back.
+    ///
+    /// # Panics
+    /// When `init` answers any other place than the one it was handed.
+    pub(crate) fn insert_with(
+        &mut self,
+        init: impl FnOnce(&mut MaybeUninit<T>) -> &mut T,
+    ) -> SlotRef<T> {
+        let slot = self.take_vacant();
+        // SAFETY: the slot is vacant, so no handle reaches its value; this
+        // borrow is the only one, and it ends with `init`.
+        let place = unsafe { &mut *value_ptr(slot).cast::<MaybeUninit<T>>() };
+        let at = place.as_mut_ptr();
+        let filled: *mut T = init(place);
+        // `init` can only answer this place initialised by writing it (or by
+        // an `unsafe` claim of its own); any other answer leaves the slot
+        // off the vacant list and handed to no one.
+        assert!(
+            ptr::eq(filled, at),
+            "a slot initialiser answered another place"
+        );
+        Self::occupy(slot)
+    }
+
     /// The handle to the value in slot `index` under `generation`, `None`
     /// when that value is gone (or never was).
     pub(crate) fn lookup(&self, index: u32, generation: u32) -> Option<SlotRef<T>> {
@@ -406,7 +491,7 @@ impl<T> SlotPool<T> {
     /// # Panics
     /// When `d` is another pool's.
     pub(crate) fn attach(&mut self, d: Detached<T>) -> SlotRef<T> {
-        let slot = core::mem::ManuallyDrop::new(d).slot;
+        let slot = ManuallyDrop::new(d).slot;
         assert!(
             self.slots.get(index_of(slot) as usize) == Some(&slot),
             "a detached slot from another pool"
@@ -426,7 +511,7 @@ impl<T> SlotPool<T> {
     /// # Panics
     /// When `d` is another pool's.
     pub(crate) fn release(&mut self, d: Detached<T>) -> T {
-        let slot = core::mem::ManuallyDrop::new(d).slot;
+        let slot = ManuallyDrop::new(d).slot;
         assert!(
             self.slots.get(index_of(slot) as usize) == Some(&slot),
             "a detached slot from another pool"
@@ -459,6 +544,18 @@ impl<T> SlotPool<T> {
         }
     }
 
+    /// A slot [`Detached::empty`] emptied, back onto the vacant list unless
+    /// it retired.
+    fn reclaim(&mut self, slot: NonNull<Slot<T>>) {
+        assert!(
+            self.slots.get(index_of(slot) as usize) == Some(&slot),
+            "a detached slot from another pool"
+        );
+        if header(slot).get() != RETIRED_GENERATION {
+            self.vacant.push(index_of(slot));
+        }
+    }
+
     /// Set `r`'s slot's generation, for the retirement tests.
     #[cfg(test)]
     fn rewind(r: &mut SlotRef<T>, generation: u32) {
@@ -467,10 +564,67 @@ impl<T> SlotPool<T> {
     }
 }
 
+/// A type whose values live in one pool, a static: what lets a
+/// [`SlotBox`] give its value back without being handed the pool.
+pub(crate) trait Pooled: Sized + 'static {
+    /// The pool every value of this type lives in.
+    fn pool() -> &'static GlobalCell<SlotPool<Self>>;
+}
+
+/// The owner of one value in its type's pool: `Box`'s shape, with the value
+/// in a type-stable slot. Dropping it ends the value **in place** -- its
+/// handles go stale first, then its destructor runs, outside any borrow of
+/// the pool, then the slot is vacant for the next value.
+///
+/// Not `Copy`, and the one owner: [`SlotBox::handle`] hands out the
+/// `Copy` handles everything else works through.
+pub(crate) struct SlotBox<T: Pooled> {
+    slot: SlotRef<T>,
+}
+
+impl<T: Pooled> SlotBox<T> {
+    /// `value`, moved into a slot of its pool.
+    pub(crate) fn new(value: T) -> Self {
+        SlotBox {
+            slot: T::pool().with_mut(|pool| pool.insert(value)),
+        }
+    }
+
+    /// A value built in its slot. [`SlotPool::insert_with`], panic
+    /// included; `init` runs with the pool borrowed, so it must not reach
+    /// the pool itself.
+    pub(crate) fn new_with(init: impl FnOnce(&mut MaybeUninit<T>) -> &mut T) -> Self {
+        SlotBox {
+            slot: T::pool().with_mut(|pool| pool.insert_with(init)),
+        }
+    }
+
+    /// The handle to the value, good for as long as this owner is kept.
+    #[inline(always)]
+    pub(crate) fn handle(&self) -> SlotRef<T> {
+        self.slot
+    }
+}
+
+impl<T: Pooled> Drop for SlotBox<T> {
+    fn drop(&mut self) {
+        let detached = T::pool().with_mut(|pool| pool.detach(self.slot));
+        // The destructor runs with the pool let go: it may free values of
+        // its own type.
+        let slot = detached.empty();
+        T::pool().with_mut(|pool| pool.reclaim(slot));
+    }
+}
+
+impl<T: Pooled> fmt::Debug for SlotBox<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SlotBox({:?})", self.slot)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::global_cell::GlobalCell;
 
     // Pools live in statics, as the editor's do: a pool leaks its slots on
     // purpose, and Miri counts what a static reaches as live.
@@ -589,5 +743,85 @@ mod tests {
         POOL.with_mut(|pool| *pool.get_mut(a) += 1);
         assert_eq!(*a, 2);
         POOL.with_mut(|pool| pool.forget(a));
+    }
+
+    #[test]
+    fn a_value_built_in_its_slot_reads_back() {
+        static POOL: GlobalCell<SlotPool<[u32; 4]>> = GlobalCell::new(SlotPool::new());
+        let a = POOL.with_mut(|pool| pool.insert_with(|place| place.write([1, 2, 3, 4])));
+        assert_eq!(*a, [1, 2, 3, 4]);
+        // SAFETY: `a.raw()` is a slot's value address.
+        assert_eq!(unsafe { generation_at(a.raw()) }, a.generation());
+        POOL.with_mut(|pool| pool.forget(a));
+        // SAFETY: as above; the slot outlives its value.
+        assert_ne!(unsafe { generation_at(a.raw()) }, a.generation());
+    }
+
+    /// Counts the drops of the boxed values below.
+    static DROPS: GlobalCell<u32> = GlobalCell::new(0);
+
+    struct Counted(u32);
+
+    impl Drop for Counted {
+        fn drop(&mut self) {
+            DROPS.set(DROPS.get() + 1);
+        }
+    }
+
+    impl Pooled for Counted {
+        fn pool() -> &'static GlobalCell<SlotPool<Self>> {
+            static POOL: GlobalCell<SlotPool<Counted>> = GlobalCell::new(SlotPool::new());
+            &POOL
+        }
+    }
+
+    #[test]
+    fn dropping_a_slot_box_drops_its_value_in_place_and_frees_the_slot() {
+        let owner = SlotBox::new(Counted(7));
+        let handle = owner.handle();
+        assert_eq!(handle.0, 7);
+        assert_eq!(DROPS.get(), 0);
+        drop(owner);
+        assert_eq!(DROPS.get(), 1);
+        assert!(!handle.is_live());
+        // The slot is reused for the next value.
+        let next = SlotBox::new_with(|place| place.write(Counted(8)));
+        assert_eq!(next.handle().raw(), handle.raw());
+        assert_eq!(next.handle().0, 8);
+        drop(next);
+        assert_eq!(DROPS.get(), 2);
+    }
+
+    /// **The shape `free_buffer` has**: an address is taken out while the
+    /// value is filed (that is `CURBUF`), the table holding the owner then
+    /// changes under it, the free path takes the owner out, keeps working
+    /// through the *address*, and drops at the end. With `Vec<Box<T>>` this
+    /// is undefined behaviour -- the `Box` that comes out is retagged, and
+    /// the write through the escaped address invalidates it -- under Stacked
+    /// and Tree Borrows alike. A `SlotBox` holds the slot's raw address and
+    /// has no retag to invalidate; this keeps it so under `just
+    /// miri-perimeter`.
+    #[test]
+    fn an_address_survives_the_table_changing_and_the_owner_leaving_it() {
+        struct Marked(u64);
+
+        impl Pooled for Marked {
+            fn pool() -> &'static GlobalCell<SlotPool<Self>> {
+                static POOL: GlobalCell<SlotPool<Marked>> = GlobalCell::new(SlotPool::new());
+                &POOL
+            }
+        }
+
+        let mut table = vec![SlotBox::new(Marked(0))];
+        let escaped = table[0].handle().raw();
+        table.push(SlotBox::new(Marked(1)));
+        let owned = table.swap_remove(0);
+        // SAFETY: the value is alive -- `owned` holds it -- and `escaped` is
+        // the address its slot gives, which nothing has retagged.
+        unsafe { (*escaped).0 = 42 };
+        assert_eq!(owned.handle().raw(), escaped);
+        assert_eq!(owned.handle().0, 42);
+        drop(owned);
+        drop(table);
     }
 }

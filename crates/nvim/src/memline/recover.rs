@@ -19,7 +19,6 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::allocator::Owned;
 use crate::autocmd::fire_autocmds_for;
 use crate::buffer::{BufFlags, alloc_unregistered_buffer};
 use crate::cstr;
@@ -30,6 +29,7 @@ use crate::memfile::{BlockId, MAX_SWAP_PAGE_SIZE, MemFile};
 use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
 use crate::os::fs::file_info;
+use crate::slot::SlotBox;
 use crate::smsg;
 use crate::types::{ApiString, Failed};
 use core::ffi::{CStr, c_int, c_long, c_uint};
@@ -118,7 +118,7 @@ struct Recovery {
     /// registry, so this frame is its owner; `buf` is only the handle the
     /// memline code works through. Its memline owns the memfile on the old
     /// swap file, and closing that is this frame's job too.
-    owned: Option<Owned<Buffer>>,
+    owned: Option<SlotBox<Buffer>>,
     buf: Option<Buf>,
     /// Nothing was recovered yet, so a failure leaves the buffer with no
     /// memline at all.

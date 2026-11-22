@@ -28,7 +28,6 @@ use core::ffi::CStr;
 use core::ffi::c_int;
 
 use super::*;
-use crate::allocator::Owned;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::diff::state::DIFF_NEED_SCROLLBIND;
 use crate::drawscreen::UPD_NOT_VALID;
@@ -47,6 +46,7 @@ use crate::option::set_option_value;
 use crate::option::vars::{p_ch, p_tpm};
 use crate::options::OPT_CMDHEIGHT;
 use crate::os::libc::int64_t;
+use crate::slot::SlotBox;
 use crate::startup::starting;
 use crate::tag::state::POSTPONED_SPLIT_TAB;
 use crate::types::{Failed, Handle, OptInt, SwitchWin, Tabpage, VAR_SCOPE};
@@ -92,7 +92,7 @@ pub(crate) fn adopt_tabpage(tabpage: TabPage) {
 pub(crate) fn alloc_tabpage() -> TabPage {
     static LAST_TP_HANDLE: GlobalCell<c_int> = GlobalCell::new(0);
     // What upstream's `xcalloc(1, sizeof(tabpage_T))` zero bytes stand for.
-    let owned = Owned::new(Box::new(Tabpage {
+    let owned = SlotBox::new(Tabpage {
         handle: Handle::NONE,
         tp_next: None,
         tp_topframe: None,
@@ -113,7 +113,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
         tp_winvar: ScopeDictItem::EMPTY,
         tp_localdir: None,
         tp_prevdir: None,
-    }));
+    });
     // `owned` keeps it alive until the registry takes it over two lines
     // below.
     let mut tp = TabPage::owned_by(&owned);
@@ -138,8 +138,7 @@ pub(crate) fn free_tab(tabpage: TabPage) {
     // The allocation, out of the registry from here on. `tabpage` is still the
     // address to work through; `owned` is only who gives the memory back.
     // Every tab page reaching here was registered by `alloc_tabpage`.
-    let owned =
-        forget_tabpage(tabpage.handle()).expect("a tab page being freed is a registered one");
+    let owned = forget_tabpage(tabpage).expect("a tab page being freed is a registered one");
     for idx in 0..SNAP_COUNT {
         drop_snapshot(tabpage, idx);
     }

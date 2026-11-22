@@ -106,9 +106,8 @@ const ZERO_TAGGY: Taggy = Taggy {
 fn zeroed_window() -> Win {
     // Written into its block rather than built and moved: a window is
     // several kilobytes, and the move was a `memcpy` of all of it.
-    Win::alloc(Box::write(
-        Box::new_uninit(),
-        Window {
+    Win::alloc(|place| {
+        place.write(Window {
             handle: Handle::NONE,
             w_buffer: Buf::NULL,
             w_s: ::core::ptr::null_mut(),
@@ -272,8 +271,8 @@ fn zeroed_window() -> Win {
             w_llist: None,
             w_llist_ref: None,
             w_click_defs: WinClickDefs::default(),
-        },
-    ))
+        })
+    })
 }
 
 /// A registered window with nothing in it but zeroed fields: [`win_alloc`]'s
@@ -299,7 +298,7 @@ pub(crate) fn bare_window() -> Win {
 pub(crate) fn free_bare_window(mut win: Win) {
     clear_winopt(&mut win.w_onebuf_opt);
     clear_winopt(&mut win.w_allbuf_opt);
-    drop(forget_window(win.handle()).expect("a bare window is registered"));
+    drop(forget_window(win).expect("a bare window is registered"));
 }
 
 // ---------------------------------------------------------------------------
@@ -519,7 +518,7 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
     // calls above it, and neither reaches the registry.
     // The block comes back with the handle; dropping it is the free. Every
     // window on a list is registered, so `None` is a window freed twice.
-    let block = forget_window(window.handle());
+    let block = forget_window(window);
     debug_assert!(block.is_some(), "a window being freed is registered");
     if let Some(block) = block {
         if AUTOCMD_BUSY.get() {
