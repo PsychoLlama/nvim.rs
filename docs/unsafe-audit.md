@@ -88,7 +88,7 @@ unsafe_placement` lists any misplaced attribute (none);
 | `memory/`                                   | memory   |     4 |         99 |           36 | `xmalloc`, the block pool, owned C strings       |
 | `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
 | `slot.rs`                                   | memory   |     1 |         19 |            2 | type-stable slots and their checked handles      |
-| `winlayer.rs`, `winlayer/`                  | memory   |     5 |         51 |           10 | window, buffer, grid and terminal handles        |
+| `winlayer.rs`, `winlayer/`                  | memory   |     6 |         42 |           10 | window, buffer, grid and terminal handles        |
 | `eval/typval/handle.rs`                     | memory   |     1 |         50 |            8 | Vimscript value handles                          |
 | `vterm/abi/`                                | test ABI |     3 |         90 |           31 | libvterm's C interface                           |
 | `harness.rs`                                | test ABI |     1 |          8 |            5 | editor symbols the harnesses resolve             |
@@ -304,17 +304,24 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 
 - **What:** `Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, `Live<T>`, the
   screen grid handle `GridRef` and the terminal handle `Term` — each a
-  `Copy` value over one pointer (`winlayer.rs` 22, `graph.rs` 17, `live.rs`
-  4, `grid.rs` 2, `terminal.rs` 3). Building one from an address is the
+  `Copy` value over one pointer (`winlayer.rs` 14, `graph.rs` 17, `live.rs`
+  4, `deref.rs` 3 — the checked dereference —, `grid.rs` 2, `terminal.rs` 2). Building one from an address is the
   unsafe step; dereferencing it is not. `curwin`/`CURBUF`/`CURTAB` are cells
   holding a raw pointer (`curwin` is a C symbol a functional spec reads).
-- **Contract:** the constructor's caller promises the object is live for as
-  long as the handle is used. The handle registries build handles from ids
-  and are safe. **The re-entry rule:** a handle held across a call that may
-  fire an autocommand or run Lua or Vimscript is re-derived from its id
-  afterwards, and no `&mut` reached through one is held across such a call.
-  A freed window's block is an owned `ParkedWindow`, freed by dropping it;
-  freeing an unregistered window is debug-asserted impossible.
+- **Contract:** the constructor's caller promises the object is live when
+  the handle is made: the handle takes its slot's generation then. The
+  handle registries build handles from ids and are safe. Every
+  `Win`/`Buf`/`TabPage`/`FrameRef` dereference compares that generation
+  with the slot's header (`winlayer/deref.rs`: one load, one compare), and
+  a slot's memory is never given back, so a handle that outlived its object
+  panics instead of reading freed memory or the slot's next tenant.
+  **The re-entry rule:** a handle held across a call that may fire an
+  autocommand or run Lua or Vimscript is re-derived from its id afterwards
+  (now checked: the stale use panics), and no `&mut` reached through one is
+  held across such a call (still review: two copies alias, S5 in
+  [safe-surface.md](safe-surface.md)). A freed window's block is an owned
+  `ParkedWindow`, freed by dropping it; freeing an unregistered window is
+  debug-asserted impossible.
 - **Retires:** only with a different object model (owning registries with
   ids end to end). Not planned; the settled verdict is that re-entry handles
   stay handles.

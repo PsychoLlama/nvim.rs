@@ -32,8 +32,8 @@
 //! slot's memory is never given back, so whatever handle outlives its object
 //! still points at a slot, and the slot's generation word says whether the
 //! object the handle was made for is still in it. Each handle carries that
-//! generation beside its address and identity (the 16 bytes it always took);
-//! nothing compares it on a dereference yet.
+//! generation beside its address and identity (the 16 bytes it always took),
+//! and every dereference compares it (`deref`): a stale handle panics.
 //!
 //! **The buffer, tab page and frame registries own what they hold.** Each
 //! holds its objects' [`SlotBox`]es, so the free path takes the owner back
@@ -144,6 +144,7 @@
     clippy::ptr_as_ptr
 )]
 
+mod deref;
 mod frame;
 pub mod graph;
 mod grid;
@@ -186,7 +187,7 @@ use crate::mark::mark_mb_adjustpos;
 use crate::memline::ml_get_buf_len;
 use crate::slot::{self, SlotBox, SlotRef};
 use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, SynBlock, Tabpage, Window};
-use crate::winlayer::graph::{CURBUF, CURTAB, curwin};
+use crate::winlayer::graph::{CURBUF, CURRENT_BUF, CURRENT_TAB, CURRENT_WIN, CURTAB, curwin};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -203,9 +204,9 @@ use crate::winlayer::graph::{CURBUF, CURTAB, curwin};
 /// check read the very window it was asking about; p28-6 counted 169 heap
 /// use-after-frees from that shape.
 ///
-/// Two handles are equal when they name the same **address**: a hand-written
-/// `PartialEq` rather than a derive, so that the comparison stays the C's
-/// `wp == curwin`.
+/// Every dereference checks the slot still holds the window this was made
+/// for, and two handles are equal when they name the same slot under the
+/// same generation (the child `deref`).
 #[derive(Clone, Copy, Debug)]
 pub struct Win {
     ptr: *mut Window,
@@ -255,101 +256,9 @@ pub struct TabPage {
     stamp: Stamp,
 }
 
-// Address equality for all three, hand-written. A derive would compare the
-// cached handle too, making a copy taken before a reallocation unequal to one
-// taken after it at the same address — a distinction no caller asks for.
-// `wp == curwin` is an address test in the C and stays one here.
-macro_rules! address_eq {
-    ($($ty:ty),+) => { $(
-        impl PartialEq for $ty {
-            #[inline(always)]
-            fn eq(&self, other: &Self) -> bool {
-                ptr::eq(self.ptr, other.ptr)
-            }
-        }
-
-        impl Eq for $ty {}
-    )+ };
-}
-
-address_eq!(Win, Buf, FrameRef, TabPage);
-
 /// A cursor or mark position the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PosRef(*mut Pos);
-
-impl Deref for Win {
-    type Target = Window;
-
-    #[inline(always)]
-    fn deref(&self) -> &Window {
-        // SAFETY: the constructor's promise — a live window.
-        unsafe { &*self.ptr }
-    }
-}
-
-impl DerefMut for Win {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Window {
-        // SAFETY: the constructor's promise — a live window. The borrow lasts
-        // only as long as the field access that asked for it.
-        unsafe { &mut *self.ptr }
-    }
-}
-
-impl Deref for Buf {
-    type Target = Buffer;
-
-    #[inline(always)]
-    fn deref(&self) -> &Buffer {
-        // SAFETY: the constructor's promise — a live buffer.
-        unsafe { &*self.ptr }
-    }
-}
-
-impl DerefMut for Buf {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Buffer {
-        // SAFETY: the constructor's promise — a live buffer.
-        unsafe { &mut *self.ptr }
-    }
-}
-
-impl Deref for FrameRef {
-    type Target = Frame;
-
-    #[inline(always)]
-    fn deref(&self) -> &Frame {
-        // SAFETY: the constructor's promise — a live frame.
-        unsafe { &*self.ptr }
-    }
-}
-
-impl DerefMut for FrameRef {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Frame {
-        // SAFETY: the constructor's promise — a live frame.
-        unsafe { &mut *self.ptr }
-    }
-}
-
-impl Deref for TabPage {
-    type Target = Tabpage;
-
-    #[inline(always)]
-    fn deref(&self) -> &Tabpage {
-        // SAFETY: the constructor's promise — a live tab page.
-        unsafe { &*self.ptr }
-    }
-}
-
-impl DerefMut for TabPage {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Tabpage {
-        // SAFETY: the constructor's promise — a live tab page.
-        unsafe { &mut *self.ptr }
-    }
-}
 
 impl Deref for PosRef {
     type Target = Pos;
@@ -532,11 +441,12 @@ impl Win {
 
     /// Whether this is the window the editor is working in.
     ///
-    /// Safe where [`Win::current`] is not: comparing the two pointers reads
-    /// neither of them.
+    /// Safe where [`Win::current`] is not: the address and generation are
+    /// compared with the current-object cells, reading neither window, so a
+    /// stale handle whose slot the current window took answers `false`.
     #[inline(always)]
     pub fn is_current(self) -> bool {
-        self.ptr == curwin.get()
+        self.ptr == curwin.get() && self.generation() == CURRENT_WIN.get().generation()
     }
 
     /// The buffer this window shows, or a null [`Buf`] for the moment between
@@ -749,11 +659,11 @@ impl Buf {
     }
 
     /// Whether this is the buffer the editor is working in. [`Win::is_current`]:
-    /// an address compare, so a null `Buf` against no current buffer answers
+    /// an address and generation compare, so a null `Buf` against no current buffer answers
     /// `true`, as the C's `wp->w_buffer == CURBUF` did.
     #[inline(always)]
     pub fn is_current(self) -> bool {
-        self.ptr == CURBUF.get()
+        self.ptr == CURBUF.get() && self.generation() == CURRENT_BUF.get().generation()
     }
 
     /// This buffer's number: the handle the API and `:ls` show, and what the
@@ -940,11 +850,10 @@ impl TabPage {
 
     /// Whether this is the tab page the editor is working in.
     ///
-    /// Safe where [`TabPage::current`] is not: comparing the two pointers
-    /// reads neither of them.
+    /// Safe where [`TabPage::current`] is not: [`Win::is_current`].
     #[inline(always)]
     pub fn is_current(self) -> bool {
-        self.ptr == CURTAB.get()
+        self.ptr == CURTAB.get() && self.generation() == CURRENT_TAB.get().generation()
     }
 
     /// This tab page as the window family takes it in an argument: `None` when
