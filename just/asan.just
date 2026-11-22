@@ -68,7 +68,7 @@ functionaltest *args: build
   # there left that run's nvims with no log file to open.
   logs={{ logs }}/functional
   if [[ -n ${NVIM_TEST_RUN_DIR:-} ]]; then
-    logs+=@$(realpath -m "$NVIM_TEST_RUN_DIR" | tr -c 'A-Za-z0-9._-' _)
+    logs+=@$(printf %s "$(realpath -m "$NVIM_TEST_RUN_DIR")" | tr -c 'A-Za-z0-9._-' _)
   fi
   rm -rf "$logs" && mkdir -p "$logs"
   export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ options }}}:log_path=$logs/asan.log"
