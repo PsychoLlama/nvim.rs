@@ -55,15 +55,21 @@ build:
 # with ASLR on, ~1/3 of processes randomly land a mapping inside ASan's fixed
 # shadow regions and SIGSEGV in the dynamic loader before main.
 #
-# Reports land in target/asan/logs/functional/asan.log.<pid>; any report
-# fails the run.
+# Reports land in target/asan/logs/functional/asan.log.<pid> (or
+# functional@<run dir> under NVIM_TEST_RUN_DIR); any report fails the run.
 #
 # Run functional tests against the ASan build. Args as for `functionaltest`
 # (`--jobs=N` included).
 functionaltest *args: build
   #!/usr/bin/env bash
   set -euo pipefail
+  # A run with a root of its own (NVIM_TEST_RUN_DIR) gets a log directory of
+  # its own too: emptying one shared directory under a run already writing
+  # there left that run's nvims with no log file to open.
   logs={{ logs }}/functional
+  if [[ -n ${NVIM_TEST_RUN_DIR:-} ]]; then
+    logs+=@$(realpath -m "$NVIM_TEST_RUN_DIR" | tr -c 'A-Za-z0-9._-' _)
+  fi
   rm -rf "$logs" && mkdir -p "$logs"
   export ASAN_OPTIONS="${ASAN_OPTIONS:-{{ options }}}:log_path=$logs/asan.log"
   export NVIM_TEST_ASAN=1
