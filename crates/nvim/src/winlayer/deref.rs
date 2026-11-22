@@ -368,14 +368,6 @@ impl Buf {
         self.ml_unlent().is_open()
     }
 
-    /// The line the line cache holds, zero for none, asked without lending
-    /// the memline.
-    #[inline(always)]
-    #[track_caller]
-    pub(crate) fn ml_cached_lnum(self) -> LineNr {
-        self.ml_unlent().cached_lnum()
-    }
-
     /// The buffer's line count: `b_ml.ml_line_count`.
     #[inline(always)]
     #[track_caller]
@@ -404,6 +396,42 @@ impl Buf {
         self.ml_unlent_mut().ml_flags = flags;
     }
 
+    /// The memline a walk of it just filled the cache through, the walk let
+    /// go: what [`Buf::ml_unlent`] answers, without asking again.
+    ///
+    /// # Panics
+    /// When `walk` is another buffer's.
+    #[inline(always)]
+    #[track_caller]
+    fn unlent_from<'a>(self, walk: MlRef<'_>) -> &'a MemLine {
+        assert!(
+            ptr::eq(walk.part_ptr(), self.ml_place().as_ptr()),
+            "a walk of another buffer's memline"
+        );
+        drop(walk);
+        // SAFETY: the walk was this memline's loan (just compared), which
+        // `lend_part_at` granted live, unedited and lent to nothing else;
+        // with it dropped nothing holds the memline. The reference lives as
+        // the `lend_` family's does (the impl's docs).
+        unsafe { self.ml_place().as_ref() }
+    }
+
+    /// [`Buf::lend_cached_line`] out of the walk that filled the cache
+    /// (`fetch_line_lent`).
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn lend_cached_line_from<'a>(self, walk: MlRef<'_>) -> &'a [u8] {
+        self.unlent_from(walk).cached_bytes()
+    }
+
+    /// The cached line with its NUL, as a block-pinned reader lends it, out
+    /// of the walk that filled the cache.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn lend_pinned_line_from<'a>(self, walk: MlRef<'_>) -> &'a [u8] {
+        self.unlent_from(walk).lend_cached_bytes_with_nul()
+    }
+
     /// The cached line, without its NUL.
     #[inline(always)]
     #[track_caller]
@@ -416,13 +444,6 @@ impl Buf {
     #[track_caller]
     pub(crate) fn lend_cached_line_with_nul<'a>(self) -> &'a [u8] {
         self.ml_unlent().cached_bytes_with_nul()
-    }
-
-    /// The cached line with its NUL, as a block-pinned reader lends it.
-    #[inline(always)]
-    #[track_caller]
-    pub(crate) fn lend_pinned_line<'a>(self) -> &'a [u8] {
-        self.ml_unlent().lend_cached_bytes_with_nul()
     }
 
     /// The cached line, writable in place (its length fixed).

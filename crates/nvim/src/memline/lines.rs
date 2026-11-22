@@ -50,7 +50,7 @@ use crate::fileio::ReadFlags;
 use crate::mbyte::Codepoint;
 use crate::memory::XString;
 use crate::types::Failed;
-use crate::winlayer::Buf;
+use crate::winlayer::{Buf, MlRef};
 use core::cell::Cell;
 use core::ffi::{CStr, c_int};
 
@@ -120,8 +120,8 @@ impl Lines {
     /// Out-of-range line numbers answer the `???` placeholder, after the
     /// E315 complaint upstream's `ml_get` gives.
     pub fn line(&mut self, lnum: LineNr) -> &[u8] {
-        fetch_line(self.0, lnum, false);
-        self.0.lend_cached_line()
+        let walk = fetch_line_lent(self.0, lnum);
+        self.0.lend_cached_line_from(walk)
     }
 
     /// Line `lnum`, writable in place.
@@ -245,13 +245,13 @@ impl HeldLines {
     ///
     /// The NUL is part of the slice because the matcher reads it as a
     /// position: `$` matches there and a character step stops there.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn line(&self, lnum: LineNr) -> &[u8] {
         if !self.pinned.get() {
             self.pin();
         }
-        fetch_line(self.buffer, lnum, false);
-        self.buffer.lend_pinned_line()
+        let walk = fetch_line_lent(self.buffer, lnum);
+        self.buffer.lend_pinned_line_from(walk)
     }
 
     /// Pin the memfile, if the buffer has one yet (a memline that is not
@@ -364,15 +364,31 @@ pub fn ml_line_alloced() -> bool {
 /// Insert `line` (its NUL the last byte) after line `lnum` of `buffer`,
 /// whose memline is open, flushing any pending change first.
 fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), LineError> {
-    // Asked without lending the memline: a file read asks once per line.
-    if lnum > buffer.line_count() {
+    ml_append_flush_held(buffer, buffer.ml(), lnum, line, flags)
+}
+
+/// [`ml_append_flush`] with the memline lent: one loan for the whole
+/// append when no change is pending, which is every line of a file read.
+fn ml_append_flush_held(
+    buffer: Buf,
+    ml: MlRef<'_>,
+    lnum: LineNr,
+    line: &[u8],
+    flags: c_int,
+) -> Result<(), LineError> {
+    if lnum > ml.ml_line_count {
         return Err(LineError::NoSuchLine);
     }
-    if buffer.ml_cached_lnum() != LineNr::ZERO {
+    if ml.cached_lnum() != LineNr::ZERO {
+        drop(ml);
         // This may invoke ml_append_int in turn.
         ml_flush_line(buffer);
+        return ml_append_int(buffer, lnum, line, flags);
     }
-    ml_append_int(buffer, lnum, line, flags)
+    if !ml.is_open() {
+        return Err(LineError::NoSuchLine);
+    }
+    ml_append_held(buffer, ml, lnum, line, flags)
 }
 
 /// Append `line` — its text, then the NUL the memline counts — after line
@@ -385,10 +401,14 @@ fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Resu
 /// The caller should probably also call `appended_lines`.
 pub(crate) fn ml_append_flags(lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), LineError> {
     debug_assert_eq!(line.last(), Some(&0), "the line carries its NUL");
-    // During startup the memfile may still have to be created.
-    if !Buf::current().ml_is_open() {
-        open_buffer(false, None, ReadFlags::NONE)?;
+    let buffer = Buf::current();
+    let ml = buffer.ml();
+    if ml.is_open() {
+        return ml_append_flush_held(buffer, ml, lnum, line, flags);
     }
+    drop(ml);
+    // During startup the memfile may still have to be created.
+    open_buffer(false, None, ReadFlags::NONE)?;
     ml_append_flush(Buf::current(), lnum, line, flags)
 }
 

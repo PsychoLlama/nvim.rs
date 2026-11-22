@@ -28,6 +28,7 @@ use crate::message_fmt::msg_cstr;
 use crate::narrow::len_as_int;
 use crate::siemsg;
 use crate::statusline::trans_bufname;
+use crate::winlayer::MlRef;
 use core::ffi::{c_int, c_uint};
 
 use super::*;
@@ -67,28 +68,48 @@ impl MemLine {
 ///
 /// Never fails: the failure paths cache the `???` placeholder.
 pub(crate) fn fetch_line(buffer: Buf, lnum: LineNr, will_change: bool) {
-    // One edit of the buffer for the walk, ended before anything that is
-    // handed the buffer or can run a message.
+    let (mut held, cached) = fetch_line_held(buffer, lnum);
+    if will_change && cached == Cached::Line {
+        held.locked_has_moved();
+        drop(held);
+        book_deleted_line(buffer);
+    }
+}
+
+/// [`fetch_line`] for a read, answering the walk's loan of the memline
+/// still held: the caller lends the cached line out of it
+/// ([`Buf::lend_cached_line_from`]) instead of asking the memline again --
+/// a search and a `Lines` read do this once per line.
+#[inline]
+pub(crate) fn fetch_line_lent<'a>(buffer: Buf, lnum: LineNr) -> MlRef<'a> {
+    fetch_line_held(buffer, lnum).0
+}
+
+/// What [`fetch_line_held`] left in the line cache.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Cached {
+    /// The line itself.
+    Line,
+    /// A stand-in: there are no lines, or not this one.
+    Placeholder,
+}
+
+/// The walk behind [`fetch_line`] and [`fetch_line_lent`]: one loan of the
+/// memline, let go before anything that is handed the buffer or can run a
+/// message and taken again after, answered still held.
+#[inline]
+fn fetch_line_held<'a>(buffer: Buf, lnum: LineNr) -> (MlRef<'a>, Cached) {
     let mut held = buffer.ml();
     let ml = &mut *held;
     if !ml.is_open() {
         // There are no lines at all.
         ml.cache_placeholder(c"", LineNr::ZERO);
-        return;
+        return (held, Cached::Placeholder);
     }
 
     if lnum > ml.ml_line_count {
         drop(held);
-        if ML_GET_RECURSIVE.get() == 0 {
-            // Avoid giving this message for a recursive call, which
-            // happens when the redraw it triggers reads the same line.
-            ML_GET_RECURSIVE.set(1);
-            siemsg!("E315: ml_get: Invalid lnum: {}", int64_t::from(lnum));
-            ML_GET_RECURSIVE.set(0);
-        }
-        ml_flush_line(buffer);
-        buffer.ml().cache_placeholder(c"???", lnum);
-        return;
+        return (invalid_lnum(buffer, lnum), Cached::Placeholder);
     }
 
     // Pretend line 0 is line 1.
@@ -97,12 +118,7 @@ pub(crate) fn fetch_line(buffer: Buf, lnum: LineNr, will_change: bool) {
     // If it is the line handed out last time, it is already unpacked;
     // otherwise the one that was may need flushing first.
     if ml.cached_lnum() == lnum {
-        if will_change {
-            ml.locked_has_moved();
-            drop(held);
-            book_deleted_line(buffer);
-        }
-        return;
+        return (held, Cached::Line);
     }
     // The common case, a run of reads through one block: the line is in
     // the block already locked and nothing is waiting to be written back,
@@ -119,31 +135,48 @@ pub(crate) fn fetch_line(buffer: Buf, lnum: LineNr, will_change: bool) {
         }
         let idx = (lnum - ml.locked_low()).cast_unsigned() as usize;
         ml.cache_block_line(id, idx, lnum);
-        if will_change {
-            ml.locked_has_moved();
-            drop(held);
-            book_deleted_line(buffer);
-        }
-        return;
+        return (held, Cached::Line);
     }
     drop(held);
+    fetch_line_by_walk(buffer, lnum)
+}
+
+/// [`fetch_line_held`] past the locked block: flush, then find the block
+/// through the tree.
+#[cold]
+#[inline(never)]
+fn fetch_line_by_walk<'a>(buffer: Buf, lnum: LineNr) -> (MlRef<'a>, Cached) {
     ml_flush_line(buffer);
 
     // Find the data block holding the line. This also fills the stack with
     // the blocks from the root down and releases any block that was locked.
     let Some(id) = ml_find_line(buffer, lnum, ML_FIND) else {
         line_not_found(buffer, lnum);
-        return;
+        return (buffer.ml(), Cached::Placeholder);
     };
     let mut held = buffer.ml();
     let ml = &mut *held;
     let idx = (lnum - ml.locked_low()).cast_unsigned() as usize;
     ml.cache_block_line(id, idx, lnum);
-    if will_change {
-        ml.locked_has_moved();
-        drop(held);
-        book_deleted_line(buffer);
+    (held, Cached::Line)
+}
+
+/// Line `lnum` is past the end: complain (not from the redraw the
+/// complaint causes) and cache the `???` placeholder.
+#[cold]
+#[inline(never)]
+fn invalid_lnum<'a>(buffer: Buf, lnum: LineNr) -> MlRef<'a> {
+    if ML_GET_RECURSIVE.get() == 0 {
+        // Avoid giving this message for a recursive call, which
+        // happens when the redraw it triggers reads the same line.
+        ML_GET_RECURSIVE.set(1);
+        siemsg!("E315: ml_get: Invalid lnum: {}", int64_t::from(lnum));
+        ML_GET_RECURSIVE.set(0);
     }
+    ml_flush_line(buffer);
+    let mut held = buffer.ml();
+    held.cache_placeholder(c"???", lnum);
+    held
 }
 
 /// Book the cached line, which the caller is about to change, as deleted

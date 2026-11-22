@@ -161,7 +161,11 @@ impl Buf {
     /// Whether `link` names a header this buffer holds.
     #[inline]
     pub(crate) fn has_header(&self, link: UndoLink) -> bool {
-        self.header(link).is_some()
+        // The read alone, not narrowed to a part: this is asked per change.
+        self.read()
+            .b_u_store
+            .as_deref()
+            .is_some_and(|store| store.get(link).is_some())
     }
 
     /// The link field `field` of the header `link` names, or no link when

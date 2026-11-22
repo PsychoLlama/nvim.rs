@@ -229,6 +229,14 @@ impl<T, U> Drop for SlotPart<'_, T, U> {
     }
 }
 
+impl<T, U> SlotPart<'_, T, U> {
+    /// The lent part's address, for asking which part a loan is of.
+    #[inline(always)]
+    pub(crate) fn part_ptr(&self) -> *const U {
+        self.part.as_ptr()
+    }
+}
+
 impl<T, U> fmt::Debug for SlotPart<'_, T, U> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "SlotPart({} @ {:p})", index_of(self.slot), self.slot)

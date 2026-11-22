@@ -25,6 +25,7 @@ use core::ffi::{c_int, c_long, c_uint};
 use super::*;
 use crate::memfile::BlockId;
 use crate::memline::state::MemLine;
+use crate::winlayer::MlRef;
 
 /// How a data block split came out, in the terms the pointer block above it
 /// has to be told: two blocks side by side, each with a block number, a line
@@ -99,16 +100,34 @@ pub(crate) fn ml_append_int(
     line: &[u8],
     flags: c_int,
 ) -> Result<(), LineError> {
-    // Asked without lending the memline, then one loan for the common case
-    // -- a file read appends every line through here -- carried on into the
-    // chunk update.
-    let line_count = buffer.line_count();
-    if lnum > line_count || !buffer.ml_is_open() {
+    let ml = buffer.ml();
+    if !ml.is_open() {
         return Err(LineError::NoSuchLine);
     }
-    // The buffer holds one more line either way (`count_new_line`).
+    ml_append_held(buffer, ml, lnum, line, flags)
+}
+
+/// [`ml_append_int`] with the memline already lent, and open: a file read
+/// appends every line through here on one loan, carried on into the chunk
+/// update.
+pub(crate) fn ml_append_held(
+    buffer: Buf,
+    mut ml: MlRef<'_>,
+    lnum: LineNr,
+    line: &[u8],
+    flags: c_int,
+) -> Result<(), LineError> {
+    let line_count = ml.ml_line_count;
+    if lnum > line_count {
+        return Err(LineError::NoSuchLine);
+    }
+    // The buffer holds one more line either way (`count_new_line`): the
+    // first change records the old count, through a setter, so with the
+    // memline let go.
     if buffer.b_prev_line_count() == 0 {
+        drop(ml);
         buffer.set_b_prev_line_count(line_count.get());
+        ml = buffer.ml();
     }
 
     if LOWEST_MARKED.get() != LineNr::ZERO && LOWEST_MARKED.get() > lnum {
@@ -119,7 +138,6 @@ pub(crate) fn ml_append_int(
     // Space needed for the text, and then for its index entry too.
     let space_needed = int64_t::from(new.len()) + int64_t::from(INDEX_BYTES);
 
-    let mut ml = buffer.ml();
     if !append_to_locked(&mut ml, lnum, &new, space_needed) {
         drop(ml);
         return append_by_walk(buffer, lnum, &new, space_needed);
