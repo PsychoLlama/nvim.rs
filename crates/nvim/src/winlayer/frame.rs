@@ -29,7 +29,7 @@ use crate::global_cell::GlobalCell;
 use crate::slot::{SlotBox, SlotRef};
 use crate::types::{Frame, Handle};
 use crate::winlayer::graph::TOPFRAME;
-use crate::winlayer::{FrameId, FrameRef, Win, WinId, forget_frame, frames, register_frame};
+use crate::winlayer::{FrameId, FrameRef, Stamp, Win, WinId, forget_frame, frames, register_frame};
 
 /// A fresh frame, zeroed and registered, with nothing linked to it yet.
 ///
@@ -95,15 +95,14 @@ impl FrameRef {
     pub(super) fn at(r: SlotRef<Frame>, handle: Handle) -> Self {
         Self {
             ptr: r.raw(),
-            id: handle,
-            generation: r.generation(),
+            stamp: Stamp::new(handle, r.generation()),
         }
     }
 
     /// The generation of the slot this was made from. [`crate::slot`].
     #[inline(always)]
     pub(crate) fn generation(self) -> u32 {
-        self.generation
+        self.stamp.generation()
     }
 
     #[inline(always)]
@@ -115,7 +114,7 @@ impl FrameRef {
     /// [`Win::handle`].
     #[inline(always)]
     pub(crate) fn handle(self) -> Handle {
-        self.id
+        self.stamp.handle()
     }
 
     /// This frame's identity, the value the tree's own links are made of and
@@ -126,7 +125,7 @@ impl FrameRef {
     /// When the handle is zero, which no registered frame has.
     #[inline(always)]
     pub(crate) fn id(self) -> FrameId {
-        FrameId(NonZero::new(self.id.get()).expect("a live frame has a handle"))
+        FrameId(NonZero::new(self.stamp.handle().get()).expect("a live frame has a handle"))
     }
 
     /// The window this frame holds — `Some` exactly for a leaf.

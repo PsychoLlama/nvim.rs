@@ -34,7 +34,7 @@
 #![allow(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
-use super::{Buf, BufId, FrameId, TabId, TabPage, Win, WinId};
+use super::{Buf, BufId, FrameId, Stamp, TabId, TabPage, Win, WinId};
 use crate::global_cell::GlobalCell;
 use crate::marktree::MarkTree;
 use crate::memline::state::MemLine;
@@ -45,7 +45,6 @@ use crate::slot::{Pooled, SlotBox, SlotRef};
 use crate::types::{BufName, Buffer, Handle, Key, Tabpage, Window};
 use core::ffi::c_int;
 use core::mem::MaybeUninit;
-use core::num::NonZero;
 
 pub(crate) static FIRSTWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static LASTWIN: GlobalCell<Option<WinId>> = GlobalCell::new(None);
@@ -117,43 +116,17 @@ pub unsafe extern "C" fn win_col_off(window: *mut Window) -> c_int {
 // They are written together, always, by the funnel below. Nothing else in
 // the tree writes either half.
 
-/// Which object is current: its identity, and the generation of its slot
-/// when it was made current -- the two halves of a handle the mirror's
-/// address does not hold. Eight bytes, so reading it is one load.
-#[derive(Clone, Copy, Debug)]
-pub(super) struct Current {
-    id: NonZero<c_int>,
-    generation: u32,
-}
-
-impl Current {
-    /// The identity and generation `handle`/`generation` spell.
-    #[inline(always)]
-    fn of(handle: Handle, generation: u32, what: &str) -> Self {
-        Current {
-            id: NonZero::new(handle.get())
-                .unwrap_or_else(|| panic!("a current {what} has a handle")),
-            generation,
-        }
-    }
-
-    #[inline(always)]
-    fn handle(self) -> Handle {
-        Handle::new(self.id.get())
-    }
-}
-
 /// The window the editor is working in, as the registry names it.
 ///
 /// `None` only before `win_alloc_first` and after the last window goes.
-pub(super) static CURRENT_WIN: GlobalCell<Option<Current>> = GlobalCell::new(None);
+pub(super) static CURRENT_WIN: GlobalCell<Stamp> = GlobalCell::new(Stamp::NONE);
 
 /// The buffer the editor is working in. `None` where [`leave_curbuf`] left
 /// it -- the editor really has none for those few statements.
-pub(super) static CURRENT_BUF: GlobalCell<Option<Current>> = GlobalCell::new(None);
+pub(super) static CURRENT_BUF: GlobalCell<Stamp> = GlobalCell::new(Stamp::NONE);
 
 /// The tab page the editor is working in. [`CURRENT_WIN`].
-pub(super) static CURRENT_TAB: GlobalCell<Option<Current>> = GlobalCell::new(None);
+pub(super) static CURRENT_TAB: GlobalCell<Stamp> = GlobalCell::new(Stamp::NONE);
 
 // ---------------------------------------------------------------------------
 // Becoming current
@@ -183,11 +156,11 @@ impl Win {
     /// that move only one half mean it.
     #[inline]
     pub fn make_current(self) {
-        CURRENT_WIN.set(Some(Current::of(
-            self.handle(),
-            self.generation(),
-            "window",
-        )));
+        // The identity is taken for its panic: a handle with none (a null
+        // one, or one built before the allocator numbered it) is never
+        // current.
+        let _ = self.id();
+        CURRENT_WIN.set(self.stamp());
         curwin.set(self.raw());
     }
 }
@@ -196,11 +169,11 @@ impl Buf {
     /// Make this the buffer the editor is working in. [`Win::make_current`].
     #[inline]
     pub fn make_current(self) {
-        CURRENT_BUF.set(Some(Current::of(
-            self.handle(),
-            self.generation(),
-            "buffer",
-        )));
+        // The identity is taken for its panic: a handle with none (a null
+        // one, or one built before the allocator numbered it) is never
+        // current.
+        let _ = self.id();
+        CURRENT_BUF.set(self.stamp());
         CURBUF.set(self.raw());
     }
 }
@@ -209,11 +182,11 @@ impl TabPage {
     /// Make this the tab page the editor is working in.
     #[inline]
     pub(crate) fn make_current(self) {
-        CURRENT_TAB.set(Some(Current::of(
-            self.handle(),
-            self.generation(),
-            "tab page",
-        )));
+        // The identity is taken for its panic: a handle with none (a null
+        // one, or one built before the allocator numbered it) is never
+        // current.
+        let _ = self.id();
+        CURRENT_TAB.set(self.stamp());
         CURTAB.set(self.raw());
     }
 }
@@ -228,7 +201,7 @@ impl TabPage {
 /// `Option` argument that would read as ordinary.
 #[inline]
 pub(crate) fn leave_curbuf() {
-    CURRENT_BUF.set(None);
+    CURRENT_BUF.set(Stamp::NONE);
     CURBUF.set(::core::ptr::null_mut::<Buffer>());
 }
 
@@ -236,7 +209,7 @@ pub(crate) fn leave_curbuf() {
 /// bare window current puts back before freeing it, and what
 /// [`Saved::restore`] puts back when a switch found no window.
 pub(crate) fn leave_curwin() {
-    CURRENT_WIN.set(None);
+    CURRENT_WIN.set(Stamp::NONE);
     curwin.set(::core::ptr::null_mut::<Window>());
 }
 
@@ -269,25 +242,28 @@ pub(crate) fn leave_curwin() {
 /// `None` before `win_alloc_first` and after the last window goes.
 #[inline(always)]
 pub(super) fn current_win() -> Option<Win> {
-    CURRENT_WIN
-        .get()
-        .map(|cur| Win::from_parts(curwin.get(), cur.handle(), cur.generation))
+    let stamp = CURRENT_WIN.get();
+    // A current object has an identity, so its stamp is never the empty
+    // word.
+    (stamp != Stamp::NONE).then(|| Win::from_stamp(curwin.get(), stamp))
 }
 
 /// [`current_win`] for the buffer. `None` where [`leave_curbuf`] left it.
 #[inline(always)]
 pub(super) fn current_buf() -> Option<Buf> {
-    CURRENT_BUF
-        .get()
-        .map(|cur| Buf::from_parts(CURBUF.get(), cur.handle(), cur.generation))
+    let stamp = CURRENT_BUF.get();
+    // A current object has an identity, so its stamp is never the empty
+    // word.
+    (stamp != Stamp::NONE).then(|| Buf::from_stamp(CURBUF.get(), stamp))
 }
 
 /// [`current_win`] for the tab page.
 #[inline(always)]
 pub(super) fn current_tab() -> Option<TabPage> {
-    CURRENT_TAB
-        .get()
-        .map(|cur| TabPage::from_parts(CURTAB.get(), cur.handle(), cur.generation))
+    let stamp = CURRENT_TAB.get();
+    // A current object has an identity, so its stamp is never the empty
+    // word.
+    (stamp != Stamp::NONE).then(|| TabPage::from_stamp(CURTAB.get(), stamp))
 }
 
 /// The window the mirror names, whatever its identity.

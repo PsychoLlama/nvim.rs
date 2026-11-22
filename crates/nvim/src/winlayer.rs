@@ -160,6 +160,7 @@ pub use grid::GridRef;
 pub(crate) use grid::{GridCell, grid_of_view, try_grid_of_view};
 
 pub use handles::BufId;
+pub(crate) use handles::Stamp;
 pub(crate) use terminal::Term;
 
 pub(crate) use graph::forget_window;
@@ -208,19 +209,16 @@ use crate::winlayer::graph::{CURBUF, CURTAB, curwin};
 #[derive(Clone, Copy, Debug)]
 pub struct Win {
     ptr: *mut Window,
-    /// The window's handle, read while it was live. Named `id` rather than
-    /// `handle` so that it cannot be confused with `Window`'s own field of
-    /// that name, which [`Deref`] still reaches: `win.handle` is a read of
-    /// the *window*, [`Win::handle`] a read of this copy.
+    /// The window's handle, read while it was live, and its slot's
+    /// generation when this was made, in one word ([`Stamp`]). The handle is
+    /// [`Win::handle`], not to be confused with `Window`'s own field of that
+    /// name, which [`Deref`] still reaches: `win.handle` is a read of the
+    /// *window*, [`Win::handle`] a read of this copy.
     ///
-    /// Zero means "no identity" — a null [`Win`], or a window whose handle
-    /// the allocator has not assigned yet — which is what [`Win::id`]
+    /// A zero handle means "no identity" — a null [`Win`], or a window whose
+    /// handle the allocator has not assigned yet — which is what [`Win::id`]
     /// refuses.
-    id: Handle,
-    /// The generation of the window's slot when this was made: the value the
-    /// slot's header holds for exactly as long as this window is in it
-    /// ([`crate::slot`]). Zero for a null [`Win`], which no slot holds.
-    generation: u32,
+    stamp: Stamp,
 }
 
 /// A buffer the caller has promised is live. [`Win`]'s shape.
@@ -232,10 +230,8 @@ pub struct Win {
 #[derive(Clone, Copy, Debug)]
 pub struct Buf {
     ptr: *mut Buffer,
-    /// The buffer's number, read while it was live. [`Win`]'s `id`.
-    id: Handle,
-    /// Its slot's generation. [`Win`]'s `generation`.
-    generation: u32,
+    /// Its handle and its slot's generation. [`Win`]'s `stamp`.
+    stamp: Stamp,
 }
 
 /// A frame of the window layout tree the caller has promised is live.
@@ -247,20 +243,16 @@ pub struct Buf {
 #[derive(Clone, Copy, Debug)]
 pub struct FrameRef {
     ptr: *mut Frame,
-    /// The frame's handle, read while it was live. [`Win`]'s `id`.
-    id: Handle,
-    /// Its slot's generation. [`Win`]'s `generation`.
-    generation: u32,
+    /// Its handle and its slot's generation. [`Win`]'s `stamp`.
+    stamp: Stamp,
 }
 
 /// A tab page the caller has promised is live. [`Win`]'s shape.
 #[derive(Clone, Copy, Debug)]
 pub struct TabPage {
     ptr: *mut Tabpage,
-    /// The tab page's handle, read while it was live. [`Win`]'s `id`.
-    id: Handle,
-    /// Its slot's generation. [`Win`]'s `generation`.
-    generation: u32,
+    /// Its handle and its slot's generation. [`Win`]'s `stamp`.
+    stamp: Stamp,
 }
 
 // Address equality for all three, hand-written. A derive would compare the
@@ -392,12 +384,12 @@ impl Win {
     #[inline(always)]
     pub unsafe fn new(raw: *mut Window) -> Self {
         if raw.is_null() {
-            return Self::from_parts(raw, Handle::NONE, 0);
+            return Self::from_stamp(raw, Stamp::NONE);
         }
         // SAFETY: the caller's promise: a live object, which lives in a slot
         // of its type's pool.
         let (id, generation) = unsafe { ((*raw).handle, slot::generation_at(raw)) };
-        Self::from_parts(raw, id, generation)
+        Self::from_stamp(raw, Stamp::new(id, generation))
     }
 
     /// The window `raw` names, `None` for null.
@@ -412,30 +404,33 @@ impl Win {
     }
 
     /// The null window. [`Buf::NULL`].
-    pub(crate) const NULL: Self = Self::from_parts(ptr::null_mut(), Handle::NONE, 0);
+    pub(crate) const NULL: Self = Self::from_stamp(ptr::null_mut(), Stamp::NONE);
 
     /// The window in slot `r` with `handle` already known — a registry entry —
     /// so **nothing is read**.
     #[inline(always)]
     pub(super) fn at(r: SlotRef<Window>, handle: Handle) -> Self {
-        Self::from_parts(r.raw(), handle, r.generation())
+        Self::from_stamp(r.raw(), Stamp::new(handle, r.generation()))
     }
 
-    /// The handle with every part already known: the current-window mirror
-    /// and its identity, or the null handle.
+    /// The handle with every part already known: the current-object mirror
+    /// and its stamp, or the null handle.
     #[inline(always)]
-    pub(super) const fn from_parts(raw: *mut Window, handle: Handle, generation: u32) -> Self {
-        Self {
-            ptr: raw,
-            id: handle,
-            generation,
-        }
+    pub(super) const fn from_stamp(raw: *mut Window, stamp: Stamp) -> Self {
+        Self { ptr: raw, stamp }
+    }
+
+    /// The handle and generation, packed: what the current-object mirror
+    /// stores beside the address.
+    #[inline(always)]
+    pub(super) fn stamp(self) -> Stamp {
+        self.stamp
     }
 
     /// The generation of the slot this was made from. [`crate::slot`].
     #[inline(always)]
     pub(crate) fn generation(self) -> u32 {
-        self.generation
+        self.stamp.generation()
     }
 
     /// The slot this was made from, under the generation it was made with;
@@ -444,9 +439,10 @@ impl Win {
     pub(super) fn slot(self) -> Option<SlotRef<Window>> {
         // SAFETY: every non-null handle's address is its slot's value
         // address: `at` takes it from a `SlotRef`, `new` from a live object
-        // (which lives in its pool), and `from_parts` from the mirror the
+        // (which lives in its pool), and `from_stamp` from the mirror the
         // funnel wrote out of a handle.
-        (!self.ptr.is_null()).then(|| unsafe { SlotRef::from_parts(self.ptr, self.generation) })
+        (!self.ptr.is_null())
+            .then(|| unsafe { SlotRef::from_parts(self.ptr, self.stamp.generation()) })
     }
 
     /// The window the editor is working in.
@@ -503,7 +499,7 @@ impl Win {
     /// construction, while the window was provably live.
     #[inline(always)]
     pub(crate) fn handle(self) -> Handle {
-        self.id
+        self.stamp.handle()
     }
 
     /// This window's identity: the value to hold across anything that can
@@ -518,7 +514,7 @@ impl Win {
     pub(crate) fn id(self) -> WinId {
         // A live window's handle is `LAST_WIN_ID`, which is incremented
         // before it is read, so it is never zero.
-        WinId(NonZero::new(self.id.get()).expect("a live window has a handle"))
+        WinId(NonZero::new(self.stamp.handle().get()).expect("a live window has a handle"))
     }
 
     /// Give this window its handle, at the one moment it has none: the
@@ -531,7 +527,7 @@ impl Win {
     #[inline]
     pub(crate) fn set_handle(&mut self, handle: Handle) {
         DerefMut::deref_mut(self).handle = handle;
-        self.id = handle;
+        self.stamp = Stamp::new(handle, self.stamp.generation());
     }
 
     /// Whether this is the window the editor is working in.
@@ -623,12 +619,12 @@ impl Buf {
     #[inline(always)]
     pub unsafe fn new(raw: *mut Buffer) -> Self {
         if raw.is_null() {
-            return Self::from_parts(raw, Handle::NONE, 0);
+            return Self::from_stamp(raw, Stamp::NONE);
         }
         // SAFETY: the caller's promise: a live object, which lives in a slot
         // of its type's pool.
         let (id, generation) = unsafe { ((*raw).handle, slot::generation_at(raw)) };
-        Self::from_parts(raw, id, generation)
+        Self::from_stamp(raw, Stamp::new(id, generation))
     }
 
     /// The buffer `raw` names, `None` for null.
@@ -655,29 +651,32 @@ impl Buf {
 
     /// The null buffer: the initial value of a context field that a caller
     /// fills in before anything reads it.
-    pub(crate) const NULL: Self = Self::from_parts(ptr::null_mut(), Handle::NONE, 0);
+    pub(crate) const NULL: Self = Self::from_stamp(ptr::null_mut(), Stamp::NONE);
 
     /// [`Win::at`] for a buffer.
     #[inline(always)]
     pub(super) fn at(r: SlotRef<Buffer>, handle: Handle) -> Self {
-        Self::from_parts(r.raw(), handle, r.generation())
+        Self::from_stamp(r.raw(), Stamp::new(handle, r.generation()))
     }
 
-    /// The handle with every part already known: the current-window mirror
-    /// and its identity, or the null handle.
+    /// The handle with every part already known: the current-object mirror
+    /// and its stamp, or the null handle.
     #[inline(always)]
-    pub(super) const fn from_parts(raw: *mut Buffer, handle: Handle, generation: u32) -> Self {
-        Self {
-            ptr: raw,
-            id: handle,
-            generation,
-        }
+    pub(super) const fn from_stamp(raw: *mut Buffer, stamp: Stamp) -> Self {
+        Self { ptr: raw, stamp }
+    }
+
+    /// The handle and generation, packed: what the current-object mirror
+    /// stores beside the address.
+    #[inline(always)]
+    pub(super) fn stamp(self) -> Stamp {
+        self.stamp
     }
 
     /// The generation of the slot this was made from. [`crate::slot`].
     #[inline(always)]
     pub(crate) fn generation(self) -> u32 {
-        self.generation
+        self.stamp.generation()
     }
 
     /// The buffer the editor is working in. [`Win::current`].
@@ -761,7 +760,7 @@ impl Buf {
     /// registry finds it by. [`Win::handle`] for a buffer — a field load.
     #[inline(always)]
     pub(crate) fn handle(self) -> Handle {
-        self.id
+        self.stamp.handle()
     }
 
     /// This buffer's identity. [`Win::id`], panic included.
@@ -769,7 +768,7 @@ impl Buf {
     pub fn id(self) -> BufId {
         // A live buffer's number is `TOP_FILE_NUM`, which is incremented
         // before it is read, so it is never zero.
-        BufId(NonZero::new(self.id.get()).expect("a live buffer has a number"))
+        BufId(NonZero::new(self.stamp.handle().get()).expect("a live buffer has a number"))
     }
 
     /// This buffer's identity, `None` for one that has no number: the null
@@ -778,14 +777,14 @@ impl Buf {
     /// this and treats `None` as "never the same".
     #[inline(always)]
     pub(crate) fn try_id(self) -> Option<BufId> {
-        NonZero::new(self.id.get()).map(BufId)
+        NonZero::new(self.stamp.handle().get()).map(BufId)
     }
 
     /// Give this buffer its number. [`Win::set_handle`].
     #[inline]
     pub(crate) fn set_handle(&mut self, handle: Handle) {
         DerefMut::deref_mut(self).handle = handle;
-        self.id = handle;
+        self.stamp = Stamp::new(handle, self.stamp.generation());
     }
 
     #[inline(always)]
@@ -831,12 +830,12 @@ impl TabPage {
     #[inline(always)]
     pub unsafe fn new(raw: *mut Tabpage) -> Self {
         if raw.is_null() {
-            return Self::from_parts(raw, Handle::NONE, 0);
+            return Self::from_stamp(raw, Stamp::NONE);
         }
         // SAFETY: the caller's promise: a live object, which lives in a slot
         // of its type's pool.
         let (id, generation) = unsafe { ((*raw).handle, slot::generation_at(raw)) };
-        Self::from_parts(raw, id, generation)
+        Self::from_stamp(raw, Stamp::new(id, generation))
     }
 
     /// [`Buf::owned_by`] for a tab page.
@@ -851,24 +850,27 @@ impl TabPage {
     /// [`Win::at`] for a tab page.
     #[inline(always)]
     pub(super) fn at(r: SlotRef<Tabpage>, handle: Handle) -> Self {
-        Self::from_parts(r.raw(), handle, r.generation())
+        Self::from_stamp(r.raw(), Stamp::new(handle, r.generation()))
     }
 
-    /// The handle with every part already known: the current-window mirror
-    /// and its identity, or the null handle.
+    /// The handle with every part already known: the current-object mirror
+    /// and its stamp, or the null handle.
     #[inline(always)]
-    pub(super) const fn from_parts(raw: *mut Tabpage, handle: Handle, generation: u32) -> Self {
-        Self {
-            ptr: raw,
-            id: handle,
-            generation,
-        }
+    pub(super) const fn from_stamp(raw: *mut Tabpage, stamp: Stamp) -> Self {
+        Self { ptr: raw, stamp }
+    }
+
+    /// The handle and generation, packed: what the current-object mirror
+    /// stores beside the address.
+    #[inline(always)]
+    pub(super) fn stamp(self) -> Stamp {
+        self.stamp
     }
 
     /// The generation of the slot this was made from. [`crate::slot`].
     #[inline(always)]
     pub(crate) fn generation(self) -> u32 {
-        self.generation
+        self.stamp.generation()
     }
 
     /// The tab page `raw` names, `None` for null — which is how the window
@@ -917,7 +919,7 @@ impl TabPage {
     /// This tab page's id. [`Win::handle`] for a tab page — a field load.
     #[inline(always)]
     pub(crate) fn handle(self) -> Handle {
-        self.id
+        self.stamp.handle()
     }
 
     /// This tab page's identity, for the list links and for holding across
@@ -926,14 +928,14 @@ impl TabPage {
     pub(crate) fn id(self) -> TabId {
         // A live tab page's handle is `LAST_TP_HANDLE`, which is incremented
         // before it is read, so it is never zero.
-        TabId(NonZero::new(self.id.get()).expect("a live tab page has a handle"))
+        TabId(NonZero::new(self.stamp.handle().get()).expect("a live tab page has a handle"))
     }
 
     /// Give this tab page its handle. [`Win::set_handle`].
     #[inline]
     pub(crate) fn set_handle(&mut self, handle: Handle) {
         DerefMut::deref_mut(self).handle = handle;
-        self.id = handle;
+        self.stamp = Stamp::new(handle, self.stamp.generation());
     }
 
     /// Whether this is the tab page the editor is working in.
