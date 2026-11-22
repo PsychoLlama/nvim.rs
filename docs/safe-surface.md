@@ -411,7 +411,11 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   `Box`. The syntax block, `SynBlockRef`, holds the handle of the object
   that owns it (the buffer for its `b_s`, the window for an `:ownsyntax`
   block) and dereferences through it, so it is checked as that handle is;
-  its aliasing is the owner handle's, closed with theirs.
+  its aliasing is the owner handle's, closed with theirs. Cost, with the
+  park above, against the build before both (release, codegen-units = 1,
+  cachegrind Ir, two runs): scrbench +0.32..0.37 % (the syntax block's owner check),
+  mkspellbench +0.5..0.6 % (its base moves 0.6 % between runs), every
+  other bench within ±0.3 %.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with
