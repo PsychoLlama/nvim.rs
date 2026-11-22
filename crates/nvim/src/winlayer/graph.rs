@@ -41,7 +41,7 @@ use crate::memline::state::MemLine;
 use crate::memory::XString;
 use crate::optionstr::BUF_STRING_OPTIONS;
 use crate::registry::id_map;
-use crate::slot::{Pooled, SlotBox, SlotRef};
+use crate::slot::{Parked, Pooled, SlotBox};
 use crate::types::{BufName, Buffer, Handle, Key, Tabpage, Window};
 use core::ffi::c_int;
 use core::mem::MaybeUninit;
@@ -392,37 +392,42 @@ impl Saved {
 /// By the time a window is freed its fields have been released one by one
 /// (`win_free`), its handle has left the registry and it is off every list,
 /// so what is left is the slot [`Win::alloc`] filled, with a `Window` whose
-/// contents no longer count. That is what this holds: dropping it empties
-/// the slot -- every handle to the window goes stale -- and runs no
-/// destructor, as the `xfree` of the block did not. The free path either
-/// drops it at once or parks it in the deferred-free set while an
-/// autocommand runs ([`super::defer_free_window`]).
+/// contents no longer count. That is what this holds: every handle to the
+/// window went stale when it was made, and dropping it frees the slot and
+/// runs no destructor, as the `xfree` of the block did not. The free path
+/// either drops it at once or parks it in the deferred-free set while an
+/// autocommand runs ([`super::defer_free_window`]); the slot takes no new
+/// window until then.
 ///
 /// The one way to get one is [`forget_window`], so the only windows emptied
 /// this way are the ones the window registry held.
 #[derive(Debug)]
 pub(crate) struct ParkedWindow {
-    slot: SlotRef<Window>,
+    /// Always `Some` until `drop` takes it.
+    parked: Option<Parked<Window>>,
 }
 
 impl Drop for ParkedWindow {
     fn drop(&mut self) {
-        Window::pool().with_mut(|pool| pool.forget(self.slot));
+        if let Some(parked) = self.parked.take() {
+            parked.abandon();
+        }
     }
 }
 
-/// Take `win` out of the registry for good, answering its slot: dropping
-/// the answer empties it. `None` when nothing is registered under its
-/// handle.
+/// Take `win` out of the registry for good, answering its slot: every
+/// handle to it is stale from here on, and dropping the answer frees the
+/// slot. `None` when nothing is registered under its handle.
 ///
 /// The caller must have released the window's fields and unlinked it from
-/// every list first, and must not use any `Win` of it afterwards -- the
-/// re-entry rule's "it did not survive", made by the free path itself. A
-/// window that stays alive out of the registry (the idle autocommand
-/// window) goes through [`super::hide_window`] instead.
+/// every list first -- the re-entry rule's "it did not survive", made by
+/// the free path itself. A window that stays alive out of the registry (the
+/// idle autocommand window) goes through [`super::hide_window`] instead.
 #[must_use = "dropping the answer is the free; ignoring it frees the window at once"]
 pub(crate) fn forget_window(win: Win) -> Option<ParkedWindow> {
-    super::handles::unregister_window(win).map(|slot| ParkedWindow { slot })
+    super::handles::unregister_window(win).map(|slot| ParkedWindow {
+        parked: Some(Parked::of(slot)),
+    })
 }
 
 impl Win {

@@ -39,7 +39,7 @@ use core::num::NonZero;
 
 use crate::global_cell::GlobalCell;
 use crate::registry::{HandleRegistry, OwnedRegistry, PendingFree};
-use crate::slot::{Pooled, SlotBox, SlotPool, SlotRef};
+use crate::slot::{Parked, Pooled, SlotBox, SlotPool, SlotRef};
 use crate::types::{Buffer, Frame, Handle, Tabpage, Window};
 use crate::winlayer::graph::ParkedWindow;
 use crate::winlayer::{Buf, FrameRef, TabPage, Win};
@@ -272,8 +272,8 @@ pub(crate) fn forget_frame(frame: FrameRef) -> Option<SlotBox<Frame>> {
 // order within each is still last-deferred-first-freed.
 
 /// Buffers whose allocation is waiting for the outermost autocommand. The
-/// set owns them: it took the [`SlotBox`] the registry gave the free path.
-static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<SlotBox<Buffer>>> =
+/// set owns them: it parked the [`SlotBox`] the registry gave the free path.
+static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<Parked<Buffer>>> =
     GlobalCell::new(PendingFree::new());
 
 /// Windows whose block is waiting for the outermost autocommand. The set
@@ -285,9 +285,12 @@ static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<ParkedWindow>> =
 ///
 /// Everything else about the buffer is torn down already and its handle is
 /// out of the registry; what is left is the memory, which this set owns until
-/// [`free_deferred`] drops it. The caller must not use the buffer again.
+/// [`free_deferred`] drops it. Every handle to the buffer goes stale **here**,
+/// not when the memory goes: a handler further out that still holds one is
+/// refused at its next dereference rather than reading a torn-down buffer.
 pub(crate) fn defer_free_buffer(buffer: SlotBox<Buffer>) {
-    PENDING_FREE_BUFFERS.with_mut(|pending| pending.park(buffer));
+    let parked = buffer.park();
+    PENDING_FREE_BUFFERS.with_mut(|pending| pending.park(parked));
 }
 
 /// [`defer_free_buffer`] for a window's block.
@@ -304,10 +307,10 @@ pub(crate) fn defer_free_window(block: ParkedWindow) {
 /// its list head each time round.
 pub(crate) fn free_deferred() {
     // Each allocation was given up by its owner and nothing has reached it
-    // since: the handle left the registry before it was parked. Dropping the
-    // buffer's `SlotBox` runs `Buffer`'s destructor in its slot and empties
-    // it, and dropping a `ParkedWindow` empties its window's; both outside
-    // the `with_mut`, so that nothing is borrowed while they run.
+    // since: its handles went stale when it was parked. Dropping a parked
+    // buffer runs `Buffer`'s destructor in its slot and frees the slot, and
+    // dropping a `ParkedWindow` frees its window's; both outside the
+    // `with_mut`, so that nothing is borrowed while they run.
     while let Some(buf) = PENDING_FREE_BUFFERS.with_mut(PendingFree::take_next) {
         drop(buf);
     }

@@ -28,7 +28,7 @@
 //! # What this does not check
 //!
 //! A [`SlotRef`] is `Copy`, and [`DerefMut`] through one copy while a borrow
-//! from another is held aliases, as [`Live`](crate::winlayer::Live) does:
+//! from another is held aliases, as the `winlayer` handles do:
 //! the handle checks **liveness**, not exclusivity. The borrow lasts as long
 //! as the field access that asked for it; hold none across a call that may
 //! reach the same value through another copy.
@@ -606,19 +606,74 @@ impl<T: Pooled> SlotBox<T> {
     }
 }
 
+impl<T: Pooled> SlotBox<T> {
+    /// Give the value up **now** while keeping its memory for later: every
+    /// handle to it goes stale at once, and the value stays in its slot,
+    /// owned by what this answers, until that is dropped. For an owner that
+    /// has torn its value down but whose memory something may still be
+    /// standing on (a buffer freed while an autocommand runs).
+    pub(crate) fn park(self) -> Parked<T> {
+        let slot = ManuallyDrop::new(self).slot;
+        Parked::of(slot)
+    }
+}
+
 impl<T: Pooled> Drop for SlotBox<T> {
     fn drop(&mut self) {
-        let detached = T::pool().with_mut(|pool| pool.detach(self.slot));
-        // The destructor runs with the pool let go: it may free values of
-        // its own type.
-        let slot = detached.empty();
-        T::pool().with_mut(|pool| pool.reclaim(slot));
+        drop(Parked::of(self.slot));
     }
 }
 
 impl<T: Pooled> fmt::Debug for SlotBox<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "SlotBox({:?})", self.slot)
+    }
+}
+
+/// A value its owner gave up whose slot is not yet vacant: named by no
+/// handle (its generation moved on when it was parked), still initialised,
+/// and off the vacant list, so the slot cannot take a new tenant while
+/// something may still be standing on the old one's memory. Dropping it
+/// ends the value in place and frees the slot for the next value;
+/// [`Parked::abandon`] frees the slot without the destructor.
+pub(crate) struct Parked<T: Pooled> {
+    slot: NonNull<Slot<T>>,
+}
+
+impl<T: Pooled> Parked<T> {
+    /// Park the live value `r` names: every handle to it goes stale.
+    ///
+    /// # Panics
+    /// When `r` is stale.
+    #[track_caller]
+    pub(crate) fn of(r: SlotRef<T>) -> Self {
+        let detached = T::pool().with_mut(|pool| pool.detach(r));
+        Parked {
+            slot: ManuallyDrop::new(detached).slot,
+        }
+    }
+
+    /// Free the slot for the next value **without** running the value's
+    /// destructor: for an owner that released what the value held by hand
+    /// (a window, whose block upstream freed with a bare `xfree`).
+    pub(crate) fn abandon(self) {
+        let slot = ManuallyDrop::new(self).slot;
+        T::pool().with_mut(|pool| pool.reclaim(slot));
+    }
+}
+
+impl<T: Pooled> Drop for Parked<T> {
+    fn drop(&mut self) {
+        // The destructor runs with the pool let go: it may free values of
+        // its own type.
+        let slot = Detached { slot: self.slot }.empty();
+        T::pool().with_mut(|pool| pool.reclaim(slot));
+    }
+}
+
+impl<T: Pooled> fmt::Debug for Parked<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Parked({} @ {:p})", index_of(self.slot), self.slot)
     }
 }
 
@@ -790,6 +845,28 @@ mod tests {
         assert_eq!(next.handle().0, 8);
         drop(next);
         assert_eq!(DROPS.get(), 2);
+
+        // Parking: the handles go stale at once, the value stays, and the
+        // slot takes no new value until the parked one is dropped.
+        let owner = SlotBox::new(Counted(9));
+        let handle = owner.handle();
+        let parked = owner.park();
+        assert!(!handle.is_live());
+        assert_eq!(DROPS.get(), 2);
+        let other = SlotBox::new(Counted(10));
+        assert_ne!(other.handle().raw(), handle.raw());
+        drop(parked);
+        assert_eq!(DROPS.get(), 3);
+        let next = SlotBox::new(Counted(11));
+        assert_eq!(next.handle().raw(), handle.raw());
+        // Abandoning frees the slot without the destructor.
+        next.park().abandon();
+        assert_eq!(DROPS.get(), 3);
+        let again = SlotBox::new(Counted(12));
+        assert_eq!(again.handle().raw(), handle.raw());
+        drop(again);
+        drop(other);
+        assert_eq!(DROPS.get(), 5);
     }
 
     /// **The shape `free_buffer` has**: an address is taken out while the

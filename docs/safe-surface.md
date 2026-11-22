@@ -388,9 +388,17 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   +2.43 %, readbench +2.37 %, spellbench +2.07 %, scrbench +1.93 %,
   markbench +1.41 %, undobench +1.25 %, rpcbench +0.91 %, evalbench
   +0.41 %, rebench +0.39 %, inbench +0.23 %, parser +0.09 %, mkspellbench
-  −0.33 %. **Liveness is what closed; aliasing is not:** two copies still
-  lend overlapping `&mut` (the `edit()` + EDIT-bit slices), and `PosRef`,
-  `Live<T>`, `GridRef` and `Term` carry no generation yet.
+  −0.33 %. A buffer or window freed while an autocommand runs is refused
+  from the moment its free path parks it, not when the outermost
+  autocommand gives its memory back: the slot's generation moves on at the
+  park and the slot stays off the vacant list until then (`slot::Parked`),
+  so a handler further out that kept a handle to the torn-down object
+  panics at its next dereference instead of reading what is left of it.
+  Functional, oldtest and the sweep (debug and release) ran unchanged with
+  it: nothing read a parked object. **Liveness is what closed; aliasing is
+  not:** two copies still lend overlapping `&mut` (the `edit()` + EDIT-bit
+  slices), and `PosRef`, `Live<T>`, `GridRef` and `Term` carry no
+  generation yet.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with
