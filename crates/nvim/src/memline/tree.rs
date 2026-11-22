@@ -67,13 +67,16 @@ impl MemLine {
 ///
 /// Never fails: the failure paths cache the `???` placeholder.
 pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
-    if !buffer.b_ml.is_open() {
+    // One dereference for the walk (each through the handle checks it is
+    // live), ended before anything that can run a message.
+    let ml = &mut buffer.b_ml;
+    if !ml.is_open() {
         // There are no lines at all.
-        buffer.b_ml.cache_placeholder(c"", LineNr::ZERO);
+        ml.cache_placeholder(c"", LineNr::ZERO);
         return;
     }
 
-    if lnum > buffer.b_ml.ml_line_count {
+    if lnum > ml.ml_line_count {
         if ML_GET_RECURSIVE.get() == 0 {
             // Avoid giving this message for a recursive call, which
             // happens when the redraw it triggers reads the same line.
@@ -91,24 +94,24 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
 
     // If it is the line handed out last time, it is already unpacked;
     // otherwise the one that was may need flushing first.
-    if buffer.b_ml.cached_lnum() != lnum {
+    if ml.cached_lnum() != lnum {
         // The common case, a run of reads through one block: the line is in
         // the block already locked and nothing is waiting to be written
         // back, so the flush below would only forget the cached line and
         // the walk would only answer the locked block. Both are done here
         // without the two calls.
-        if !buffer.b_ml.line_is_dirty()
-            && let Some(id) = buffer.b_ml.locked_id()
-            && buffer.b_ml.locked_low() <= lnum
-            && lnum <= buffer.b_ml.locked_high()
+        if !ml.line_is_dirty()
+            && let Some(id) = ml.locked_id()
+            && ml.locked_low() <= lnum
+            && lnum <= ml.locked_high()
         {
-            if buffer.b_ml.cached_lnum() != LineNr::ZERO {
-                buffer.b_ml.clear_cache();
+            if ml.cached_lnum() != LineNr::ZERO {
+                ml.clear_cache();
             }
-            let idx = (lnum - buffer.b_ml.locked_low()).cast_unsigned() as usize;
-            buffer.b_ml.cache_block_line(id, idx, lnum);
+            let idx = (lnum - ml.locked_low()).cast_unsigned() as usize;
+            ml.cache_block_line(id, idx, lnum);
             if will_change {
-                buffer.b_ml.locked_has_moved();
+                ml.locked_has_moved();
                 let text = buffer.b_ml.cached_bytes();
                 ml_add_deleted_len_buf(buffer, text, text.len());
             }
@@ -123,8 +126,9 @@ pub(crate) fn fetch_line(mut buffer: Buf, lnum: LineNr, will_change: bool) {
             line_not_found(buffer, lnum);
             return;
         };
-        let idx = (lnum - buffer.b_ml.locked_low()).cast_unsigned() as usize;
-        buffer.b_ml.cache_block_line(id, idx, lnum);
+        let ml = &mut buffer.b_ml;
+        let idx = (lnum - ml.locked_low()).cast_unsigned() as usize;
+        ml.cache_block_line(id, idx, lnum);
     }
 
     if will_change {
@@ -285,33 +289,33 @@ pub(crate) fn ml_new_ptr(memfile: &mut MemFile) -> BlockId {
 ///
 /// [`LockedBlock::lineadd`]: crate::memline::state::LockedBlock::lineadd
 pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Option<BlockId> {
+    // One dereference for the walk (each through the handle checks it is
+    // live, and this is every read's path), taken again only after a call
+    // that is handed the buffer, and ended before a message.
+    let mut ml = &mut buffer.b_ml;
+
     // If a block is locked, see whether the wanted line is in it. Not
     // for ML_FLUSH (the point of which is to release it), and not for
     // the actions that have to rebuild the stack.
-    if buffer.b_ml.is_locked() {
-        if action & ML_SIMPLE != 0
-            && buffer.b_ml.locked_low() <= lnum
-            && buffer.b_ml.locked_high() >= lnum
-        {
+    if ml.is_locked() {
+        if action & ML_SIMPLE != 0 && ml.locked_low() <= lnum && ml.locked_high() >= lnum {
             // Remember to update the pointer blocks and the stack later.
             if action == ML_INSERT {
-                buffer.b_ml.shift_locked(1);
+                ml.shift_locked(1);
             } else if action == ML_DELETE {
-                buffer.b_ml.shift_locked(-1);
+                ml.shift_locked(-1);
             }
-            return buffer.b_ml.locked_id();
+            return ml.locked_id();
         }
 
         // Give it back, telling the memfile what was done to it, and
         // then repair the line counts in the pointer blocks above: lines
         // were added or deleted in it and they were never told.
-        if let Some(locked) = buffer.b_ml.unlock() {
-            buffer
-                .b_ml
-                .memfile()
-                .put(locked.id, locked.dirty, locked.moved);
+        if let Some(locked) = ml.unlock() {
+            ml.memfile().put(locked.id, locked.dirty, locked.moved);
             if locked.lineadd != 0 {
                 ml_lineadd(buffer, locked.lineadd);
+                ml = &mut buffer.b_ml;
             }
         }
     }
@@ -323,64 +327,65 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
     let mut bnum: BlockNr = 1; // start at the root of the tree
     let mut page_count: c_int = 1;
     let mut low: LineNr = LineNr::ONE;
-    let mut high: LineNr = buffer.b_ml.ml_line_count;
+    let mut high: LineNr = ml.ml_line_count;
 
     if action == ML_FIND {
         // The previous walk's stack usually still covers this line —
         // reads come in runs. Restart from the deepest entry that does.
-        let mut top = buffer.b_ml.stack_len();
+        let mut top = ml.stack_len();
         let mut resumed = false;
         while top > 0 {
             top -= 1;
-            let ip = buffer.b_ml.stack_at(top);
+            let ip = ml.stack_at(top);
             if ip.ip_low <= lnum && ip.ip_high >= lnum {
                 bnum = ip.ip_bnum;
                 low = ip.ip_low;
                 high = ip.ip_high;
-                buffer.b_ml.stack_truncate(top); // drop the entry itself
+                ml.stack_truncate(top); // drop the entry itself
                 resumed = true;
                 break;
             }
         }
         if !resumed {
-            buffer.b_ml.stack_clear(); // not found, start at the root
+            ml.stack_clear(); // not found, start at the root
         }
     } else {
         // ML_DELETE or ML_INSERT: the whole path has to be rewritten.
-        buffer.b_ml.stack_clear();
+        ml.stack_clear();
     }
 
     // Search downwards until a data block is found.
-    while let Some(id) = buffer.b_ml.memfile().get(bnum, page_count.cast_unsigned()) {
+    while let Some(id) = ml.memfile().get(bnum, page_count.cast_unsigned()) {
         if action == ML_INSERT {
             high += 1;
         } else if action == ML_DELETE {
             high -= 1;
         }
 
-        if DataBlock(buffer.b_ml.page(id)).is_data() {
-            buffer.b_ml.lock(id, low, high);
+        if DataBlock(ml.page(id)).is_data() {
+            ml.lock(id, low, high);
             return Some(id);
         }
 
-        // Anything that is not a data block must be a pointer block.
-        if !PointerBlock(buffer.b_ml.page(id)).is_pointer() {
+        // Anything that is not a data block must be a pointer block. The
+        // block goes back before the message, which may redraw.
+        if !PointerBlock(ml.page(id)).is_pointer() {
+            ml.put(id, false);
             iemsg(gettext(c"E317: Pointer block id wrong"));
-            buffer.b_ml.put(id, false);
             break;
         }
 
-        let top = ml_add_stack(buffer);
+        let top = ml.stack_push();
         let frame = InfoPtr {
             ip_bnum: bnum,
             ip_low: low,
             ip_high: high,
             ip_index: -1, // index not known yet
         };
-        buffer.b_ml.stack_set(top, frame);
+        ml.stack_set(top, frame);
 
         let mut dirty = false;
-        let pointers = PointerBlock(buffer.b_ml.page(id));
+        let pointers = PointerBlock(ml.page(id));
         let count = usize::from(pointers.count());
         let mut idx = 0;
         for t in pointers.line_counts() {
@@ -393,20 +398,21 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
 
         if idx >= count {
             // Past the end: the tree disagrees with the line count.
-            if lnum > buffer.b_ml.ml_line_count {
+            let line_count = ml.ml_line_count;
+            ml.put(id, false);
+            if lnum > line_count {
                 siemsg!(
                     "E322: Line number out of range: {} past the end",
-                    int64_t::from(lnum) - int64_t::from(buffer.b_ml.ml_line_count)
+                    int64_t::from(lnum) - int64_t::from(line_count)
                 );
             } else {
                 siemsg!("E323: Line count wrong in block {}", bnum);
             }
-            buffer.b_ml.put(id, false);
             break;
         }
 
         let entry = pointers.entry(idx);
-        buffer.b_ml.stack_set_index(top, len_as_int(idx));
+        ml.stack_set_index(top, len_as_int(idx));
         bnum = entry.pe_bnum;
         page_count = entry.pe_page_count;
         high = low - 1;
@@ -415,22 +421,22 @@ pub(crate) fn ml_find_line(mut buffer: Buf, lnum: LineNr, action: c_int) -> Opti
         // A negative block number is one that has not been written yet;
         // it may since have been given a real one.
         if bnum < 0 {
-            let renumbered = buffer.b_ml.memfile().trans_del(bnum);
+            let renumbered = ml.memfile().trans_del(bnum);
             if bnum != renumbered {
                 bnum = renumbered;
-                PointerBlock(buffer.b_ml.page_mut(id)).set_bnum(idx, bnum);
+                PointerBlock(ml.page_mut(id)).set_bnum(idx, bnum);
                 dirty = true;
             }
         }
 
         if action == ML_DELETE {
-            PointerBlock(buffer.b_ml.page_mut(id)).add_line_count(idx, -1);
+            PointerBlock(ml.page_mut(id)).add_line_count(idx, -1);
             dirty = true;
         } else if action == ML_INSERT {
-            PointerBlock(buffer.b_ml.page_mut(id)).add_line_count(idx, 1);
+            PointerBlock(ml.page_mut(id)).add_line_count(idx, 1);
             dirty = true;
         }
-        buffer.b_ml.put(id, dirty);
+        ml.put(id, dirty);
     }
 
     // The walk failed. For ML_DELETE/ML_INSERT the counts on the way

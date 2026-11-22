@@ -364,10 +364,13 @@ pub fn ml_line_alloced() -> bool {
 /// Insert `line` (its NUL the last byte) after line `lnum` of `buffer`,
 /// whose memline is open, flushing any pending change first.
 fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), LineError> {
-    if lnum > buffer.b_ml.ml_line_count {
+    // One dereference for both questions (each through the handle checks
+    // it is live): a file read asks them once per line.
+    let ml = &buffer.b_ml;
+    if lnum > ml.ml_line_count {
         return Err(LineError::NoSuchLine);
     }
-    if buffer.b_ml.cached_lnum() != LineNr::ZERO {
+    if ml.cached_lnum() != LineNr::ZERO {
         // This may invoke ml_append_int in turn.
         ml_flush_line(buffer);
     }

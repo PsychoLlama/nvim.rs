@@ -99,7 +99,10 @@ pub(crate) fn ml_append_int(
     line: &[u8],
     flags: c_int,
 ) -> Result<(), LineError> {
-    if lnum > buffer.b_ml.ml_line_count || !buffer.b_ml.is_open() {
+    // One dereference for the common case (each through the handle checks
+    // it is live): a file read appends every line through here.
+    let b: &mut Buffer = &mut buffer;
+    if lnum > b.b_ml.ml_line_count || !b.b_ml.is_open() {
         return Err(LineError::NoSuchLine);
     }
 
@@ -111,11 +114,16 @@ pub(crate) fn ml_append_int(
     // Space needed for the text, and then for its index entry too.
     let space_needed = int64_t::from(new.len()) + int64_t::from(INDEX_BYTES);
 
-    if !append_to_locked(&mut buffer.b_ml, lnum, &new, space_needed) {
+    if !append_to_locked(&mut b.b_ml, lnum, &new, space_needed) {
         return append_by_walk(buffer, lnum, &new, space_needed);
     }
-    buffer.b_ml.ml_flags.clear(MlFlags::EMPTY);
-    count_new_line(buffer);
+    b.b_ml.ml_flags.clear(MlFlags::EMPTY);
+    // The buffer holds one more line (`count_new_line`, through the one
+    // borrow).
+    if b.b_prev_line_count == 0 {
+        b.b_prev_line_count = b.b_ml.ml_line_count.get();
+    }
+    b.b_ml.ml_line_count += 1;
     // The line was inserted below `lnum`.
     buffer.update_line_chunks(lnum + 1, new.len().cast_signed(), ML_CHNK_ADDLINE);
     Ok(())

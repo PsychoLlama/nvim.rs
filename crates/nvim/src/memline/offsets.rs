@@ -49,20 +49,23 @@ impl Buf {
         // SAFETY: the caller's buffer, reached through a handle that
         // borrows it for the one access that asked and no longer.
         let mut b = self;
+        // One dereference for the update (each through the handle checks it
+        // is live): this runs once per line a file read appends.
+        let ml = &mut b.b_ml;
         let mut curline = ML_UPD_LASTCURLINE.get();
         let mut curix = ML_UPD_LASTCURIX.get();
 
-        if b.b_ml.ml_chunks.is_off() || len_arg == 0 {
+        if ml.ml_chunks.is_off() || len_arg == 0 {
             return;
         }
-        if !b.b_ml.ml_chunks.is_built() {
-            b.b_ml.ml_chunks.build();
+        if !ml.ml_chunks.is_built() {
+            ml.ml_chunks.build();
         }
 
-        if updtype == ML_CHNK_UPDLINE && b.b_ml.ml_line_count == LineNr::ONE {
+        if updtype == ML_CHNK_UPDLINE && ml.ml_line_count == LineNr::ONE {
             // First line in an empty buffer, from ml_flush_line: reset.
-            let textlen = b.b_ml.cached_len();
-            b.b_ml.ml_chunks.reset_to_one(textlen.get());
+            let textlen = ml.cached_len();
+            ml.ml_chunks.reset_to_one(textlen.get());
             return;
         }
 
@@ -76,17 +79,13 @@ impl Buf {
         {
             curline = LineNr::ONE;
             curix = 0;
-            while curix + 1 < b.b_ml.ml_chunks.len()
-                && line >= curline + b.b_ml.ml_chunks.lines(curix)
-            {
-                curline += b.b_ml.ml_chunks.lines(curix);
+            while curix + 1 < ml.ml_chunks.len() && line >= curline + ml.ml_chunks.lines(curix) {
+                curline += ml.ml_chunks.lines(curix);
                 curix += 1;
             }
-        } else if curix + 1 < b.b_ml.ml_chunks.len()
-            && line >= curline + b.b_ml.ml_chunks.lines(curix)
-        {
+        } else if curix + 1 < ml.ml_chunks.len() && line >= curline + ml.ml_chunks.lines(curix) {
             // The cached position is one chunk stale; step it on.
-            curline += b.b_ml.ml_chunks.lines(curix);
+            curline += ml.ml_chunks.lines(curix);
             curix += 1;
         }
 
@@ -95,7 +94,7 @@ impl Buf {
         } else {
             len_arg
         };
-        b.b_ml.ml_chunks.add_size(curix, len);
+        ml.ml_chunks.add_size(curix, len);
 
         if updtype == ML_CHNK_ADDLINE {
             if !ml_chunk_addline(self, line, curline, curix) {
@@ -121,20 +120,22 @@ impl Buf {
 /// # Panics
 /// When the chunk index has no chunk `curix`.
 fn ml_chunk_addline(mut b: Buf, line: LineNr, curline: LineNr, curix: usize) -> bool {
-    b.b_ml.ml_chunks.add_lines(curix, 1);
+    // One dereference until the calls that take the buffer.
+    let ml = &mut b.b_ml;
+    ml.ml_chunks.add_lines(curix, 1);
 
-    if b.b_ml.ml_chunks.lines(curix) >= MLCS_MAXL {
+    if ml.ml_chunks.lines(curix) >= MLCS_MAXL {
         return ml_chunk_split(b, curix, curline);
     }
 
-    if b.b_ml.ml_chunks.lines(curix) >= MLCS_MINL
-        && curix + 1 == b.b_ml.ml_chunks.len()
-        && b.b_ml.ml_line_count - line <= 1
+    if ml.ml_chunks.lines(curix) >= MLCS_MINL
+        && curix + 1 == ml.ml_chunks.len()
+        && ml.ml_line_count - line <= 1
     {
         // This is the last chunk and starting another one after it is
         // cheap right now, so do it and save the walk later on.
-        b.b_ml.ml_chunks.push_empty();
-        if line != b.b_ml.ml_line_count {
+        ml.ml_chunks.push_empty();
+        if line != ml.ml_line_count {
             // The line is just before the last one, so move the last
             // line's size over. This is the common case while loading a
             // file.
@@ -294,18 +295,23 @@ impl Buf {
             curix += 1;
         }
 
-        // Then walk the data blocks of that chunk line by line.
+        // Then walk the data blocks of that chunk line by line. A find
+        // changes no line count, so the bound is read once; each block is
+        // read through one borrow of the memline, taken after the find.
+        let line_count = b.b_ml.ml_line_count;
         while lnum != LineNr::ZERO && curline < lnum || offset != 0 && size < offset {
             // The bounds test has to come first: ml_find_line complains about
             // a line past the end.
-            if curline > b.b_ml.ml_line_count {
+            if curline > line_count {
                 return None;
             }
             let id = ml_find_line(self, curline, ML_FIND)?;
-            let count = b.b_ml.locked_high() - b.b_ml.locked_low() + 1;
-            let start_idx = curline - b.b_ml.locked_low();
+            let ml = &self.b_ml;
+            let (locked_low, locked_high) = (ml.locked_low(), ml.locked_high());
+            let count = locked_high - locked_low + 1;
+            let start_idx = curline - locked_low;
             let mut idx = start_idx;
-            let page = self.b_ml.page(id);
+            let page = ml.page(id);
             let data = DataBlock(page);
             let starts = data.index_entries(count.cast_unsigned() as usize);
             let start_of = |idx: c_int| {
@@ -350,12 +356,12 @@ impl Buf {
                     low32(offset - size + len - (text_end - start_of(idx - 1))).cast_signed()
                 };
                 curline += idx - start_idx + extra;
-                if curline > b.b_ml.ml_line_count {
+                if curline > line_count {
                     return None; // exactly one byte beyond the end
                 }
                 return Some(curline.get());
             }
-            curline = b.b_ml.locked_high() + 1;
+            curline = locked_high + 1;
         }
 
         if lnum != LineNr::ZERO {
