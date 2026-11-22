@@ -61,7 +61,7 @@ impl InsertEnd {
     fn pos(self) -> Pos {
         match self {
             Self::At(pos) => pos,
-            Self::CursorOf(win) => win.w_cursor,
+            Self::CursorOf(win) => win.w_cursor(),
         }
     }
 }
@@ -112,7 +112,7 @@ pub(crate) fn check_spell_redraw() {
 /// `Err` when undo is impossible, in which case the caller must not insert.
 pub(crate) fn stop_arrow() -> Result<(), Failed> {
     if ARROW_USED.get() {
-        INSSTART.set(Win::current().w_cursor); // new insertion starts here
+        INSSTART.set(Win::current().w_cursor()); // new insertion starts here
         if INSSTART.get().col > INSSTART_ORIG.get().col && !INS_NEED_UNDO.get() {
             // Don't update the original insert position when moved to the
             // right, except when nothing was inserted yet.
@@ -120,7 +120,7 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
         }
         let mut lines = Lines::current();
         INSSTART_TEXTLEN.set(ColNr::new(linetabsize_str(
-            lines.line(Win::current().w_cursor.lnum),
+            lines.line(Win::current().cursor().lnum()),
         )));
 
         if save_cursor_line().is_ok() {
@@ -185,17 +185,17 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
         // Only when something was actually inserted, or undo breaks.
         let mut cc;
         if !INS_NEED_UNDO.get() && has_format_option(FoFlag::AUTO) {
-            let tpos = Win::current().w_cursor;
+            let tpos = Win::current().w_cursor();
 
             // At the end of a line after a space, formatting would move
             // the cursor to the following word; move it onto the space
             // first so it does not.
             cc = c_int::from(b'x');
-            if Win::current().w_cursor.col > ColNr::ZERO && char_at_cursor() == 0 {
+            if Win::current().cursor().col() > ColNr::ZERO && char_at_cursor() == 0 {
                 dec_cursor();
                 cc = char_at_cursor();
                 if !ascii_iswhite(cc) {
-                    Win::current().w_cursor = tpos;
+                    Win::current().set_w_cursor(tpos);
                 }
             }
 
@@ -207,10 +207,10 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
                 }
                 // Still on the same character: keep its `coladd` too.
                 if char_at_cursor() == 0
-                    && Win::current().w_cursor.lnum == tpos.lnum
-                    && Win::current().w_cursor.col == tpos.col
+                    && Win::current().cursor().lnum() == tpos.lnum
+                    && Win::current().cursor().col() == tpos.col
                 {
-                    Win::current().w_cursor.coladd = tpos.coladd;
+                    Win::current().cursor().set_coladd(tpos.coladd);
                 }
             }
         }
@@ -227,17 +227,19 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
             && DID_AI.get()
             && (esc
                 || (!cpo_has(CpoFlag::INDENT)
-                    && Win::current().w_cursor.lnum != end_insert_pos.pos().lnum))
+                    && Win::current().cursor().lnum() != end_insert_pos.pos().lnum))
             && end_insert_pos.pos().lnum <= Buf::current().line_count()
         {
-            let mut tpos = Win::current().w_cursor;
+            let mut tpos = Win::current().w_cursor();
             let prev_col = end_insert_pos.pos().col;
 
-            Win::current().w_cursor = end_insert_pos.pos();
+            Win::current().set_w_cursor(end_insert_pos.pos());
             check_cursor_col(Win::current()); // make sure it is not past the line
             loop {
-                if char_at_cursor() == 0 && Win::current().w_cursor.col > ColNr::ZERO {
-                    Win::current().w_cursor.col -= 1;
+                if char_at_cursor() == 0 && Win::current().cursor().col() > ColNr::ZERO {
+                    Win::current()
+                        .cursor()
+                        .set_col(Win::current().cursor().col() - 1);
                 }
                 cc = char_at_cursor();
                 if !ascii_iswhite(cc) || del_char(true).is_err() {
@@ -245,14 +247,16 @@ pub(crate) fn stop_insert(end_insert_pos: Option<InsertEnd>, esc: bool, nomove: 
                 }
             }
 
-            if Win::current().w_cursor.lnum != tpos.lnum {
-                Win::current().w_cursor = tpos;
-            } else if Win::current().w_cursor.col < prev_col {
+            if Win::current().cursor().lnum() != tpos.lnum {
+                Win::current().set_w_cursor(tpos);
+            } else if Win::current().cursor().col() < prev_col {
                 // Reset `tpos`: the loop above may have invalidated it.
-                tpos = Win::current().w_cursor;
+                tpos = Win::current().w_cursor();
                 tpos.col += 1;
                 if cc != 0 && gchar_pos(&tpos) == Codepoint::NUL {
-                    Win::current().w_cursor.col += 1; // put the cursor back on the NUL
+                    Win::current()
+                        .cursor()
+                        .set_col(Win::current().cursor().col() + 1); // put the cursor back on the NUL
                 }
             }
 
@@ -290,8 +294,8 @@ pub(crate) fn ins_apply_autocmds(event: AutoEvent) -> bool {
 
     if event != AutoEvent::InsertLeave && tick != buf_get_changedtick(Buf::current()) {
         let _ = u_save(
-            Win::current().w_cursor.lnum,
-            Win::current().w_cursor.lnum + 1,
+            Win::current().cursor().lnum(),
+            Win::current().cursor().lnum() + 1,
         );
     }
     r

@@ -31,11 +31,11 @@ fn put_line(out: &mut dyn Write, args: core::fmt::Arguments<'_>) -> io::Result<(
 pub fn put_folds(out: &mut dyn Write, window: Win) -> io::Result<()> {
     if foldmethod_is_manual(window) {
         put_line(out, format_args!("silent! normal! zE"))?;
-        put_folds_recurse(out, &window.w_folds, 0)?;
+        put_folds_recurse(out, &window.read().w_folds, 0)?;
         put_line(out, format_args!("let &fdl = &fdl"))?;
     }
-    if window.w_fold_manual {
-        return put_foldopen_recurse(out, window, &window.w_folds, 0);
+    if window.w_fold_manual() {
+        return put_foldopen_recurse(out, window, &window.read().w_folds, 0);
     }
     Ok(())
 }
@@ -84,7 +84,7 @@ pub(super) fn put_foldopen_recurse(
         // A leaf: only write the command when its state differs from what
         // 'foldlevel' would give it anyway.
         let level = fold_level_win(window, fold.top + off);
-        let foldlevel = window.w_onebuf_opt.wo_fdl;
+        let foldlevel = window.wo_fdl();
         let differs = if fold.is(FoldState::Closed) {
             foldlevel >= OptInt::from(level)
         } else {

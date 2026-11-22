@@ -106,7 +106,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     } else {
         // The opening brace may have been on a continuation line; find
         // the start of *that*, by matching the rightmost paren.
-        Win::current().w_cursor.lnum = ourscope;
+        Win::current().cursor().set_lnum(ourscope);
         let mut lnum = ourscope;
         // The borrow ends with the statement: the match search reads other
         // lines, and only runs once `find_last_paren` found one.
@@ -122,7 +122,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         let js_or_keep_case =
             Buf::current().b_ind_js() != 0 || Buf::current().b_ind_keep_case_label() != 0;
         let starts_case = js_or_keep_case && {
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             let mut lines = Lines::current();
             let text = lines.line(cursor_lnum);
             is_case_label(text, skip::white(text), false)
@@ -156,7 +156,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         LOOKFOR_INITIAL
     };
     if lookfor != LOOKFOR_INITIAL {
-        Win::current().w_cursor.lnum = line.cur_curpos.lnum;
+        Win::current().cursor().set_lnum(line.cur_curpos.lnum);
         if find_match(lookfor, ourscope) {
             return get_indent();
         }
@@ -173,7 +173,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         lookfor_cpp_namespace = true;
     } else if start_brace == BRACE_AT_END {
         amount += Buf::current().b_ind_open_imag();
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let mut lines = Lines::current();
         let text = lines.line(cursor_lnum);
         let at = skip::white(text);
@@ -237,13 +237,15 @@ impl BlockScan<'_> {
     /// Walk back from the cursor to `ourscope`, looking for something to line
     /// up with.
     fn run(mut self) -> c_int {
-        Win::current().w_cursor = self.line.cur_curpos;
+        Win::current().set_w_cursor(self.line.cur_curpos);
         loop {
-            Win::current().w_cursor.lnum -= 1;
-            Win::current().w_cursor.col = ColNr::ZERO;
+            Win::current()
+                .cursor()
+                .set_lnum(Win::current().cursor().lnum() - 1);
+            Win::current().cursor().set_col(ColNr::ZERO);
 
             // Back at the start of our scope: line up with it.
-            if Win::current().w_cursor.lnum <= self.ourscope {
+            if Win::current().cursor().lnum() <= self.ourscope {
                 if self.at_scope_start() == Step::Done {
                     break;
                 }

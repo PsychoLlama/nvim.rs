@@ -186,7 +186,7 @@ pub fn ex_diffsplit(excmd: &mut ExArg) {
         return;
     }
     excmd.cmdidx = CmdIdx::split;
-    Win::current().w_onebuf_opt.wo_diff = 1;
+    Win::current().set_wo_diff(1);
     excmd.exedit(Some(old_curwin.id()));
     if old_curwin.is_current() {
         return;
@@ -195,11 +195,11 @@ pub fn ex_diffsplit(excmd: &mut ExArg) {
     if win_valid(old_curwin.id()) {
         diff_win_options(old_curwin, true);
         if let Some(old_buf) = old_curbuf.get() {
-            let lnum = diff_get_corresponding_line(old_buf, old_curwin.w_cursor.lnum);
-            Win::current().w_cursor.lnum = lnum;
+            let lnum = diff_get_corresponding_line(old_buf, old_curwin.cursor().lnum());
+            Win::current().cursor().set_lnum(lnum);
         }
     }
-    let height = Win::current().w_height;
+    let height = Win::current().w_height();
     scroll_to_fraction(Win::current(), height);
 }
 
@@ -232,31 +232,32 @@ fn set_diff_option(window: Win, value: bool) {
 /// restore.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub fn diff_win_options(mut window: Win, addbuf: bool) {
+pub fn diff_win_options(window: Win, addbuf: bool) {
     let saved = switch_window(window);
     new_fold_level();
     saved.restore();
 
     // Each option is saved only while the window is not already in diff
     // mode, so a second `:diffthis` cannot overwrite the saved values.
-    let first_time = window.w_onebuf_opt.wo_diff == 0;
+    let first_time = window.wo_diff() == 0;
     if first_time {
-        window.w_onebuf_opt.wo_scb_save = window.w_onebuf_opt.wo_scb;
+        window.set_wo_scb_save(window.wo_scb());
     }
-    window.w_onebuf_opt.wo_scb = 1;
+    window.set_wo_scb(1);
     if first_time {
-        window.w_onebuf_opt.wo_crb_save = window.w_onebuf_opt.wo_crb;
+        window.set_wo_crb_save(window.wo_crb());
     }
-    window.w_onebuf_opt.wo_crb = 1;
+    window.set_wo_crb(1);
     if DIFF_FLAGS.get() & DIFF_FOLLOWWRAP == 0 {
         if first_time {
-            window.w_onebuf_opt.wo_wrap_save = window.w_onebuf_opt.wo_wrap;
+            window.set_wo_wrap_save(window.wo_wrap());
         }
-        window.w_onebuf_opt.wo_wrap = 0;
-        window.w_skipcol = ColNr::ZERO;
+        window.set_wo_wrap(0);
+        window.set_w_skipcol(ColNr::ZERO);
     }
     if first_time {
-        window.w_onebuf_opt.wo_fdm_save = window.w_onebuf_opt.wo_fdm.clone();
+        let mut edit = window.edit();
+        edit.w_onebuf_opt.wo_fdm_save = edit.w_onebuf_opt.wo_fdm.clone();
     }
     let foldmethod = OptVal::string(ApiString::from_cstr(c"diff"));
     let scope = OptionSetFlags::LOCAL;
@@ -268,24 +269,25 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
         OptionTarget::Win(window),
     );
     if first_time {
-        window.w_onebuf_opt.wo_fen_save = window.w_onebuf_opt.wo_fen;
-        window.w_onebuf_opt.wo_fdl_save = window.w_onebuf_opt.wo_fdl;
-        window.w_onebuf_opt.wo_fdc_save = window.w_onebuf_opt.wo_fdc.clone();
+        window.set_wo_fen_save(window.wo_fen());
+        window.set_wo_fdl_save(window.wo_fdl());
+        let mut edit = window.edit();
+        edit.w_onebuf_opt.wo_fdc_save = edit.w_onebuf_opt.wo_fdc.clone();
     }
     // A single digit, because the option's buffer is one byte plus the
     // NUL. C's `assert()` is `debug_assert!`: it vanishes under NDEBUG.
     let width = DIFF_FOLDCOLUMN.get();
     debug_assert!((0..=9).contains(&width));
     let digit = u8::try_from(width.clamp(0, 9)).unwrap_or(0);
-    window.w_onebuf_opt.wo_fdc = Some(XString::from_bytes(&[b'0' + digit]));
-    window.w_onebuf_opt.wo_fen = 1;
-    window.w_onebuf_opt.wo_fdl = 0 as OptInt;
+    window.edit().w_onebuf_opt.wo_fdc = Some(XString::from_bytes(&[b'0' + digit]));
+    window.set_wo_fen(1);
+    window.set_wo_fdl(0 as OptInt);
     fold_update_all(window);
     changed_window_setting(window);
     if !p_sbo(|value| value.to_bytes().contains(&b'h')) {
         let _ = do_cmdline_cmd(c"set sbo+=hor");
     }
-    window.w_onebuf_opt.wo_diff_saved = 1;
+    window.set_wo_diff_saved(1);
     set_diff_option(window, true);
     if addbuf {
         diff_buf_add(window.buffer());
@@ -302,48 +304,48 @@ pub fn diff_win_options(mut window: Win, addbuf: bool) {
 pub fn ex_diffoff(excmd: &mut ExArg) {
     let mut diffwin = false;
     // `FOR_ALL_WINDOWS_IN_TAB(wp, CURTAB)`: always the `FIRSTWIN` list.
-    for mut wp in windows() {
+    for wp in windows() {
         let wanted = if excmd.forceit {
-            wp.w_onebuf_opt.wo_diff != 0
+            wp.wo_diff() != 0
         } else {
             wp.is_current()
         };
         if wanted {
             set_diff_option(wp, false);
-            if wp.w_onebuf_opt.wo_diff_saved != 0 {
-                if wp.w_onebuf_opt.wo_scb != 0 {
-                    wp.w_onebuf_opt.wo_scb = wp.w_onebuf_opt.wo_scb_save;
+            if wp.wo_diff_saved() != 0 {
+                if wp.wo_scb() != 0 {
+                    wp.set_wo_scb(wp.wo_scb_save());
                 }
-                if wp.w_onebuf_opt.wo_crb != 0 {
-                    wp.w_onebuf_opt.wo_crb = wp.w_onebuf_opt.wo_crb_save;
+                if wp.wo_crb() != 0 {
+                    wp.set_wo_crb(wp.wo_crb_save());
                 }
                 if DIFF_FLAGS.get() & DIFF_FOLLOWWRAP == 0
-                    && wp.w_onebuf_opt.wo_wrap == 0
-                    && wp.w_onebuf_opt.wo_wrap_save != 0
+                    && wp.wo_wrap() == 0
+                    && wp.wo_wrap_save() != 0
                 {
-                    wp.w_onebuf_opt.wo_wrap = 1;
-                    wp.w_leftcol = ColNr::ZERO;
+                    wp.set_wo_wrap(1);
+                    wp.set_w_leftcol(ColNr::ZERO);
                 }
-                wp.w_onebuf_opt.wo_fdm = saved_or(&wp.w_onebuf_opt.wo_fdm_save, c"manual");
-                wp.w_onebuf_opt.wo_fdc = saved_or(&wp.w_onebuf_opt.wo_fdc_save, c"0");
-                if wp.w_onebuf_opt.wo_fdl == 0 as OptInt {
-                    wp.w_onebuf_opt.wo_fdl = wp.w_onebuf_opt.wo_fdl_save;
+                {
+                    let mut edit = wp.edit();
+                    let opt = &mut edit.w_onebuf_opt;
+                    opt.wo_fdm = saved_or(&opt.wo_fdm_save, c"manual");
+                    opt.wo_fdc = saved_or(&opt.wo_fdc_save, c"0");
                 }
-                if wp.w_onebuf_opt.wo_fen != 0 {
+                if wp.wo_fdl() == 0 as OptInt {
+                    wp.set_wo_fdl(wp.wo_fdl_save());
+                }
+                if wp.wo_fen() != 0 {
                     let manual = foldmethod_is_manual(wp);
-                    wp.w_onebuf_opt.wo_fen = if manual {
-                        0
-                    } else {
-                        wp.w_onebuf_opt.wo_fen_save
-                    };
+                    wp.set_wo_fen(if manual { 0 } else { wp.wo_fen_save() });
                 }
                 fold_update_all(wp);
             }
-            wp.w_topfill = 0;
+            wp.set_w_topfill(0);
             changed_window_setting(wp);
             diff_buf_adjust(wp);
         }
-        diffwin = diffwin || wp.w_onebuf_opt.wo_diff != 0;
+        diffwin = diffwin || wp.wo_diff() != 0;
     }
     if excmd.forceit {
         diff_buf_clear();

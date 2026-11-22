@@ -36,7 +36,7 @@ use crate::winlayer::{Buf, Win};
 /// C's `COMPL_STARTPOS.lnum = curwin->w_cursor.lnum; COMPL_STARTPOS.col = col;`
 /// — the completion's anchor moved to `col` on the cursor's line.
 fn set_compl_startpos_here(col: ColNr) {
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     COMPL_STARTPOS.set(COMPL_STARTPOS.get().with_lnum(lnum).with_col(col));
 }
 
@@ -49,7 +49,9 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
     // `'complete'` functions called at the bottom run user code, and every
     // caller of the `get_*_compl_info` family used to re-fetch the line
     // afterwards for exactly that reason.
-    let line: Vec<u8> = Lines::current().line(Win::current().w_cursor.lnum).to_vec();
+    let line: Vec<u8> = Lines::current()
+        .line(Win::current().cursor().lnum())
+        .to_vec();
     let line: &[u8] = &line;
     let buffer = Buf::current();
     // The text from column `col`, read as the C string it was: past the end
@@ -156,7 +158,7 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
 /// `complete()` function.
 pub(crate) fn get_wholeline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
     let mut lines = Lines::current();
-    let line = lines.line(Win::current().w_cursor.lnum);
+    let line = lines.line(Win::current().cursor().lnum());
     COMPL_COL.set(ColNr::try_from(skip::white(line)).unwrap_or(ColNr::ZERO));
     COMPL_LENGTH.set(curs_col - COMPL_COL.get());
     if COMPL_LENGTH.get() < 0 {
@@ -170,7 +172,7 @@ pub(crate) fn get_wholeline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
 /// The pattern, column and length for filename completion.
 pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
     let mut lines = Lines::current();
-    let line = lines.line(Win::current().w_cursor.lnum);
+    let line = lines.line(Win::current().cursor().lnum());
     // Go back to just before the first filename character.
     if startcol > 0 {
         // C's MB_PTR_BACK: step back over one whole character.
@@ -205,7 +207,7 @@ pub(crate) fn get_cmdline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
     let mut xp = COMPL_XP.take().unwrap_or_default();
     let pattern = {
         let mut lines = Lines::current();
-        let line = lines.line(Win::current().w_cursor.lnum);
+        let line = lines.line(Win::current().cursor().lnum());
         let to = usize::try_from(curs_col).unwrap_or(0).min(line.len());
         ApiString::from_bytes(&line[..to])
     };
@@ -287,16 +289,16 @@ pub(crate) fn get_userdefined_compl_info(
     // The empty string is the argument's own, released with it.
     let args = [TypVal::Number(1), TypVal::string_from(b"")];
 
-    let pos = Win::current().w_cursor;
+    let pos = Win::current().w_cursor();
     let locked = Lock::text();
     let col = number_as_col(callback_call_retnr(cb, &args));
     drop(locked);
 
     STATE.set(save_state);
-    Win::current().w_cursor = pos; // restore the cursor position
+    Win::current().set_w_cursor(pos); // restore the cursor position
     check_cursor(Win::current()); // make sure the position is valid, just in case
     validate_cursor(Win::current());
-    if !equalpos(Win::current().w_cursor, pos) {
+    if !equalpos(Win::current().w_cursor(), pos) {
         emsg(gettext(E_COMPLDEL));
         return Err(Declined::Cancel);
     }
@@ -414,13 +416,13 @@ pub(crate) fn ins_compl_continue_search() {
     // It is a continued search.
     COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_INTRPT); // remove INTRPT
     if ctrl_x_mode_normal() || ctrl_x_mode_path_patterns() || ctrl_x_mode_path_defines() {
-        if COMPL_STARTPOS.get().lnum != Win::current().w_cursor.lnum {
+        if COMPL_STARTPOS.get().lnum != Win::current().cursor().lnum() {
             // The line (probably) wrapped: set compl_startpos to the first
             // non-blank in the line. If that is not a word character we
             // include it to get a better pattern, but then we don't want
             // the "\\<" prefix — checked below.
             let mut lines = Lines::current();
-            let line = lines.line(Win::current().w_cursor.lnum);
+            let line = lines.line(Win::current().cursor().lnum());
             COMPL_COL.set(ColNr::try_from(skip::white(line)).unwrap_or(ColNr::ZERO));
             set_compl_startpos_here(COMPL_COL.get());
             COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_SOL); // clear SOL if present
@@ -433,20 +435,20 @@ pub(crate) fn ins_compl_continue_search() {
                 let skip = usize::try_from((COMPL_STARTPOS.get().col + COMPL_LENGTH.get()).get())
                     .unwrap_or(0);
                 let mut lines = Lines::current();
-                let line = lines.line(Win::current().w_cursor.lnum);
+                let line = lines.line(Win::current().cursor().lnum());
                 let from = skip.min(line.len());
                 let col = ColNr::try_from(from + skip::white(&line[from..])).unwrap_or(ColNr::ZERO);
                 COMPL_STARTPOS.set(COMPL_STARTPOS.get().with_col(col));
             }
             COMPL_COL.set(COMPL_STARTPOS.get().col);
         }
-        COMPL_LENGTH.set(Win::current().w_cursor.col - COMPL_COL.get());
+        COMPL_LENGTH.set(Win::current().cursor().col() - COMPL_COL.get());
         // An `IOSIZE` buffer is used to add a "word from the next
         // line"; would we have enough space?  Just being paranoid.
         if COMPL_LENGTH.get() > IOSIZE - MIN_SPACE {
             COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_SOL);
             COMPL_LENGTH.set(IOSIZE - MIN_SPACE);
-            COMPL_COL.set(Win::current().w_cursor.col - COMPL_LENGTH.get());
+            COMPL_COL.set(Win::current().cursor().col() - COMPL_LENGTH.get());
         }
         COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_ADDING | CONT_N_ADDS);
         if COMPL_LENGTH.get() < 1 {
@@ -472,9 +474,9 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
         return Err(Failed);
     }
 
-    let curs_col = Win::current().w_cursor.col;
+    let curs_col = Win::current().cursor().col();
     COMPL_PENDING.set(0);
-    COMPL_LNUM.set(Win::current().w_cursor.lnum);
+    COMPL_LNUM.set(Win::current().cursor().lnum());
 
     if COMPL_CONT_STATUS.get() & CONT_INTRPT == CONT_INTRPT
         && COMPL_CONT_MODE.get() == CTRL_X_MODE.get()
@@ -495,7 +497,7 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
             COMPL_CONT_STATUS.set(0);
         }
         COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() | CONT_N_ADDS);
-        COMPL_STARTPOS.set(Win::current().w_cursor);
+        COMPL_STARTPOS.set(Win::current().w_cursor());
         startcol = curs_col.get();
         COMPL_COL.set(ColNr::ZERO);
     }
@@ -523,8 +525,8 @@ pub(crate) fn ins_compl_start() -> Result<(), Failed> {
             let _ = ins_eol(Key::CAR);
             Buf::current().edit().b_p_com = old;
             COMPL_LENGTH.set(0);
-            COMPL_COL.set(Win::current().w_cursor.col);
-            COMPL_LNUM.set(Win::current().w_cursor.lnum);
+            COMPL_COL.set(Win::current().cursor().col());
+            COMPL_LNUM.set(Win::current().cursor().lnum());
         }
     } else {
         EDIT_SUBMODE_PRE.set(None);
@@ -609,8 +611,8 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
     COMPL_NUM_BESTS.set(0);
 
     // Find the next match (and the following matches).
-    let save_w_wrow = Win::current().w_wrow;
-    let save_w_leftcol = Win::current().w_leftcol;
+    let save_w_wrow = Win::current().w_wrow();
+    let save_w_leftcol = Win::current().w_leftcol();
     let n = ins_compl_next(true, ins_compl_key2count(c), insert_match);
 
     // Reset the autocompletion timer expiry flag.
@@ -701,10 +703,10 @@ pub fn ins_complete(c: Key, enable_pum: bool) -> Result<(), Failed> {
 /// Move the cursor back to the start of the bad word, recording its length in
 /// `SPELL_BAD_LEN`.
 pub(crate) fn spell_back_to_badword() {
-    let tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor();
     let win = Win::current();
     SPELL_BAD_LEN.set(win.spell_move_to(BACKWARD, SMT_ALL, true, None));
-    if Win::current().w_cursor.col != tpos.col {
+    if Win::current().cursor().col() != tpos.col {
         start_arrow(Some(InsertEnd::At(tpos)));
     }
 }
@@ -714,7 +716,7 @@ pub(crate) fn spell_back_to_badword() {
 /// `compl_pattern`.
 pub(crate) fn compl_pattern_from_line() -> ApiString {
     let mut lines = Lines::current();
-    let text = compl_range(lines.line(Win::current().w_cursor.lnum));
+    let text = compl_range(lines.line(Win::current().cursor().lnum()));
     if p_ic() {
         ApiString::from_bytes(&foldcase(text, None))
     } else {
@@ -726,7 +728,7 @@ pub(crate) fn compl_pattern_from_line() -> ApiString {
 /// command-line pattern want.
 pub(crate) fn compl_text_from_line() -> ApiString {
     let mut lines = Lines::current();
-    ApiString::from_bytes(compl_range(lines.line(Win::current().w_cursor.lnum)))
+    ApiString::from_bytes(compl_range(lines.line(Win::current().cursor().lnum())))
 }
 
 /// `COMPL_COL .. COMPL_COL + COMPL_LENGTH` of `line`, clamped to it.

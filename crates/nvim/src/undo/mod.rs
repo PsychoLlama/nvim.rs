@@ -161,7 +161,7 @@ impl From<Failed> for UndoFailed {
 ///
 /// Safe: as [`u_save`], over the cursor's line.
 pub fn u_save_cursor() -> Result<(), Failed> {
-    let cur: LineNr = Win::current().w_cursor.lnum;
+    let cur: LineNr = Win::current().cursor().lnum();
     u_save((cur - 1).max(LineNr::ZERO), cur + 1)
 }
 
@@ -389,7 +389,7 @@ fn start_new_header(b: Buf) -> bool {
     b.set_b_u_seq_cur(seq);
     let win = Win::current();
     let now = os_time_raw();
-    let cursor_vcol = if virtual_active(win) && win.w_cursor.coladd > 0 {
+    let cursor_vcol = if virtual_active(win) && win.cursor().coladd() > 0 {
         getviscol()
     } else {
         ColNr::NONE
@@ -409,7 +409,7 @@ fn start_new_header(b: Buf) -> bool {
         uh.alt_next = old_curhead;
         uh.alt_prev = alt_prev;
         uh.time = now;
-        uh.cursor = win.w_cursor;
+        uh.cursor = win.w_cursor();
         uh.cursor_vcol = cursor_vcol;
         uh.flags = flags;
         uh.named_marks = named_marks;

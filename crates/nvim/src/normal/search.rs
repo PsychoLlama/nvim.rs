@@ -63,7 +63,7 @@ fn current_match_is_distinct() -> bool {
 /// `/` and `?`: read a pattern from the command line and search for it.
 pub(crate) fn nv_search(cmd_arg: &mut CmdArg) {
     let op = cmd_arg.op();
-    let save_cursor = Win::current().w_cursor;
+    let save_cursor = Win::current().w_cursor();
     // `g?` is rot13; `?` after it is the operator, not a search.
     if cmd_arg.cmdchar.is('?') && op.op_type == OpType::Rot13 {
         cmd_arg.cmdchar = Key::ascii(b'g');
@@ -78,7 +78,7 @@ pub(crate) fn nv_search(cmd_arg: &mut CmdArg) {
     }
     // Reading the pattern may itself have moved the cursor ('incsearch'),
     // in which case the previous position is already on the jump list.
-    let moved_while_typing = cmd_arg.arg != 0 || !equalpos(save_cursor, Win::current().w_cursor);
+    let moved_while_typing = cmd_arg.arg != 0 || !equalpos(save_cursor, Win::current().w_cursor());
     let mark = if moved_while_typing {
         0
     } else {
@@ -99,14 +99,14 @@ impl CmdArg {
 
 /// `n` and `N`: search again for the last pattern.
 pub(crate) fn nv_next(cmd_arg: &mut CmdArg) {
-    let old = Win::current().w_cursor;
+    let old = Win::current().w_cursor();
     let mut wrapped = false;
     let opt = SEARCH_MARK as c_int | cmd_arg.arg;
     let i = normal_search(cmd_arg, 0, b"", opt, Some(&mut wrapped));
     // A match that lands where the cursor already is, without having
     // wrapped, is the one we are standing on: search once more so `n`
     // always moves.
-    if i == Some(Hit::Match) && !wrapped && equalpos(old, Win::current().w_cursor) {
+    if i == Some(Hit::Match) && !wrapped && equalpos(old, Win::current().w_cursor()) {
         cmd_arg.count1 += 1;
         let again = SEARCH_MARK as c_int | cmd_arg.arg;
         normal_search(cmd_arg, 0, b"", again, None);
@@ -129,14 +129,14 @@ pub(crate) fn normal_search(
     wrapped: Option<&mut bool>,
 ) -> Option<Hit> {
     let mut sia = SearchItArg::default();
-    let prev_cursor = Win::current().w_cursor;
+    let prev_cursor = Win::current().w_cursor();
     let mut op = cmd_arg.op();
     op.motion_type = MotionType::CharWise;
     op.inclusive = false;
     // A search is one of the motions that fills the "1 last change"
     // register rather than the small-delete one.
     op.use_reg_one = true;
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
 
     let flags = opt | SEARCH_OPT as c_int | SEARCH_ECHO as c_int | SEARCH_MSG as c_int;
     let n = cmd_arg.count1;
@@ -150,7 +150,7 @@ pub(crate) fn normal_search(
         if hit == Hit::Linewise {
             op.motion_type = MotionType::LineWise;
         }
-        Win::current().w_cursor.coladd = 0;
+        Win::current().cursor().set_coladd(0);
         if op.op_type == OpType::Nop
             && FDO_FLAGS.get() & OPT_FDO_FLAG_SEARCH != 0
             && KEY_TYPED.get()
@@ -160,7 +160,7 @@ pub(crate) fn normal_search(
     } else {
         clear_op(op);
     }
-    if !equalpos(Win::current().w_cursor, prev_cursor) && current_match_is_distinct() {
+    if !equalpos(Win::current().w_cursor(), prev_cursor) && current_match_is_distinct() {
         redraw_later(Win::current(), UPD_SOME_VALID);
     }
     check_cursor(Win::current());
@@ -206,7 +206,7 @@ pub(crate) fn nv_mark_move_to(
         cmd_arg.op().use_reg_one = true;
     }
     cmd_arg.op().inclusive = false;
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
     res
 }
 
@@ -266,7 +266,7 @@ pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
         .and_then(|name| mark_get(Buf::current(), Win::current(), MARK_ALL, name));
     let move_res = nv_mark_move_to(cmd_arg, flags, fm.as_ref());
     if !virtual_active(Win::current()) {
-        Win::current().w_cursor.coladd = 0;
+        Win::current().cursor().set_coladd(0);
     }
     let moved = move_res & MARK_MOVE_SUCCESS as MarkMoveRes != 0
         && (move_res & MARK_SWITCHED_BUF as MarkMoveRes != 0

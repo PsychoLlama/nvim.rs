@@ -27,7 +27,7 @@ use crate::winlayer::{Buf, Win};
 /// The bytes `from .. to` of the cursor line, as a completion string.
 pub(crate) fn cursor_line_part(from: ColNr, to: ColNr) -> ApiString {
     let mut lines = Lines::current();
-    let line = lines.line(Win::current().w_cursor.lnum);
+    let line = lines.line(Win::current().cursor().lnum());
     let to = usize::try_from(to).unwrap_or(0).min(line.len());
     let from = usize::try_from(from).unwrap_or(0).min(to);
     ApiString::from_bytes(&line[from..to])
@@ -36,7 +36,7 @@ pub(crate) fn cursor_line_part(from: ColNr, to: ColNr) -> ApiString {
 /// Insert `text` at the cursor.
 pub(crate) fn ins_compl_insert_text(text: &[u8]) {
     ins_bytes(text);
-    COMPL_INS_END_COL.set(Win::current().w_cursor.col);
+    COMPL_INS_END_COL.set(Win::current().cursor().col());
 }
 
 /// `text` from where the typed part of it ends: the part a completion
@@ -178,40 +178,42 @@ pub fn ins_compl_delete(new_leader: bool) {
         };
     if ins_compl_preinsert_effect() {
         col += len_as_int(ins_compl_leader_len());
-        Win::current().w_cursor.col = COMPL_INS_END_COL.get();
+        Win::current().cursor().set_col(COMPL_INS_END_COL.get());
     }
 
     // What follows the cursor on the last line, which the line deletion
     // below would take with it; re-inserted at the end.
     let mut remaining = None;
-    if Win::current().w_cursor.lnum > COMPL_LNUM.get() {
+    if Win::current().cursor().lnum() > COMPL_LNUM.get() {
         let line_len = get_cursor_line_len();
-        if Win::current().w_cursor.col < line_len {
-            remaining = Some(cursor_line_part(Win::current().w_cursor.col, line_len));
+        if Win::current().cursor().col() < line_len {
+            remaining = Some(cursor_line_part(Win::current().cursor().col(), line_len));
         }
-        while Win::current().w_cursor.lnum > COMPL_LNUM.get() {
-            if ml_delete(Win::current().w_cursor.lnum).is_err() {
+        while Win::current().cursor().lnum() > COMPL_LNUM.get() {
+            if ml_delete(Win::current().cursor().lnum()).is_err() {
                 return;
             }
-            deleted_lines_mark(Win::current().w_cursor.lnum, 1);
-            Win::current().w_cursor.lnum -= 1;
+            deleted_lines_mark(Win::current().cursor().lnum(), 1);
+            Win::current()
+                .cursor()
+                .set_lnum(Win::current().cursor().lnum() - 1);
         }
         // Move cursor to end of line.
-        Win::current().w_cursor.col = get_cursor_line_len();
+        Win::current().cursor().set_col(get_cursor_line_len());
     }
 
-    if Win::current().w_cursor.col > col {
+    if Win::current().cursor().col() > col {
         if stop_arrow().is_err() {
             return;
         }
         backspace_until_column(col.get());
-        COMPL_INS_END_COL.set(Win::current().w_cursor.col);
+        COMPL_INS_END_COL.set(Win::current().cursor().col());
     }
 
     if let Some(remaining) = remaining {
-        orig_col = Win::current().w_cursor.col.get();
+        orig_col = Win::current().cursor().col().get();
         ins_str(remaining.as_bytes());
-        Win::current().w_cursor.col = ColNr::new(orig_col);
+        Win::current().cursor().set_col(ColNr::new(orig_col));
     }
 
     // TODO(vim): is this sufficient for redrawing?  Redrawing everything
@@ -234,7 +236,7 @@ pub(crate) fn ins_compl_expand_multiple(text: &[u8]) {
     }
     // Handle remaining text after the last newline (if any).
     insert_chars(line);
-    COMPL_INS_END_COL.set(Win::current().w_cursor.col);
+    COMPL_INS_END_COL.set(Win::current().cursor().col());
 }
 
 /// `ins_char_bytes` over `text`, which C hands it whole whatever it holds.
@@ -306,7 +308,9 @@ pub fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
                 // match need not start with it), and upstream's `size_t`
                 // underflow narrows to a negative `ColNr`, i.e. the
                 // cursor moves the other way.
-                Win::current().w_cursor.col -= len_as_int(len.wrapping_sub(leader_len));
+                Win::current().cursor().set_col(
+                    Win::current().cursor().col() - len_as_int(len.wrapping_sub(leader_len)),
+                );
             }
         }
     }

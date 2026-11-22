@@ -159,7 +159,7 @@ pub fn check_compl_option(dict_opt: bool) -> bool {
     let buffer = Buf::current();
     let empty = if dict_opt {
         let unset = buffer.read().b_p_dict.bytes().is_empty() && p_dict(CStr::is_empty);
-        unset && Win::current().w_onebuf_opt.wo_spell == 0
+        unset && Win::current().wo_spell() == 0
     } else {
         buffer.read().b_p_tsr.bytes().is_empty()
             && p_tsr(CStr::is_empty)
@@ -340,7 +340,7 @@ pub(crate) fn ins_compl_has_multiple() -> bool {
 /// A completion with a shown match is running, as for
 /// [`ins_compl_has_multiple`], which this asks first.
 pub(crate) fn ins_compl_lnum_in_range(lnum: LineNr) -> bool {
-    ins_compl_has_multiple() && lnum >= COMPL_LNUM.get() && lnum <= Win::current().w_cursor.lnum
+    ins_compl_has_multiple() && lnum >= COMPL_LNUM.get() && lnum <= Win::current().cursor().lnum()
 }
 
 pub(crate) fn ins_compl_has_shown_match() -> bool {
@@ -355,7 +355,7 @@ pub(crate) fn ins_compl_long_shown_match() -> bool {
     let Some(shown) = shown_match() else {
         return false;
     };
-    let typed = Win::current().w_cursor.col - COMPL_COL.get();
+    let typed = Win::current().cursor().col() - COMPL_COL.get();
     ColNr::try_from(shown.text_len()).unwrap_or(ColNr::MAX) > ColNr::new(typed)
 }
 
@@ -430,7 +430,7 @@ pub fn ins_compl_has_preinsert() -> bool {
 /// A previewed match is currently in the buffer ahead of the cursor.
 pub fn ins_compl_preinsert_effect() -> bool {
     let previewing = ins_compl_has_preinsert() || ins_compl_preinsert_longest();
-    previewing && Win::current().w_cursor.col < COMPL_INS_END_COL.get()
+    previewing && Win::current().cursor().col() < COMPL_INS_END_COL.get()
 }
 
 /// The completion function asked for its matches to be recomputed on every
@@ -452,7 +452,7 @@ pub(crate) fn ins_compl_has_autocomplete() -> bool {
 /// How much of the leader has been typed: the cursor's distance from
 /// `COMPL_COL`, never negative.
 pub(crate) fn get_compl_len() -> usize {
-    let off = Win::current().w_cursor.col - COMPL_COL.get();
+    let off = Win::current().cursor().col() - COMPL_COL.get();
     usize::try_from(off).unwrap_or(0)
 }
 

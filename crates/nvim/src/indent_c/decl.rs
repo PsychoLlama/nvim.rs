@@ -58,7 +58,7 @@ pub(crate) fn past_label(line: &[u8], at: usize) -> Option<usize> {
 pub(crate) fn is_jump_label() -> bool {
     let is_label = {
         let mut lines = Lines::current();
-        let line = lines.line(Win::current().w_cursor.lnum);
+        let line = lines.line(Win::current().cursor().lnum());
         let at = code_at(line, 0);
         // The chain is left whole: `past_label` only steps over a line the
         // two tests in front of it did not claim.
@@ -71,12 +71,14 @@ pub(crate) fn is_jump_label() -> bool {
         return false; // not a label in a comment or a raw string
     }
 
-    let cursor_save = Win::current().w_cursor;
-    while Win::current().w_cursor.lnum > LineNr::ONE {
-        Win::current().w_cursor.lnum -= 1;
-        Win::current().w_cursor.col = ColNr::ZERO;
+    let cursor_save = Win::current().w_cursor();
+    while Win::current().cursor().lnum() > LineNr::ONE {
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() - 1);
+        Win::current().cursor().set_col(ColNr::ZERO);
         if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
-            Win::current().w_cursor = trypos;
+            Win::current().set_w_cursor(trypos);
         }
 
         // Ignore #defines, #if, etc., and lines with nothing on them.  The
@@ -84,7 +86,7 @@ pub(crate) fn is_jump_label() -> bool {
         // nothing after this reads the text.
         let verdict = {
             let mut lines = Lines::current();
-            let line = lines.line(Win::current().w_cursor.lnum);
+            let line = lines.line(Win::current().cursor().lnum());
             let at = code_at(line, 0);
             if is_preproc(line) || at >= line.len() {
                 None
@@ -101,10 +103,10 @@ pub(crate) fn is_jump_label() -> bool {
             continue;
         };
 
-        Win::current().w_cursor = cursor_save;
+        Win::current().set_w_cursor(cursor_save);
         return verdict;
     }
-    Win::current().w_cursor = cursor_save;
+    Win::current().set_w_cursor(cursor_save);
     true // label at start of file???
 }
 
@@ -169,7 +171,7 @@ pub(crate) fn is_enum_or_init() -> bool {
     const SKIP: [&[u8]; 4] = [b"static", b"public", b"protected", b"private"];
 
     let mut lines = Lines::current();
-    let line = lines.line(Win::current().w_cursor.lnum);
+    let line = lines.line(Win::current().cursor().lnum());
     let mut at = code_at(line, 0);
     if starts_with_word(line, at, b"typedef") {
         at = code_at(line, at + 7);
@@ -253,13 +255,13 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
     }
 
     let mut lnum = first_lnum;
-    let save_lnum = Win::current().w_cursor.lnum;
+    let save_lnum = Win::current().cursor().lnum();
     let mut just_started = true;
 
     // Position on the rightmost unmatched paren so that matching it
     // takes us to the line the declaration starts on.  The borrow ends
     // with the statement: the match search reads other lines.
-    Win::current().w_cursor.lnum = lnum;
+    Win::current().cursor().set_lnum(lnum);
     let has_paren = find_last_paren(Lines::current().line(lnum), b'(', b')');
     let opening = if has_paren {
         find_match_paren(Buf::current().b_ind_maxparen())
@@ -269,11 +271,11 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
     if let Some(trypos) = opening {
         lnum = trypos.lnum;
         if lnum < min_lnum {
-            Win::current().w_cursor.lnum = save_lnum;
+            Win::current().cursor().set_lnum(save_lnum);
             return false;
         }
     }
-    Win::current().w_cursor.lnum = save_lnum;
+    Win::current().cursor().set_lnum(save_lnum);
 
     let mut lines = Lines::current();
     let mut at = 0usize;

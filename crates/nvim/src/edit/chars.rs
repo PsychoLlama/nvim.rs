@@ -188,7 +188,7 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
             && !(STATE.get() & REPLACE_FLAG != 0
                 && STATE.get() & VREPLACE_FLAG == 0
                 && cursor_byte() != 0)
-            && (Win::current().w_cursor.lnum != INSSTART.get().lnum
+            && (Win::current().cursor().lnum() != INSSTART.get().lnum
                 || ((!fo_ins_long || INSSTART_TEXTLEN.get() <= ColNr::new(textwidth))
                     && (!fo_ins_blank || INSSTART_BLANK_VCOL.get() <= ColNr::new(textwidth)))));
     if !wanted {
@@ -205,7 +205,7 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
         && flags & INSCHAR_NO_FEX == 0
         && (force_format != 0 || virtcol > ColNr::new(textwidth))
     {
-        do_internal = fex_format(Win::current().w_cursor.lnum, 1, c.raw()) != 0;
+        do_internal = fex_format(Win::current().cursor().lnum(), 1, c.raw()) != 0;
         // Saving for undo may be needed again, e.g. when the expression
         // called setline().
         INS_NEED_UNDO.set(true);
@@ -227,7 +227,7 @@ fn end_pending_comment(c: Key) {
     }
 
     // Find the comment leader this line starts with.
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     let (lead, flags) = get_leader_len(Lines::current().line(lnum), false, true);
     // The middle item's flags, searched as upstream searches them: to the
     // end of 'comments'.
@@ -265,7 +265,7 @@ fn end_pending_comment(c: Key) {
 
     // Skip the white space before the cursor, then back over the middle
     // leader.
-    let mut i = Win::current().w_cursor.col;
+    let mut i = Win::current().cursor().col();
     {
         let mut lines = Lines::current();
         let line = lines.line(lnum);
@@ -302,12 +302,12 @@ pub(crate) fn echeck_abbr(c: Key, literal: bool) -> bool {
         return false;
     }
 
-    let start_col = if Win::current().w_cursor.lnum == INSSTART.get().lnum {
+    let start_col = if Win::current().cursor().lnum() == INSSTART.get().lnum {
         INSSTART.get().col
     } else {
         ColNr::ZERO
     };
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let col = usize::try_from(cursor.col).unwrap_or(0);
     // A copy of the line before the cursor: the expansion can run user code,
     // which may change the line.
@@ -352,7 +352,7 @@ pub(crate) fn do_insert_char_pre(c: Key) -> Option<XString> {
 
 /// The byte under the cursor, NUL past the end of its line.
 fn cursor_byte() -> u8 {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     byte_at(Lines::current().line(cursor.lnum), cursor.col.as_usize())
 }
 

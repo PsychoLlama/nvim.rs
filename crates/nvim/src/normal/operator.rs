@@ -103,7 +103,7 @@ pub(crate) fn nv_kundo(cmd_arg: &mut CmdArg) {
         return;
     }
     u_undo(cmd_arg.count1);
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
 }
 
 /// `U`: undo the whole line, or the `gU` operator.
@@ -116,7 +116,7 @@ pub(crate) fn nv_undo_line(cmd_arg: &mut CmdArg) {
         return;
     }
     u_undoline();
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
 }
 
 /// `"`: name the register the next command works on.
@@ -176,7 +176,7 @@ pub(crate) fn nv_redo_or_register(cmd_arg: &mut CmdArg) {
         return;
     }
     u_redo(cmd_arg.count1);
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
 }
 
 /// Start an operator, or apply the pending one to whole lines when it is the
@@ -191,7 +191,7 @@ pub(crate) fn nv_operator(cmd_arg: &mut CmdArg) {
     if op_type == cmd_arg.op().op_type {
         nv_lineop(cmd_arg);
     } else if !check_clear_op(cmd_arg.op()) {
-        cmd_arg.op().start = Win::current().w_cursor;
+        cmd_arg.op().start = Win::current().w_cursor();
         cmd_arg.op().op_type = op_type;
         set_op_var(op_type);
     }

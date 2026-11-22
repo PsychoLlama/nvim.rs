@@ -374,7 +374,7 @@ pub(crate) static LAST_REPLACEMENT: GlobalCell<Option<SpellReplacement>> = Globa
 /// `:spellrepall` — repeat the last `z=` replacement everywhere else in
 /// the buffer.
 pub fn ex_spellrepall(_excmd: &mut ExArg) {
-    let pos: Pos = Win::current().w_cursor;
+    let pos: Pos = Win::current().w_cursor();
     // Round-tripped through a bool, as in C: any non-zero 'wrapscan'
     // comes back as 1.
     let save_ws = p_ws();
@@ -401,7 +401,7 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
 
     SUB_NSUBS.set(0);
     SUB_NLINES.set(0);
-    Win::current().w_cursor.lnum = LineNr::ZERO;
+    Win::current().cursor().set_lnum(LineNr::ZERO);
     while !GOT_INT.get() {
         let slash = c_int::from(b'/');
         let found = do_search(None, slash, slash, &frompat, 1, SEARCH_KEEP, None);
@@ -411,10 +411,10 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
 
         // Only replace where the replacement is not already there. That
         // happens when changing "etc" to "etc.".
-        let col = Win::current().w_cursor.col;
+        let col = Win::current().cursor().col();
         let replaced = {
             let mut lines = Lines::current();
-            let line = lines.line(Win::current().w_cursor.lnum);
+            let line = lines.line(Win::current().cursor().lnum());
             let at = col.as_usize();
             let present = chartab::tail(line, at).starts_with(&repl_to);
             (!grows || !present).then(|| {
@@ -425,22 +425,24 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
             })
         };
         if let Some(replaced) = replaced {
-            let _ = ml_replace_owned(Win::current().w_cursor.lnum, replaced);
-            let lnum = Win::current().w_cursor.lnum;
+            let _ = ml_replace_owned(Win::current().cursor().lnum(), replaced);
+            let lnum = Win::current().cursor().lnum();
             let (was, now) = (len_as_int(repl_from_len), len_as_int(repl_to_len));
             inserted_bytes(lnum, col, was, now);
 
-            if Win::current().w_cursor.lnum != prev_lnum {
+            if Win::current().cursor().lnum() != prev_lnum {
                 SUB_NLINES.set(SUB_NLINES.get() + 1);
-                prev_lnum = Win::current().w_cursor.lnum;
+                prev_lnum = Win::current().cursor().lnum();
             }
             SUB_NSUBS.set(SUB_NSUBS.get() + 1);
         }
-        Win::current().w_cursor.col += len_as_int(repl_to_len);
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() + len_as_int(repl_to_len));
     }
 
     P_WS.set(save_ws);
-    Win::current().w_cursor = pos;
+    Win::current().set_w_cursor(pos);
 
     if SUB_NSUBS.get() == 0 {
         let arg0 = msg_bytes(&repl_from);

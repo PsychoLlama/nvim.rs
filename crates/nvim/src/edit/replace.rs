@@ -67,8 +67,10 @@ pub(crate) fn truncate_spaces(line: &mut Vec<u8>) {
 /// non-Replace arm goes through [`del_char_after_col`] rather than
 /// `del_char`.
 pub(crate) fn backspace_until_column(col: c_int) {
-    while Win::current().w_cursor.col > ColNr::new(col) {
-        Win::current().w_cursor.col -= 1;
+    while Win::current().cursor().col() > ColNr::new(col) {
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() - 1);
         if STATE.get() & REPLACE_FLAG != 0 {
             replace_do_bs(col);
         } else if !del_char_after_col(col) {
@@ -87,22 +89,24 @@ pub(crate) fn backspace_until_column(col: c_int) {
 /// Answers whether anything was deleted.
 fn del_char_after_col(limit_col: c_int) -> bool {
     if limit_col >= 0 {
-        let ecol = Win::current().w_cursor.col + 1;
+        let ecol = Win::current().cursor().col() + 1;
 
         // Put the cursor at the start of a character, then step forward
         // again if a composing character took it too far back.
         mb_adjust_cursor();
-        while Win::current().w_cursor.col < ColNr::new(limit_col) {
+        while Win::current().cursor().col() < ColNr::new(limit_col) {
             let l = ColNr::try_from(cursor_tail(char_len)).unwrap_or(ColNr::MAX);
             if l == ColNr::ZERO {
                 break; // end of line
             }
-            Win::current().w_cursor.col += l.get();
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + l.get());
         }
-        if cursor_tail(|tail| byte_at(tail, 0)) == b'\0' || Win::current().w_cursor.col == ecol {
+        if cursor_tail(|tail| byte_at(tail, 0)) == b'\0' || Win::current().cursor().col() == ecol {
             return false;
         }
-        let _ = del_bytes(ecol - Win::current().w_cursor.col, false, true);
+        let _ = del_bytes(ecol - Win::current().cursor().col(), false, true);
     } else {
         let _ = del_char(false);
     }
@@ -259,16 +263,23 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
 
             // Virtual Replace keeps the following text aligned, so any
             // spaces it padded with have to come off again.
-            Win::current().w_cursor.col += ins_len;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + ins_len);
             while vcol > ColNr::new(orig_vcols) && gchar_cursor() == b' ' {
                 let _ = del_char(false);
                 orig_vcols += 1;
             }
-            Win::current().w_cursor.col -= ins_len;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() - ins_len);
         }
 
         // Mark the buffer changed and prepare for displaying.
-        changed_bytes(Win::current().w_cursor.lnum, Win::current().w_cursor.col);
+        changed_bytes(
+            Win::current().cursor().lnum(),
+            Win::current().cursor().col(),
+        );
     } else if cc == Some(0) {
         del_char_after_col(limit_col);
     }
@@ -276,7 +287,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
 
 /// `f` of the cursor's line from the cursor's column on.
 fn cursor_tail<R>(f: impl FnOnce(&[u8]) -> R) -> R {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
     f(&line[usize::try_from(cursor.col)

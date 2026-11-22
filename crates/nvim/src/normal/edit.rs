@@ -144,7 +144,9 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
             // Past the end of the line: make room for the whole count and
             // then step back to where the replacing starts.
             coladvance_force(getviscol() + cmd_arg.count1);
-            Win::current().w_cursor.col -= cmd_arg.count1;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() - cmd_arg.count1);
         } else if gchar_cursor() == TAB {
             // Land on the tab's first cell, not the cell of it the cursor
             // happens to be showing on.
@@ -193,7 +195,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
         if literal { Key::CTRL_V } else { Key::NUL },
         Key::NUL,
     );
-    Buf::current().set_b_op_start(Win::current().w_cursor);
+    Buf::current().set_b_op_start(Win::current().w_cursor());
     let old_state = STATE.get();
     if cmd_arg.nchar_len > 0 {
         append_to_redobuff(cstr::until_nul(&cmd_arg.nchar_composing));
@@ -207,14 +209,16 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
         if cmd_arg.nchar == Key::CTRL_E || cmd_arg.nchar == Key::CTRL_Y {
             // `r CTRL-E` and `r CTRL-Y` copy from the line below or above.
             let from =
-                Win::current().w_cursor.lnum + if cmd_arg.nchar == Key::CTRL_Y { -1 } else { 1 };
+                Win::current().cursor().lnum() + if cmd_arg.nchar == Key::CTRL_Y { -1 } else { 1 };
             let c = ins_copychar(from);
             if !c.is_nul() {
                 ins_char(c);
             } else {
                 // Nothing there to copy: leave the character alone and
                 // step over it.
-                Win::current().w_cursor.col += 1;
+                Win::current()
+                    .cursor()
+                    .set_col(Win::current().cursor().col() + 1);
             }
         } else if cmd_arg.nchar_len != 0 {
             let bytes = cstr::until_nul(&cmd_arg.nchar_composing);
@@ -224,10 +228,12 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
         }
         STATE.set(old_state);
     }
-    Win::current().w_cursor.col -= 1;
+    Win::current()
+        .cursor()
+        .set_col(Win::current().cursor().col() - 1);
     mb_adjust_cursor();
-    Buf::current().set_b_op_end(Win::current().w_cursor);
-    Win::current().w_set_curswant = true;
+    Buf::current().set_b_op_end(Win::current().w_cursor());
+    Win::current().set_w_set_curswant(true);
     set_last_insert(cmd_arg.nchar);
     fold_update_after_insert();
 }
@@ -302,7 +308,7 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
     let wraps = p_ww(|value| value.to_bytes().contains(&b'~'));
     if Buf::current()
         .lines()
-        .line(Win::current().w_cursor.lnum)
+        .line(Win::current().cursor().lnum())
         .is_empty()
         && !wraps
     {
@@ -313,21 +319,23 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
     if u_save_cursor().is_err() {
         return;
     }
-    let startpos = Win::current().w_cursor;
+    let startpos = Win::current().w_cursor();
     let mut did_change = false;
     let mut n = cmd_arg.count1;
     while n > 0 {
-        did_change |= swapchar(cmd_arg.op().op_type, Win::current().w_cursor);
+        did_change |= swapchar(cmd_arg.op().op_type, Win::current().w_cursor());
         inc_cursor();
         if gchar_cursor() == Codepoint::NUL {
-            if !(wraps && Win::current().w_cursor.lnum < Buf::current().line_count()) {
+            if !(wraps && Win::current().cursor().lnum() < Buf::current().line_count()) {
                 break;
             }
-            Win::current().w_cursor.lnum += 1;
-            Win::current().w_cursor.col = ColNr::ZERO;
+            Win::current()
+                .cursor()
+                .set_lnum(Win::current().cursor().lnum() + 1);
+            Win::current().cursor().set_col(ColNr::ZERO);
             // Each further line needs its own undo entry.
             if n > 1 {
-                if u_savesub(Win::current().w_cursor.lnum).is_err() {
+                if u_savesub(Win::current().cursor().lnum()).is_err() {
                     break;
                 }
                 u_clearline(Buf::current());
@@ -336,13 +344,13 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
         n -= 1;
     }
     check_cursor(Win::current());
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
     if did_change {
         let (from, col) = (startpos.lnum, startpos.col);
-        let to = Win::current().w_cursor.lnum + 1;
+        let to = Win::current().cursor().lnum() + 1;
         changed_lines(Buf::current(), from, col, to, 0, true);
         Buf::current().set_b_op_start(startpos);
-        Buf::current().set_b_op_end(Win::current().w_cursor);
+        Buf::current().set_b_op_end(Win::current().w_cursor());
         if Buf::current().b_op_end().col > ColNr::ZERO {
             Buf::current().edit().b_op_end.col -= 1;
         }
@@ -417,21 +425,21 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
     if check_clear_op_quit(cmd_arg.op()) {
         return;
     }
-    let mut win = Win::current();
+    let win = Win::current();
     let opening_above = cmd_arg.cmdchar.is('O');
     // Open outside a closed fold rather than inside it: `O` stretches to the
     // fold's first line, `o` to its last.
-    let lnum = win.w_cursor.lnum;
+    let lnum = win.cursor().lnum();
     let mut edge = lnum;
     if opening_above {
         win.has_folding(lnum, Some(&mut edge), None);
     } else {
         win.has_folding(lnum, None, Some(&mut edge));
     }
-    win.w_cursor.lnum = edge;
+    win.cursor().set_lnum(edge);
     Buf::current().set_b_last_changedtick_i(buf_get_changedtick(Buf::current()));
-    let undo_first = win.w_cursor.lnum - i32::from(opening_above);
-    let undo_last = win.w_cursor.lnum + i32::from(!opening_above);
+    let undo_first = win.cursor().lnum() - i32::from(opening_above);
+    let undo_last = win.cursor().lnum() + i32::from(!opening_above);
     let dir = if opening_above {
         BACKWARD as c_int
     } else {
@@ -447,7 +455,7 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
     if opened {
         if win_cursorline_standout(win) {
             // The cursor line moved, so its highlight has to be redrawn.
-            win.w_valid -= WinValid::CROW;
+            win.set_w_valid(win.w_valid().without(WinValid::CROW));
         }
         invoke_edit(cmd_arg, false, cmd_arg.cmdchar, true);
     }
@@ -468,7 +476,7 @@ pub(crate) fn nv_tilde(cmd_arg: &mut CmdArg) {
 /// Put the cursor where `A` starts inserting: past the last character, or
 /// past the last *cell* when 'virtualedit' is "all".
 pub(crate) fn set_cursor_for_append_to_line() {
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
     if get_ve_flags(Win::current()) == OPT_VE_FLAG_ALL as c_uint {
         // Insert mode is what makes `coladvance` allow the position one
         // past the end.
@@ -477,7 +485,9 @@ pub(crate) fn set_cursor_for_append_to_line() {
         coladvance(Win::current(), ColNr::MAX);
         STATE.set(save_state);
     } else {
-        Win::current().w_cursor.col += len_as_int(with_cursor_rest(<[u8]>::len));
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() + len_as_int(with_cursor_rest(<[u8]>::len)));
     }
 }
 
@@ -514,11 +524,13 @@ pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
             // `a` steps one right first. Under 'virtualedit' a position
             // inside a tab or past the end of the line moves by a cell.
             if virtual_active(Win::current())
-                && (Win::current().w_cursor.coladd > 0
+                && (Win::current().cursor().coladd() > 0
                     || gchar_cursor() == Codepoint::NUL
                     || gchar_cursor() == TAB)
             {
-                Win::current().w_cursor.coladd += 1;
+                Win::current()
+                    .cursor()
+                    .set_coladd(Win::current().cursor().coladd() + 1);
             } else if gchar_cursor() != Codepoint::NUL {
                 inc_cursor();
             }
@@ -527,7 +539,7 @@ pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
     }
     // Insert mode has no virtual column of its own, so anything but `A`
     // has to land on a real one first.
-    if Win::current().w_cursor.coladd != 0 && !cmd_arg.cmdchar.is('A') {
+    if Win::current().cursor().coladd() != 0 && !cmd_arg.cmdchar.is('A') {
         let save_state = STATE.get();
         STATE.set(MODE_INSERT);
         coladvance(Win::current(), getviscol());
@@ -574,14 +586,15 @@ pub(crate) fn nv_join(cmd_arg: &mut CmdArg) {
     // Joining fewer than two lines means nothing; `J` and `1J` both join
     // this line with the next.
     cmd_arg.count0 = cmd_arg.count0.max(2);
-    if Win::current().w_cursor.lnum + cmd_arg.count0 - 1 > Buf::current().line_count() {
+    if Win::current().cursor().lnum() + cmd_arg.count0 - 1 > Buf::current().line_count() {
         // A count that runs off the end joins what is left -- unless there
         // was no count, in which case there is nothing below to join to.
         if cmd_arg.count0 <= 2 {
             clear_op_beep(cmd_arg.op());
             return;
         }
-        cmd_arg.count0 = (Buf::current().line_count() - Win::current().w_cursor.lnum + 1) as c_int;
+        cmd_arg.count0 =
+            (Buf::current().line_count() - Win::current().cursor().lnum() + 1) as c_int;
     }
     prep_redo(
         RegName::from_byte((cmd_arg.op().regname).byte()),
@@ -610,8 +623,8 @@ pub(crate) fn nv_put(cmd_arg: &mut CmdArg) {
 /// The put commands. `fix_indent` is the `]p`/`[p` family, which reindents the
 /// text to the current line.
 pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
-    let mut win = Win::current();
-    let save_fen = win.w_onebuf_opt.wo_fen;
+    let win = Win::current();
+    let save_fen = win.wo_fen();
     if cmd_arg.op().op_type != OpType::Nop {
         // `dp` is not "delete, then put": it is the diff command.
         if cmd_arg.op().op_type == OpType::Delete && cmd_arg.cmdchar.is('p') {
@@ -626,8 +639,9 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     if buf_is_prompt(current_buf()) && !prompt_curpos_editable() {
         // On the prompt's own line, put in front of the prompt text
         // rather than refusing.
-        if win.w_cursor.lnum == Buf::current().read().b_prompt_start.mark.lnum {
-            win.w_cursor.col = Buf::current().read().b_prompt_start.mark.col;
+        if win.cursor().lnum() == Buf::current().read().b_prompt_start.mark.lnum {
+            win.cursor()
+                .set_col(Buf::current().read().b_prompt_start.mark.col);
             cmd_arg.cmdchar = Key::ascii(b'P');
         } else {
             clear_op_beep(cmd_arg.op());
@@ -681,7 +695,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
             savereg = Some(copy_register(regname));
         }
         // The delete must not close or open folds under the selection.
-        win.w_onebuf_opt.wo_fen = 0;
+        win.set_wo_fen(0);
         // The condition is upstream's; only the `.` register on a
         // charwise selection skips the delete.
         if !visual_active() || visual_mode().is_line() || regname != b'.' {
@@ -712,8 +726,8 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         // Put where the selection was, which is where the delete left the
         // cursor -- forwards only when it left it before the start.
         dir = BACKWARD;
-        if (!visual_mode().is_line() && win.w_cursor.col < Buf::current().b_op_start().col)
-            || (visual_mode().is_line() && win.w_cursor.lnum < Buf::current().b_op_start().lnum)
+        if (!visual_mode().is_line() && win.cursor().col() < Buf::current().b_op_start().col)
+            || (visual_mode().is_line() && win.cursor().lnum() < Buf::current().b_op_start().lnum)
         {
             dir = FORWARD;
         }
@@ -729,7 +743,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     );
     if was_visual {
         if save_fen != 0 {
-            win.w_onebuf_opt.wo_fen = 1;
+            win.set_wo_fen(1);
         }
         // Leave `gv` naming what was just put.
         let value = Buf::current().b_op_start();
@@ -747,8 +761,8 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     if emptied && Buf::current().lines().line(last).is_empty() {
         let _ = ml_delete_flags(Buf::current().line_count(), ML_DEL_MESSAGE);
         deleted_lines(Buf::current().line_count() + 1, 1);
-        if win.w_cursor.lnum > Buf::current().line_count() {
-            win.w_cursor.lnum = Buf::current().line_count();
+        if win.cursor().lnum() > Buf::current().line_count() {
+            win.cursor().set_lnum(Buf::current().line_count());
             coladvance(win, ColNr::MAX);
         }
     }
@@ -766,7 +780,7 @@ pub(crate) fn nv_open(cmd_arg: &mut CmdArg) {
     } else if visual_active() {
         v_swap_corners(cmd_arg.cmdchar);
     } else if buf_is_prompt(current_buf())
-        && Win::current().w_cursor.lnum < Buf::current().read().b_prompt_start.mark.lnum
+        && Win::current().cursor().lnum() < Buf::current().read().b_prompt_start.mark.lnum
     {
         clear_op_beep(cmd_arg.op());
     } else {

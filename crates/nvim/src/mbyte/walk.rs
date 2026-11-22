@@ -129,36 +129,35 @@ pub(crate) fn snap_pos_to_char(buffer: Buf, pos: Pos) -> Pos {
 
 /// Move the cursor off the middle of a character, if it is in one.
 pub fn mb_adjust_cursor() {
-    let mut window = Win::current();
-    window.w_cursor = snap_pos_to_char(Buf::current(), window.w_cursor);
+    let window = Win::current();
+    window.set_w_cursor(snap_pos_to_char(Buf::current(), window.w_cursor()));
 }
 
 impl Win {
     /// Pull this window's cursor back onto a character start, and clear a
     /// `coladd` that no longer means anything. Upstream's
     /// `mb_check_adjust_col`.
-    pub(crate) fn snap_cursor_to_char(mut self) {
-        let oldcol = self.w_cursor.col;
+    pub(crate) fn snap_cursor_to_char(self) {
+        let oldcol = self.cursor().col();
         if oldcol == ColNr::ZERO {
             return;
         }
         let mut lines = self.buffer().lines();
-        let line = lines.line(self.w_cursor.lnum);
+        let line = lines.line(self.cursor().lnum());
         let len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
         if len == ColNr::ZERO || oldcol < ColNr::ZERO {
-            self.w_cursor.col = ColNr::ZERO;
+            self.cursor().set_col(ColNr::ZERO);
         } else {
             if oldcol > len {
-                self.w_cursor.col = len - 1;
+                self.cursor().set_col(len - 1);
             }
-            let col = usize::try_from(self.w_cursor.col).unwrap_or(0);
-            self.w_cursor.col -= ColNr::try_from(head_off(line, col))
-                .expect("a short step back")
-                .get();
+            let col = usize::try_from(self.cursor().col()).unwrap_or(0);
+            let back = ColNr::try_from(head_off(line, col)).expect("a short step back");
+            self.cursor().set_col(self.cursor().col() - back.get());
         }
-        let at = usize::try_from(self.w_cursor.col).unwrap_or(0);
-        if self.w_cursor.coladd == 1 && coladd_drops(&line[at.min(line.len())..]) {
-            self.w_cursor.coladd = 0;
+        let at = usize::try_from(self.cursor().col()).unwrap_or(0);
+        if self.cursor().coladd() == 1 && coladd_drops(&line[at.min(line.len())..]) {
+            self.cursor().set_coladd(0);
         }
     }
 }

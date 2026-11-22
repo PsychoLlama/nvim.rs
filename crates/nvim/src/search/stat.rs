@@ -141,8 +141,8 @@ pub(crate) fn cmdline_search_stat(
 
     // A right-to-left window has the pair the other way round, so that
     // it still reads "current of total" on screen.
-    let reversed = Win::current().w_onebuf_opt.wo_rl != 0
-        && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's';
+    let reversed = Win::current().wo_rl() != 0
+        && Win::current().read().w_onebuf_opt.wo_rlc.first_byte() == b's';
     // Four digits is the most `'maxsearchcount'` allows on either side of
     // the slash, so the longest of these is `[>9999/>9999]` -- thirteen
     // bytes, and upstream's `STAT_BUF_LEN` scratch buffer never truncated
@@ -335,7 +335,7 @@ fn list_number(item: &TypVal) -> Option<c_int> {
 /// `searchcount()`: the match counts as a dictionary.
 pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut pos = Win::current().w_cursor;
+    let mut pos = Win::current().w_cursor();
     let mut pattern: Option<Vec<u8>> = None;
     let mut maxcount = number_as_int(p_msc());
     let mut timeout = SEARCH_STAT_DEF_TIMEOUT as c_int;

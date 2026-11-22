@@ -131,7 +131,7 @@ pub fn mark_get_local(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
     } else if name == b'\'' || name == b'`' {
         // The context mark is the WINDOW's; its number is overwritten with
         // `buffer`'s below, as upstream does after reading `CURBUF`'s.
-        pos_to_mark(Buf::current(), win.w_pcmark)
+        pos_to_mark(Buf::current(), win.w_pcmark())
     } else {
         mark_get_motion(buffer, win, name)?
     };
@@ -149,26 +149,26 @@ pub fn mark_get_local(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
 /// Returns the mark, or `None` when `name` names no motion or the motion
 /// found nothing.
 pub fn mark_get_motion(buffer: Buf, win: Win, name: u8) -> Option<FileMark> {
-    let mut cur = Win::current();
+    let cur = Win::current();
     // The motion is computed by *moving the cursor* and reading where it
     // landed, so the cursor is put back before answering. `LISTCMD_BUSY`
     // suppresses the jumplist entry the move would otherwise push.
-    let saved = cur.w_cursor;
+    let saved = cur.w_cursor();
     let was_busy = LISTCMD_BUSY.get();
     LISTCMD_BUSY.set(true);
     let mut mark = None;
     if name == b'{' || name == b'}' {
         let dir = if name == b'}' { FORWARD } else { BACKWARD };
         if findpar(dir as c_int, 1, 0, false).is_some() {
-            mark = Some(pos_to_mark(buffer, win.w_cursor));
+            mark = Some(pos_to_mark(buffer, win.w_cursor()));
         }
     } else if name == b'(' || name == b')' {
         let dir = if name == b')' { FORWARD } else { BACKWARD };
         if findsent(dir as Direction, 1).is_ok() {
-            mark = Some(pos_to_mark(buffer, win.w_cursor));
+            mark = Some(pos_to_mark(buffer, win.w_cursor()));
         }
     }
-    cur.w_cursor = saved;
+    cur.set_w_cursor(saved);
     LISTCMD_BUSY.set(was_busy);
     mark
 }
@@ -297,10 +297,10 @@ pub fn mark_move_to(fm: Option<&FileMark>, flags: MarkMove) -> MarkMoveRes {
         setpcmark();
     }
 
-    let mut win = Win::current();
+    let win = Win::current();
     let pos = fm.mark;
-    let prev_pos = win.w_cursor;
-    win.w_cursor = pos;
+    let prev_pos = win.w_cursor();
+    win.set_w_cursor(pos);
     if flags as c_uint & MARK_BEGIN_LINE as c_uint != 0 {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }

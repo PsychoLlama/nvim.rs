@@ -49,7 +49,7 @@ type StepFn = fn(&mut Pos) -> Moved;
 /// between. A paragraph or section boundary ends one as well.
 pub(crate) fn findsent(dir: Direction, mut count: c_int) -> Result<(), NoObject> {
     let mut noskip = false; // do not skip blanks
-    let mut pos = Win::current().w_cursor;
+    let mut pos = Win::current().w_cursor();
     let step: StepFn = if dir as c_int == FORWARD as c_int {
         incl
     } else {
@@ -92,7 +92,7 @@ pub(crate) fn findsent(dir: Direction, mut count: c_int) -> Result<(), NoObject>
     }
 
     setpcmark();
-    Win::current().w_cursor = pos;
+    Win::current().set_w_cursor(pos);
     Ok(())
 }
 
@@ -231,9 +231,9 @@ fn find_first_blank(pos: &mut Pos) {
 
 /// [`find_first_blank`] of the cursor.
 fn cursor_to_first_blank() {
-    let mut cursor = Win::current().w_cursor;
+    let mut cursor = Win::current().w_cursor();
     find_first_blank(&mut cursor);
-    Win::current().w_cursor = cursor;
+    Win::current().set_w_cursor(cursor);
 }
 
 /// Skip `count`/2 sentences and `count`/2 runs of the white space between
@@ -271,7 +271,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
         // just after it, or exactly at the start of one.
         let mut at_start_sent = true;
         decl(&mut pos);
-        while lt(pos, Win::current().w_cursor) {
+        while lt(pos, Win::current().w_cursor()) {
             if !ascii_iswhite(gchar_pos(&pos)) {
                 at_start_sent = false;
                 break;
@@ -280,7 +280,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
         }
         if !at_start_sent {
             let _ = findsent(BACKWARD, 1);
-            if equalpos(Win::current().w_cursor, start_pos) {
+            if equalpos(Win::current().w_cursor(), start_pos) {
                 at_start_sent = true; // exactly at the start of a sentence
             } else {
                 // Inside a sentence: go to its end, the next one's start.
@@ -311,10 +311,10 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
         // inside one.
         incl(&mut pos);
         let mut at_start_sent = true;
-        if !equalpos(pos, Win::current().w_cursor) {
+        if !equalpos(pos, Win::current().w_cursor()) {
             // Not just before a sentence.
             at_start_sent = false;
-            while lt(pos, Win::current().w_cursor) {
+            while lt(pos, Win::current().w_cursor()) {
                 if !ascii_iswhite(gchar_pos(&pos)) {
                     at_start_sent = true;
                     break;
@@ -324,7 +324,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
             if at_start_sent {
                 let _ = findsent(BACKWARD, 1); // inside the sentence
             } else {
-                Win::current().w_cursor = start_pos; // in the white space
+                Win::current().set_w_cursor(start_pos); // in the white space
             }
         }
         if include {
@@ -332,7 +332,9 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
         }
         findsent_forward(count, at_start_sent);
         if P_SEL.first_byte() == b'e' {
-            Win::current().w_cursor.col += 1;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + 1);
         }
     }
 }
@@ -341,7 +343,7 @@ fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Po
 /// Visual mode an existing selection is extended by one or more sentences
 /// instead.
 pub(crate) fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Result<(), NoObject> {
-    let mut start_pos = Win::current().w_cursor;
+    let mut start_pos = Win::current().w_cursor();
     let mut pos = start_pos;
     let _ = findsent(FORWARD, 1); // the start of the next sentence
 
@@ -356,12 +358,12 @@ pub(crate) fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Resul
     while ascii_iswhite(gchar_pos(&pos)) {
         incl(&mut pos);
     }
-    let start_blank = equalpos(pos, Win::current().w_cursor);
+    let start_blank = equalpos(pos, Win::current().w_cursor());
     if start_blank {
         find_first_blank(&mut start_pos); // back to the first blank
     } else {
         let _ = findsent(BACKWARD, 1);
-        start_pos = Win::current().w_cursor;
+        start_pos = Win::current().w_cursor();
     }
 
     let ncount = if include {
@@ -393,12 +395,14 @@ pub(crate) fn current_sent(op: &mut OpArg, count: c_int, include: bool) -> Resul
 
     if visual_active() {
         // Don't get stuck with `is` on a single space before a sentence.
-        if equalpos(start_pos, Win::current().w_cursor) {
+        if equalpos(start_pos, Win::current().w_cursor()) {
             extend_sentences(count, include, start_pos, pos);
             return Ok(());
         }
         if P_SEL.first_byte() == b'e' {
-            Win::current().w_cursor.col += 1;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + 1);
         }
         set_visual_anchor(start_pos);
         set_visual_mode(VisualMode::CHAR);

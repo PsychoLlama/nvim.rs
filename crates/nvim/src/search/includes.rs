@@ -582,7 +582,7 @@ enum After {
 /// Offer the match at offset `startp` to insert-mode completion
 /// (ACTION_EXPAND).
 fn expand_match(walk: &mut Walk, startp: usize, dir: &mut Option<Direction>) -> After {
-    if walk.files.depth() == -1 && walk.lnum == Win::current().w_cursor.lnum {
+    if walk.files.depth() == -1 && walk.lnum == Win::current().cursor().lnum() {
         return After::Stop;
     }
     walk.found = true;
@@ -719,7 +719,7 @@ fn goto_match(
 ) -> After {
     walk.found = true;
     let mut curwin_save: Option<WinId> = None;
-    if walk.files.depth() == -1 && walk.lnum == Win::current().w_cursor.lnum && tagpreview == 0 {
+    if walk.files.depth() == -1 && walk.lnum == Win::current().cursor().lnum() && tagpreview == 0 {
         emsg(gettext(c"E387: Match is on current line"));
     } else if action == ACTION_SHOW {
         let did_show = walk.did_show;
@@ -737,8 +737,8 @@ fn goto_match(
             }
             // RESET_BINDING: a new window does not inherit
             // 'scrollbind'/'cursorbind'.
-            Win::current().w_onebuf_opt.wo_scb = 0;
-            Win::current().w_onebuf_opt.wo_crb = 0;
+            Win::current().set_wo_scb(0);
+            Win::current().set_wo_crb(0);
         }
         if walk.files.depth() == -1 {
             // The match is in the current file.
@@ -756,7 +756,7 @@ fn goto_match(
             } else {
                 setpcmark();
             }
-            Win::current().w_cursor.lnum = walk.lnum;
+            Win::current().cursor().set_lnum(walk.lnum);
             check_cursor(Win::current());
         } else {
             let file = walk.files.innermost();
@@ -768,12 +768,12 @@ fn goto_match(
             }
             // Autocommands may have changed the line number; that is
             // not wanted here.
-            Win::current().w_cursor.lnum = flnum;
+            Win::current().cursor().set_lnum(flnum);
         }
     }
     if action != ACTION_SHOW {
-        Win::current().w_cursor.col = ColNr::from_index(startp);
-        Win::current().w_set_curswant = true;
+        Win::current().cursor().set_col(ColNr::from_index(startp));
+        Win::current().set_w_set_curswant(true);
     }
 
     if let Some(saved) = curwin_save.and_then(valid_win).filter(|_| tagpreview != 0)

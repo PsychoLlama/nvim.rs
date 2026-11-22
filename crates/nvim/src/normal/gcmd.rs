@@ -60,35 +60,35 @@ const POUND_BYTE: u8 = 0xa3;
 ///
 /// Also called from `move.rs` for a mouse click landing left of the text.
 pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
-    let mut win = Win::current();
+    let win = Win::current();
     let to_first_non_blank = cmd_arg.nchar.is('^');
     cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = false;
     let mut i;
-    if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
+    if win.wo_wrap() != 0 && win.w_view_width() != 0 {
         // A wrapped line's first screen row can be narrower than the rest,
         // so the row the cursor is on decides where its start is.
-        let width1 = win.w_view_width - win.col_off();
+        let width1 = win.w_view_width() - win.col_off();
         let width2 = width1 + win_col_off2(win);
         validate_virtcol(win);
         i = 0;
-        if win.w_virtcol >= ColNr::new(width1) && width2 > 0 {
-            i = (win.w_virtcol - width1).get() / width2 * width2 + width1;
+        if win.w_virtcol() >= ColNr::new(width1) && width2 > 0 {
+            i = (win.w_virtcol() - width1).get() / width2 * width2 + width1;
         }
-        if win.w_skipcol > ColNr::ZERO && win.w_cursor.lnum == win.w_topline {
+        if win.w_skipcol() > ColNr::ZERO && win.cursor().lnum() == win.w_topline() {
             // 'smoothscroll' hides part of the top row behind its marker;
             // the text starts after it.
-            let overlap = sms_marker_overlap(win, win.w_view_width - width2);
-            if overlap > 0 && i == win.w_skipcol.get() {
+            let overlap = sms_marker_overlap(win, win.w_view_width() - width2);
+            if overlap > 0 && i == win.w_skipcol().get() {
                 i += overlap;
             }
         }
     } else {
-        i = win.w_leftcol.get();
+        i = win.w_leftcol().get();
     }
     if cmd_arg.nchar.is('m') {
-        i += (win.w_view_width - win.col_off()
-            + if win.w_onebuf_opt.wo_wrap != 0 && i > 0 {
+        i += (win.w_view_width() - win.col_off()
+            + if win.wo_wrap() != 0 && i > 0 {
                 win_col_off2(win)
             } else {
                 0
@@ -98,14 +98,14 @@ pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
     coladvance(win, ColNr::new(i));
     if to_first_non_blank {
         while ascii_iswhite(gchar_cursor()) && oneright().is_ok() {}
-        win.w_valid -= WinValid::WCOL;
+        win.set_w_valid(win.w_valid().without(WinValid::WCOL));
     }
-    win.w_set_curswant = true;
+    win.set_w_set_curswant(true);
     // Inside a closed fold the wanted column is the one that was asked
     // for, not the one the fold's single displayed line has.
     if has_any_folding(win) != 0 {
         validate_cheight(win);
-        if win.w_cline_folded {
+        if win.w_cline_folded() {
             update_curswant_force();
         }
     }
@@ -114,56 +114,58 @@ pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
 
 /// `g_`: the last non-blank of the line, `count1 - 1` lines down.
 pub(crate) fn nv_g_underscore_cmd(cmd_arg: &mut CmdArg) {
-    let mut win = Win::current();
+    let win = Win::current();
     cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = true;
-    win.w_curswant = ColNr::MAX;
+    win.set_w_curswant(ColNr::MAX);
     if cursor_down(cmd_arg.count1 - 1, cmd_arg.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
         return;
     }
     let mut lines = Lines::current();
-    let line = lines.line(win.w_cursor.lnum);
+    let line = lines.line(win.cursor().lnum());
     let byte_at = |col: ColNr| cstr::byte_at(line, usize::try_from(col).unwrap_or(0));
     // 'virtualedit' can leave the cursor on the terminator.
-    if win.w_cursor.col > ColNr::ZERO && byte_at(win.w_cursor.col) == 0 {
-        win.w_cursor.col -= 1;
+    if win.cursor().col() > ColNr::ZERO && byte_at(win.cursor().col()) == 0 {
+        win.cursor().set_col(win.cursor().col() - 1);
     }
-    while win.w_cursor.col > ColNr::ZERO && ascii_iswhite(c_int::from(byte_at(win.w_cursor.col))) {
-        win.w_cursor.col -= 1;
+    while win.cursor().col() > ColNr::ZERO
+        && ascii_iswhite(c_int::from(byte_at(win.cursor().col())))
+    {
+        win.cursor().set_col(win.cursor().col() - 1);
     }
-    win.w_set_curswant = true;
+    win.set_w_set_curswant(true);
     adjust_for_sel(cmd_arg);
 }
 
 /// `g$` and `g<End>`: the end of the *screen* line.
 pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
-    let mut win = Win::current();
+    let win = Win::current();
     let mut op = cmd_arg.op();
     let col_off = win.col_off();
     // `<End>` also skips back over trailing white space.
     let to_last_non_blank = cmd_arg.nchar == SpecialKey::End || cmd_arg.nchar == SpecialKey::Kend;
     op.motion_type = MotionType::CharWise;
     op.inclusive = true;
-    if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
-        win.w_curswant = ColNr::MAX;
+    if win.wo_wrap() != 0 && win.w_view_width() != 0 {
+        win.set_w_curswant(ColNr::MAX);
         if cmd_arg.count1 == 1 {
-            let width1 = win.w_view_width - col_off;
+            let width1 = win.w_view_width() - col_off;
             let width2 = width1 + win_col_off2(win);
             validate_virtcol(win);
             let mut i = width1 - 1;
-            if win.w_virtcol >= ColNr::new(width1) {
-                i += ((win.w_virtcol - width1).get() / width2 + 1) * width2;
+            if win.w_virtcol() >= ColNr::new(width1) {
+                i += ((win.w_virtcol() - width1).get() / width2 + 1) * width2;
             }
             coladvance(win, ColNr::new(i));
             update_curswant_force();
             // A character wider than one cell straddles the edge; step
             // back onto the last one that fits.
-            if win.w_cursor.col > ColNr::ZERO
-                && win.w_onebuf_opt.wo_wrap != 0
-                && win.w_virtcol > ColNr::new(i)
+            if win.cursor().col() > ColNr::ZERO
+                && win.wo_wrap() != 0
+                && win.w_virtcol() > ColNr::new(i)
             {
-                win.w_cursor.col -= 1;
+                win.cursor().set_col(win.cursor().col() - 1);
             }
         } else if !nv_screengo(op, FORWARD as c_int, cmd_arg.count1 - 1, false) {
             clear_op_beep(op);
@@ -173,36 +175,37 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
         if cmd_arg.count1 > 1 {
             let _ = cursor_down(cmd_arg.count1 - 1, false);
         }
-        let i = win.w_leftcol + win.w_view_width - col_off - 1;
+        let i = win.w_leftcol() + win.w_view_width() - col_off - 1;
         coladvance(win, i);
-        if win.w_cursor.col > ColNr::ZERO && with_cursor_rest(cells_at) > 1 {
+        if win.cursor().col() > ColNr::ZERO && with_cursor_rest(cells_at) > 1 {
             let vcol = win.virtual_vcol_span(win.cursor()).1;
-            if vcol >= win.w_leftcol + win.w_view_width - col_off {
-                win.w_cursor.col -= 1;
+            if vcol >= win.w_leftcol() + win.w_view_width() - col_off {
+                win.cursor().set_col(win.cursor().col() - 1);
             }
         }
         update_curswant_force();
     }
     if to_last_non_blank {
         while ascii_iswhite_or_nul(gchar_cursor()) && oneleft().is_ok() {}
-        win.w_valid -= WinValid::WCOL;
+        win.set_w_valid(win.w_valid().without(WinValid::WCOL));
     }
 }
 
 /// `gi`: insert where insert mode was left, even if the line has since got
 /// shorter.
 pub(crate) fn nv_gi_cmd(cmd_arg: &mut CmdArg) {
-    let mut win = Win::current();
+    let win = Win::current();
     if Buf::current().read().b_last_insert.mark.lnum != LineNr::ZERO {
-        win.w_cursor = Buf::current().read().b_last_insert.mark;
+        win.set_w_cursor(Buf::current().read().b_last_insert.mark);
         check_cursor_lnum(win);
         let len = get_cursor_line_len();
-        if win.w_cursor.col > len {
+        if win.cursor().col() > len {
             if virtual_active(win) {
                 // Past the end is a real position under 'virtualedit'.
-                win.w_cursor.coladd += win.w_cursor.col - len;
+                win.cursor()
+                    .set_coladd(win.cursor().coladd() + (win.cursor().col() - len));
             }
-            win.w_cursor.col = len;
+            win.cursor().set_col(len);
         }
     }
     cmd_arg.cmdchar = Key::ascii(b'i');
@@ -221,7 +224,7 @@ fn nv_g_select(cmd_arg: &mut CmdArg) {
 /// when 'wrap' is off.
 fn nv_g_screen_line(cmd_arg: &mut CmdArg, dir: c_int) {
     let mut op = cmd_arg.op();
-    let moved = if Win::current().w_onebuf_opt.wo_wrap == 0 {
+    let moved = if Win::current().wo_wrap() == 0 {
         op.motion_type = MotionType::LineWise;
         let stop_at_end = op.op_type == OpType::Nop;
         if dir == FORWARD as c_int {
@@ -336,13 +339,13 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         Some(b'M') => {
             op.motion_type = MotionType::CharWise;
             op.inclusive = false;
-            let width = linetabsize(Win::current(), Win::current().w_cursor.lnum);
+            let width = linetabsize(Win::current(), Win::current().cursor().lnum());
             if cmd_arg.count0 > 0 && cmd_arg.count0 <= 100 {
                 coladvance(Win::current(), ColNr::new(width * cmd_arg.count0 / 100));
             } else {
                 coladvance(Win::current(), ColNr::new(width / 2));
             }
-            Win::current().w_set_curswant = true;
+            Win::current().set_w_set_curswant(true);
         }
         Some(b'_') => nv_g_underscore_cmd(cmd_arg),
         Some(b'$') => nv_g_dollar_cmd(cmd_arg),
@@ -352,7 +355,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         // `ge`/`gE`: back to the end of the previous word.
         Some(b'e' | b'E') => {
             op.motion_type = MotionType::CharWise;
-            Win::current().w_set_curswant = true;
+            Win::current().set_w_set_curswant(true);
             op.inclusive = true;
             if bckend_word(cmd_arg.count1, nchar.is('E'), false).is_err() {
                 clear_op_beep(op);
@@ -398,7 +401,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         // `gq` and `gw` both format; `gw` returns the cursor to where it
         // was, which is what the remembered position is for.
         Some(b'q' | b'w') => {
-            op.cursor_start = Win::current().w_cursor;
+            op.cursor_start = Win::current().w_cursor();
             nv_operator(cmd_arg);
         }
         // The rest of the two-character operators: `g~ gu gU g? g@`.

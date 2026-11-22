@@ -171,9 +171,9 @@ const IGNORED: [SpecialKey; 22] = [
 /// opened out to its whole range.
 fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (LineNr, LineNr) {
     let (mut top, mut bot) = if cursor_bot {
-        (sel.anchor.lnum, Win::current().w_cursor.lnum)
+        (sel.anchor.lnum, Win::current().cursor().lnum())
     } else {
-        (Win::current().w_cursor.lnum, sel.anchor.lnum)
+        (Win::current().cursor().lnum(), sel.anchor.lnum)
     };
     Win::current().has_folding(top, Some(&mut top), None);
     Win::current().has_folding(bot, None, Some(&mut bot));
@@ -189,13 +189,13 @@ fn blockwise_width(sel: VisualSelection) -> c_int {
     // Both positions are in the current buffer, and the two 'showbreak'
     // values are put back before returning.
     let saved_sbr = P_SBR.clear();
-    let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr.take();
-    let mut win = Win::current();
-    let mut cursor = win.w_cursor;
+    let saved_w_sbr = Win::current().edit().w_onebuf_opt.wo_sbr.take();
+    let win = Win::current();
+    let mut cursor = win.w_cursor();
     let (leftcol, rightcol) = getvcols(win, &mut cursor, &mut anchor);
-    win.w_cursor = cursor;
+    win.set_w_cursor(cursor);
     P_SBR.restore(saved_sbr);
-    Win::current().w_onebuf_opt.wo_sbr = saved_w_sbr;
+    Win::current().edit().w_onebuf_opt.wo_sbr = saved_w_sbr;
     rightcol - leftcol + 1
 }
 
@@ -208,7 +208,7 @@ fn blockwise_width(sel: VisualSelection) -> c_int {
 fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
     let (mut bytes, mut chars) = (0, 0);
     let anchor = sel.anchor;
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     // The selection is within one line, so both ends are columns of it.
     let (start, end) = if cursor_bot {
         (anchor.col, cursor.col)
@@ -245,11 +245,11 @@ fn charwise_extent(sel: VisualSelection, cursor_bot: bool) -> (c_int, c_int) {
 
 /// Describe the Visual selection into the 'showcmd' buffer.
 fn show_visual_size(sel: VisualSelection) {
-    let cursor_bot = lt(sel.anchor, Win::current().w_cursor);
+    let cursor_bot = lt(sel.anchor, Win::current().w_cursor());
     let (top, bot) = visual_line_range(sel, cursor_bot);
     let lines = (bot - top + 1) as c_int;
 
-    let same_line = sel.anchor.lnum == Win::current().w_cursor.lnum;
+    let same_line = sel.anchor.lnum == Win::current().cursor().lnum();
     let text = if sel.mode.is_block() {
         format!("{lines}x{}", blockwise_width(sel))
     } else if sel.mode.is_line() || !same_line {
@@ -376,7 +376,7 @@ pub(crate) fn display_showcmd() {
     let loc = p_sloc(cstr::first);
     if loc == b's' {
         if clear {
-            Win::current().w_redr_status = true;
+            Win::current().set_w_redr_status(true);
         } else {
             win_redr_status(Win::current());
             setcursor();

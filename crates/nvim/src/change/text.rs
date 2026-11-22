@@ -75,9 +75,9 @@ pub fn ins_char(c: Key) {
 fn vreplace_extent(new: &[u8], col: usize) -> (usize, usize) {
     // Disable 'list' while measuring, unless 'cpo' has the `L` flag: it
     // changes how wide a TAB looks.
-    let old_list = Win::current().w_onebuf_opt.wo_list;
+    let old_list = Win::current().wo_list();
     if old_list != 0 && !cpo_has(CpoFlag::LISTWM) {
-        Win::current().w_onebuf_opt.wo_list = c_int::from(false);
+        Win::current().set_wo_list(c_int::from(false));
     }
 
     let mut oldlen = 0;
@@ -88,7 +88,7 @@ fn vreplace_extent(new: &[u8], col: usize) -> (usize, usize) {
     // The line is read here, not handed in: `getvcol` above reads the
     // memline too, so a slice taken in front of it is not one to hold.
     let mut lines = Buf::current().lines();
-    let line = lines.line(Win::current().w_cursor.lnum);
+    let line = lines.line(Win::current().cursor().lnum());
     while col + oldlen < line.len() && vcol < new_vcol {
         let at = &line[col + oldlen..];
         vcol += win_chartabsize(win, at, vcol);
@@ -105,7 +105,7 @@ fn vreplace_extent(new: &[u8], col: usize) -> (usize, usize) {
         }
     }
 
-    Win::current().w_onebuf_opt.wo_list = old_list;
+    Win::current().set_wo_list(old_list);
     (oldlen, newlen)
 }
 
@@ -116,12 +116,12 @@ fn vreplace_extent(new: &[u8], col: usize) -> (usize, usize) {
 /// one. The caller must have prepared for undo.
 pub fn ins_char_bytes(new: &[u8]) {
     // Break tabs if needed.
-    if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
+    if virtual_active(Win::current()) && Win::current().cursor().coladd() > 0 {
         coladvance_force(getviscol());
     }
 
-    let col = Win::current().w_cursor.col.as_usize();
-    let lnum = Win::current().w_cursor.lnum;
+    let col = Win::current().cursor().col().as_usize();
+    let lnum = Win::current().cursor().lnum();
     let charlen = new.len();
 
     // The defaults are the values for when not replacing: nothing deleted,
@@ -182,7 +182,9 @@ pub fn ins_char_bytes(new: &[u8]) {
 
     if !p_ri() || STATE.get() & REPLACE_FLAG != 0 {
         // Normal insert: move the cursor right.
-        Win::current().w_cursor.col += len_as_int(charlen);
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() + len_as_int(charlen));
     }
 }
 
@@ -191,13 +193,13 @@ pub fn ins_char_bytes(new: &[u8]) {
 /// Unlike [`ins_char_bytes`] this does *not* handle Replace mode. The caller
 /// must have prepared for undo.
 pub fn ins_str(text: &[u8]) {
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
 
-    if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
+    if virtual_active(Win::current()) && Win::current().cursor().coladd() > 0 {
         coladvance_force(getviscol());
     }
 
-    let col = Win::current().w_cursor.col.as_usize();
+    let col = Win::current().cursor().col().as_usize();
 
     let newline = {
         let mut lines = Buf::current().lines();
@@ -210,7 +212,9 @@ pub fn ins_str(text: &[u8]) {
     };
     let _ = ml_replace_owned(lnum, newline);
     inserted_bytes(lnum, ColNr::from_index(col), 0, len_as_int(text.len()));
-    Win::current().w_cursor.col += len_as_int(text.len());
+    Win::current()
+        .cursor()
+        .set_col(Win::current().cursor().col() + len_as_int(text.len()));
 }
 
 /// Delete the character under the cursor.
@@ -219,7 +223,7 @@ pub fn ins_str(text: &[u8]) {
 pub fn del_char(fixpos: bool) -> Result<(), Failed> {
     // Make sure the cursor is at the start of a character.
     mb_adjust_cursor();
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lines = Buf::current().lines();
     if cstr::byte_at(lines.line(cursor.lnum), cursor.col.as_usize()) == b'\0' {
         return Err(Failed);
@@ -229,7 +233,7 @@ pub fn del_char(fixpos: bool) -> Result<(), Failed> {
 
 /// [`del_bytes`] counted in characters rather than bytes.
 pub fn del_chars(count: c_int, fixpos: c_int) -> Result<(), Failed> {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let col = cursor.col.as_usize();
     let bytes = {
         let mut lines = Buf::current().lines();
@@ -264,8 +268,8 @@ fn composes_with(line: &[u8], at: usize, next: usize, state: &mut GraphemeState)
 /// Answers `Err` on the NUL past the end of the line or for a negative
 /// `count`, `Ok` otherwise.
 pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Result<(), Failed> {
-    let lnum = Win::current().w_cursor.lnum;
-    let mut col = Win::current().w_cursor.col;
+    let lnum = Win::current().cursor().lnum();
+    let mut col = Win::current().cursor().col();
     let mut fixpos = fixpos_arg;
     let oldlen = Buf::current().lines().line_len(lnum);
 
@@ -324,11 +328,15 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
             && RESTART_EDIT.get().is_nul()
             && get_ve_flags(Win::current()) & OPT_VE_FLAG_ONEMORE == 0
         {
-            Win::current().w_cursor.col -= 1;
-            Win::current().w_cursor.coladd = 0;
-            let at = Win::current().w_cursor.col.as_usize();
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() - 1);
+            Win::current().cursor().set_coladd(0);
+            let at = Win::current().cursor().col().as_usize();
             let back = head_off(Buf::current().lines().line(lnum), at);
-            Win::current().w_cursor.col -= ColNr::try_from(back).unwrap_or(ColNr::ZERO).get();
+            Win::current().cursor().set_col(
+                Win::current().cursor().col() - ColNr::try_from(back).unwrap_or(ColNr::ZERO).get(),
+            );
         }
         count = oldlen - col;
         movelen = 1;
@@ -373,8 +381,8 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
 
 /// Delete everything on the cursor line from the cursor onwards.
 pub fn truncate_line(fixpos: c_int) {
-    let lnum = Win::current().w_cursor.lnum;
-    let col = Win::current().w_cursor.col;
+    let lnum = Win::current().cursor().lnum();
+    let col = Win::current().cursor().col();
     let mut lines = Buf::current().lines();
     let old_len = lines.line_len(lnum);
     let newp = XString::from_bytes(&lines.line(lnum)[..col.as_usize()]);
@@ -384,8 +392,10 @@ pub fn truncate_line(fixpos: c_int) {
     inserted_bytes(lnum, col, deleted, 0);
 
     // Don't leave the cursor past the end of the line.
-    if fixpos != 0 && Win::current().w_cursor.col > ColNr::ZERO {
-        Win::current().w_cursor.col -= 1;
+    if fixpos != 0 && Win::current().cursor().col() > ColNr::ZERO {
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() - 1);
     }
 }
 
@@ -394,7 +404,7 @@ pub fn truncate_line(fixpos: c_int) {
 /// The cursor column is reset and the line clamped into the buffer; the
 /// cursor's line is *not* otherwise moved.
 pub fn del_lines(nlines: i32, undo: bool) {
-    let first = Win::current().w_cursor.lnum;
+    let first = Win::current().cursor().lnum();
     if nlines <= 0 {
         return;
     }
@@ -415,7 +425,7 @@ pub fn del_lines(nlines: i32, undo: bool) {
         }
     }
 
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_col(ColNr::ZERO);
     check_cursor_lnum(Win::current());
     deleted_lines_mark(first, n);
 }

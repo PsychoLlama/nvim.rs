@@ -48,7 +48,7 @@ use crate::optionstr::OptString;
 /// when spell checking is off or no language defines one.
 pub fn eval_soundfold(word: &CStr) -> XString {
     let win = Win::current();
-    if win.w_onebuf_opt.wo_spell != 0 && win.syn_block().b_p_spl.first_byte() != 0 {
+    if win.wo_spell() != 0 && win.syn_block().b_p_spl.first_byte() != 0 {
         let folded = LOADED_LANGS.with(|langs| {
             win.syn_block().b_langp.iter().find_map(|lp| {
                 let slang = langs.get(lp.slang)?;

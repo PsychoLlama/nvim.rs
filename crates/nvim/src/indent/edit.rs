@@ -66,7 +66,7 @@ use crate::winlayer::{Buf, Win};
 /// Whether the cursor is before (or, with `extra` zero, on) the first
 /// non-blank of the line.
 pub fn inindent(extra: c_int) -> bool {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let col = len_as_int(skip::white(Lines::current().line(cursor.lnum)));
     col >= cursor.col.get() + extra
 }
@@ -80,9 +80,9 @@ fn indent_progress(fmt: &CStr, n: int64_t, status: &CStr) {
 
 /// Reindents `op`'s lines with `how`, one of the three indent engines.
 pub fn op_reindent(op: &OpArg, how: Indenter) {
-    let mut win = Win::current();
+    let win = Win::current();
     let buf = Buf::current();
-    let start_lnum = win.w_cursor.lnum;
+    let start_lnum = win.cursor().lnum();
     let line_count = op.line_count;
     if buf.b_p_ma() == 0 {
         emsg(gettext(E_MODIFIABLE));
@@ -108,14 +108,14 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
             if i > 1 && (i % 50 == 0 || i == line_count - 1) && i64::from(line_count) > p_report() {
                 // Restore the cursor first, so the `msg_show` callback
                 // does not redraw `curwin`.
-                let save_lnum = win.w_cursor.lnum;
-                win.w_cursor.lnum = start_lnum;
+                let save_lnum = win.cursor().lnum();
+                win.cursor().set_lnum(start_lnum);
                 indent_progress(
                     gettext(c"%ld lines to indent... "),
                     int64_t::from(i),
                     c"running",
                 );
-                win.w_cursor.lnum = save_lnum;
+                win.cursor().set_lnum(save_lnum);
             }
             // Vi-compatible: with Lisp indenting the first line is not
             // indented, unless it is the only line.
@@ -124,24 +124,24 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
                 // A blank line gets no indent rather than the engine's.
                 let blank = {
                     let mut lines = Lines::current();
-                    let line = lines.line(win.w_cursor.lnum);
+                    let line = lines.line(win.cursor().lnum());
                     skip::white(line) == line.len()
                 };
                 let amount = if blank { 0 } else { how.amount() };
                 if amount >= 0 && set_indent(amount, 0) {
                     if first_changed == LineNr::ZERO {
-                        first_changed = win.w_cursor.lnum;
+                        first_changed = win.cursor().lnum();
                     }
-                    last_changed = win.w_cursor.lnum;
+                    last_changed = win.cursor().lnum();
                 }
             }
-            win.w_cursor.lnum += 1;
-            win.w_cursor.col = ColNr::ZERO; // keep it valid
+            win.cursor().set_lnum(win.cursor().lnum() + 1);
+            win.cursor().set_col(ColNr::ZERO); // keep it valid
             i -= 1;
         }
     }
     // Put the cursor on the first non-blank of the indented line.
-    win.w_cursor.lnum = start_lnum;
+    win.cursor().set_lnum(start_lnum);
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     // Mark the changed lines for redraw. Under Visual highlighting that
     // has to reach the last line even when nothing changed, so that the
@@ -195,8 +195,8 @@ pub fn may_do_si() -> bool {
 /// holding the matching `(`, which is what makes an `if (..\n..) {`
 /// spanning several lines come out right (Webb).
 fn si_indent_like_open_brace(pos: Pos) {
-    let mut win = Win::current();
-    let old_pos = win.w_cursor;
+    let win = Win::current();
+    let old_pos = win.w_cursor();
     let mut i = pos.col.get();
     // The line is read here and nowhere else: `findmatch` below walks the
     // buffer itself, so the borrow has to be over before it is called.
@@ -210,13 +210,13 @@ fn si_indent_like_open_brace(pos: Pos) {
         } {}
     }
     let after_paren = byte_at(line, as_index(i)) == b')';
-    win.w_cursor.lnum = pos.lnum;
-    win.w_cursor.col = ColNr::new(i);
+    win.cursor().set_lnum(pos.lnum);
+    win.cursor().set_col(ColNr::new(i));
     if after_paren && let Some(open) = findmatch(None, Codepoint::byte(b'(')) {
-        win.w_cursor = open;
+        win.set_w_cursor(open);
     }
     let indent = get_indent();
-    win.w_cursor = old_pos;
+    win.set_w_cursor(old_pos);
     if STATE.get() & VREPLACE_FLAG != 0 {
         change_indent(INDENT_SET, indent, 0, true);
     } else {
@@ -227,13 +227,13 @@ fn si_indent_like_open_brace(pos: Pos) {
 /// Whether a `{` typed after an `O` should reduce this line's indent: it may
 /// not go below the indent of the previous real line.
 fn si_should_shift_back() -> bool {
-    let mut win = Win::current();
-    let old_pos = win.w_cursor;
+    let win = Win::current();
+    let old_pos = win.w_cursor();
     let here = get_indent();
     let mut lines = Lines::current();
-    while win.w_cursor.lnum > LineNr::ONE {
-        win.w_cursor.lnum -= 1;
-        let line = lines.line(win.w_cursor.lnum);
+    while win.cursor().lnum() > LineNr::ONE {
+        win.cursor().set_lnum(win.cursor().lnum() - 1);
+        let line = lines.line(win.cursor().lnum());
         let first = byte_at(line, skip::white(line));
         // Ignore empty lines and lines starting with '#'.
         if first != b'#' && first != 0 {
@@ -241,7 +241,7 @@ fn si_should_shift_back() -> bool {
         }
     }
     let above = get_indent();
-    win.w_cursor = old_pos;
+    win.set_w_cursor(old_pos);
     above < here
 }
 
@@ -259,10 +259,10 @@ pub fn ins_try_si(c: c_int) {
         };
         if let Some(matching) = matching {
             si_indent_like_open_brace(matching);
-        } else if win.w_cursor.col > ColNr::ZERO {
+        } else if win.cursor().col() > ColNr::ZERO {
             let shift = !(c == c_int::from(b'{')
                 && CAN_SI_BACK.get()
-                && win.w_cursor.lnum > LineNr::ONE
+                && win.cursor().lnum() > LineNr::ONE
                 && !si_should_shift_back());
             if shift {
                 shift_line(true, false, 1, true);
@@ -270,13 +270,13 @@ pub fn ins_try_si(c: c_int) {
         }
     }
     // The indent of a '#' is always zero.
-    if win.w_cursor.col > ColNr::ZERO && CAN_SI.get() && c == c_int::from(b'#') && inindent(0) {
+    if win.cursor().col() > ColNr::ZERO && CAN_SI.get() && c == c_int::from(b'#') && inindent(0) {
         // Remember the current indent for the next line.
         OLD_INDENT.set(get_indent());
         set_indent(0, SIN_CHANGED);
     }
     // Adjust `AI_COL`: the character at this position can be deleted.
-    AI_COL.set(AI_COL.get().min(win.w_cursor.col));
+    AI_COL.set(AI_COL.get().min(win.cursor().col()));
 }
 
 /// Applies the indent [`change_indent`] was asked for, leaving the cursor on
@@ -299,13 +299,13 @@ fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: 
 /// the line with spaces when no character starts exactly there. Answers the
 /// byte column the cursor should take.
 fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
-    let mut win = Win::current();
-    win.w_virtcol = ColNr::new(end_vcol);
+    let win = Win::current();
+    win.set_w_virtcol(ColNr::new(end_vcol));
     let mut new_cursor_col = 0;
     let mut vcol = 0;
     {
         let mut lines = Lines::current();
-        let line = lines.line(win.w_cursor.lnum);
+        let line = lines.line(win.cursor().lnum());
         if !line.is_empty() {
             let (mut csarg, cstype) = CharsizeArg::new(win, LineNr::ZERO, line);
             let mut at = 0;
@@ -324,13 +324,13 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
             new_cursor_col = len_as_int(at);
         }
     }
-    if vcol == win.w_virtcol.get() {
+    if vcol == win.w_virtcol().get() {
         return new_cursor_col;
     }
     // No character starts at that column, so make one: insert the spaces
     // the cursor needs to sit where it was asked to.
-    win.w_cursor.col = ColNr::new(new_cursor_col);
-    let ptrlen = usize::try_from(win.w_virtcol.get() - vcol)
+    win.cursor().set_col(ColNr::new(new_cursor_col));
+    let ptrlen = usize::try_from(win.w_virtcol().get() - vcol)
         .expect("the cursor's virtual column is past the last character start");
     ins_str(&vec![b' '; ptrlen]);
     new_cursor_col + len_as_int(ptrlen)
@@ -340,7 +340,7 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
 /// insert still starts where the user began typing.
 fn adjust_insert_start(insstart_less: c_int) {
     let mut insstart = INSSTART.get();
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     if lnum == insstart.lnum && insstart.col != ColNr::ZERO {
         insstart.col = if insstart.col.get() <= insstart_less {
             ColNr::ZERO
@@ -360,11 +360,11 @@ fn adjust_insert_start(insstart_less: c_int) {
 /// the line lost, push NULs for what it gained.
 fn fix_replace_stack(mut start_col: c_int) {
     let win = Win::current();
-    while start_col > win.w_cursor.col.get() {
+    while start_col > win.cursor().col().get() {
         replace_join(0); // remove a NUL from the replace stack
         start_col -= 1;
     }
-    while start_col < win.w_cursor.col.get() {
+    while start_col < win.cursor().col().get() {
         replace_push_nul();
         start_col += 1;
     }
@@ -375,16 +375,16 @@ fn fix_replace_stack(mut start_col: c_int) {
 /// whole line is replayed. `orig_line`/`orig_col` are what [`change_indent`]
 /// saved.
 fn vreplace_restore(orig_line: XString, orig_col: ColNr) {
-    let mut win = Win::current();
+    let win = Win::current();
     // The new line, but only up to the cursor.
-    let new_col = win.w_cursor.col;
+    let new_col = win.cursor().col();
     let new_line = {
         let mut lines = Lines::current();
-        let line = lines.line(win.w_cursor.lnum);
+        let line = lines.line(win.cursor().lnum());
         line[..new_col.as_usize().min(line.len())].to_vec()
     };
-    let _ = ml_replace_owned(win.w_cursor.lnum, orig_line);
-    win.w_cursor.col = orig_col;
+    let _ = ml_replace_owned(win.cursor().lnum(), orig_line);
+    win.cursor().set_col(orig_col);
     let splice = Suppress::splice();
     backspace_until_column(0);
     ins_bytes(&new_line);
@@ -392,7 +392,7 @@ fn vreplace_restore(orig_line: XString, orig_col: ColNr) {
     let delta = orig_col.get() - new_col.get();
     extmark_splice_cols(
         Buf::current(),
-        win.w_cursor.lnum.get() - 1,
+        win.cursor().lnum().get() - 1,
         new_col,
         if delta < 0 {
             ColNr::new(-delta)
@@ -413,29 +413,29 @@ fn vreplace_restore(orig_line: XString, orig_col: ColNr) {
 /// and applies only to the two shifts; `call_changed_bytes` asks for
 /// `changed_bytes()`.
 pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
-    let mut win = Win::current();
+    let win = Win::current();
     // Virtual Replace needs to know what the line looked like before.
     let orig = (STATE.get() & VREPLACE_FLAG != 0).then(|| {
         (
-            XString::from_bytes(Lines::current().line(win.w_cursor.lnum)),
-            win.w_cursor.col,
+            XString::from_bytes(Lines::current().line(win.cursor().lnum())),
+            win.cursor().col(),
         )
     });
     // The tricks below do not want 'list' mode.
-    let save_p_list = win.w_onebuf_opt.wo_list;
-    win.w_onebuf_opt.wo_list = 0;
+    let save_p_list = win.wo_list();
+    win.set_wo_list(0);
     // A copy of the cursor, written back: the walk reads the window.
-    let mut cursor = win.w_cursor;
+    let mut cursor = win.w_cursor();
     let mut vcol = getvcol_nolist(&mut cursor).get();
-    win.w_cursor = cursor;
+    win.set_w_cursor(cursor);
     // Replace mode fixes its stack below, which is only possible when the
     // cursor is in the indent; this is how many characters precede it.
-    let mut start_col = win.w_cursor.col.get();
+    let mut start_col = win.cursor().col().get();
     // Offset of the cursor from the first non-blank.
-    let mut new_cursor_col = win.w_cursor.col.get();
+    let mut new_cursor_col = win.cursor().col().get();
     beginline(BeginlineOpts::WHITE);
-    new_cursor_col -= win.w_cursor.col.get();
-    let mut insstart_less = win.w_cursor.col.get();
+    new_cursor_col -= win.cursor().col().get();
+    let mut insstart_less = win.cursor().col().get();
     if new_cursor_col < 0 {
         // The cursor is inside the indent: how many screen columns it
         // sits left of the first non-blank.
@@ -445,7 +445,7 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
         start_col = -1; // the replace stack cannot be fixed
     }
     apply_indent(type_0, amount, round, call_changed_bytes);
-    insstart_less -= win.w_cursor.col.get();
+    insstart_less -= win.cursor().col().get();
 
     // Try to keep the cursor on the same character: at or after the first
     // non-blank that is a byte offset from it, outside Insert mode it just
@@ -456,17 +456,17 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
             // The cursor is touching the indent, so `INSSTART.col` resets.
             insstart_less = c_int::MAX;
         }
-        new_cursor_col += win.w_cursor.col.get();
+        new_cursor_col += win.cursor().col().get();
     } else if STATE.get() & MODE_INSERT == 0 {
-        new_cursor_col = win.w_cursor.col.get();
+        new_cursor_col = win.cursor().col().get();
     } else {
         new_cursor_col = place_cursor_in_indent((get_indent() - vcol).max(0));
         insstart_less = c_int::MAX;
     }
 
-    win.w_onebuf_opt.wo_list = save_p_list;
-    win.w_cursor.col = ColNr::new(new_cursor_col.max(0));
-    win.w_set_curswant = true;
+    win.set_wo_list(save_p_list);
+    win.cursor().set_col(ColNr::new(new_cursor_col.max(0)));
+    win.set_w_set_curswant(true);
     changed_cline_bef_curs(win);
     if STATE.get() & MODE_INSERT != 0 {
         adjust_insert_start(insstart_less);
@@ -543,10 +543,10 @@ pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
     let ind_len = len_as_int(indent.len());
 
     // The indent, then the whole of the cursor line.
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     indent.extend_from_slice(Lines::current().line(lnum));
     let _ = ml_replace_owned(lnum, XString::from_vec(indent));
-    Win::current().w_cursor.col = ColNr::new(ind_len);
+    Win::current().cursor().set_col(ColNr::new(ind_len));
     true
 }
 
@@ -785,10 +785,10 @@ fn set_retab_tabstop(vts: TabStopArray, ts_str: &XString) {
 
 /// `:retab`.
 pub fn ex_retab(excmd: &mut ExArg) {
-    let mut win = Win::current();
+    let win = Win::current();
     let buf = Buf::current();
-    let save_list = win.w_onebuf_opt.wo_list;
-    win.w_onebuf_opt.wo_list = 0; // 'list' mode is not wanted here
+    let save_list = win.wo_list();
+    win.set_wo_list(0); // 'list' mode is not wanted here
     let Ok(tabs) = parse_retab_arg(excmd.line.arg()) else {
         // Upstream returns here without restoring 'list', which it has
         // already cleared. Kept: a `:retab` with a malformed tabstop
@@ -829,10 +829,10 @@ pub fn ex_retab(excmd: &mut ExArg) {
             true,
         );
     }
-    win.w_onebuf_opt.wo_list = save_list; // restore 'list'
+    win.set_wo_list(save_list); // restore 'list'
     if let Some(ts_str) = &tabs.ts_str {
         set_retab_tabstop(tabs.vts, ts_str);
     }
-    coladvance(win, win.w_curswant);
+    coladvance(win, win.w_curswant());
     u_clearline(buf);
 }

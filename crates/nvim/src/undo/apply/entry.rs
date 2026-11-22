@@ -138,7 +138,7 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     let mut pick = CursorPick {
         line: MAXLNUM,
-        pos: Win::current().w_cursor,
+        pos: Win::current().w_cursor(),
     };
     // Newest first, which is the end of the vector; the list comes back in
     // the reverse of the order it is applied, which is the order the next
@@ -211,8 +211,8 @@ pub(crate) fn u_undoredo(undo: bool, do_buf_event: bool) {
     }
 
     // The cursor goes where the entries decided; check the line exists.
-    let mut win = Win::current();
-    win.w_cursor = pick.pos;
+    let win = Win::current();
+    win.set_w_cursor(pick.pos);
     check_cursor_lnum(win);
 
     if let Some(mut header) = buf.header_mut(link) {
@@ -400,24 +400,24 @@ fn swap_marks(
 
 /// Puts the cursor where the header says it was, or on the first line the
 /// move actually changed.
-fn place_cursor(buffer: Buf, mut win: Win, cursor: Pos, cursor_vcol: ColNr) {
+fn place_cursor(buffer: Buf, win: Win, cursor: Pos, cursor_vcol: ColNr) {
     // Off by exactly one line: put it back where the change started, which is
     // what the "o" command wants. Otherwise it goes to the first undone line.
-    if win.w_cursor.lnum > LineNr::ONE && cursor.lnum == win.w_cursor.lnum - 1 {
-        win.w_cursor.lnum -= 1;
+    if win.cursor().lnum() > LineNr::ONE && cursor.lnum == win.cursor().lnum() - 1 {
+        win.cursor().set_lnum(win.cursor().lnum() - 1);
     }
-    if win.w_cursor.lnum > buffer.line_count() {
+    if win.cursor().lnum() > buffer.line_count() {
         // Past the end, which happens after undoing lines added at the end of
         // the file. `check_cursor` below moves it to the last line, so all
         // that is left is to put it in the first column.
-        win.w_cursor.col = ColNr::ZERO;
-        win.w_cursor.coladd = 0;
-    } else if cursor.lnum == win.w_cursor.lnum {
-        win.w_cursor.col = cursor.col;
+        win.cursor().set_col(ColNr::ZERO);
+        win.cursor().set_coladd(0);
+    } else if cursor.lnum == win.cursor().lnum() {
+        win.cursor().set_col(cursor.col);
         if virtual_active(win) && cursor_vcol >= ColNr::ZERO {
             coladvance(win, cursor_vcol);
         } else {
-            win.w_cursor.coladd = 0;
+            win.cursor().set_coladd(0);
         }
     } else {
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);

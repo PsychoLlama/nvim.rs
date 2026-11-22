@@ -81,7 +81,7 @@ pub(crate) fn whitechar(cc: c_int) -> bool {
 /// ASCII byte, the end of the line among them, never is -- the common case,
 /// and the only one that needs no decode.
 fn composing_after_cursor() -> bool {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
     let after = usize::try_from(cursor.col).unwrap_or(0) + 1;
@@ -97,19 +97,19 @@ pub fn comp_textwidth(ff: bool) -> c_int {
     let mut textwidth = c_int::try_from(Buf::current().b_p_tw()).unwrap_or(c_int::MAX);
     if textwidth == 0 && Buf::current().b_p_wm() != 0 {
         let margin = c_int::try_from(Buf::current().b_p_wm()).unwrap_or(c_int::MAX);
-        textwidth = win.w_view_width - margin;
+        textwidth = win.w_view_width() - margin;
         if CMDWIN_BUF.get() == Buf::current_or_none().map(Buf::id) {
             textwidth -= 1;
         }
         textwidth -= win_fdccol_count(win);
-        textwidth -= win.w_scwidth;
-        if win.w_onebuf_opt.wo_nu != 0 || win.w_onebuf_opt.wo_rnu != 0 {
+        textwidth -= win.w_scwidth();
+        if win.wo_nu() != 0 || win.wo_rnu() != 0 {
             textwidth -= 8;
         }
     }
     textwidth = textwidth.max(0);
     if ff && textwidth == 0 {
-        textwidth = (win.w_view_width - 1).min(79);
+        textwidth = (win.w_view_width() - 1).min(79);
     }
     textwidth
 }

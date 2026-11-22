@@ -376,8 +376,8 @@ pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
         && MSG_SILENT.get() == 0
         && (!RESTART_EDIT.get().is_nul()
             || visual_active()
-                && ns.old_pos.lnum == Win::current().w_cursor.lnum
-                && ns.old_pos.col == Win::current().w_cursor.col)
+                && ns.old_pos.lnum == Win::current().cursor().lnum()
+                && ns.old_pos.col == Win::current().cursor().col())
         && (CLEAR_CMDLINE.get() || REDRAW_CMDLINE.get())
         && (MSG_DIDOUT.get() || MSG_DIDANY.get() && MSG_SCROLL.get() != 0)
         && !MSG_NOWAIT.get()
@@ -477,11 +477,11 @@ fn normal_check_cursor_moved() {
     if !FINISH_OP.get()
         && has_event(AutoEvent::CursorMoved)
         && (LAST_CURSORMOVED_WIN.get() != Win::current_or_none().map(Win::id)
-            || !equalpos(LAST_CURSORMOVED.get(), Win::current().w_cursor))
+            || !equalpos(LAST_CURSORMOVED.get(), Win::current().w_cursor()))
     {
         fire_on_curbuf(AutoEvent::CursorMoved);
         LAST_CURSORMOVED_WIN.set(Win::current_or_none().map(Win::id));
-        LAST_CURSORMOVED.set(Win::current().w_cursor);
+        LAST_CURSORMOVED.set(Win::current().w_cursor());
     }
 }
 

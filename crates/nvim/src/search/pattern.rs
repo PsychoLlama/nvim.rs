@@ -214,8 +214,8 @@ pub(crate) fn search_regcomp(
     };
     let text: &[u8] = &source;
 
-    let rightleft_reverse = Win::current().w_onebuf_opt.wo_rl != 0
-        && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's';
+    let rightleft_reverse = Win::current().wo_rl() != 0
+        && Win::current().read().w_onebuf_opt.wo_rlc.first_byte() == b's';
     COMPILED_PAT.set(Some(if rightleft_reverse {
         XString::from_vec(reversed_text(text))
     } else {
@@ -703,9 +703,9 @@ mod tests {
     /// [`get_search_pat`] then holds.
     fn compiled_rightleft(rlc: &str) -> XString {
         let _fixture = Fixture::new();
-        let mut win = Win::current();
-        win.w_onebuf_opt.wo_rl = 1;
-        win.w_onebuf_opt.wo_rlc = Some(XString::from(rlc));
+        let win = Win::current();
+        win.set_wo_rl(1);
+        win.edit().w_onebuf_opt.wo_rlc = Some(XString::from(rlc));
         let flags = CMDMOD.with(|c| c.cmod_flags);
         CMDMOD.with_mut(|c| c.cmod_flags |= CmdModFlags::KEEPPATTERNS);
         let mut regmatch = RegMMatch::default();

@@ -244,14 +244,14 @@ fn delete_block(op: &mut OpArg) -> Result<(), UndoFailed> {
     u_save(above, below)?;
 
     let mut bd = BlockDef::ZERO;
-    let mut lnum = Win::current().w_cursor.lnum;
+    let mut lnum = Win::current().cursor().lnum();
     while lnum <= op.end.lnum {
         block_prep(&mut bd, op, lnum, true);
         if bd.textlen != 0 {
             // Adjust the cursor for a TAB replaced by spaces, and 'lbr'.
-            if lnum == Win::current().w_cursor.lnum {
-                Win::current().w_cursor.col = bd.textcol + bd.startspaces;
-                Win::current().w_cursor.coladd = 0;
+            if lnum == Win::current().cursor().lnum() {
+                Win::current().cursor().set_col(bd.textcol + bd.startspaces);
+                Win::current().cursor().set_coladd(0);
             }
 
             // The line loses the block's text and gains the padding that
@@ -291,7 +291,10 @@ fn delete_block(op: &mut OpArg) -> Result<(), UndoFailed> {
         lnum += 1;
     }
 
-    let (lnum, col) = (Win::current().w_cursor.lnum, Win::current().w_cursor.col);
+    let (lnum, col) = (
+        Win::current().cursor().lnum(),
+        Win::current().cursor().col(),
+    );
     check_cursor_col(Win::current());
     changed_lines(Buf::current(), lnum, col, op.end.lnum + 1, 0, true);
     // No whole lines were deleted, so `msgmore` must not report any.
@@ -318,10 +321,12 @@ fn delete_whole_lines(op: &OpArg) -> Result<(), UndoFailed> {
     // Delete every line but the first, with the cursor moved off it: the
     // line number is remembered because deleting the last line moves it.
     if op.line_count > 1 {
-        let lnum = Win::current().w_cursor.lnum;
-        Win::current().w_cursor.lnum += 1;
+        let lnum = Win::current().cursor().lnum();
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() + 1);
         del_lines(op.line_count - 1, true);
-        Win::current().w_cursor.lnum = lnum;
+        Win::current().cursor().set_lnum(lnum);
     }
     u_save_cursor()?;
     if Buf::current().b_p_ai() != 0 {
@@ -329,7 +334,7 @@ fn delete_whole_lines(op: &OpArg) -> Result<(), UndoFailed> {
         // what deletes it again if the insert is left with ESC.
         beginline(BeginlineOpts::WHITE);
         DID_AI.set(true);
-        AI_COL.set(Win::current().w_cursor.col);
+        AI_COL.set(Win::current().cursor().col());
     } else {
         beginline(BeginlineOpts::NONE);
     }
@@ -382,12 +387,12 @@ fn break_tabs_at_edges(op: &mut OpArg) -> Result<(), UndoFailed> {
         }
         let startcol = getviscol2(op.start.col, op.start.coladd);
         coladvance_force(startcol);
-        op.start = Win::current().w_cursor;
+        op.start = Win::current().w_cursor();
         if op.line_count == 1 {
             Win::current().coladvance(ColNr::new(endcol));
-            op.end.col = Win::current().w_cursor.col;
-            op.end.coladd = Win::current().w_cursor.coladd;
-            Win::current().w_cursor = op.start;
+            op.end.col = Win::current().cursor().col();
+            op.end.coladd = Win::current().cursor().coladd();
+            Win::current().set_w_cursor(op.start);
         }
     }
 
@@ -395,11 +400,11 @@ fn break_tabs_at_edges(op: &mut OpArg) -> Result<(), UndoFailed> {
     if gchar_pos(&op.end) == b'\t' && op.end.coladd == 0 && op.inclusive {
         // Save the last line for undo.
         u_save(op.end.lnum - 1, op.end.lnum + 1)?;
-        Win::current().w_cursor = op.end;
+        Win::current().set_w_cursor(op.end);
         let endcol = getviscol2(op.end.col, op.end.coladd);
         coladvance_force(endcol);
-        op.end = Win::current().w_cursor;
-        Win::current().w_cursor = op.start;
+        op.end = Win::current().w_cursor();
+        Win::current().set_w_cursor(op.start);
     }
 
     mb_adjust_opend(op);
@@ -417,7 +422,7 @@ fn delete_chars_one_line(op: &OpArg) -> Result<(), UndoFailed> {
     // removing the text now.
     if cpo_has(CpoFlag::DOLLAR)
         && op.op_type == OpType::Change
-        && op.end.lnum == Win::current().w_cursor.lnum
+        && op.end.lnum == Win::current().cursor().lnum()
         && !op.is_visual
     {
         display_dollar(op.end.col - c_int::from(!op.inclusive));
@@ -439,7 +444,7 @@ fn delete_chars_one_line(op: &OpArg) -> Result<(), UndoFailed> {
         }
         // Having deleted a character in the line, `coladd` is stale.
         if gchar_cursor() != Codepoint::NUL {
-            Win::current().w_cursor.coladd = 0;
+            Win::current().cursor().set_coladd(0);
         }
     }
 
@@ -459,13 +464,13 @@ fn delete_chars_one_line(op: &OpArg) -> Result<(), UndoFailed> {
 fn delete_chars_across_lines(op: &OpArg) -> Result<(), UndoFailed> {
     // The region spans at least two lines; the cursor stays inside it
     // through all four edits.
-    let above = Win::current().w_cursor.lnum - 1;
-    let past = Win::current().w_cursor.lnum + op.line_count;
+    let above = Win::current().cursor().lnum() - 1;
+    let past = Win::current().cursor().lnum() + op.line_count;
     // Save the deleted and changed lines for undo.
     u_save(above, past)?;
 
     let splice = Suppress::splice();
-    let startpos = Win::current().w_cursor;
+    let startpos = Win::current().w_cursor();
     let (lnum, col) = (startpos.lnum, startpos.col);
     let buf = Buf::current();
     let spanned = get_region_bytecount(buf, lnum, op.end.lnum, col, op.end.col);
@@ -474,17 +479,19 @@ fn delete_chars_across_lines(op: &OpArg) -> Result<(), UndoFailed> {
     // From the cursor to the end of the line.
     truncate_line(1);
 
-    let curpos = Win::current().w_cursor;
-    Win::current().w_cursor.lnum += 1;
+    let curpos = Win::current().w_cursor();
+    Win::current()
+        .cursor()
+        .set_lnum(Win::current().cursor().lnum() + 1);
     del_lines(op.line_count - 2, false);
 
     // From the start of the last line up to the region's end.
     let n = op.end.col + 1 - c_int::from(!op.inclusive);
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_col(ColNr::ZERO);
     let fixpos = op.op_type == OpType::Delete && !op.is_visual;
     let _ = del_bytes(n.get(), !op_virtual(), fixpos);
 
-    Win::current().w_cursor = curpos;
+    Win::current().set_w_cursor(curpos);
     let _ = do_join(2, false, false, false, false);
     drop(splice);
 

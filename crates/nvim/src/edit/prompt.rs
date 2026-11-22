@@ -50,7 +50,7 @@ pub(crate) fn buf_prompt_text_owned(buffer: Buf) -> ThinCString {
 /// still means "at the end of the line" once the cursor has been moved onto
 /// the prompt line.
 pub(crate) fn init_prompt(cmdchar_todo: Key) {
-    let mut win = Win::current();
+    let win = Win::current();
     let prompt = buf_prompt_text_owned(Buf::current());
     let prompt = prompt.as_bytes();
     let prompt_len =
@@ -69,7 +69,7 @@ pub(crate) fn init_prompt(cmdchar_todo: Key) {
         Buf::current().set_b_prompt_append_new_line(true);
     }
 
-    win.w_cursor.lnum = win.w_cursor.lnum.max(start().lnum);
+    win.cursor().set_lnum(win.cursor().lnum().max(start().lnum));
 
     // Is the prompt actually there, ending at the mark's column?
     let start_col = start().col;
@@ -81,7 +81,7 @@ pub(crate) fn init_prompt(cmdchar_todo: Key) {
         });
         (missing, text.is_empty())
     };
-    if start().lnum == win.w_cursor.lnum && prompt_missing {
+    if start().lnum == win.cursor().lnum() && prompt_missing {
         if empty {
             // The line is empty: the prompt *is* the line.
             let _ = ml_replace_buf_text(Buf::current(), start().lnum, prompt);
@@ -99,7 +99,7 @@ pub(crate) fn init_prompt(cmdchar_todo: Key) {
             u_clearallandblockfree(Buf::current());
         }
         set_start_col(ColNr::new(prompt_len));
-        win.w_cursor.lnum = Buf::current().line_count();
+        win.cursor().set_lnum(Buf::current().line_count());
         coladvance_win(win, MAXCOL);
     }
 
@@ -119,8 +119,8 @@ pub(crate) fn init_prompt(cmdchar_todo: Key) {
     if cmdchar_todo.is('A') {
         coladvance_win(win, MAXCOL);
     }
-    if start().lnum == win.w_cursor.lnum {
-        win.w_cursor.col = win.w_cursor.col.max(start().col);
+    if start().lnum == win.cursor().lnum() {
+        win.cursor().set_col(win.cursor().col().max(start().col));
     }
     // Make sure the cursor is in a valid position.
     check_cursor(win);
@@ -153,6 +153,6 @@ fn coladvance_win(win: Win, vcol: c_int) {
 /// Is the cursor in the editable part of the prompt line?
 pub(crate) fn prompt_curpos_editable() -> bool {
     let start = start();
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     cursor.lnum > start.lnum || (cursor.lnum == start.lnum && cursor.col >= start.col)
 }

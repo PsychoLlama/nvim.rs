@@ -286,16 +286,16 @@ pub fn get_sw_value(buffer: Buf) -> c_int {
 /// The cursor is moved to `pos` (a position in the current buffer) and
 /// restored.
 fn get_sw_value_pos(buffer: Buf, pos: Pos, left: bool) -> c_int {
-    let save_cursor = Win::current().w_cursor;
-    Win::current().w_cursor = pos;
+    let save_cursor = Win::current().w_cursor();
+    Win::current().set_w_cursor(pos);
     let sw_value = get_sw_value_col(buffer, get_nolist_virtcol(), left);
-    Win::current().w_cursor = save_cursor;
+    Win::current().set_w_cursor(save_cursor);
     sw_value
 }
 
 /// `buffer`'s 'shiftwidth' as seen from the end of the current line's indent.
 pub fn get_sw_value_indent(buffer: Buf, left: bool) -> c_int {
-    let mut pos = Win::current().w_cursor;
+    let mut pos = Win::current().w_cursor();
     pos.col = getwhitecols_curline();
     get_sw_value_pos(buffer, pos, left)
 }
@@ -324,7 +324,7 @@ pub fn get_sts_value() -> c_int {
 /// Safe: the only promise is that the editor exists, which `Buf::current()`
 /// and the cursor accessors carry.
 pub fn get_indent() -> c_int {
-    get_indent_lnum(Win::current().w_cursor.lnum)
+    get_indent_lnum(Win::current().cursor().lnum())
 }
 
 /// The screen width of line `lnum`'s indent, in the current buffer.
@@ -704,7 +704,7 @@ fn reindent_line(size: c_int, flags: c_int, oldline: &[u8]) -> Option<Reindented
 /// Answers whether the line was changed.
 pub fn set_indent(size: c_int, flags: c_int) -> bool {
     let buf = Buf::current();
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     // One read of the line: the new one is built from it before anything
     // writes the memline.
     let Some(Reindented {
@@ -749,7 +749,7 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
         }
         retval = true;
     }
-    Win::current().w_cursor.col = ColNr::new(ind_len);
+    Win::current().cursor().set_col(ColNr::new(ind_len));
     retval
 }
 

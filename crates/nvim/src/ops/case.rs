@@ -184,8 +184,8 @@ pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
         // The byte length can differ, so rebuild the character through the
         // change layer. Not `del_char()`: that would take the composing
         // characters with it.
-        let saved: Pos = Win::current().w_cursor;
-        Win::current().w_cursor = pos;
+        let saved: Pos = Win::current().w_cursor();
+        Win::current().set_w_cursor(pos);
         let len = {
             let mut lines = Lines::current();
             let line = lines.line(pos.lnum);
@@ -195,7 +195,7 @@ pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
         let _ = del_bytes(len.get(), false, false);
         // The new character, from the case tables, as the key that types it.
         ins_char(Key::from_code(nc));
-        Win::current().w_cursor = saved;
+        Win::current().set_w_cursor(saved);
     } else {
         // Both are below 0x80 here.
         pbyte(pos, u8::try_from(nc).expect("an ASCII character"));

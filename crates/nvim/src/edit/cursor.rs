@@ -49,41 +49,41 @@ crate::flag_set! {
 /// Safe: the only promise is that the editor exists, which `cur_win()`
 /// carries.
 pub(crate) fn beginline(flags: BeginlineOpts) {
-    let mut win = Win::current();
+    let win = Win::current();
     if flags.has(BeginlineOpts::SOL) && !p_sol() {
-        let want = win.w_curswant;
+        let want = win.w_curswant();
         coladvance_win(win, want);
     } else {
-        win.w_cursor.col = ColNr::ZERO;
-        win.w_cursor.coladd = 0;
+        win.cursor().set_col(ColNr::ZERO);
+        win.cursor().set_coladd(0);
 
         if flags.has(BeginlineOpts::WHITE | BeginlineOpts::SOL) {
             let mut lines = Lines::current();
-            let line = lines.line(win.w_cursor.lnum);
+            let line = lines.line(win.cursor().lnum());
             let mut at = 0;
             // `line[at + 1] == NUL` under `FIX` is what keeps an all-white
             // line from ending with the cursor on the NUL.
             while ascii_iswhite(c_int::from(byte_at(line, at)))
                 && !(flags.has(BeginlineOpts::FIX) && byte_at(line, at + 1) == b'\0')
             {
-                win.w_cursor.col += 1;
+                win.cursor().set_col(win.cursor().col() + 1);
                 at += 1;
             }
         }
-        win.w_set_curswant = true;
+        win.set_w_set_curswant(true);
     }
     adjust_skipcol_now();
 }
 
 /// Move one character right; answers `Err` at the end of the line.
 pub(crate) fn oneright() -> Result<(), Failed> {
-    let mut win = Win::current();
+    let win = Win::current();
 
     if virtual_edit(win) {
         // In 'virtualedit' the step is a *screen* column, so a wide
         // character has to be stepped over whole -- except a TAB, whose
         // width the cursor is allowed to sit inside.
-        let prevpos = win.w_cursor;
+        let prevpos = win.w_cursor();
         let width = with_cursor_tail(|tail| {
             if printable_not_tab(tail) {
                 ptr2cells_at(tail)
@@ -92,9 +92,9 @@ pub(crate) fn oneright() -> Result<(), Failed> {
             }
         });
         coladvance_win(win, viscol() + width);
-        win.w_set_curswant = true;
+        win.set_w_set_curswant(true);
         // OK if the cursor moved, FAIL otherwise (at the window edge).
-        return if prevpos.col != win.w_cursor.col || prevpos.coladd != win.w_cursor.coladd {
+        return if prevpos.col != win.cursor().col() || prevpos.coladd != win.cursor().coladd() {
             Ok(())
         } else {
             Err(Failed)
@@ -114,16 +114,17 @@ pub(crate) fn oneright() -> Result<(), Failed> {
     if last && get_ve_flags(win) & OPT_VE_FLAG_ONEMORE == 0 {
         return Err(Failed);
     }
-    win.w_cursor.col += ColNr::try_from(l).unwrap_or(ColNr::MAX).get();
+    win.cursor()
+        .set_col(win.cursor().col() + ColNr::try_from(l).unwrap_or(ColNr::MAX).get());
 
-    win.w_set_curswant = true;
+    win.set_w_set_curswant(true);
     adjust_skipcol_now();
     Ok(())
 }
 
 /// Move one character left; answers `Err` at column 0.
 pub(crate) fn oneleft() -> Result<(), Failed> {
-    let mut win = Win::current();
+    let win = Win::current();
 
     if virtual_edit(win) {
         let v = viscol();
@@ -143,25 +144,25 @@ pub(crate) fn oneleft() -> Result<(), Failed> {
             width += 1;
         }
 
-        if win.w_cursor.coladd == 1 {
+        if win.cursor().coladd() == 1 {
             // Landed one cell inside a character: legal for a TAB, not
             // for a wide one.
             if with_cursor_tail(|tail| printable_not_tab(tail) && ptr2cells_at(tail) > 1) {
-                win.w_cursor.coladd = 0;
+                win.cursor().set_coladd(0);
             }
         }
 
-        win.w_set_curswant = true;
+        win.set_w_set_curswant(true);
         adjust_skipcol_now();
         return Ok(());
     }
 
-    if win.w_cursor.col == ColNr::ZERO {
+    if win.cursor().col() == ColNr::ZERO {
         return Err(Failed);
     }
 
-    win.w_set_curswant = true;
-    win.w_cursor.col -= 1;
+    win.set_w_set_curswant(true);
+    win.cursor().set_col(win.cursor().col() - 1);
     // The byte to the left may be the tail of a multi-byte character.
     mb_adjust_cursor();
     adjust_skipcol_now();
@@ -175,8 +176,8 @@ pub(crate) fn oneleft() -> Result<(), Failed> {
 /// loop runs one more time.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub(crate) fn cursor_up_inner(mut win: Win, mut n: i32, skip_conceal: bool) {
-    let mut lnum = win.w_cursor.lnum;
+pub(crate) fn cursor_up_inner(win: Win, mut n: i32, skip_conceal: bool) {
+    let mut lnum = win.cursor().lnum();
 
     if n >= lnum.get() {
         lnum = LineNr::ONE;
@@ -206,7 +207,7 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: i32, skip_conceal: bool) {
         lnum -= n;
     }
 
-    win.w_cursor.lnum = lnum;
+    win.cursor().set_lnum(lnum);
 }
 
 /// `k`: move the cursor up `n` lines and back to the wanted column.
@@ -214,13 +215,13 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: i32, skip_conceal: bool) {
 /// `Err` when the cursor is already on line 1.
 pub(crate) fn cursor_up(n: i32, upd_topline: bool) -> Result<(), Failed> {
     let win = Win::current();
-    if n > 0 && win.w_cursor.lnum <= LineNr::ONE {
+    if n > 0 && win.cursor().lnum() <= LineNr::ONE {
         return Err(Failed);
     }
     cursor_up_inner(win, n, false);
 
     // Try to advance to the column we want to be at.
-    let want = win.w_curswant;
+    let want = win.w_curswant();
     coladvance_win(win, want);
 
     if upd_topline {
@@ -234,8 +235,8 @@ pub(crate) fn cursor_up(n: i32, upd_topline: bool) -> Result<(), Failed> {
 /// The mirror of [`cursor_up_inner`], including the `skip_conceal` step-back.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) {
-    let mut lnum = win.w_cursor.lnum;
+pub(crate) fn cursor_down_inner(win: Win, mut n: c_int, skip_conceal: bool) {
+    let mut lnum = win.cursor().lnum();
     let line_count = win.buffer().line_count();
 
     if lnum + n >= line_count {
@@ -259,7 +260,7 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
         lnum += n;
     }
 
-    win.w_cursor.lnum = lnum;
+    win.cursor().set_lnum(lnum);
 }
 
 /// `j`: move the cursor down `n` lines and back to the wanted column.
@@ -268,7 +269,7 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
 /// ends on it, which is why the bound is measured from the fold's end.
 pub(crate) fn cursor_down(n: c_int, upd_topline: bool) -> Result<(), Failed> {
     let win = Win::current();
-    let mut lnum = win.w_cursor.lnum;
+    let mut lnum = win.cursor().lnum();
     fold_end(win, lnum, &mut lnum);
     if n > 0 && lnum >= win.buffer().line_count() {
         return Err(Failed);
@@ -276,7 +277,7 @@ pub(crate) fn cursor_down(n: c_int, upd_topline: bool) -> Result<(), Failed> {
     cursor_down_inner(win, n, false);
 
     // Try to advance to the column we want to be at.
-    let want = win.w_curswant;
+    let want = win.w_curswant();
     coladvance_win(win, want);
 
     if upd_topline {
@@ -300,7 +301,7 @@ fn coladvance_win(win: Win, vcol: ColNr) {
 /// `f` of the cursor's line from the cursor's own column on.
 #[inline(always)]
 fn with_cursor_tail<R>(f: impl FnOnce(&[u8]) -> R) -> R {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
     f(&line[usize::try_from(cursor.col)

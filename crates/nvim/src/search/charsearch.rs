@@ -157,11 +157,11 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
     cmd_arg.op().inclusive = dir != BACKWARD as c_int;
 
     let mut lines = Lines::current();
-    let line = lines.line(Win::current().w_cursor.lnum);
+    let line = lines.line(Win::current().cursor().lnum());
     let len = line.len();
     let bytelen = usize::try_from(LASTC_BYTELEN.get()).unwrap_or(0);
     let bytes = LASTC_BYTES.get();
-    let mut col = Win::current().w_cursor.col.as_usize();
+    let mut col = Win::current().cursor().col().as_usize();
     // The first `n` bytes of `text`, or up to its NUL: what `strncmp` reads.
     let prefix = |text: &[u8], n: usize| cstr::until_nul(&text[..n.min(text.len())]).to_vec();
     let want = prefix(&bytes, bytelen);
@@ -202,6 +202,6 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
             col -= head_off(line, col);
         }
     }
-    Win::current().w_cursor.col = ColNr::from_index(col);
+    Win::current().cursor().set_col(ColNr::from_index(col));
     Ok(())
 }

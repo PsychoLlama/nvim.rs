@@ -152,11 +152,11 @@ pub fn diff_buf_delete(buffer: Buf) {
 ///
 /// A buffer stays in the diff while *any* window still shows it in diff mode.
 pub fn diff_buf_adjust(win: Win) {
-    if win.w_onebuf_opt.wo_diff != 0 {
+    if win.wo_diff() != 0 {
         diff_buf_add(win.buffer());
         return;
     }
-    if windows().any(|wp| wp.w_buffer == win.w_buffer && wp.w_onebuf_opt.wo_diff != 0) {
+    if windows().any(|wp| wp.w_buffer() == win.w_buffer() && wp.wo_diff() != 0) {
         return;
     }
     let tp = TabPage::current();

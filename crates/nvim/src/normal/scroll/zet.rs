@@ -140,7 +140,7 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: Key) -> Result<(), Faile
         word = Some(XString::from_bytes(text.selected()));
     }
     if word.is_none() {
-        let pos = Win::current().w_cursor;
+        let pos = Win::current().w_cursor();
         // The search is only being used to find where the bad word
         // starts; its "no more misspellings" message is not wanted.
         let no_emsg = Suppress::emsg();
@@ -148,15 +148,15 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: Key) -> Result<(), Faile
         drop(no_emsg);
         // Only if it found one at or before the cursor, i.e. the one the
         // cursor is inside rather than the next one.
-        if bad_len != 0 && Win::current().w_cursor.col <= pos.col {
+        if bad_len != 0 && Win::current().cursor().col() <= pos.col {
             let win = Win::current();
-            let at = usize::try_from(win.w_cursor.col).unwrap_or(0);
+            let at = usize::try_from(win.cursor().col()).unwrap_or(0);
             let mut lines = win.buffer().lines();
-            let line = lines.line(win.w_cursor.lnum);
+            let line = lines.line(win.cursor().lnum());
             let end = at.saturating_add(bad_len).min(line.len());
             word = Some(XString::from_bytes(&line[at.min(end)..end]));
         }
-        Win::current().w_cursor = pos;
+        Win::current().set_w_cursor(pos);
     }
     let word = match word {
         Some(word) => word,
@@ -189,13 +189,13 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: Key) -> Result<(), Faile
 /// Scroll sideways by `count1` columns, which 'wrap' makes meaningless.
 fn scroll_sideways(cmd_arg: &mut CmdArg, right: bool) {
     let win = Win::current();
-    if win.w_onebuf_opt.wo_wrap != 0 {
+    if win.wo_wrap() != 0 {
         return;
     }
     let target = if right {
-        win.w_leftcol + cmd_arg.count1
+        win.w_leftcol() + cmd_arg.count1
     } else {
-        (win.w_leftcol - cmd_arg.count1).max(ColNr::ZERO)
+        (win.w_leftcol() - cmd_arg.count1).max(ColNr::ZERO)
     };
     set_leftcol(target);
 }
@@ -203,14 +203,14 @@ fn scroll_sideways(cmd_arg: &mut CmdArg, right: bool) {
 /// `zs` and `ze`: scroll sideways until the cursor is at the left or right
 /// edge, keeping 'sidescrolloff' columns of context.
 fn scroll_cursor_to_edge(to_left: bool) {
-    let mut win = Win::current();
-    if win.w_onebuf_opt.wo_wrap != 0 {
+    let win = Win::current();
+    if win.wo_wrap() != 0 {
         return;
     }
     let siso = get_sidescrolloff_value(win);
     let mut col: ColNr = ColNr::ZERO;
     // A closed fold shows one line of its own, which starts at column 0.
-    if !folded(win.w_cursor.lnum) {
+    if !folded(win.cursor().lnum()) {
         let (start, end) = win.vcol_span(win.cursor());
         col = if to_left { start } else { end };
     }
@@ -222,7 +222,7 @@ fn scroll_cursor_to_edge(to_left: bool) {
             ColNr::ZERO
         };
     } else {
-        let width = win.w_view_width - win.col_off();
+        let width = win.w_view_width() - win.col_off();
         let width = int64_t::from(width);
         col = if (i64::from(col) + siso) < width {
             ColNr::ZERO
@@ -233,18 +233,18 @@ fn scroll_cursor_to_edge(to_left: bool) {
             ColNr::new(c_int::MAX)
         };
     }
-    if win.w_leftcol != col {
-        win.w_leftcol = col;
+    if win.w_leftcol() != col {
+        win.set_w_leftcol(col);
         redraw_later(win, UPD_NOT_VALID);
     }
 }
 
 /// The fold half of the `z` tree. Answers whether the key was one of them.
 fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -> bool {
-    let mut win = Win::current();
+    let win = Win::current();
     // Whether the cursor is inside a fold, which is what decides between
     // opening and closing for the toggles.
-    let in_fold = || folded(win.w_cursor.lnum);
+    let in_fold = || folded(win.cursor().lnum());
     match nchar.as_byte() {
         // `zf`/`zF`: create a fold. `zF` folds `count1` lines, which is
         // the operator applied to itself.
@@ -252,7 +252,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
             if fold_manual_allowed(true).is_ok() {
                 cmd_arg.nchar = Key::ascii(b'f');
                 nv_operator(cmd_arg);
-                win.w_onebuf_opt.wo_fen = 1;
+                win.set_wo_fen(1);
                 if nchar.is('F') && cmd_arg.op().op_type == OpType::Fold {
                     nv_operator(cmd_arg);
                     FINISH_OP.set(true);
@@ -267,7 +267,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
                 if visual_active() {
                     nv_operator(cmd_arg);
                 } else {
-                    let lnum = win.w_cursor.lnum;
+                    let lnum = win.cursor().lnum();
                     let deep = c_int::from(nchar.is('D'));
                     delete_fold(win, lnum, lnum, deep, false);
                 }
@@ -286,24 +286,24 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
             }
         }
         // `zn`/`zN`/`zi`: 'foldenable' off, on, toggled.
-        Some(b'n') => win.w_onebuf_opt.wo_fen = 0,
-        Some(b'N') => win.w_onebuf_opt.wo_fen = 1,
-        Some(b'i') => win.w_onebuf_opt.wo_fen = c_int::from(win.w_onebuf_opt.wo_fen == 0),
+        Some(b'n') => win.set_wo_fen(0),
+        Some(b'N') => win.set_wo_fen(1),
+        Some(b'i') => win.set_wo_fen(c_int::from(win.wo_fen() == 0)),
         // `za`/`zA`: toggle this fold, recursively for `zA`.
         Some(b'a') => {
             if in_fold() {
-                open_fold(win.w_cursor, cmd_arg.count1);
+                open_fold(win.w_cursor(), cmd_arg.count1);
             } else {
-                close_fold(win.w_cursor, cmd_arg.count1);
-                win.w_onebuf_opt.wo_fen = 1;
+                close_fold(win.w_cursor(), cmd_arg.count1);
+                win.set_wo_fen(1);
             }
         }
         Some(b'A') => {
             if in_fold() {
-                open_fold_recurse(win.w_cursor);
+                open_fold_recurse(win.w_cursor());
             } else {
-                close_fold_recurse(win.w_cursor);
-                win.w_onebuf_opt.wo_fen = 1;
+                close_fold_recurse(win.w_cursor());
+                win.set_wo_fen(1);
             }
         }
         // `zo`/`zO`: open. With a selection they are the operator form.
@@ -311,14 +311,14 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
             if visual_active() {
                 nv_operator(cmd_arg);
             } else {
-                open_fold(win.w_cursor, cmd_arg.count1);
+                open_fold(win.w_cursor(), cmd_arg.count1);
             }
         }
         Some(b'O') => {
             if visual_active() {
                 nv_operator(cmd_arg);
             } else {
-                open_fold_recurse(win.w_cursor);
+                open_fold_recurse(win.w_cursor());
             }
         }
         // `zc`/`zC`: close. Closing always turns 'foldenable' back on --
@@ -327,55 +327,55 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
             if visual_active() {
                 nv_operator(cmd_arg);
             } else {
-                close_fold(win.w_cursor, cmd_arg.count1);
+                close_fold(win.w_cursor(), cmd_arg.count1);
             }
-            win.w_onebuf_opt.wo_fen = 1;
+            win.set_wo_fen(1);
         }
         Some(b'C') => {
             if visual_active() {
                 nv_operator(cmd_arg);
             } else {
-                close_fold_recurse(win.w_cursor);
+                close_fold_recurse(win.w_cursor());
             }
-            win.w_onebuf_opt.wo_fen = 1;
+            win.set_wo_fen(1);
         }
         // `zv`: open just enough to see the cursor line.
         Some(b'v') => fold_open_cursor(),
         // `zx`/`zX`: recompute the folds. `zx` also reopens to the cursor.
         Some(b'x') => {
-            win.w_onebuf_opt.wo_fen = 1;
-            win.w_foldinvalid = true;
+            win.set_wo_fen(1);
+            win.set_w_foldinvalid(true);
             new_fold_level();
             fold_open_cursor();
         }
         Some(b'X') => {
-            win.w_onebuf_opt.wo_fen = 1;
-            win.w_foldinvalid = true;
+            win.set_wo_fen(1);
+            win.set_w_foldinvalid(true);
             // Force the tail's `new_fold_level`.
             *old_fdl = None;
         }
         // `zm`/`zM`: fold more, or all the way.
         Some(b'm') => {
-            if win.w_onebuf_opt.wo_fdl > 0 {
-                win.w_onebuf_opt.wo_fdl -= OptInt::from(cmd_arg.count1);
-                win.w_onebuf_opt.wo_fdl = win.w_onebuf_opt.wo_fdl.max(0);
+            if win.wo_fdl() > 0 {
+                win.set_wo_fdl(win.wo_fdl() - OptInt::from(cmd_arg.count1));
+                win.set_wo_fdl(win.wo_fdl().max(0));
             }
             *old_fdl = None;
-            win.w_onebuf_opt.wo_fen = 1;
+            win.set_wo_fen(1);
         }
         Some(b'M') => {
-            win.w_onebuf_opt.wo_fdl = 0;
+            win.set_wo_fdl(0);
             *old_fdl = None;
-            win.w_onebuf_opt.wo_fen = 1;
+            win.set_wo_fen(1);
         }
         // `zr`/`zR`: reduce the folding, or open everything.
         Some(b'r') => {
-            win.w_onebuf_opt.wo_fdl += OptInt::from(cmd_arg.count1);
+            win.set_wo_fdl(win.wo_fdl() + OptInt::from(cmd_arg.count1));
             let deepest = deepest_fold_nesting(win);
-            win.w_onebuf_opt.wo_fdl = win.w_onebuf_opt.wo_fdl.min(OptInt::from(deepest));
+            win.set_wo_fdl(win.wo_fdl().min(OptInt::from(deepest)));
         }
         Some(b'R') => {
-            win.w_onebuf_opt.wo_fdl = OptInt::from(deepest_fold_nesting(win));
+            win.set_wo_fdl(OptInt::from(deepest_fold_nesting(win)));
             *old_fdl = None;
         }
         // `zj`/`zk`: to the next or previous fold's edge.
@@ -397,12 +397,12 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
 /// `z`, whose second character says what part of the view or of the folding
 /// it is about.
 pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
-    let mut win = Win::current();
+    let win = Win::current();
     let mut nchar = cmd_arg.nchar;
     // The 'foldlevel' to compare against at the end; `None` when a command
     // set it and the folds must be updated regardless.
-    let mut old_fdl = Some(win.w_onebuf_opt.wo_fdl);
-    let old_fen = win.w_onebuf_opt.wo_fen;
+    let mut old_fdl = Some(win.wo_fdl());
+    let old_fen = win.wo_fen();
 
     // `z` may take a count of its own between the `z` and the command.
     if ascii_isdigit(nchar.code()) && !nv_z_get_count(cmd_arg, &mut nchar) {
@@ -423,11 +423,12 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
     // not how many of anything.
     if has_char(c"+\r\nt.z^-b", nchar.code())
         && cmd_arg.count0 != 0
-        && LineNr::new(cmd_arg.count0) != win.w_cursor.lnum
+        && LineNr::new(cmd_arg.count0) != win.cursor().lnum()
     {
         setpcmark();
         let count0 = LineNr::new(cmd_arg.count0);
-        win.w_cursor.lnum = count0.min(Buf::current().line_count());
+        win.cursor()
+            .set_lnum(count0.min(Buf::current().line_count()));
         check_cursor_col(win);
     }
 
@@ -451,7 +452,8 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
                 // window rather than from the cursor.
                 if cmd_arg.count0 == 0 {
                     validate_botline_win(win);
-                    win.w_cursor.lnum = win.w_botline.min(Buf::current().line_count());
+                    win.cursor()
+                        .set_lnum(win.w_botline().min(Buf::current().line_count()));
                 }
                 Some((Place::Top, true))
             }
@@ -463,11 +465,11 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
                 // count it first scrolls the current top out of sight.
                 if cmd_arg.count0 != 0 {
                     scroll_cursor_bot(win, 0, true);
-                    win.w_cursor.lnum = win.w_topline;
-                } else if win.w_topline == LineNr::ONE {
-                    win.w_cursor.lnum = LineNr::ONE;
+                    win.cursor().set_lnum(win.w_topline());
+                } else if win.w_topline() == LineNr::ONE {
+                    win.cursor().set_lnum(LineNr::ONE);
                 } else {
-                    win.w_cursor.lnum = win.w_topline - 1;
+                    win.cursor().set_lnum(win.w_topline() - 1);
                 }
                 Some((Place::Bottom, true))
             }
@@ -477,7 +479,7 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
             // width multiply -- and the count is the user's. The C wraps;
             // `set_leftcol` clamps whatever comes out.
             Some(b'H') => {
-                cmd_arg.count1 = cmd_arg.count1.wrapping_mul(win.w_view_width / 2);
+                cmd_arg.count1 = cmd_arg.count1.wrapping_mul(win.w_view_width() / 2);
                 scroll_sideways(cmd_arg, false);
                 None
             }
@@ -486,7 +488,7 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
                 None
             }
             Some(b'L') => {
-                cmd_arg.count1 = cmd_arg.count1.wrapping_mul(win.w_view_width / 2);
+                cmd_arg.count1 = cmd_arg.count1.wrapping_mul(win.w_view_width() / 2);
                 scroll_sideways(cmd_arg, true);
                 None
             }
@@ -549,20 +551,20 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
         set_fraction(win);
     }
 
-    if old_fen != win.w_onebuf_opt.wo_fen {
+    if old_fen != win.wo_fen() {
         // Windows bound by 'scrollbind' in diff mode have to fold alike,
         // or the same line is at a different height in each.
-        if foldmethod_is_diff(win) && win.w_onebuf_opt.wo_scb != 0 {
-            for mut wp in windows() {
-                if wp.raw() != win.raw() && foldmethod_is_diff(wp) && wp.w_onebuf_opt.wo_scb != 0 {
-                    wp.w_onebuf_opt.wo_fen = win.w_onebuf_opt.wo_fen;
+        if foldmethod_is_diff(win) && win.wo_scb() != 0 {
+            for wp in windows() {
+                if wp.raw() != win.raw() && foldmethod_is_diff(wp) && wp.wo_scb() != 0 {
+                    wp.set_wo_fen(win.wo_fen());
                     changed_window_setting(wp);
                 }
             }
         }
         changed_window_setting(win);
     }
-    if old_fdl != Some(win.w_onebuf_opt.wo_fdl) {
+    if old_fdl != Some(win.wo_fdl()) {
         new_fold_level();
     }
 }

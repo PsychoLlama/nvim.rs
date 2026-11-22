@@ -131,7 +131,7 @@ pub fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> Option<c_int> {
         let inside = col >= start_col.get() && col < COMPL_INS_END_COL.get().get();
         return inside.then_some(attr);
     }
-    let cursor_lnum = Win::current().w_cursor.lnum;
+    let cursor_lnum = Win::current().cursor().lnum();
     let inside = (lnum == COMPL_LNUM.get() && col >= start_col.get() && col < MAXCOL)
         || (lnum > COMPL_LNUM.get() && lnum < cursor_lnum)
         || (lnum == cursor_lnum && col <= COMPL_INS_END_COL.get().get());
@@ -223,7 +223,7 @@ pub(crate) fn prepend_startcol_text(dest: ComplStr, src: ComplStr, startcol: Col
     let mut text = XString::with_capacity(new_length);
     {
         let mut lines = Lines::current();
-        let line = lines.line(Win::current().w_cursor.lnum);
+        let line = lines.line(Win::current().cursor().lnum());
         let at = usize::try_from(startcol).unwrap_or(0).min(line.len());
         text.push_bytes(&line[at..at.saturating_add(prepend_len).min(line.len())]);
     }
@@ -500,11 +500,11 @@ pub fn ins_compl_show_pum() {
 
     // Move the cursor to the start of the match for the popup menu's sake,
     // then put it back.
-    let col = Win::current().w_cursor.col;
-    Win::current().w_cursor.col = COMPL_COL.get();
+    let col = Win::current().cursor().col();
+    Win::current().cursor().set_col(COMPL_COL.get());
     COMPL_SELECTED_ITEM.set(cur);
     pum_display(compl_match_array().rows(), cur, array_changed, 0);
-    Win::current().w_cursor.col = col;
+    Win::current().cursor().set_col(col);
 
     if COMPL_STARTED.get() && COMPL_CURR_MATCH.get() != COMPL_SHOWN_MATCH.get() {
         COMPL_CURR_MATCH.set(COMPL_SHOWN_MATCH.get());
@@ -667,7 +667,8 @@ pub(crate) fn show_pum(prev_w_wrow: c_int, prev_w_leftcol: c_int) {
     // If the cursor moved or the display scrolled, the menu has to be
     // rebuilt rather than only redrawn.
     setcursor();
-    if prev_w_wrow != Win::current().w_wrow || prev_w_leftcol != Win::current().w_leftcol.get() {
+    if prev_w_wrow != Win::current().w_wrow() || prev_w_leftcol != Win::current().w_leftcol().get()
+    {
         ins_compl_del_pum();
     }
     ins_compl_show_pum();

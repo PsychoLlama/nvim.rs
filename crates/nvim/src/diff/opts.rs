@@ -119,7 +119,7 @@ pub(crate) fn parse_diffanchors(
     let bufwin = if check_only {
         None
     } else {
-        let shown = windows().find(|w| w.w_buffer == buffer && w.w_onebuf_opt.wo_diff != 0);
+        let shown = windows().find(|w| w.w_buffer() == buffer && w.wo_diff() != 0);
         if shown.is_none() && dia[at] != 0 {
             emsg(gettext(E_DIFF_ANCHORS_WITH_HIDDEN_WINDOWS));
             return Err(Failed);

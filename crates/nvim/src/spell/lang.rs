@@ -713,7 +713,7 @@ pub fn spell_reload() {
     // the buffer has 'spell' on. The walk is over the current tab, which
     // always starts at `FIRSTWIN`.
     for wp in windows() {
-        if wp.syn_block().b_p_spl.first_byte() != 0 && wp.w_onebuf_opt.wo_spell != 0 {
+        if wp.syn_block().b_p_spl.first_byte() != 0 && wp.wo_spell() != 0 {
             let _ = parse_spelllang(wp);
             break;
         }
@@ -751,7 +751,7 @@ pub fn valid_spellfile(value: &[u8]) -> bool {
 pub fn did_set_spell_option() -> Result<(), OptError> {
     let mut errmsg = Ok(());
     for wp in windows() {
-        if wp.w_buffer.is_current() && wp.w_onebuf_opt.wo_spell != 0 {
+        if wp.w_buffer().is_current() && wp.wo_spell() != 0 {
             errmsg = parse_spelllang(wp);
             break;
         }

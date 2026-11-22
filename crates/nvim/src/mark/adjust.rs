@@ -313,10 +313,10 @@ pub fn mark_adjust_buf(
     // rather than to `buffer`, so they only move when the two agree. They are
     // NOT under the `:lockmarks` guard above — upstream leaves them out, and
     // `:lockmarks` is documented as being about the *named* marks.
-    let mut curwin_handle = Win::current();
-    if curwin_handle.w_buffer == buffer {
-        shift.line(&mut curwin_handle.w_pcmark.lnum);
-        shift.line(&mut curwin_handle.w_prev_pcmark.lnum);
+    let curwin_handle = Win::current();
+    if curwin_handle.w_buffer() == buffer {
+        shift.line(&mut curwin_handle.edit().w_pcmark.lnum);
+        shift.line(&mut curwin_handle.edit().w_prev_pcmark.lnum);
         let mut saved = SAVED_CURSOR.get();
         if saved.lnum != LineNr::ZERO {
             shift.line_nodel(&mut saved.lnum);
@@ -324,27 +324,27 @@ pub fn mark_adjust_buf(
         }
     }
 
-    for mut win in tab_windows() {
+    for win in tab_windows() {
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-            let len = slot(win.w_jumplistlen);
-            for jump in &mut win.w_jumplist[..len] {
+            let len = slot(win.w_jumplistlen());
+            for jump in &mut win.edit().w_jumplist[..len] {
                 shift.mark_nodel_in(&mut jump.fmark, fnum);
             }
         }
-        if win.w_buffer != buffer {
+        if win.w_buffer() != buffer {
             continue;
         }
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-            let len = slot(win.w_tagstacklen);
-            for tag in &mut win.w_tagstack[..len] {
+            let len = slot(win.w_tagstacklen());
+            for tag in &mut win.edit().w_tagstack[..len] {
                 shift.mark_nodel_in(&mut tag.fmark, fnum);
             }
         }
         // The remembered Visual range of a window that is not the current
         // one; the two move together or not at all.
-        if win.w_old_cursor_lnum != LineNr::ZERO {
-            shift.line_nodel(&mut win.w_old_cursor_lnum);
-            shift.line_nodel(&mut win.w_old_visual_lnum);
+        if win.w_old_cursor_lnum() != LineNr::ZERO {
+            shift.line_nodel(&mut win.edit().w_old_cursor_lnum);
+            shift.line_nodel(&mut win.edit().w_old_visual_lnum);
         }
 
         // Which windows follow the change with their view: an API splice
@@ -357,30 +357,30 @@ pub fn mark_adjust_buf(
         // `fold_mark_adjust`, and upstream reads the field afresh at each of
         // these three tests.
         if by_api || follows(win, by_term, buffer) {
-            if win.w_topline >= line1 && win.w_topline <= line2 {
+            if win.w_topline() >= line1 && win.w_topline() <= line2 {
                 if amount == MAXLNUM.get() {
                     // An API splice that *replaces* the topline's range with
                     // at least as many lines leaves the topline where it is.
                     if !(by_api && amount_after > line1 - line2 - 1) {
-                        win.w_topline = (line1 - 1).max(LineNr::ONE);
+                        win.set_w_topline((line1 - 1).max(LineNr::ONE));
                     }
-                } else if win.w_topline > line1 {
-                    win.w_topline += amount;
+                } else if win.w_topline() > line1 {
+                    win.set_w_topline(win.w_topline() + amount);
                 }
-                win.w_topfill = 0;
+                win.set_w_topfill(0);
             } else if amount_after != 0
-                && win.w_topline > line2 + c_int::from(by_api && line2 < line1)
+                && win.w_topline() > line2 + c_int::from(by_api && line2 < line1)
             {
-                win.w_topline += amount_after;
-                win.w_topfill = 0;
+                win.set_w_topline(win.w_topline() + amount_after);
+                win.set_w_topfill(0);
             }
         }
         // The cursor is the one store an API splice leaves alone: the API
         // contract is that a splice does not move the user's cursor.
         if !by_api && follows(win, by_term, buffer) {
-            let mut cursor = win.w_cursor;
+            let mut cursor = win.w_cursor();
             shift.cursor(&mut cursor);
-            win.w_cursor = cursor;
+            win.set_w_cursor(cursor);
         }
         if adjust_folds {
             fold_mark_adjust(win, line1, line2, amount, amount_after);
@@ -407,7 +407,7 @@ pub fn mark_adjust_buf(
 /// already on `buffer`'s last line.
 fn follows(win: Win, by_term: bool, buffer: Buf) -> bool {
     if by_term {
-        win.w_cursor.lnum < buffer.line_count()
+        win.cursor().lnum() < buffer.line_count()
     } else {
         !win.is_current()
     }
@@ -437,7 +437,7 @@ pub fn mark_col_adjust(
         return;
     }
 
-    let (buf, mut cur) = (Buf::current(), Win::current());
+    let (buf, cur) = (Buf::current(), Win::current());
     let fnum = buf.handle();
     let shift = ColShift {
         lnum,
@@ -470,8 +470,8 @@ pub fn mark_col_adjust(
     shift.col(&mut b.b_visual.vi_start);
     shift.col(&mut b.b_visual.vi_end);
     drop(edit);
-    shift.col(&mut cur.w_pcmark);
-    shift.col(&mut cur.w_prev_pcmark);
+    shift.col(&mut cur.edit().w_pcmark);
+    shift.col(&mut cur.edit().w_prev_pcmark);
     let mut saved = SAVED_CURSOR.get();
     shift.col(&mut saved);
     SAVED_CURSOR.set(saved);
@@ -479,22 +479,22 @@ pub fn mark_col_adjust(
     // The current tab page's windows only. Upstream spells the head
     // `CURTAB == CURTAB ? FIRSTWIN : CURTAB->tp_firstwin`, a transpiler
     // tautology that always takes `FIRSTWIN`.
-    for mut win in windows() {
-        let len = slot(win.w_jumplistlen);
-        for jump in &mut win.w_jumplist[..len] {
+    for win in windows() {
+        let len = slot(win.w_jumplistlen());
+        for jump in &mut win.edit().w_jumplist[..len] {
             shift.mark_in(&mut jump.fmark, fnum);
         }
-        if win.w_buffer != buf {
+        if win.w_buffer() != buf {
             continue;
         }
-        let len = slot(win.w_tagstacklen);
-        for tag in &mut win.w_tagstack[..len] {
+        let len = slot(win.w_tagstacklen());
+        for tag in &mut win.edit().w_tagstack[..len] {
             shift.mark_in(&mut tag.fmark, fnum);
         }
         if !win.is_current() {
-            let mut cursor = win.w_cursor;
+            let mut cursor = win.w_cursor();
             shift.col(&mut cursor);
-            win.w_cursor = cursor;
+            win.set_w_cursor(cursor);
         }
     }
 }

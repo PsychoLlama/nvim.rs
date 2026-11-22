@@ -47,25 +47,25 @@ use crate::winlayer::{Buf, TabPage, Win, tab_windows, windows};
 /// Drop the cached display information one window holds about the lines a
 /// change covered, and shift what is below it by `xtra`.
 fn changed_lines_invalidate_win(
-    mut window: Win,
+    window: Win,
     lnum: LineNr,
     col: ColNr,
     mut lnume: LineNr,
     xtra: i32,
 ) {
-    if window.w_cursor.lnum <= lnum {
+    if window.cursor().lnum() <= lnum {
         let below =
-            find_wl_entry(window, lnum).is_some_and(|entry| window.w_cursor.lnum > entry.wl_lnum);
+            find_wl_entry(window, lnum).is_some_and(|entry| window.cursor().lnum() > entry.wl_lnum);
         if below {
             changed_line_abv_curs_win(window);
         }
     }
-    if window.w_cursor.lnum > lnum {
+    if window.cursor().lnum() > lnum {
         changed_line_abv_curs_win(window);
-    } else if window.w_cursor.lnum == lnum && window.w_cursor.col >= col {
+    } else if window.cursor().lnum() == lnum && window.cursor().col() >= col {
         changed_cline_bef_curs(window);
     }
-    if window.w_botline >= lnum {
+    if window.w_botline() >= lnum {
         if xtra < 0 {
             invalidate_botline_win(window);
         } else {
@@ -75,16 +75,15 @@ fn changed_lines_invalidate_win(
 
     // Inline virtual text under 'wrap', and virtual lines, make the line
     // after the change part of it as far as the display cache goes.
-    let widen = xtra < 0
-        && window.w_onebuf_opt.wo_wrap != 0
-        && buf_meta_total(window.buffer(), MT_META_INLINE) != 0
-        || xtra != 0 && buf_meta_total(window.buffer(), MT_META_LINES) != 0;
+    let widen =
+        xtra < 0 && window.wo_wrap() != 0 && buf_meta_total(window.buffer(), MT_META_INLINE) != 0
+            || xtra != 0 && buf_meta_total(window.buffer(), MT_META_LINES) != 0;
     if widen {
         lnume += 1;
     }
 
-    let valid = usize::try_from(window.w_lines_valid).unwrap_or(0);
-    for (i, wl) in window.w_lines[..valid].iter_mut().enumerate() {
+    let valid = usize::try_from(window.w_lines_valid()).unwrap_or(0);
+    for (i, wl) in window.edit().w_lines[..valid].iter_mut().enumerate() {
         if !wl.wl_valid {
             continue;
         }
@@ -115,7 +114,7 @@ pub fn changed_lines_invalidate_buf(
     xtra: i32,
 ) {
     for wp in tab_windows() {
-        if wp.w_buffer == buffer {
+        if wp.w_buffer() == buffer {
             changed_lines_invalidate_win(wp, lnum, col, lnume, xtra);
         }
     }
@@ -136,8 +135,8 @@ fn record_change_mark(buffer: Buf, lnum: LineNr, col: ColNr) {
         skipcol: ColNr::ZERO,
     };
     let win = Win::current();
-    if win.w_buffer == buffer && lnum >= win.w_topline && lnum <= win.w_botline {
-        let at = win.w_cursor;
+    if win.w_buffer() == buffer && lnum >= win.w_topline() && lnum <= win.w_botline() {
+        let at = win.w_cursor();
         view = mark_view_make(win, at);
     }
 
@@ -181,16 +180,16 @@ fn record_change_mark(buffer: Buf, lnum: LineNr, col: ColNr) {
                 // oldest there instead, and the new entry below overwrites
                 // it either way.
                 buffer.edit().b_changelist.rotate_left(1);
-                for mut wp in tab_windows() {
-                    if wp.w_buffer == buffer && wp.w_changelistidx > 0 {
-                        wp.w_changelistidx -= 1;
+                for wp in tab_windows() {
+                    if wp.w_buffer() == buffer && wp.w_changelistidx() > 0 {
+                        wp.set_w_changelistidx(wp.w_changelistidx() - 1);
                     }
                 }
             }
             // A window sitting at the end of the list stays at the end.
-            for mut wp in tab_windows() {
-                if wp.w_buffer == buffer && wp.w_changelistidx == buffer.b_changelistlen() {
-                    wp.w_changelistidx += 1;
+            for wp in tab_windows() {
+                if wp.w_buffer() == buffer && wp.w_changelistidx() == buffer.b_changelistlen() {
+                    wp.set_w_changelistidx(wp.w_changelistidx() + 1);
                 }
             }
             buffer.set_b_changelistlen(buffer.b_changelistlen() + 1);
@@ -204,20 +203,20 @@ fn record_change_mark(buffer: Buf, lnum: LineNr, col: ColNr) {
     // The current window is always *after* the last change, so that `g,`
     // takes you back to it.
     let len = buffer.b_changelistlen();
-    if Win::current().w_buffer == buffer {
-        Win::current().w_changelistidx = len;
+    if Win::current().w_buffer() == buffer {
+        Win::current().set_w_changelistidx(len);
     }
 }
 
 /// Bring one window's fold, scroll and cursor-line state up to date with a
 /// change that covered `lnum`..`lnume` and moved what follows by `xtra`.
-fn redraw_win_for_change(mut window: Win, mut lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i32) {
-    if !REDRAW_NOT_ALLOWED.get() && window.w_redr_type < UPD_VALID {
-        window.w_redr_type = UPD_VALID;
+fn redraw_win_for_change(window: Win, mut lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i32) {
+    if !REDRAW_NOT_ALLOWED.get() && window.w_redr_type() < UPD_VALID {
+        window.set_w_redr_type(UPD_VALID);
     }
     // Adding or removing lines invalidates a pending w_redraw_top/bot
     // range, so redraw everything instead.
-    if xtra != 0 && window.w_redraw_top != LineNr::ZERO {
+    if xtra != 0 && window.w_redraw_top() != LineNr::ZERO {
         window.redraw_later(UPD_NOT_VALID);
     }
 
@@ -225,14 +224,14 @@ fn redraw_win_for_change(mut window: Win, mut lnum: LineNr, col: ColNr, lnume: L
 
     // Reset 'smoothscroll''s w_skipcol if the topline has become so short
     // that nothing would be visible, allowing for the `<<<` marker.
-    let hide_all = window.w_skipcol > ColNr::ZERO
-        && (last < window.w_topline
-            || (window.w_topline >= lnum
-                && window.w_topline < lnume
-                && linetabsize_eol(window, window.w_topline)
-                    <= (window.w_skipcol + sms_marker_overlap(window, -1)).get()));
+    let hide_all = window.w_skipcol() > ColNr::ZERO
+        && (last < window.w_topline()
+            || (window.w_topline() >= lnum
+                && window.w_topline() < lnume
+                && linetabsize_eol(window, window.w_topline())
+                    <= (window.w_skipcol() + sms_marker_overlap(window, -1)).get()));
     if hide_all {
-        window.w_skipcol = ColNr::ZERO;
+        window.set_w_skipcol(ColNr::ZERO);
     }
 
     // Can't postpone the fold update: a following operator might work on
@@ -245,13 +244,13 @@ fn redraw_win_for_change(mut window: Win, mut lnum: LineNr, col: ColNr, lnume: L
     // just above a closed fold.
     // Only `firstp` is asked for, and it is a local.
     let mut folded = window.has_folding_with(lnum, Some(&mut lnum), None, false, None);
-    if window.w_cursor.lnum == lnum {
-        window.w_cline_folded = folded;
+    if window.cursor().lnum() == lnum {
+        window.set_w_cline_folded(folded);
     }
     // As above, for `lastp`.
     folded = window.has_folding_with(last, None, Some(&mut last), false, None);
-    if window.w_cursor.lnum == last {
-        window.w_cline_folded = folded;
+    if window.cursor().lnum() == last {
+        window.set_w_cline_folded(folded);
     }
 
     changed_lines_invalidate_win(window, lnum, col, lnume, xtra);
@@ -259,24 +258,24 @@ fn redraw_win_for_change(mut window: Win, mut lnum: LineNr, col: ColNr, lnume: L
     // Setting w_topline has side effects once the folds have changed --
     // especially when the buffer was changed in another window.
     if window.has_any_folding() {
-        let top = window.w_topline;
+        let top = window.w_topline();
         set_topline(window, top);
     }
 
     // 'relativenumber' always needs a redraw when lines came or went, even
     // if the cursor did not move.
-    if window.w_onebuf_opt.wo_rnu != 0 && xtra != 0 {
-        window.w_last_cursor_lnum_rnu = LineNr::ZERO;
+    if window.wo_rnu() != 0 && xtra != 0 {
+        window.set_w_last_cursor_lnum_rnu(LineNr::ZERO);
     }
 
-    if window.w_onebuf_opt.wo_cul != 0 && window.w_last_cursorline >= lnum {
-        if window.w_last_cursorline < lnume {
+    if window.wo_cul() != 0 && window.w_last_cursorline() >= lnum {
+        if window.w_last_cursorline() < lnume {
             // 'cursorline' was inside the change: the loop above has
             // already invalidated it in w_lines[].
-            window.w_last_cursorline = LineNr::ZERO;
+            window.set_w_last_cursorline(LineNr::ZERO);
         } else {
             // Below the change: shift it.
-            window.w_last_cursorline += xtra;
+            window.set_w_last_cursorline(window.w_last_cursorline() + xtra);
         }
     }
 }
@@ -290,8 +289,7 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i3
     changed(buffer);
 
     for win in windows() {
-        let diffed =
-            win.w_buffer == buffer && win.w_onebuf_opt.wo_diff != 0 && diff_internal() != 0;
+        let diffed = win.w_buffer() == buffer && win.wo_diff() != 0 && diff_internal() != 0;
         if diffed {
             TabPage::current().set_tp_diff_update(1);
             diff_update_line(lnum);
@@ -302,12 +300,12 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i3
         record_change_mark(buffer, lnum, col);
     }
 
-    if Win::current().w_buffer == buffer && visual_active() {
+    if Win::current().w_buffer() == buffer && visual_active() {
         check_visual_pos();
     }
 
     for wp in tab_windows() {
-        if wp.w_buffer == buffer {
+        if wp.w_buffer() == buffer {
             redraw_win_for_change(wp, lnum, col, lnume, xtra);
         }
         if wp.is_current() && xtra != 0 && SEARCH_HL_HAS_CURSOR_LNUM.get() >= lnum {
@@ -321,9 +319,9 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: i3
     // A change on the cursor line always triggers CursorMoved.
     let win = Win::current();
     if LAST_CURSORMOVED_WIN.get() == Some(win.id())
-        && win.w_buffer == buffer
-        && lnum <= win.w_cursor.lnum
-        && lnume + xtra.abs() > win.w_cursor.lnum
+        && win.w_buffer() == buffer
+        && lnum <= win.cursor().lnum()
+        && lnume + xtra.abs() > win.cursor().lnum()
     {
         LAST_CURSORMOVED.set(LAST_CURSORMOVED.get().with_lnum(LineNr::ZERO));
     }
@@ -348,9 +346,9 @@ pub fn changed_bytes(lnum: LineNr, col: ColNr) {
     buf_updates_send_changes(Buf::current(), lnum, 1, 1);
 
     // Diff highlighting in the other diff windows may need updating too.
-    if Win::current().w_onebuf_opt.wo_diff != 0 {
+    if Win::current().wo_diff() != 0 {
         for wp in windows() {
-            if wp.w_onebuf_opt.wo_diff != 0 && !wp.is_current() {
+            if wp.wo_diff() != 0 && !wp.is_current() {
                 wp.redraw_later(UPD_VALID);
                 let wlnum = diff_lnum_win(lnum, wp);
                 if wlnum > LineNr::ZERO {
@@ -484,14 +482,14 @@ pub fn changed_lines(
     changed_lines_redraw_buf(buffer, lnum, lnume, xtra);
 
     let diff_same_lines = xtra == 0
-        && Win::current().w_onebuf_opt.wo_diff != 0
-        && Win::current().w_buffer == buffer
+        && Win::current().wo_diff() != 0
+        && Win::current().w_buffer() == buffer
         && diff_internal() == 0;
     if diff_same_lines {
         // With the line count unchanged, mark_adjust() is never called, so
         // the other diff buffers still have to be marked for display.
         for wp in windows() {
-            if wp.w_onebuf_opt.wo_diff != 0 && !wp.is_current() {
+            if wp.wo_diff() != 0 && !wp.is_current() {
                 wp.redraw_later(UPD_VALID);
                 let wlnum = diff_lnum_win(lnum, wp);
                 if wlnum > LineNr::ZERO {

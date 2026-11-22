@@ -65,43 +65,43 @@ impl Win {
     /// included.
     #[inline(always)]
     fn view_width(self) -> c_int {
-        self.w_view_width
+        self.w_view_width()
     }
 
     #[inline(always)]
     fn wraps(self) -> bool {
-        self.w_onebuf_opt.wo_wrap != 0
+        self.wo_wrap() != 0
     }
 
     #[inline(always)]
     fn leftcol(self) -> ColNr {
-        self.w_leftcol
+        self.w_leftcol()
     }
 
     #[inline(always)]
-    fn set_leftcol(mut self, leftcol: ColNr) {
-        self.w_leftcol = leftcol;
+    fn set_leftcol(self, leftcol: ColNr) {
+        self.set_w_leftcol(leftcol);
     }
 
     #[inline(always)]
     fn virtcol(self) -> ColNr {
-        self.w_virtcol
+        self.w_virtcol()
     }
 
     #[inline(always)]
-    fn set_curswant(mut self, curswant: ColNr) {
-        self.w_curswant = curswant;
+    fn set_curswant(self, curswant: ColNr) {
+        self.set_w_curswant(curswant);
     }
 
     /// Ask for `w_curswant` to be recomputed from the cursor's new position.
     #[inline(always)]
-    fn recompute_curswant(mut self) {
-        self.w_set_curswant = true;
+    fn recompute_curswant(self) {
+        self.set_w_set_curswant(true);
     }
 
     #[inline(always)]
-    fn invalidate_virtcol(mut self) {
-        self.w_valid -= WinValid::VIRTCOL;
+    fn invalidate_virtcol(self) {
+        self.set_w_valid(self.w_valid().without(WinValid::VIRTCOL));
     }
 
     #[inline(always)]
@@ -181,7 +181,7 @@ pub fn coladvance_force(wcol: ColNr) -> bool {
 /// allows. Answers whether the column was reached.
 pub fn coladvance(win: Win, wcol: ColNr) -> bool {
     let reached = advance_cursor(win, false, win.virtual_active(), wcol);
-    let cursor = win.w_cursor;
+    let cursor = win.w_cursor();
     // The cached virtual column is only good if the cursor did not land on a
     // tab, whose width depends on where it starts rather than on `wcol`.
     if wcol == ColNr::MAX || !reached {
@@ -204,11 +204,11 @@ pub fn coladvance(win: Win, wcol: ColNr) -> bool {
 /// own cursor is not lent out for its length. `coladvance2` moves only the
 /// column, and only the column is written back.
 #[inline(always)]
-fn advance_cursor(mut win: Win, addspaces: bool, finetune: bool, wcol: ColNr) -> bool {
-    let mut at = win.w_cursor;
+fn advance_cursor(win: Win, addspaces: bool, finetune: bool, wcol: ColNr) -> bool {
+    let mut at = win.w_cursor();
     let reached = coladvance2(win, &mut at, addspaces, finetune, wcol);
-    win.w_cursor.col = at.col;
-    win.w_cursor.coladd = at.coladd;
+    win.cursor().set_col(at.col);
+    win.cursor().set_coladd(at.coladd);
     reached
 }
 
@@ -384,10 +384,10 @@ pub fn getvpos(win: Win, pos: &mut Pos, wcol: ColNr) -> bool {
 /// Safe: the only promise is that the editor exists, which `Win::current()`
 /// carries; `inc` clamps the line it walks.
 pub(crate) fn inc_cursor() -> Moved {
-    let mut win = Win::current();
-    let mut at = win.w_cursor;
+    let win = Win::current();
+    let mut at = win.w_cursor();
     let moved = inc(&mut at);
-    win.w_cursor = at;
+    win.set_w_cursor(at);
     moved
 }
 
@@ -395,10 +395,10 @@ pub(crate) fn inc_cursor() -> Moved {
 ///
 /// Safe: as [`inc_cursor`].
 pub(crate) fn dec_cursor() -> Moved {
-    let mut win = Win::current();
-    let mut at = win.w_cursor;
+    let win = Win::current();
+    let mut at = win.w_cursor();
     let moved = dec(&mut at);
-    win.w_cursor = at;
+    win.set_w_cursor(at);
     moved
 }
 
@@ -407,8 +407,8 @@ pub(crate) fn dec_cursor() -> Moved {
 /// step stays inside it (a walk that does both per character paid for two
 /// reads).
 pub(crate) fn dec_cursor_gchar() -> (Moved, c_int) {
-    let mut win = Win::current();
-    let mut pos = win.w_cursor;
+    let win = Win::current();
+    let mut pos = win.w_cursor();
     if pos.col > ColNr::ZERO && pos.col != ColNr::MAX {
         // `dec`'s "still within the line" step.
         let mut lines = Lines::current();
@@ -421,7 +421,7 @@ pub(crate) fn dec_cursor_gchar() -> (Moved, c_int) {
             line.get(usize::try_from(pos.col).unwrap_or(0)..)
                 .unwrap_or_default(),
         );
-        win.w_cursor = pos;
+        win.set_w_cursor(pos);
         return (Moved::InLine, c.get());
     }
     let moved = dec_cursor();
@@ -430,8 +430,8 @@ pub(crate) fn dec_cursor_gchar() -> (Moved, c_int) {
 
 /// [`inc_cursor`] and then [`gchar_cursor`], as [`dec_cursor_gchar`].
 pub(crate) fn inc_cursor_gchar() -> (Moved, c_int) {
-    let mut win = Win::current();
-    let pos = win.w_cursor;
+    let win = Win::current();
+    let pos = win.w_cursor();
     if pos.col != ColNr::MAX {
         let mut lines = Lines::current();
         let line = lines.line(pos.lnum);
@@ -440,7 +440,8 @@ pub(crate) fn inc_cursor_gchar() -> (Moved, c_int) {
             // `inc`'s "still within the line" step.
             let next = at + cluster_len(&line[at..]);
             let c = char_at(line.get(next..).unwrap_or_default());
-            win.w_cursor.col = ColNr::try_from(next).unwrap_or(ColNr::MAX);
+            win.cursor()
+                .set_col(ColNr::try_from(next).unwrap_or(ColNr::MAX));
             let moved = if next < line.len() {
                 Moved::InLine
             } else {
@@ -626,7 +627,7 @@ pub fn set_leftcol(leftcol: ColNr) -> bool {
 /// caller's -- `check_cursor_col` is what restores it; a column past the end
 /// reads as the NUL there.
 pub fn gchar_cursor() -> Codepoint {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
     char_at(line.get(cursor.col.as_usize()..).unwrap_or_default())
@@ -635,7 +636,7 @@ pub fn gchar_cursor() -> Codepoint {
 /// The character before the cursor, or `None` at the start of the line
 /// (upstream's −1).
 pub fn char_before_cursor() -> Option<Codepoint> {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     if cursor.col == ColNr::ZERO {
         return None;
     }
@@ -651,7 +652,7 @@ pub fn char_before_cursor() -> Option<Codepoint> {
 
 /// Overwrite the byte under the cursor.
 pub fn pchar_cursor(c: u8) {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lines = Lines::current();
     if let Some(byte) = lines.line_mut(cursor.lnum).get_mut(cursor.col.as_usize()) {
         *byte = c;
@@ -661,7 +662,7 @@ pub fn pchar_cursor(c: u8) {
 /// `f` of the cursor's line from the cursor on: empty at (or past) the end
 /// of the line, where the pointer form reads the terminator.
 pub(crate) fn with_cursor_rest<R>(f: impl FnOnce(&[u8]) -> R) -> R {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
     f(line

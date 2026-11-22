@@ -218,8 +218,8 @@ pub(crate) fn u_saveline(buffer: Buf, lnum: LineNr) {
     u_clearline(buffer);
     buffer.set_b_u_line_lnum(lnum);
     let win = Win::current();
-    let value = if win.w_buffer == buffer && win.w_cursor.lnum == lnum {
-        win.w_cursor.col
+    let value = if win.w_buffer() == buffer && win.cursor().lnum() == lnum {
+        win.cursor().col()
     } else {
         ColNr::ZERO
     };
@@ -265,13 +265,13 @@ pub fn u_undoline() {
         EXTMARK_UNDO,
     );
     changed_bytes(lnum, ColNr::ZERO);
-    let mut win = Win::current();
+    let win = Win::current();
     let col: ColNr = buf.b_u_line_colnr();
-    if win.w_cursor.lnum == buf.b_u_line_lnum() {
-        buf.set_b_u_line_colnr(win.w_cursor.col);
+    if win.cursor().lnum() == buf.b_u_line_lnum() {
+        buf.set_b_u_line_colnr(win.cursor().col());
     }
-    win.w_cursor.col = col;
-    win.w_cursor.lnum = buf.b_u_line_lnum();
+    win.cursor().set_col(col);
+    win.cursor().set_lnum(buf.b_u_line_lnum());
     check_cursor_col(win);
 }
 

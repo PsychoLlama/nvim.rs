@@ -186,7 +186,7 @@ fn plan_start_or_middle(
         let after_leader = at(saved_line, lead_len);
         let last_of_leader = at(saved_line, lead_len - 1);
         if !ascii_iswhite(c_int::from(last_of_leader))
-            && (has_extra && Win::current().w_cursor.col == ColNr::new(plan.lead_len)
+            && (has_extra && Win::current().cursor().col() == ColNr::new(plan.lead_len)
                 || !has_extra && after_leader == 0
                 || require_blank)
         {
@@ -590,15 +590,17 @@ pub(crate) fn indent_after_comment_end(
     {
         return newindent;
     }
-    let old_cursor = Win::current().w_cursor;
-    Win::current().w_cursor.col = ColNr::from_index(comment_end);
+    let old_cursor = Win::current().w_cursor();
+    Win::current()
+        .cursor()
+        .set_col(ColNr::from_index(comment_end));
     let newindent = match findmatch(None, Codepoint::NUL) {
         None => newindent,
         Some(pos) => {
-            Win::current().w_cursor.lnum = pos.lnum;
+            Win::current().cursor().set_lnum(pos.lnum);
             get_indent()
         }
     };
-    Win::current().w_cursor = old_cursor;
+    Win::current().set_w_cursor(old_cursor);
     newindent
 }

@@ -52,7 +52,7 @@ pub(crate) fn ins_redraw(ready: bool) {
     if ready
         && has_event(AutoEvent::CursorMovedI)
         && (LAST_CURSORMOVED_WIN.get() != Win::current_or_none().map(Win::id)
-            || !equalpos(LAST_CURSORMOVED.get(), Win::current().w_cursor))
+            || !equalpos(LAST_CURSORMOVED.get(), Win::current().w_cursor()))
         && !pum_visible()
     {
         // Update the screen first so syntax highlighting is right after a
@@ -66,7 +66,7 @@ pub(crate) fn ins_redraw(ready: bool) {
         update_curswant();
         ins_apply_autocmds(AutoEvent::CursorMovedI);
         LAST_CURSORMOVED_WIN.set(Win::current_or_none().map(Win::id));
-        LAST_CURSORMOVED.set(Win::current().w_cursor);
+        LAST_CURSORMOVED.set(Win::current().w_cursor());
     }
 
     // TextChangedI when changedtick_i differs, and TextChangedP when
@@ -100,8 +100,8 @@ pub(crate) fn ins_redraw(ready: bool) {
             // See `ins_apply_autocmds`: the autocommand's change belongs
             // to a block of its own.
             let _ = u_save(
-                Win::current().w_cursor.lnum,
-                Win::current().w_cursor.lnum + 1,
+                Win::current().cursor().lnum(),
+                Win::current().cursor().lnum() + 1,
             );
         }
     };
@@ -160,8 +160,8 @@ pub(crate) fn ins_redraw(ready: bool) {
 /// something at the cursor while they wait for the rest of the sequence.
 /// Nothing is stored in a buffer, so the next real redraw removes it.
 pub(crate) fn edit_putchar(c: Key, highlight: bool) {
-    let mut win = Win::current();
-    if !win.w_grid_alloc.is_allocated() && !default_grid_ref().is_allocated() {
+    let win = Win::current();
+    if !win.read().w_grid_alloc.is_allocated() && !default_grid_ref().is_allocated() {
         return;
     }
 
@@ -169,18 +169,18 @@ pub(crate) fn edit_putchar(c: Key, highlight: bool) {
     validate_cursor(win);
     let attr = if highlight { hl_attr(HLF_8) } else { 0 };
 
-    PC_ROW.set(win.w_wrow);
+    PC_ROW.set(win.w_wrow());
     PC_STATUS.set(PutChar::Unset);
-    grid_line_start(win.w_grid, PC_ROW.get());
-    if win.w_onebuf_opt.wo_rl != 0 {
-        PC_COL.set(win.w_view_width - 1 - win.w_wcol);
+    grid_line_start(win.w_grid(), PC_ROW.get());
+    if win.wo_rl() != 0 {
+        PC_COL.set(win.w_view_width() - 1 - win.w_wcol());
         if grid_line_getchar(PC_COL.get()).0 == 0 {
             grid_line_put_schar(PC_COL.get() - 1, ' ' as ScreenChar, attr);
-            win.w_wcol -= 1;
+            win.set_w_wcol(win.w_wcol() - 1);
             PC_STATUS.set(PutChar::Right);
         }
     } else {
-        PC_COL.set(win.w_wcol);
+        PC_COL.set(win.w_wcol());
         if grid_line_getchar(PC_COL.get() + 1).0 == 0 {
             // pc_col is the left half of a double-width character.
             PC_STATUS.set(PutChar::Left);
@@ -205,18 +205,18 @@ pub(crate) fn edit_putchar(c: Key, highlight: bool) {
 
 /// Undo the previous [`edit_putchar`].
 pub(crate) fn edit_unputchar() {
-    let mut win = Win::current();
+    let win = Win::current();
     match PC_STATUS.get() {
         PutChar::Unset => {}
         // Half of a double-width character was overwritten and cannot be
         // restored a cell at a time; redraw the whole line instead.
         PutChar::Right => {
-            win.w_wcol += 1;
-            redraw_win_line(win, win.w_cursor.lnum);
+            win.set_w_wcol(win.w_wcol() + 1);
+            redraw_win_line(win, win.cursor().lnum());
         }
-        PutChar::Left => redraw_win_line(win, win.w_cursor.lnum),
+        PutChar::Left => redraw_win_line(win, win.cursor().lnum()),
         PutChar::Set => {
-            grid_line_start(win.w_grid, PC_ROW.get());
+            grid_line_start(win.w_grid(), PC_ROW.get());
             grid_line_put_schar(PC_COL.get(), PC_SCHAR.get(), PC_ATTR.get());
             grid_line_flush();
         }
@@ -233,23 +233,24 @@ pub(crate) fn display_dollar(col_arg: ColNr) {
         return;
     }
 
-    let mut win = Win::current();
-    let save_col = win.w_cursor.col;
-    win.w_cursor.col = col;
+    let win = Win::current();
+    let save_col = win.cursor().col();
+    win.cursor().set_col(col);
 
     // On the last byte of a multi-byte character, move to the first byte.
     let back = {
         let mut lines = Lines::current();
-        let line = lines.line(win.w_cursor.lnum);
+        let line = lines.line(win.cursor().lnum());
         head_off(line, usize::try_from(col).unwrap_or(0).min(line.len()))
     };
-    win.w_cursor.col -= ColNr::try_from(back).unwrap_or(ColNr::ZERO).get();
+    win.cursor()
+        .set_col(win.cursor().col() - ColNr::try_from(back).unwrap_or(ColNr::ZERO).get());
     curs_columns(win, 0); // recompute w_wrow and w_wcol
-    if win.w_wcol < win.w_view_width {
+    if win.w_wcol() < win.w_view_width() {
         edit_putchar(Key::ascii(b'$'), false);
-        DOLLAR_VCOL.set(win.w_virtcol);
+        DOLLAR_VCOL.set(win.w_virtcol());
     }
-    win.w_cursor.col = save_col;
+    win.cursor().set_col(save_col);
 }
 
 /// Take the `$` away again.  Call before moving the cursor off the normal
@@ -259,24 +260,24 @@ pub(crate) fn undisplay_dollar() {
         return;
     }
     DOLLAR_VCOL.set(ColNr::NONE);
-    redraw_win_line(Win::current(), Win::current().w_cursor.lnum);
+    redraw_win_line(Win::current(), Win::current().cursor().lnum());
 }
 
 /// The value `w_virtcol` would have with 'list' off -- unless 'cpoptions'
 /// contains `L`, which says the option should be honoured after all.
 pub(crate) fn get_nolist_virtcol() -> ColNr {
-    let mut win = Win::current();
-    let unloaded = win.w_buffer.is_null() || win.buffer().ml().ml_mfp.is_none();
-    if unloaded || win.w_cursor.lnum > win.buffer().line_count() {
+    let win = Win::current();
+    let unloaded = win.w_buffer().is_null() || win.buffer().ml().ml_mfp.is_none();
+    if unloaded || win.cursor().lnum() > win.buffer().line_count() {
         return ColNr::ZERO;
     }
-    if win.w_onebuf_opt.wo_list != 0 && !cpo_has(CpoFlag::LISTWM) {
+    if win.wo_list() != 0 && !cpo_has(CpoFlag::LISTWM) {
         // A copy of the cursor, written back: the walk reads the window.
-        let mut cursor = win.w_cursor;
+        let mut cursor = win.w_cursor();
         let vcol = getvcol_nolist(&mut cursor);
-        win.w_cursor = cursor;
+        win.set_w_cursor(cursor);
         return vcol;
     }
     validate_virtcol(win);
-    win.w_virtcol
+    win.w_virtcol()
 }

@@ -120,12 +120,14 @@ impl Put {
 
                 let _ = ml_replace_owned(lnum, newline);
 
-                if lnum == Win::current().w_cursor.lnum {
+                if lnum == Win::current().cursor().lnum() {
                     // Land the cursor on the last character put, keeping
                     // w_virtcol right.
                     changed_cline_bef_curs(Win::current());
                     invalidate_botline_win(Win::current());
-                    Win::current().w_cursor.col += len_as_int(totlen - 1);
+                    Win::current()
+                        .cursor()
+                        .set_col(Win::current().cursor().col() + len_as_int(totlen - 1));
                 }
                 changed_bytes(lnum, col);
                 let inserted = len_as_int(totlen);
@@ -148,15 +150,19 @@ impl Put {
         }
 
         // `']` goes on the *first byte* of the last character put.
-        Buf::current().set_b_op_end(Win::current().w_cursor);
+        Buf::current().set_b_op_end(Win::current().w_cursor());
         Buf::current().edit().b_op_end.col -= first_byte_off;
 
         // `CTRL-O p` in Insert mode leaves the cursor after the last
         // character rather than on it.
         if totlen != 0 && (!RESTART_EDIT.get().is_nul() || self.flags & PUT_CURSEND != 0) {
-            Win::current().w_cursor.col += 1;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + 1);
         } else {
-            Win::current().w_cursor.col -= first_byte_off;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() - first_byte_off);
         }
     }
 
@@ -185,8 +191,8 @@ impl Put {
     /// Reindent line `lnum` the way `]p` wants: keep the *relative* indent of
     /// the register's lines, but move the block as a whole to `orig_indent`.
     fn fix_indent(&self, lnum: LineNr, state: &mut FixIndent) {
-        let old_pos = Win::current().w_cursor;
-        Win::current().w_cursor.lnum = lnum;
+        let old_pos = Win::current().w_cursor();
+        Win::current().cursor().set_lnum(lnum);
         let first = Buf::current().lines().line(lnum).first().copied();
         // A `#` line stays at the start of the line, and an empty line
         // has no indent to keep.
@@ -201,7 +207,7 @@ impl Put {
             (get_indent() + state.diff).max(0)
         };
         set_indent(indent, SIN_NOMARK);
-        Win::current().w_cursor = old_pos;
+        Win::current().set_w_cursor(old_pos);
     }
 
     /// The `'[` and `']` marks, and where the cursor ends up.
@@ -232,7 +238,7 @@ impl Put {
 
         // The range is the lines the put just rewrote.
         if self.kind == MotionType::CharWise {
-            let at = Win::current().w_cursor.lnum;
+            let at = Win::current().cursor().lnum();
             changed_lines(Buf::current(), at, col, at + 1, self.nr_lines, true);
         } else {
             let at = Buf::current().b_op_start().lnum;
@@ -257,35 +263,39 @@ impl Put {
 
         if self.flags & PUT_CURSLINE != 0 {
             // `:put`: the cursor goes on the last inserted line.
-            Win::current().w_cursor.lnum = lnum;
+            Win::current().cursor().set_lnum(lnum);
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         } else if self.flags & PUT_CURSEND != 0 {
             // The cursor goes after the inserted text.
             if self.kind == MotionType::LineWise {
-                Win::current().w_cursor.lnum = if lnum >= Buf::current().line_count() {
-                    Buf::current().line_count()
-                } else {
-                    lnum + 1
-                };
-                Win::current().w_cursor.col = ColNr::ZERO;
+                Win::current()
+                    .cursor()
+                    .set_lnum(if lnum >= Buf::current().line_count() {
+                        Buf::current().line_count()
+                    } else {
+                        lnum + 1
+                    });
+                Win::current().cursor().set_col(ColNr::ZERO);
             } else {
-                Win::current().w_cursor.lnum = new_lnum;
-                Win::current().w_cursor.col = col;
-                Buf::current().set_b_op_end(Win::current().w_cursor);
+                Win::current().cursor().set_lnum(new_lnum);
+                Win::current().cursor().set_col(col);
+                Buf::current().set_b_op_end(Win::current().w_cursor());
                 if col > ColNr::new(1) {
                     Buf::current().edit().b_op_end.col = col - 1;
                 }
             }
         } else if self.kind == MotionType::LineWise {
             // The cursor goes on the first non-blank of the first line.
-            Win::current().w_cursor.col = ColNr::ZERO;
+            Win::current().cursor().set_col(ColNr::ZERO);
             if self.dir == FORWARD {
-                Win::current().w_cursor.lnum += 1;
+                Win::current()
+                    .cursor()
+                    .set_lnum(Win::current().cursor().lnum() + 1);
             }
             beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         } else {
             // The cursor goes on the first character put.
-            Win::current().w_cursor = new_cursor;
+            Win::current().set_w_cursor(new_cursor);
         }
     }
 
@@ -320,7 +330,7 @@ impl Put {
                 lnum = new_cursor.lnum;
                 self.split_line_for_charwise(lnum, col);
                 new_lnum += 1;
-                Win::current().w_cursor.lnum = lnum;
+                Win::current().cursor().set_lnum(lnum);
                 i = 1;
             }
 

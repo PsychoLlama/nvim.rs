@@ -56,7 +56,7 @@ pub fn find_start_comment(ind_maxcomment: c_int) -> Option<Pos> {
         if !is_pos_in_string(Lines::current().line(pos.lnum), pos.col) {
             return Some(pos);
         }
-        cur_maxcomment = int64_t::from(Win::current().w_cursor.lnum - pos.lnum - 1);
+        cur_maxcomment = int64_t::from(Win::current().cursor().lnum() - pos.lnum - 1);
         if cur_maxcomment <= 0 {
             return None;
         }
@@ -78,7 +78,7 @@ pub(crate) fn find_start_rawstring(ind_maxcomment: c_int) -> Option<Pos> {
         if !is_pos_in_string(Lines::current().line(pos.lnum), pos.col) {
             return Some(pos);
         }
-        cur_maxcomment = (Win::current().w_cursor.lnum - pos.lnum - 1) as c_int;
+        cur_maxcomment = (Win::current().cursor().lnum() - pos.lnum - 1) as c_int;
         if cur_maxcomment <= 0 {
             return None;
         }
@@ -265,7 +265,7 @@ pub(crate) fn only_comment_left(line: &[u8], at: usize) -> bool {
 
 /// The nearest `//` comment above the cursor, skipping blank lines.
 pub(crate) fn find_line_comment() -> Option<Pos> {
-    let mut pos = Win::current().w_cursor;
+    let mut pos = Win::current().w_cursor();
     let mut lines = Lines::current();
     loop {
         pos.lnum -= 1;

@@ -456,7 +456,7 @@ fn key_tab(s: &mut InsertState) -> Next {
 fn key_eol(s: &mut InsertState) -> Next {
     // In a quickfix or location-list window, `<CR>` jumps to the entry.
     if buf_is_quickfix(current_buf()) && s.c == Key::CAR {
-        if Win::current().w_llist_ref.is_none() {
+        if Win::current().w_llist_ref().is_none() {
             let _ = do_cmdline_cmd(c".cc");
         } else {
             let _ = do_cmdline_cmd(c".ll");
@@ -516,7 +516,9 @@ fn do_backspace(s: &mut InsertState, mode: Backspace) {
 /// Only while nothing else is typed ahead -- autocompletion must never make
 /// a burst of keys slow.
 fn may_autocomplete_before_cursor(s: &mut InsertState) {
-    if !(ins_compl_has_autocomplete() && !char_avail() && Win::current().w_cursor.col > ColNr::ZERO)
+    if !(ins_compl_has_autocomplete()
+        && !char_avail()
+        && Win::current().cursor().col() > ColNr::ZERO)
     {
         return;
     }
@@ -595,7 +597,7 @@ fn insert_normal_char(s: &mut InsertState) {
             CAN_CINDENT.set(false);
         }
         if INSSTART_BLANK_VCOL.get() == ColNr::MAX
-            && Win::current().w_cursor.lnum == INSSTART.get().lnum
+            && Win::current().cursor().lnum() == INSSTART.get().lnum
         {
             INSSTART_BLANK_VCOL.set(get_nolist_virtcol());
         }

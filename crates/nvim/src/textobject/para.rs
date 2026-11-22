@@ -39,7 +39,7 @@ use crate::types::{ColNr, LineNr};
 /// boundary, and otherwise whether the last character of the buffer was
 /// reached and has to be included in the motion.
 pub fn findpar(dir: c_int, mut count: c_int, what: u8, both: bool) -> Option<bool> {
-    let mut curr = Win::current().w_cursor.lnum;
+    let mut curr = Win::current().cursor().lnum();
 
     loop {
         let this = count;
@@ -86,22 +86,26 @@ pub fn findpar(dir: c_int, mut count: c_int, what: u8, both: bool) -> Option<boo
     if both && Lines::current().line(curr).first() == Some(&b'}') {
         curr += 1; // include the line holding the `}`
     }
-    Win::current().w_cursor.lnum = curr;
+    Win::current().cursor().set_lnum(curr);
     let mut inclusive = false;
     if curr == Buf::current().line_count() && what != b'}' && dir == FORWARD as c_int {
         // Put the cursor on the last character of the last line and make
         // the motion inclusive.
         let mut lines = Lines::current();
         let line = lines.line(curr);
-        Win::current().w_cursor.col = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
-        if Win::current().w_cursor.col != ColNr::ZERO {
-            let col = Win::current().w_cursor.col - 1;
+        Win::current()
+            .cursor()
+            .set_col(ColNr::try_from(line.len()).unwrap_or(ColNr::MAX));
+        if Win::current().cursor().col() != ColNr::ZERO {
+            let col = Win::current().cursor().col() - 1;
             let back = head_off(line, usize::try_from(col).unwrap_or(usize::MAX));
-            Win::current().w_cursor.col = col - c_int::try_from(back).unwrap_or(0);
+            Win::current()
+                .cursor()
+                .set_col(col - c_int::try_from(back).unwrap_or(0));
             inclusive = true;
         }
     } else {
-        Win::current().w_cursor.col = ColNr::ZERO;
+        Win::current().cursor().set_col(ColNr::ZERO);
     }
     Some(inclusive)
 }
@@ -214,8 +218,8 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> Res
             prev_start_is_white = start_is_white;
         }
     }
-    Win::current().w_cursor.lnum = start_lnum;
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_lnum(start_lnum);
+    Win::current().cursor().set_col(ColNr::ZERO);
     retval
 }
 
@@ -234,7 +238,7 @@ pub(crate) fn current_par(
     if kind == b'S' {
         return Err(NoObject); // not implemented yet
     }
-    let mut start_lnum = Win::current().w_cursor.lnum;
+    let mut start_lnum = Win::current().cursor().lnum();
 
     // A Visual area of more than one line is extended, not replaced.
     if visual_active() && start_lnum != visual_anchor().lnum {
@@ -312,7 +316,7 @@ pub(crate) fn current_par(
     if visual_active() {
         // `Vipipip` on a single white line would otherwise get stuck
         // here, so hand it to the extending path instead.
-        if visual_mode().is_line() && start_lnum == Win::current().w_cursor.lnum {
+        if visual_mode().is_line() && start_lnum == Win::current().cursor().lnum() {
             return extend_paragraphs(start_lnum, count, include);
         }
         if visual_anchor().lnum != start_lnum {
@@ -326,8 +330,8 @@ pub(crate) fn current_par(
         op.start.col = ColNr::ZERO;
         op.motion_type = MotionType::LineWise;
     }
-    Win::current().w_cursor.lnum = end_lnum;
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_lnum(end_lnum);
+    Win::current().cursor().set_col(ColNr::ZERO);
     Ok(())
 }
 

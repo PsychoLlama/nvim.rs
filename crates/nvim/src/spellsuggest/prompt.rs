@@ -89,21 +89,21 @@ use core::ffi::c_int;
 pub(crate) fn spell_suggest(count: c_int) {
     // `curwin` is re-read after the body because autocommands may have
     // moved it.
-    let prev_cursor = Win::current().w_cursor;
+    let prev_cursor = Win::current().w_cursor();
     let msg_scroll_save = MSG_SCROLL.get();
 
     // `z=` works with 'spell' off, but 'spelllang' has to be parsed
     // for it, which is what turning the option on does.
-    let wo_spell_save = Win::current().w_onebuf_opt.wo_spell;
-    if Win::current().w_onebuf_opt.wo_spell == 0 {
+    let wo_spell_save = Win::current().wo_spell();
+    if Win::current().wo_spell() == 0 {
         let _ = parse_spelllang(Win::current());
-        Win::current().w_onebuf_opt.wo_spell = 1;
+        Win::current().set_wo_spell(1);
     }
 
     suggest_and_replace(count, prev_cursor, msg_scroll_save);
 
     // Every way out of the body comes through here.
-    Win::current().w_onebuf_opt.wo_spell = wo_spell_save;
+    Win::current().set_wo_spell(wo_spell_save);
 }
 
 /// The body of `z=`, with `'spell'` already on.
@@ -118,8 +118,8 @@ fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
     };
 
     // Should the replacement start with a capital?
-    let lnum = Win::current().w_cursor.lnum;
-    let col = Win::current().w_cursor.col;
+    let lnum = Win::current().cursor().lnum();
+    let col = Win::current().cursor().col();
     let need_cap = check_need_cap(Win::current(), lnum, col);
 
     // Autocommands may free the line, so work from a copy.
@@ -131,7 +131,7 @@ fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
     let limit = SPS_LIMIT.get().min(ROWS.get() - 2);
     let mut sug = SugInfo::new();
     let col = Win::current()
-        .w_cursor
+        .w_cursor()
         .col
         .max(ColNr::ZERO)
         .as_usize()
@@ -155,7 +155,7 @@ fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
         let stp = &sug.su_ga[as_index(selected) - 1];
         apply_suggestion(&sug, stp, &line, col);
     } else {
-        Win::current().w_cursor = prev_cursor;
+        Win::current().set_w_cursor(prev_cursor);
     }
 }
 
@@ -168,31 +168,31 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
     if visual_active() {
         // The Visual selection is the bad word, but only within a
         // single line.
-        if Win::current().w_cursor.lnum != visual_anchor().lnum {
+        if Win::current().cursor().lnum() != visual_anchor().lnum {
             vim_beep(OPT_BO_FLAG_SPELL as core::ffi::c_uint);
             return None;
         }
-        let mut badlen = Win::current().w_cursor.col - visual_anchor().col;
+        let mut badlen = Win::current().cursor().col() - visual_anchor().col;
         if badlen < 0 {
             badlen = -badlen;
         } else {
-            Win::current().w_cursor.col = visual_anchor().col;
+            Win::current().cursor().set_col(visual_anchor().col);
         }
         badlen += 1;
         end_visual_mode();
         // Leave out the NUL at the end of the line.
-        return Some(badlen.min(get_cursor_line_len() - Win::current().w_cursor.col));
+        return Some(badlen.min(get_cursor_line_len() - Win::current().cursor().col()));
     }
 
     let win = Win::current();
     let moved = win.spell_move_to(FORWARD as c_int, SMT_ALL, true, None);
-    if moved != 0 && Win::current().w_cursor.col <= prev_cursor.col {
+    if moved != 0 && Win::current().cursor().col() <= prev_cursor.col {
         return Some(0);
     }
 
     // No bad word, or the one found starts after the cursor: take the
     // word under the cursor instead.
-    Win::current().w_cursor = prev_cursor;
+    Win::current().set_w_cursor(prev_cursor);
     let mut lines = Lines::current();
     let curline = lines.line(prev_cursor.lnum);
     let mut p = prev_cursor
@@ -212,7 +212,7 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
         beep_flush(); // no word at all
         return None;
     }
-    Win::current().w_cursor.col = ColNr::from_index(p);
+    Win::current().cursor().set_col(ColNr::from_index(p));
     Some(0)
 }
 
@@ -221,7 +221,7 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
 /// Returns the number chosen, or 0 for none.
 fn ask_which_suggestion(sug: &SugInfo, msg_scroll_save: c_int) -> c_int {
     // With 'rightleft' the list is drawn right to left.
-    CMDMSG_RL.set(Win::current().w_onebuf_opt.wo_rl != 0);
+    CMDMSG_RL.set(Win::current().wo_rl() != 0);
 
     msg_start();
     MSG_ROW.set(ROWS.get() - 1); // for when 'cmdheight' > 1
@@ -370,8 +370,8 @@ fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: &[u8], col: usize) {
     append_to_redobuff_literally(&newline[col..(col + replaced_len).min(newline.len())]);
     append_to_redobuff_char(Key::ESC);
 
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     let _ = ml_replace_owned(lnum, XString::from_vec(newline));
-    Win::current().w_cursor.col = ColNr::from_index(col);
+    Win::current().cursor().set_col(ColNr::from_index(col));
     inserted_bytes(lnum, ColNr::from_index(col), stp.st_orglen, stp.st_wordlen);
 }

@@ -572,7 +572,7 @@ pub(crate) fn expand_by_function(type_0: CtrlXMode, base: ComplStr, cb: Option<&
     let mut matchdict: Option<DictRef> = None;
     let mut rettv = TYPVAL_T_INIT;
     let save_state = STATE.get();
-    let pos = Win::current().w_cursor;
+    let pos = Win::current().w_cursor();
 
     // Lock the text to avoid weird things from happening.  Also disallow
     // switching to another window: it should not be needed and may end up
@@ -591,10 +591,10 @@ pub(crate) fn expand_by_function(type_0: CtrlXMode, base: ComplStr, cb: Option<&
     }
     drop(locked);
 
-    Win::current().w_cursor = pos; // restore the cursor position
+    Win::current().set_w_cursor(pos); // restore the cursor position
     check_cursor(Win::current()); // make sure the position is valid, just in case
     validate_cursor(Win::current());
-    if !equalpos(Win::current().w_cursor, pos) {
+    if !equalpos(Win::current().w_cursor(), pos) {
         emsg(gettext(E_COMPLDEL));
     } else if let Some(list) = &matchlist {
         ins_compl_add_list(list);
@@ -644,7 +644,7 @@ pub(crate) fn get_callback_if_cpt_func(entry: &[u8], idx: c_int) -> Option<HeldC
 fn cpt_function_start(idx: c_int, answer: Result<ColNr, Declined>) -> Option<ColNr> {
     match answer {
         Ok(startcol) => {
-            let cursor = Win::current().w_cursor.col;
+            let cursor = Win::current().cursor().col();
             Some(if startcol < ColNr::ZERO || startcol > cursor {
                 cursor
             } else {
@@ -670,7 +670,7 @@ pub(crate) fn prepare_cpt_compl_funcs() {
             cpt_sources().update(idx, |source| source.cs_startcol = None);
             continue;
         };
-        let col = Win::current().w_cursor.col;
+        let col = Win::current().cursor().col();
         let startcol = cpt_function_start(idx, get_userdefined_compl_info(col, Some(&cb)));
         cpt_sources().update(idx, |source| source.cs_startcol = startcol);
     }
@@ -721,7 +721,7 @@ pub(crate) fn get_cpt_func_completion_matches(cb: &Callback) {
         return;
     };
 
-    set_compl_globals(startcol, Win::current().w_cursor.col, true);
+    set_compl_globals(startcol, Win::current().cursor().col(), true);
 
     // Insert the leader string (previously removed) before expansion.
     // This prevents flicker when `func` (e.g. an LSP client) is slow and
@@ -759,7 +759,7 @@ pub(crate) fn cpt_compl_refresh() {
         };
         if let Some(cb) = cb {
             remove_old_matches();
-            let col = Win::current().w_cursor.col;
+            let col = Win::current().cursor().col();
             let startcol = cpt_function_start(idx, get_userdefined_compl_info(col, Some(&cb)));
             cpt_sources().update(idx, |source| source.cs_startcol = startcol);
             if startcol.is_some() {

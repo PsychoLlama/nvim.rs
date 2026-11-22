@@ -77,7 +77,7 @@ pub fn ex_marks(excmd: &mut ExArg) {
     let prompt = buf_is_prompt(Some(buf)).then(|| (b':', buf.read().b_prompt_start.mark));
     let visual = [(b'<', first), (b'>', second)];
 
-    show_one_mark(b'\'', arg, win.w_pcmark, None, true);
+    show_one_mark(b'\'', arg, win.w_pcmark(), None, true);
     for (c, pos) in locals {
         show_one_mark(c, arg, pos, None, true);
     }

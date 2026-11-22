@@ -511,11 +511,11 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
     ns.ca.searchbuf = None;
     Win::current().snap_cursor_to_char();
 
-    if Win::current().w_onebuf_opt.wo_scb != 0 && ns.toplevel {
+    if Win::current().wo_scb() != 0 && ns.toplevel {
         validate_cursor(Win::current());
         do_check_scrollbind(true);
     }
-    if Win::current().w_onebuf_opt.wo_crb != 0 && ns.toplevel {
+    if Win::current().wo_crb() != 0 && ns.toplevel {
         validate_cursor(Win::current());
         do_check_cursorbind();
     }
@@ -551,7 +551,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
 pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
     ns.command_finished = false;
     ns.ctrl_w = false;
-    ns.old_col = Win::current().w_curswant.get();
+    ns.old_col = Win::current().w_curswant().get();
     ns.c = key;
     langmap_adjust(&mut ns.c, get_real_state() != MODE_SELECT);
 
@@ -632,7 +632,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
     {
         ns.command_finished = true;
     } else {
-        if Win::current().w_onebuf_opt.wo_rl != 0
+        if Win::current().wo_rl() != 0
             && KEY_TYPED.get()
             && !KEY_STUFFED.get()
             && ns.row().cmd_flags.has(NvFlags::RL)
@@ -658,7 +658,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
                 MSG_DIDOUT.set(false);
                 MSG_COL.set(0);
             }
-            ns.old_pos = Win::current().w_cursor;
+            ns.old_pos = Win::current().w_cursor();
 
             // 'keymodel' startsel: a shifted special key starts a
             // selection and then acts as its unshifted self.

@@ -113,13 +113,13 @@ pub(crate) fn ins_reg() {
     // error message for it; only explicitly.
     let no_sync = Suppress::undo_sync();
     if regname == Some(RegName::EXPRESSION) {
-        let curpos = Win::current().w_cursor;
+        let curpos = Win::current().w_cursor();
         // Sync undo if the expression calls setline() or append(), so
         // that can be undone separately.
         U_SYNC_ONCE.set(2);
         regname = get_expr_register().then_some(RegName::EXPRESSION);
         // The cursor may have been moved back a column.
-        Win::current().w_cursor = curpos;
+        Win::current().set_w_cursor(curpos);
         check_cursor(Win::current());
     }
 
@@ -201,7 +201,7 @@ pub(crate) fn ins_ctrl_g() {
             // Insstart has to be reset too, because a BS that joins this
             // line to the previous one must save for undo.
             UPDATE_INSSTART_ORIG.set(false);
-            INSSTART.set(Win::current().w_cursor);
+            INSSTART.set(Win::current().w_cursor());
         }
         // CTRL-G U: allow one left/right cursor movement with the next
         // key without breaking undo.
@@ -242,7 +242,7 @@ pub(crate) fn ins_ctrl_hat() {
 pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     check_spell_redraw();
 
-    let temp = Win::current().w_cursor.col;
+    let temp = Win::current().cursor().col();
     if DISABLED_REDRAW.get() {
         REDRAWING_DISABLED.set(REDRAWING_DISABLED.get() - 1);
         DISABLED_REDRAW.set(false);
@@ -288,35 +288,43 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     }
 
     // When an auto-indent was removed, curswant stays after the indent.
-    if RESTART_EDIT.get().is_nul() && temp == Win::current().w_cursor.col {
-        Win::current().w_set_curswant = true;
+    if RESTART_EDIT.get().is_nul() && temp == Win::current().cursor().col() {
+        Win::current().set_w_set_curswant(true);
     }
 
     // Remember the last Insert position in the `'^` mark (`RESET_FMARK`).
     if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
-        let view = mark_view_make(Win::current(), Win::current().w_cursor);
+        let view = mark_view_make(Win::current(), Win::current().w_cursor());
         let buf = Buf::current();
-        let value = FileMark::fresh(Win::current().w_cursor, Some(buf.handle()), view);
+        let value = FileMark::fresh(Win::current().w_cursor(), Some(buf.handle()), view);
         buf.edit().b_last_insert = value;
     }
 
     // The cursor should end up on the last inserted character.  Not for
     // CTRL-O, unless it is past the end of the line.
     if !nomove
-        && (Win::current().w_cursor.col != ColNr::ZERO || Win::current().w_cursor.coladd > 0)
+        && (Win::current().cursor().col() != ColNr::ZERO || Win::current().cursor().coladd() > 0)
         && (RESTART_EDIT.get().is_nul() || (char_at_cursor() == 0 && !visual_active()))
         && !REVINS_ON.get()
     {
-        if Win::current().w_cursor.coladd > 0
+        if Win::current().cursor().coladd() > 0
             || get_ve_flags(Win::current()) == OPT_VE_FLAG_ALL as ::core::ffi::c_uint
         {
             let _ = oneleft();
             if !RESTART_EDIT.get().is_nul() {
-                Win::current().w_cursor.coladd += 1;
+                Win::current()
+                    .cursor()
+                    .set_coladd(Win::current().cursor().coladd() + 1);
             }
         } else {
-            Win::current().w_cursor.col -= 1;
-            Win::current().w_valid -= WinValid::WCOL | WinValid::VIRTCOL;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() - 1);
+            Win::current().set_w_valid(
+                Win::current()
+                    .w_valid()
+                    .without(WinValid::WCOL | WinValid::VIRTCOL),
+            );
             // Correct the cursor for a multi-byte character.
             mb_adjust_cursor();
         }
@@ -328,7 +336,11 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     // the line carries inline virtual text.
     if char_at_cursor() == c_int::from(b'\t') || buf_meta_total(Buf::current(), MT_META_INLINE) > 0
     {
-        Win::current().w_valid -= WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL;
+        Win::current().set_w_valid(
+            Win::current()
+                .w_valid()
+                .without(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL),
+        );
     }
 
     setmouse();
@@ -361,14 +373,16 @@ pub(crate) fn ins_ctrl_() {
             if n == 0 {
                 break;
             }
-            Win::current().w_cursor.col += 1;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + 1);
         }
     }
 
     P_RI.set(!p_ri());
     REVINS_ON.set(STATE.get() == MODE_INSERT && p_ri());
     if REVINS_ON.get() {
-        REVINS_SCOL.set(Win::current().w_cursor.col.get());
+        REVINS_SCOL.set(Win::current().cursor().col().get());
         REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
         REVINS_CHARS.set(0);
         undisplay_dollar();

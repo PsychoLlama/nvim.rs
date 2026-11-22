@@ -40,10 +40,10 @@ pub fn diff_redraw(dofold: bool) {
 
     // `FOR_ALL_WINDOWS_IN_TAB(wp, CURTAB)`: the current tabpage's windows
     // are always the `FIRSTWIN` list.
-    for mut wp in windows() {
+    for wp in windows() {
         // The window is live but its buffer may already have been wiped, so
         // the pointer is compared, never read. The short circuit is upstream's.
-        if wp.w_onebuf_opt.wo_diff == 0 || wp.surviving_buffer().is_none() {
+        if wp.wo_diff() == 0 || wp.surviving_buffer().is_none() {
             continue;
         }
         wp.redraw_later(UPD_SOME_VALID);
@@ -58,18 +58,18 @@ pub fn diff_redraw(dofold: bool) {
         // and the check can run user code (a `'foldexpr'`, `DiffUpdated`
         // when the diff is brought up to date) that closes the window.
         let n = if wp.is_live() {
-            diff_check_fill(wp, wp.w_topline)
+            diff_check_fill(wp, wp.w_topline())
         } else {
             0
         };
         if !wp.is_live() {
             continue;
         }
-        if !wp.is_current() && wp.w_topfill > 0 || n > 0 {
-            if wp.w_topfill > n {
-                wp.w_topfill = n.max(0);
-            } else if n > 0 && n > wp.w_topfill {
-                wp.w_topfill = n;
+        if !wp.is_current() && wp.w_topfill() > 0 || n > 0 {
+            if wp.w_topfill() > n {
+                wp.set_w_topfill(n.max(0));
+            } else if n > 0 && n > wp.w_topfill() {
+                wp.set_w_topfill(n);
                 if wp.is_current() {
                     used_max_fill_curwin = true;
                 } else if wp_other.is_some() {
@@ -82,7 +82,7 @@ pub fn diff_redraw(dofold: bool) {
 
     // Whichever window took the larger filler count drives the other.
     if let Some(other) = wp_other.filter(|w| w.is_live())
-        && Win::current().w_onebuf_opt.wo_scb != 0
+        && Win::current().wo_scb() != 0
     {
         let pair = if used_max_fill_curwin {
             Some((other, Win::current()))
@@ -115,7 +115,7 @@ pub fn diff_check_with_linestatus(window: Win, lnum: LineNr) -> (c_int, c_int) {
     let tp = TabPage::current();
     // A live window's buffer is live; a diffed window always has one.
     let buf = window.buffer();
-    if tp.diff_len() == 0 || window.w_onebuf_opt.wo_diff == 0 {
+    if tp.diff_len() == 0 || window.wo_diff() == 0 {
         return (0, 0);
     }
     // One past the last line is legal: that is where the filler for a
@@ -136,7 +136,7 @@ pub fn diff_check_with_linestatus(window: Win, lnum: LineNr) -> (c_int, c_int) {
     }
 
     // Line matching is deferred until a block is actually on screen.
-    let on_screen = lnum >= window.w_topline && lnum < window.w_botline;
+    let on_screen = lnum >= window.w_topline() && lnum < window.w_botline();
     let slots = tp.tp_diffbuf();
     tp.with_diff(|blocks| line_status(blocks, &slots, idx, lnum, on_screen))
 }
@@ -230,14 +230,14 @@ pub fn diff_check_fill(window: Win, lnum: LineNr) -> c_int {
 /// Unchanged, and further than `'diffopt'`'s `context:` from any change.  A
 /// window whose buffer is the only one in the diff folds nothing.
 pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
-    if window.w_onebuf_opt.wo_diff == 0 {
+    if window.wo_diff() == 0 {
         return false;
     }
     let tp = TabPage::current();
     let mut idx = None;
     let mut other = false;
     for i in 0..DB_COUNT as usize {
-        if tp.diff_slot_holds(i, window.w_buffer) {
+        if tp.diff_slot_holds(i, window.w_buffer()) {
             idx = Some(i);
         } else if tp.tp_diffbuf()[i].is_some() {
             other = true;
@@ -279,7 +279,7 @@ pub(crate) fn diff_fold_update(
     let skip = usize::try_from(skip_idx).unwrap_or(usize::MAX);
     for wp in windows() {
         for i in 0..DB_COUNT as usize {
-            if tp.diff_slot_holds(i, wp.w_buffer) && i != skip {
+            if tp.diff_slot_holds(i, wp.w_buffer()) && i != skip {
                 fold_update(wp, lnum[i], lnum[i] + count[i]);
             }
         }

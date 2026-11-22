@@ -114,11 +114,11 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
             break;
         };
         prev_pos = new_pos;
-        Win::current().w_cursor = found;
+        Win::current().set_w_cursor(found);
         new_pos = found;
         n -= 1;
     }
-    Win::current().w_cursor = old_pos;
+    Win::current().set_w_cursor(old_pos);
 
     if method {
         // `[m` and `]M` want the brace itself; `[M` and `]m` want the one
@@ -127,7 +127,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
         n = cmd_arg.count1;
         if prev_pos.lnum != LineNr::ZERO {
             pos = Some(prev_pos);
-            Win::current().w_cursor = prev_pos;
+            Win::current().set_w_cursor(prev_pos);
             if norm {
                 n -= 1;
             }
@@ -154,11 +154,11 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
                     continue;
                 }
                 if (c == findc && norm) || (n == 1 && !norm) {
-                    new_pos = Win::current().w_cursor;
+                    new_pos = Win::current().w_cursor();
                     pos = Some(new_pos);
                     n = 0;
                 } else if new_pos.lnum == LineNr::ZERO {
-                    new_pos = Win::current().w_cursor;
+                    new_pos = Win::current().w_cursor();
                     pos = Some(new_pos);
                 } else {
                     // A brace of the other kind: step over the block it
@@ -167,14 +167,14 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
                         findmatchlimit(Some(&mut cmd_arg.op()), findc, match_direction(cmd_arg), 0);
                     match pos {
                         None => n = 0,
-                        Some(found) => Win::current().w_cursor = found,
+                        Some(found) => Win::current().set_w_cursor(found),
                     }
                 }
                 break;
             }
             n -= 1;
         }
-        Win::current().w_cursor = old_pos;
+        Win::current().set_w_cursor(old_pos);
         // A position was found on the way out but lost on the way back in.
         if pos.is_none() && new_pos.lnum != LineNr::ZERO {
             clear_op_beep(cmd_arg.op());
@@ -183,8 +183,8 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
 
     if let Some(pos) = pos {
         setpcmark();
-        Win::current().w_cursor = pos;
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_cursor(pos);
+        Win::current().set_w_set_curswant(true);
         may_fold_open(cmd_arg, OPT_FDO_FLAG_BLOCK as c_uint);
     }
 }
@@ -228,7 +228,7 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     };
     // `]` starts below the cursor line, `[` at the top of the file.
     let from = if cmd_arg.cmdchar.is(']') {
-        Win::current().w_cursor.lnum + 1
+        Win::current().cursor().lnum() + 1
     } else {
         LineNr::ONE
     };
@@ -237,7 +237,7 @@ fn nv_bracket_ident(cmd_arg: &mut CmdArg) {
     find_pattern_in_path(
         &name, dir, true, fold_case, what, n, action, from, last, false, false,
     );
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
 }
 
 /// `['`, `` [` ``, `]'` and `` ]` ``: jump to the next or previous lower-case
@@ -246,7 +246,7 @@ fn nv_bracket_mark(cmd_arg: &mut CmdArg) {
     // The walk starts from a mark standing for the cursor itself; every
     // later one is a copy of a buffer mark. Running out of marks stops at the
     // last one found rather than failing.
-    let mut fm = pos_to_mark(Buf::current(), Win::current().w_cursor);
+    let mut fm = pos_to_mark(Buf::current(), Win::current().w_cursor());
     let linewise = cmd_arg.nchar == Key::ascii(b'\'');
     for _ in 0..cmd_arg.count1 {
         match getnextmark(fm.mark, direction(cmd_arg), linewise) {
@@ -274,7 +274,7 @@ fn nv_bracket_spell(cmd_arg: &mut CmdArg) {
             clear_op_beep(cmd_arg.op());
             break;
         }
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
     }
     may_fold_open(cmd_arg, OPT_FDO_FLAG_SEARCH as c_uint);
 }
@@ -283,8 +283,8 @@ fn nv_bracket_spell(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
     cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = false;
-    let old_pos = Win::current().w_cursor;
-    Win::current().w_cursor.coladd = 0;
+    let old_pos = Win::current().w_cursor();
+    Win::current().cursor().set_coladd(0);
 
     let nchar = cmd_arg.nchar;
     let opening = cmd_arg.cmdchar.is('[');
@@ -302,7 +302,7 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
         // `[[` and `]]` look for a section start, `[]` and `][` for its
         // end.
         let flag = if nchar == cmd_arg.cmdchar { b'{' } else { b'}' };
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
         let both_ways =
             cmd_arg.op().op_type != OpType::Nop && cmd_arg.arg == FORWARD as c_int && flag == b'{';
         let (dir, n) = (cmd_arg.arg, cmd_arg.count1);

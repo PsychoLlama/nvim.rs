@@ -68,22 +68,22 @@ use crate::r#move::{
 /// fold counts as one screen line however tall its text is, so the walk steps
 /// over it rather than through it.
 pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal: bool) -> bool {
-    let mut win = Win::current();
+    let win = Win::current();
     let wp = win;
-    let mut linelen = linetabsize(wp, win.w_cursor.lnum);
+    let mut linelen = linetabsize(wp, win.cursor().lnum());
     let mut retval = true;
     // `$` asked for the end of the line, which has to be recomputed on
     // every row rather than carried as a column.
     let mut atend = false;
     op.motion_type = MotionType::CharWise;
-    op.inclusive = win.w_curswant == ColNr::MAX;
+    op.inclusive = win.w_curswant() == ColNr::MAX;
 
     // The first screen row of a line can be narrower than the rest: only
     // it carries the number column and the signs.
     let col_off1 = wp.col_off();
     let col_off2 = col_off1 - win_col_off2(wp);
-    let width1 = win.w_view_width - col_off1;
-    let mut width2 = win.w_view_width - col_off2;
+    let width1 = win.w_view_width() - col_off1;
+    let mut width2 = win.w_view_width() - col_off2;
     if width2 == 0 {
         width2 = 1;
     }
@@ -99,58 +99,58 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
         };
     }
 
-    if win.w_view_width != 0 {
-        if win.w_curswant == ColNr::MAX {
+    if win.w_view_width() != 0 {
+        if win.w_curswant() == ColNr::MAX {
             atend = true;
             validate_virtcol(wp);
             if width1 <= 0 {
-                win.w_curswant = ColNr::ZERO;
+                win.set_w_curswant(ColNr::ZERO);
             } else {
                 // Start from the end of the row the cursor is on.
-                win.w_curswant = ColNr::new(width1 - 1);
-                if win.w_virtcol > win.w_curswant {
-                    let rows = (win.w_virtcol - win.w_curswant - 1) / width2 + 1;
-                    win.w_curswant += rows * width2;
+                win.set_w_curswant(ColNr::new(width1 - 1));
+                if win.w_virtcol() > win.w_curswant() {
+                    let rows = (win.w_virtcol() - win.w_curswant() - 1) / width2 + 1;
+                    win.set_w_curswant(win.w_curswant() + (rows * width2));
                 }
             }
         } else {
             let n = line_end!();
-            win.w_curswant = win.w_curswant.min(ColNr::new(n - 1));
+            win.set_w_curswant(win.w_curswant().min(ColNr::new(n - 1)));
         }
         while dist != 0 {
             dist -= 1;
             if dir == BACKWARD as c_int {
-                if win.w_curswant >= ColNr::new(width1) && !folded(win, win.w_cursor.lnum) {
+                if win.w_curswant() >= ColNr::new(width1) && !folded(win, win.cursor().lnum()) {
                     // Still inside this line: back one row.
-                    win.w_curswant -= width2;
-                } else if win.w_cursor.lnum <= LineNr::ONE {
+                    win.set_w_curswant(win.w_curswant() - width2);
+                } else if win.cursor().lnum() <= LineNr::ONE {
                     retval = false;
                     break;
                 } else {
                     cursor_up_inner(wp, 1, skip_conceal);
-                    linelen = linetabsize(wp, win.w_cursor.lnum);
+                    linelen = linetabsize(wp, win.cursor().lnum());
                     if linelen > width1 {
                         // Land on the *last* row of the line above.
                         let w = ((linelen - width1 - 1) / width2 + 1) * width2;
-                        debug_assert!(w <= 0 || win.w_curswant <= ColNr::new(c_int::MAX - w));
-                        win.w_curswant += w;
+                        debug_assert!(w <= 0 || win.w_curswant() <= ColNr::new(c_int::MAX - w));
+                        win.set_w_curswant(win.w_curswant() + w);
                     }
                 }
             } else {
                 let n = line_end!();
-                if win.w_curswant + width2 < ColNr::new(n) && !folded(win, win.w_cursor.lnum) {
-                    win.w_curswant += width2;
-                } else if win.w_cursor.lnum >= win.buffer().line_count() {
+                if win.w_curswant() + width2 < ColNr::new(n) && !folded(win, win.cursor().lnum()) {
+                    win.set_w_curswant(win.w_curswant() + width2);
+                } else if win.cursor().lnum() >= win.buffer().line_count() {
                     retval = false;
                     break;
                 } else {
                     cursor_down_inner(wp, 1, skip_conceal);
                     // Land on the *first* row of the line below.
-                    win.w_curswant = ColNr::new(win.w_curswant.get() % width2);
-                    if win.w_curswant >= ColNr::new(width1) {
-                        win.w_curswant -= width2;
+                    win.set_w_curswant(ColNr::new(win.w_curswant().get() % width2));
+                    if win.w_curswant() >= ColNr::new(width1) {
+                        win.set_w_curswant(win.w_curswant() - width2);
                     }
-                    linelen = linetabsize(wp, win.w_cursor.lnum);
+                    linelen = linetabsize(wp, win.cursor().lnum());
                 }
             }
         }
@@ -159,12 +159,12 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
     if virtual_active(win) && atend {
         coladvance(win, ColNr::MAX);
     } else {
-        coladvance(win, win.w_curswant);
+        coladvance(win, win.w_curswant());
     }
 
-    if win.w_cursor.col > ColNr::ZERO && win.w_onebuf_opt.wo_wrap != 0 {
+    if win.cursor().col() > ColNr::ZERO && win.wo_wrap() != 0 {
         validate_virtcol(wp);
-        let mut virtcol = win.w_virtcol;
+        let mut virtcol = win.w_virtcol();
         // 'showbreak' is drawn in front of every continuation row and is
         // not part of the text.
         if virtcol > ColNr::new(width1) && wp.has_showbreak() {
@@ -174,8 +174,8 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
         // A wide unprintable character is drawn as `<xxxx>`, which is
         // wider than the cell the column arithmetic assumed.
         if dir == FORWARD as c_int
-            && virtcol < win.w_curswant
-            && win.w_curswant <= ColNr::new(width1)
+            && virtcol < win.w_curswant()
+            && win.w_curswant() <= ColNr::new(width1)
             && !vim_isprintc(c)
             && c > 255
         {
@@ -183,17 +183,17 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
         }
         // Landed past the wanted column on a multi-cell character: keep
         // it only if more than half of it is before the wanted column.
-        let mostly_past = if win.w_curswant < ColNr::new(width1) {
-            win.w_curswant > ColNr::new(width1 / 2)
+        let mostly_past = if win.w_curswant() < ColNr::new(width1) {
+            win.w_curswant() > ColNr::new(width1 / 2)
         } else {
-            (win.w_curswant - width1).get() % width2 > width2 / 2
+            (win.w_curswant() - width1).get() % width2 > width2 / 2
         };
-        if virtcol > win.w_curswant && mostly_past {
-            win.w_cursor.col -= 1;
+        if virtcol > win.w_curswant() && mostly_past {
+            win.cursor().set_col(win.cursor().col() - 1);
         }
     }
     if atend {
-        win.w_curswant = ColNr::MAX;
+        win.set_w_curswant(ColNr::MAX);
     }
     adjust_skipcol();
     retval
@@ -203,79 +203,82 @@ pub(crate) fn nv_screengo(mut op: Op, dir: c_int, mut dist: c_int, skip_conceal:
 pub(crate) fn nv_scroll(cmd_arg: &mut CmdArg) {
     let (cmdchar, count1) = (cmd_arg.cmdchar, cmd_arg.count1);
     let mut op = cmd_arg.op();
-    let mut win = Win::current();
+    let win = Win::current();
     let wp = win;
     op.motion_type = MotionType::LineWise;
     setpcmark();
     if cmdchar.is('L') {
         validate_botline_win(wp);
-        win.w_cursor.lnum = win.w_botline - 1;
-        if LineNr::new(count1) > win.w_cursor.lnum {
-            win.w_cursor.lnum = LineNr::ONE;
+        win.cursor().set_lnum(win.w_botline() - 1);
+        if LineNr::new(count1) > win.cursor().lnum() {
+            win.cursor().set_lnum(LineNr::ONE);
         } else if win_lines_concealed(wp) {
             // A concealed line takes no screen row, so the count has to be
             // walked rather than subtracted.
             let mut n = count1 - 1;
-            while n > 0 && win.w_cursor.lnum > win.w_topline {
-                let lnum = win.w_cursor.lnum;
-                win.has_folding(lnum, Some(&mut win.w_cursor.lnum), None);
-                n += c_int::from(decor_conceal_line(wp, win.w_cursor.lnum.get(), true));
-                if win.w_cursor.lnum > win.w_topline {
-                    win.w_cursor.lnum -= 1;
+            while n > 0 && win.cursor().lnum() > win.w_topline() {
+                let lnum = win.cursor().lnum();
+                let mut first = win.cursor().lnum();
+                win.has_folding(lnum, Some(&mut first), None);
+                win.cursor().set_lnum(first);
+                n += c_int::from(decor_conceal_line(wp, win.cursor().lnum().get(), true));
+                if win.cursor().lnum() > win.w_topline() {
+                    win.cursor().set_lnum(win.cursor().lnum() - 1);
                 }
                 n -= 1;
             }
         } else {
-            win.w_cursor.lnum -= count1 - 1;
+            win.cursor().set_lnum(win.cursor().lnum() - (count1 - 1));
         }
     } else {
         let mut n;
         if cmdchar.is('M') {
             // Walk down counting screen rows until half the window's are
             // used up. Filler lines above the top line count against it.
-            let mut used = -(win_get_fill(wp, win.w_topline) - win.w_topfill);
+            let mut used = -(win_get_fill(wp, win.w_topline()) - win.w_topfill());
             validate_botline_win(wp);
-            let half = (win.w_view_height - win.w_empty_rows + 1) / 2;
+            let half = (win.w_view_height() - win.w_empty_rows() + 1) / 2;
             n = 0;
-            while (win.w_topline + n) < Buf::current().line_count() {
-                if n > 0 && used + win_get_fill(wp, win.w_topline + n) / 2 >= half {
+            while (win.w_topline() + n) < Buf::current().line_count() {
+                if n > 0 && used + win_get_fill(wp, win.w_topline() + n) / 2 >= half {
                     n -= 1;
                     break;
                 }
-                used += plines_win(wp, win.w_topline + n, true);
+                used += plines_win(wp, win.w_topline() + n, true);
                 if used >= half {
                     break;
                 }
                 let mut last: LineNr = LineNr::ZERO;
-                let at = win.w_topline + n;
+                let at = win.w_topline() + n;
                 if wp.has_folding(at, None, Some(&mut last)) {
                     // The whole fold is one screen row.
-                    n = (last - win.w_topline) as c_int;
+                    n = (last - win.w_topline()) as c_int;
                 }
                 n += 1;
             }
-            if n > 0 && used > win.w_view_height {
+            if n > 0 && used > win.w_view_height() {
                 n -= 1;
             }
         } else {
             n = count1 - 1;
             if win_lines_concealed(wp) {
-                let mut lnum = win.w_topline;
+                let mut lnum = win.w_topline();
                 // The decrement is inside the condition, so a concealed
                 // line is stepped over without spending any of the count.
                 while (decor_conceal_line(wp, lnum.get() - 1, true) || {
                     let before = n;
                     n -= 1;
                     before > 0
-                }) && lnum < win.w_botline - 1
+                }) && lnum < win.w_botline() - 1
                 {
                     wp.has_folding(lnum, None, Some(&mut lnum));
                     lnum += 1;
                 }
-                n = (lnum - win.w_topline) as c_int;
+                n = (lnum - win.w_topline()) as c_int;
             }
         }
-        win.w_cursor.lnum = (win.w_topline + n).min(Buf::current().line_count());
+        win.cursor()
+            .set_lnum((win.w_topline() + n).min(Buf::current().line_count()));
     }
     if op.op_type == OpType::Nop {
         cursor_correct(wp);
@@ -295,7 +298,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
     }
     let (cmdchar, count1) = (cmd_arg.cmdchar, cmd_arg.count1);
     let mut op = cmd_arg.op();
-    let mut win = Win::current();
+    let win = Win::current();
     op.motion_type = MotionType::CharWise;
     op.inclusive = false;
     // With an inclusive selection the cursor may sit one past the last
@@ -324,20 +327,20 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
         if at_end {
             if wrap_flag != 0
                 && p_ww(|value| value.to_bytes().contains(&wrap_flag))
-                && win.w_cursor.lnum < Buf::current().line_count()
+                && win.cursor().lnum() < Buf::current().line_count()
             {
                 // A pending exclusive operator eats the line break by
                 // becoming inclusive instead of moving.
                 let eat = op.op_type != OpType::Nop
                     && !op.inclusive
-                    && !Buf::current().lines().line(win.w_cursor.lnum).is_empty();
+                    && !Buf::current().lines().line(win.cursor().lnum()).is_empty();
                 if eat {
                     op.inclusive = true;
                 } else {
-                    win.w_cursor.lnum += 1;
-                    win.w_cursor.col = ColNr::ZERO;
-                    win.w_cursor.coladd = 0;
-                    win.w_set_curswant = true;
+                    win.cursor().set_lnum(win.cursor().lnum() + 1);
+                    win.cursor().set_col(ColNr::ZERO);
+                    win.cursor().set_coladd(0);
+                    win.set_w_set_curswant(true);
                     op.inclusive = false;
                 }
             } else {
@@ -347,19 +350,22 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
                     if n == count1 {
                         beep_flush();
                     }
-                } else if !Buf::current().lines().line(win.w_cursor.lnum).is_empty() {
+                } else if !Buf::current().lines().line(win.cursor().lnum()).is_empty() {
                     op.inclusive = true;
                 }
                 break;
             }
         } else if past_line {
-            win.w_set_curswant = true;
+            win.set_w_set_curswant(true);
             if virtual_active(win) {
                 let _ = oneright();
             } else {
-                win.w_cursor.col += ColNr::try_from(with_cursor_rest(cluster_len))
-                    .unwrap_or(ColNr::MAX)
-                    .get();
+                win.cursor().set_col(
+                    win.cursor().col()
+                        + (ColNr::try_from(with_cursor_rest(cluster_len))
+                            .unwrap_or(ColNr::MAX)
+                            .get()),
+                );
             }
         }
         n -= 1;
@@ -371,7 +377,7 @@ pub(crate) fn nv_right(cmd_arg: &mut CmdArg) {
 
 /// `h`, `<BS>`, CTRL-H and `<Left>`.
 pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
-    let mut win = Win::current();
+    let win = Win::current();
     // A modifier turns this into a word move.
     if MOD_MASK.get().has(ModMask::SHIFT | ModMask::CTRL) {
         if MOD_MASK.get().has(ModMask::CTRL) {
@@ -399,22 +405,25 @@ pub(crate) fn nv_left(cmd_arg: &mut CmdArg) {
         if oneleft().is_err() {
             if wrap_flag != 0
                 && p_ww(|value| value.to_bytes().contains(&wrap_flag))
-                && win.w_cursor.lnum > LineNr::ONE
+                && win.cursor().lnum() > LineNr::ONE
             {
-                win.w_cursor.lnum -= 1;
+                win.cursor().set_lnum(win.cursor().lnum() - 1);
                 coladvance(win, ColNr::MAX);
-                win.w_set_curswant = true;
+                win.set_w_set_curswant(true);
                 // A delete or a change that wrapped back over the line
                 // break must take the break with it, so put the cursor
                 // one past the last character and tell the caller not to
                 // pull it back.
                 if (cmd_arg.op().op_type == OpType::Delete
                     || cmd_arg.op().op_type == OpType::Change)
-                    && !Buf::current().lines().line(win.w_cursor.lnum).is_empty()
+                    && !Buf::current().lines().line(win.cursor().lnum()).is_empty()
                 {
-                    win.w_cursor.col += ColNr::try_from(with_cursor_rest(cluster_len))
-                        .unwrap_or(ColNr::MAX)
-                        .get();
+                    win.cursor().set_col(
+                        win.cursor().col()
+                            + (ColNr::try_from(with_cursor_rest(cluster_len))
+                                .unwrap_or(ColNr::MAX)
+                                .get()),
+                    );
                     cmd_arg.outcome |= Outcome::NO_ADJ_OP_END;
                 }
             } else {
@@ -466,7 +475,7 @@ pub(crate) fn nv_down(cmd_arg: &mut CmdArg) {
             return;
         }
         if buf_is_prompt(current_buf())
-            && Win::current().w_cursor.lnum == Buf::current().line_count()
+            && Win::current().cursor().lnum() == Buf::current().line_count()
         {
             prompt_invoke_callback();
             if RESTART_EDIT.get().is_nul() {
@@ -507,7 +516,7 @@ pub(crate) fn nv_dollar(cmd_arg: &mut CmdArg) {
         || gchar_cursor() != Codepoint::NUL
         || cmd_arg.op().op_type == OpType::Nop
     {
-        Win::current().w_curswant = ColNr::MAX;
+        Win::current().set_w_curswant(ColNr::MAX);
     }
     if cursor_down(cmd_arg.count1 - 1, cmd_arg.op().op_type == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
@@ -539,7 +548,7 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
         }
         return;
     }
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
     // Landing on a TAB with 'virtualedit' means the *last* cell of it,
     // so that `dt<Tab>` takes the whole tab.
     if gchar_cursor() == TAB
@@ -549,9 +558,9 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
     {
         let win = Win::current();
         let (scol, ecol) = win.vcol_span(win.cursor());
-        Win::current().w_cursor.coladd = ecol - scol;
+        Win::current().cursor().set_coladd(ecol - scol);
     } else {
-        Win::current().w_cursor.coladd = 0;
+        Win::current().cursor().set_coladd(0);
     }
     adjust_for_sel(cmd_arg);
     may_fold_open(cmd_arg, OPT_FDO_FLAG_HOR as c_uint);
@@ -562,8 +571,8 @@ pub(crate) fn nv_csearch(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
     let count0 = cmd_arg.count0;
     let mut op = cmd_arg.op();
-    let mut win = Win::current();
-    let lnum = win.w_cursor.lnum;
+    let win = Win::current();
+    let lnum = win.cursor().lnum();
     op.inclusive = true;
     if count0 != 0 {
         if count0 > 100 {
@@ -575,12 +584,13 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
             let count = line_count.get();
             // Divide first for a file long enough that `count * 100`
             // would not fit.
-            win.w_cursor.lnum = LineNr::new(if count >= 21474836 {
+            win.cursor().set_lnum(LineNr::new(if count >= 21474836 {
                 (count + 99) / 100 * count0
             } else {
                 (count * count0 + 99) / 100
-            });
-            win.w_cursor.lnum = win.w_cursor.lnum.max(LineNr::ONE).min(line_count);
+            }));
+            win.cursor()
+                .set_lnum(win.cursor().lnum().max(LineNr::ONE).min(line_count));
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     } else {
@@ -589,15 +599,15 @@ pub(crate) fn nv_percent(cmd_arg: &mut CmdArg) {
         let pos = findmatch(Some(&mut op), Codepoint::NUL);
         if let Some(pos) = pos {
             setpcmark();
-            win.w_cursor = pos;
-            win.w_set_curswant = true;
-            win.w_cursor.coladd = 0;
+            win.set_w_cursor(pos);
+            win.set_w_set_curswant(true);
+            win.cursor().set_coladd(0);
             adjust_for_sel(cmd_arg);
         } else {
             clear_op_beep(op);
         }
     }
-    if lnum != win.w_cursor.lnum {
+    if lnum != win.cursor().lnum() {
         may_fold_open(cmd_arg, OPT_FDO_FLAG_PERCENT as c_uint);
     }
 }
@@ -607,13 +617,13 @@ pub(crate) fn nv_brace(cmd_arg: &mut CmdArg) {
     cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().use_reg_one = true;
     cmd_arg.op().inclusive = false;
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
     if findsent(cmd_arg.arg as Direction, cmd_arg.count1).is_err() {
         clear_op_beep(cmd_arg.op());
         return;
     }
     adjust_cursor(cmd_arg.op());
-    Win::current().w_cursor.coladd = 0;
+    Win::current().cursor().set_coladd(0);
     may_fold_open(cmd_arg, OPT_FDO_FLAG_BLOCK as c_uint);
 }
 
@@ -622,7 +632,7 @@ pub(crate) fn nv_findpar(cmd_arg: &mut CmdArg) {
     cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = false;
     cmd_arg.op().use_reg_one = true;
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
     let Some(inclusive) = findpar(cmd_arg.arg, cmd_arg.count1, 0, false) else {
         clear_op_beep(cmd_arg.op());
         return;
@@ -630,7 +640,7 @@ pub(crate) fn nv_findpar(cmd_arg: &mut CmdArg) {
     if inclusive {
         cmd_arg.op().inclusive = true;
     }
-    Win::current().w_cursor.coladd = 0;
+    Win::current().cursor().set_coladd(0);
     may_fold_open(cmd_arg, OPT_FDO_FLAG_BLOCK as c_uint);
 }
 
@@ -653,19 +663,19 @@ pub(crate) fn nv_pipe(cmd_arg: &mut CmdArg) {
     beginline(BeginlineOpts::NONE);
     if cmd_arg.count0 > 0 {
         coladvance(Win::current(), ColNr::new(cmd_arg.count0 - 1));
-        Win::current().w_curswant = ColNr::new(cmd_arg.count0 - 1);
+        Win::current().set_w_curswant(ColNr::new(cmd_arg.count0 - 1));
     } else {
-        Win::current().w_curswant = ColNr::ZERO;
+        Win::current().set_w_curswant(ColNr::ZERO);
     }
     // The column was named outright, so it is not a remembered want.
-    Win::current().w_set_curswant = false;
+    Win::current().set_w_set_curswant(false);
 }
 
 /// `b` and `B`: back a word.
 pub(crate) fn nv_bck_word(cmd_arg: &mut CmdArg) {
     cmd_arg.op().motion_type = MotionType::CharWise;
     cmd_arg.op().inclusive = false;
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
     if bck_word(cmd_arg.count1, cmd_arg.arg != 0, false).is_err() {
         clear_op_beep(cmd_arg.op());
     } else {
@@ -675,7 +685,7 @@ pub(crate) fn nv_bck_word(cmd_arg: &mut CmdArg) {
 
 /// `w`, `W`, `e` and `E`: forward a word, or to a word's end.
 pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
-    let startpos = Win::current().w_cursor;
+    let startpos = Win::current().w_cursor();
     let mut word_end = cmd_arg.cmdchar.is('e') || cmd_arg.cmdchar.is('E');
     cmd_arg.op().inclusive = word_end;
 
@@ -694,7 +704,7 @@ pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
     }
 
     cmd_arg.op().motion_type = MotionType::CharWise;
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
     let moved = if word_end {
         end_word(cmd_arg.count1, cmd_arg.arg != 0, cw_on_word, false)
     } else {
@@ -704,7 +714,7 @@ pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
             cmd_arg.op().op_type != OpType::Nop,
         )
     };
-    if lt(startpos, Win::current().w_cursor) {
+    if lt(startpos, Win::current().w_cursor()) {
         adjust_cursor(cmd_arg.op());
     }
     if moved.is_err() && cmd_arg.op().op_type == OpType::Nop {
@@ -718,13 +728,15 @@ pub(crate) fn nv_wordcmd(cmd_arg: &mut CmdArg) {
 /// Pull the cursor back off the line's terminator, which is not a position an
 /// operator may include -- and say the operator now covers the last character.
 pub(crate) fn adjust_cursor(mut op: Op) {
-    if Win::current().w_cursor.col > ColNr::ZERO
+    if Win::current().cursor().col() > ColNr::ZERO
         && gchar_cursor() == Codepoint::NUL
         && (!visual_active() || P_SEL.first_byte() == b'o')
         && !virtual_active(Win::current())
         && get_ve_flags(Win::current()) & OPT_VE_FLAG_ONEMORE as c_uint == 0
     {
-        Win::current().w_cursor.col -= 1;
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() - 1);
         mb_adjust_cursor();
         op.inclusive = true;
     }
@@ -749,7 +761,9 @@ pub(crate) fn nv_goto(cmd_arg: &mut CmdArg) {
     if cmd_arg.count0 != 0 {
         lnum = LineNr::new(cmd_arg.count0);
     }
-    Win::current().w_cursor.lnum = lnum.max(LineNr::ONE).min(last);
+    Win::current()
+        .cursor()
+        .set_lnum(lnum.max(LineNr::ONE).min(last));
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     may_fold_open(cmd_arg, OPT_FDO_FLAG_JUMP as c_uint);
 }

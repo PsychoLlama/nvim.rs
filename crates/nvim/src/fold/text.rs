@@ -83,7 +83,7 @@ pub(crate) fn get_foldtext(
         DID_EMSG.set(0);
     }
     let win = window;
-    if win.w_onebuf_opt.wo_fdt.first_byte() != 0 {
+    if win.read().w_onebuf_opt.wo_fdt.first_byte() != 0 {
         let level = foldinfo.fi_level.clamp(0, 21);
         let dashes = vec![b'-'; usize::try_from(level).unwrap_or(0)];
         set_vim_var_nr(Vv::Foldstart, VarNumber::from(lnum));
@@ -93,7 +93,7 @@ pub(crate) fn get_foldtext(
         if !GOT_FDT_ERROR.get() {
             let saved = switch_to(window);
             let saved_sctx = CURRENT_SCTX.get();
-            CURRENT_SCTX.set(win.w_onebuf_opt.wo_script_ctx[WIN_OPT_FOLDTEXT as usize]);
+            CURRENT_SCTX.set(win.read().w_onebuf_opt.wo_script_ctx[WIN_OPT_FOLDTEXT as usize]);
             let no_emsg = Suppress::emsg();
             let obj: Object = eval_foldtext(window);
             match obj.kind() {
@@ -186,7 +186,7 @@ pub(super) fn foldtext_cleanup(text: &mut Vec<u8>, from: usize) {
     let cms_start = &cms[..cms_slen];
     parse_marker(Win::current());
     // A copy: the window's option is not held while the text is edited.
-    let foldmarker = Win::current().w_onebuf_opt.wo_fmr.get();
+    let foldmarker = Win::current().read().w_onebuf_opt.wo_fmr.get();
     let (start_marker, end_marker) = markers(&foldmarker);
 
     // Each half of 'commentstring' is only removed once.

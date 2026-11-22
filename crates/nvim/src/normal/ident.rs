@@ -231,7 +231,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
                 return;
             };
             (word_col, n) = (col, len);
-            let lnum = Win::current().w_cursor.lnum;
+            let lnum = Win::current().cursor().lnum();
             let from = usize::try_from(col).unwrap_or(0);
             Lines::current().line(lnum)[from..].to_vec()
         }
@@ -262,7 +262,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
             // These become a search, so the cursor moves to the start of
             // the word first.
             setpcmark();
-            Win::current().w_cursor.col = word_col;
+            Win::current().cursor().set_col(word_col);
             if !g_cmd && is_word_at(&text, Buf::current()) {
                 // The plain forms anchor at a word boundary.
                 out.extend_from_slice(b"\\<");
@@ -352,7 +352,7 @@ pub(crate) fn nv_ident(cmd_arg: &mut CmdArg) {
 /// the last of the `n`-byte word at `word_col` -- is a word character, which
 /// is what decides whether `*` and `#` anchor the end of their pattern.
 fn word_end_is_word(word_col: ColNr, n: usize) -> bool {
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     let mut lines = Lines::current();
     let line = lines.line(lnum);
     let end = usize::try_from(word_col).unwrap_or(0) + n;
@@ -397,7 +397,7 @@ pub(crate) fn nv_gotofile(cmd_arg: &mut CmdArg) {
     let win = Some(Win::current().id());
     let opened = do_ecmd(None, Some(name.as_cstr()), None, None, last, hide, win);
     if opened.is_ok() && cmd_arg.nchar.is('F') && lnum >= LineNr::ZERO {
-        Win::current().w_cursor.lnum = lnum;
+        Win::current().cursor().set_lnum(lnum);
         check_cursor_lnum(Win::current());
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }

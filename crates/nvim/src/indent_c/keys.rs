@@ -132,9 +132,9 @@ pub fn in_cinkeys(keytyped: Key, when: u8, line_is_empty: bool) -> bool {
         } else if c == b'e' {
             // Check for "else" at the start of the line and just before
             // the cursor.
-            if try_match && keytyped.is('e') && Win::current().w_cursor.col >= ColNr::new(4) {
-                let back = usize::try_from(Win::current().w_cursor.col - 4).unwrap_or(0);
-                let cursor_lnum = Win::current().w_cursor.lnum;
+            if try_match && keytyped.is('e') && Win::current().cursor().col() >= ColNr::new(4) {
+                let back = usize::try_from(Win::current().cursor().col() - 4).unwrap_or(0);
+                let cursor_lnum = Win::current().cursor().lnum();
                 let mut lines = Lines::current();
                 let text = lines.line(cursor_lnum);
                 let is_else =
@@ -182,7 +182,7 @@ pub fn in_cinkeys(keytyped: Key, when: u8, line_is_empty: bool) -> bool {
                 .map_or(look.len(), |comma| i + comma);
             let len = end - i;
             if (try_match || try_match_word)
-                && Win::current().w_cursor.col >= ColNr::try_from(len).unwrap_or(ColNr::MAX)
+                && Win::current().cursor().col() >= ColNr::try_from(len).unwrap_or(ColNr::MAX)
                 && word_matches(keytyped, look, i..end, icase, try_match, try_match_word)
             {
                 return true;
@@ -212,7 +212,7 @@ pub fn in_cinkeys(keytyped: Key, when: u8, line_is_empty: bool) -> bool {
 /// second colon, it is not one.  The line is written to and restored, which
 /// is why it has to be re-fetched around every call that may unlock it.
 fn colon_reindents() -> bool {
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     // The chain re-enters at `is_jump_label`, so the borrow the two tests in
     // front of it take is dropped before it runs.
     let labelled = |lnum: LineNr| {
@@ -227,7 +227,7 @@ fn colon_reindents() -> bool {
         return true;
     }
 
-    let col = usize::try_from(Win::current().w_cursor.col).unwrap_or(0);
+    let col = usize::try_from(Win::current().cursor().col()).unwrap_or(0);
     let double_colon = col > 2 && {
         let mut lines = Lines::current();
         let line = lines.line(lnum);
@@ -279,7 +279,7 @@ fn word_matches(
             text == word
         }
     };
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let col = usize::try_from(cursor.col).unwrap_or(0);
 
     let matched = if keytyped == Key::COMPLETED {
@@ -323,7 +323,7 @@ fn word_matches(
     // "0=word" also requires that only blanks precede the word.
     if matched && try_match_word && !try_match {
         let white = getwhitecols_curline();
-        return Win::current().w_cursor.col.as_usize().checked_sub(len) == Some(white.as_usize());
+        return Win::current().cursor().col().as_usize().checked_sub(len) == Some(white.as_usize());
     }
     matched
 }
@@ -340,12 +340,12 @@ pub fn do_c_expr_indent() {
 /// `cindent(lnum)`: what `get_c_indent` would answer for line `lnum`, or -1
 /// when the line is out of range.
 pub fn f_cindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let pos = Win::current().w_cursor;
+    let pos = Win::current().w_cursor();
     let lnum = tv_get_lnum(&args[0]) as LineNr;
     let amount = if lnum >= LineNr::ONE && lnum <= Buf::current().line_count() {
-        Win::current().w_cursor.lnum = lnum;
+        Win::current().cursor().set_lnum(lnum);
         let amount = VarNumber::from(get_c_indent());
-        Win::current().w_cursor = pos;
+        Win::current().set_w_cursor(pos);
         amount
     } else {
         -1

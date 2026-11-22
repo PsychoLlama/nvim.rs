@@ -379,7 +379,7 @@ impl Jump {
             return Err(Failed);
         }
 
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
         POSTPONED_SPLIT.set(0);
         let mut retval = self.run_command(line, tagp).map(|()| Jumped::Done);
         // Jumping to another file counts as success: at least the file
@@ -391,7 +391,7 @@ impl Jump {
             // In a help buffer put the cursor line at the top of the
             // window: the help subject is below it.
             if Buf::current().b_help() {
-                set_topline(Win::current(), Win::current().w_cursor.lnum);
+                set_topline(Win::current(), Win::current().cursor().lnum());
             }
             if FDO_FLAGS.get() & OPT_FDO_FLAG_TAG as c_uint != 0 && self.key_typed {
                 fold_open_cursor();
@@ -424,7 +424,7 @@ impl Jump {
         // Don't split again below.
         POSTPONED_SPLIT.set(0);
         self.saved_win = Some(Win::current().id());
-        if Win::current().w_onebuf_opt.wo_pvw == 0 {
+        if Win::current().wo_pvw() == 0 {
             // Entering a reused window may change directory
             // (autocommands), so make the name absolute first.
             self.full_fname = Some(full_name_save(self.fname(), false));
@@ -462,8 +462,8 @@ impl Jump {
             return false;
         }
         // A fresh window does not inherit the scroll and cursor binding.
-        Win::current().w_onebuf_opt.wo_scb = 0;
-        Win::current().w_onebuf_opt.wo_crb = 0;
+        Win::current().set_wo_scb(0);
+        Win::current().set_wo_crb(0);
         true
     }
 
@@ -514,10 +514,12 @@ impl Jump {
         P_IC.set(false);
         P_SCS.set(false);
 
-        let save_lnum = Win::current().w_cursor.lnum;
+        let save_lnum = Win::current().cursor().lnum();
         // Start before the line the "line:" field named, or before the
         // first line.
-        Win::current().w_cursor.lnum = (tagp.tagline - 1).max(LineNr::ZERO);
+        Win::current()
+            .cursor()
+            .set_lnum((tagp.tagline - 1).max(LineNr::ZERO));
 
         let found = if self.pattern.search(search_options) {
             Found::Exactly
@@ -536,7 +538,7 @@ impl Jump {
             Found::Exactly => Ok(()),
             Found::Nowhere => {
                 tag_emsg(c"E434: Can't find tag pattern");
-                Win::current().w_cursor.lnum = save_lnum;
+                Win::current().cursor().set_lnum(save_lnum);
                 Err(Failed)
             }
             Found::IgnoringCase | Found::Guessing => {
@@ -666,11 +668,11 @@ impl Pattern {
         let _sandboxed = Lock::sandbox();
 
         // Start the command in line 1.
-        Win::current().w_cursor = Pos {
+        Win::current().set_w_cursor(Pos {
             lnum: LineNr::ONE,
             col: ColNr::ZERO,
             coladd: 0,
-        };
+        });
         let _ = do_cmdline_cmd(cstr::in_bytes(&self.buf));
 
         // When the command did something that is not allowed, make

@@ -59,9 +59,11 @@ pub(crate) fn ins_shift(c: Key, lastc: Key) {
     // character and has to come off again.
     if c == Key::CTRL_D
         && (lastc.is('0') || lastc.is('^'))
-        && Win::current().w_cursor.col > ColNr::ZERO
+        && Win::current().cursor().col() > ColNr::ZERO
     {
-        Win::current().w_cursor.col -= 1;
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() - 1);
         let _ = del_char(false);
         if STATE.get() & REPLACE_FLAG != 0 {
             replace_pop_ins();
@@ -81,7 +83,7 @@ pub(crate) fn ins_shift(c: Key, lastc: Key) {
 
     if DID_AI.get() {
         let mut lines = Lines::current();
-        let line = lines.line(Win::current().w_cursor.lnum);
+        let line = lines.line(Win::current().cursor().lnum());
         if skip::white(line) < line.len() {
             DID_AI.set(false);
         }
@@ -99,7 +101,7 @@ pub(crate) fn ins_shift(c: Key, lastc: Key) {
 /// 'smarttab' off or 'tabstop' equal to 'shiftwidth' anyway.
 pub(crate) fn ins_tab() -> bool {
     if INSSTART_BLANK_VCOL.get() == ColNr::MAX
-        && Win::current().w_cursor.lnum == INSSTART.get().lnum
+        && Win::current().cursor().lnum() == INSSTART.get().lnum
     {
         INSSTART_BLANK_VCOL.set(nolist_virtcol());
     }
@@ -198,24 +200,24 @@ fn tab_spaces_to_tabs() {
     let vreplace = STATE.get() & VREPLACE_FLAG != 0;
     // The first column a TAB went into, once one did.
     let mut change_col: Option<ColNr> = None;
-    let save_list = Win::current().w_onebuf_opt.wo_list;
-    let lnum = Win::current().w_cursor.lnum;
+    let save_list = Win::current().wo_list();
+    let lnum = Win::current().cursor().lnum();
 
     let mut line = Lines::current().line(lnum).to_vec();
     if vreplace {
-        pos = Win::current().w_cursor;
+        pos = Win::current().w_cursor();
     }
     // The byte being looked at, which is the cursor's column to begin with.
-    let mut at = Win::current().w_cursor.col.as_usize();
+    let mut at = Win::current().cursor().col().as_usize();
 
     // 'list' changes what a TAB is worth; unless 'cpoptions' has `L`, it
     // must not be allowed to.
     if !cpo_has(CpoFlag::LISTWM) {
-        Win::current().w_onebuf_opt.wo_list = 0;
+        Win::current().set_wo_list(0);
     }
 
     // Find the first white character of the run.
-    let mut fpos = Win::current().w_cursor;
+    let mut fpos = Win::current().w_cursor();
     while fpos.col > ColNr::ZERO && ascii_iswhite(c_int::from(line[at - 1])) {
         fpos.col -= 1;
         at -= 1;
@@ -325,7 +327,9 @@ fn tab_spaces_to_tabs() {
         if vreplace {
             pos.col -= i;
         } else {
-            Win::current().w_cursor.col -= i;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() - i);
         }
 
         // In `MODE_VREPLACE` the change was made to the copy; replay it
@@ -338,7 +342,7 @@ fn tab_spaces_to_tabs() {
         }
     }
 
-    Win::current().w_onebuf_opt.wo_list = save_list;
+    Win::current().set_wo_list(save_list);
 }
 
 /// Handle CR or NL in Insert mode.
@@ -360,7 +364,7 @@ pub(crate) fn ins_eol(c: Key) -> Result<(), Failed> {
 
     // In 'virtualedit' past the end of the line, make the position real
     // first.
-    if virtual_active(Win::current()) && Win::current().w_cursor.coladd > 0 {
+    if virtual_active(Win::current()) && Win::current().cursor().coladd() > 0 {
         let vcol = getviscol();
         coladvance(Win::current(), vcol);
     }
@@ -368,7 +372,9 @@ pub(crate) fn ins_eol(c: Key) -> Result<(), Failed> {
     // In 'revins' the cursor is at the start of what was typed, and the
     // line is broken at its end.
     if REVINS_ON.get() {
-        Win::current().w_cursor.col += get_cursor_pos_len();
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() + get_cursor_pos_len());
     }
 
     append_to_redobuff(NL_STR.to_bytes());
@@ -393,7 +399,7 @@ fn walk_col(pos: &Pos, vreplace: bool) -> ColNr {
     if vreplace {
         pos.col
     } else {
-        Win::current().w_cursor.col
+        Win::current().cursor().col()
     }
 }
 

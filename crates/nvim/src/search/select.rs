@@ -120,7 +120,9 @@ pub(crate) fn current_search(count: c_int, forward: bool) -> Result<(), NoMatch>
     let save_visual = visual_anchor();
 
     // Correct the cursor when 'selection' is exclusive.
-    if visual_active() && P_SEL.first_byte() == b'e' && lt(visual_anchor(), Win::current().w_cursor)
+    if visual_active()
+        && P_SEL.first_byte() == b'e'
+        && lt(visual_anchor(), Win::current().w_cursor())
     {
         dec_cursor();
     }
@@ -129,9 +131,9 @@ pub(crate) fn current_search(count: c_int, forward: bool) -> Result<(), NoMatch>
     // Visual area, skip the first backward search, or it would not
     // move.
     let skip_first_backward =
-        forward && visual_active() && lt(Win::current().w_cursor, visual_anchor());
+        forward && visual_active() && lt(Win::current().w_cursor(), visual_anchor());
 
-    let orig_pos = Win::current().w_cursor; // where the cursor started
+    let orig_pos = Win::current().w_cursor(); // where the cursor started
     let mut pos = orig_pos; // position after the pattern
     if visual_active() {
         // Searching further will extend the match.
@@ -145,14 +147,14 @@ pub(crate) fn current_search(count: c_int, forward: bool) -> Result<(), NoMatch>
     // Is the pattern zero-width? This time, don't care about the
     // direction.
     let pat = last_search_pat().unwrap_or_default();
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let Some(zero_width) = is_zero_width(&pat, true, cursor, FORWARD) else {
         return Err(NoMatch); // pattern not found
     };
 
     let found = search_around(&pat, pos, count, forward, skip_first_backward, zero_width);
     let Some(found) = found else {
-        Win::current().w_cursor = orig_pos;
+        Win::current().set_w_cursor(orig_pos);
         if visual_active() {
             set_visual_anchor(save_visual);
         }
@@ -164,26 +166,26 @@ pub(crate) fn current_search(count: c_int, forward: bool) -> Result<(), NoMatch>
     }
 
     // Put the cursor after the match.
-    Win::current().w_cursor = found.end;
+    Win::current().set_w_cursor(found.end);
     if lt(visual_anchor(), found.end) && forward {
         if skip_first_backward {
             // Put the cursor on the start of the match.
-            Win::current().w_cursor = found.start;
+            Win::current().set_w_cursor(found.start);
         } else {
             // Put the cursor on the last character of the match.
             dec_cursor();
         }
-    } else if visual_active() && lt(Win::current().w_cursor, visual_anchor()) && forward {
-        Win::current().w_cursor = found.start;
+    } else if visual_active() && lt(Win::current().w_cursor(), visual_anchor()) && forward {
+        Win::current().set_w_cursor(found.start);
     }
     set_visual_active(true);
     set_visual_mode(VisualMode::CHAR);
 
     if P_SEL.first_byte() == b'e' {
         // Correction for exclusive selection depends on the direction.
-        if forward && ltoreq(visual_anchor(), Win::current().w_cursor) {
+        if forward && ltoreq(visual_anchor(), Win::current().w_cursor()) {
             inc_cursor();
-        } else if !forward && ltoreq(Win::current().w_cursor, visual_anchor()) {
+        } else if !forward && ltoreq(Win::current().w_cursor(), visual_anchor()) {
             with_visual_anchor(inc);
         }
     }

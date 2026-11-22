@@ -138,7 +138,8 @@ fn put_last_insert(dir: Direction, mut count: c_int, flags: PutFlags, ve_flags: 
             });
             let ve_allows =
                 ve_flags == OPT_VE_FLAG_ALL as c_uint || ve_flags == OPT_VE_FLAG_ONEMORE as c_uint;
-            let eof = Buf::current().line_count() == Win::current().w_cursor.lnum && one_past_line;
+            let eof =
+                Buf::current().line_count() == Win::current().cursor().lnum() && one_past_line;
             if ve_allows || !(eol || eof) {
                 stuff_readbuf_char(Key::ascii(b'l'));
             }
@@ -150,7 +151,7 @@ fn put_last_insert(dir: Direction, mut count: c_int, flags: PutFlags, ve_flags: 
     // Save the cursor position now (though no text), so that `u` after
     // `".p` restores it.
     if command_start_char.is('a') {
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         let _ = u_save(lnum, lnum + 1);
     }
 }
@@ -160,8 +161,8 @@ fn put_last_insert(dir: Direction, mut count: c_int, flags: PutFlags, ve_flags: 
 fn with_cursor_text<R>(f: impl FnOnce(&[u8]) -> R) -> R {
     let win = Win::current();
     let mut lines = win.buffer().lines();
-    let line = lines.line(win.w_cursor.lnum);
-    let col = usize::try_from(win.w_cursor.col).unwrap_or(0);
+    let line = lines.line(win.cursor().lnum());
+    let col = usize::try_from(win.cursor().col()).unwrap_or(0);
     f(line.get(col..).unwrap_or_default())
 }
 
@@ -211,8 +212,8 @@ impl Put {
         if u_save_cursor().is_err() {
             return false;
         }
-        let lnum = Win::current().w_cursor.lnum;
-        let col = usize::try_from(Win::current().w_cursor.col).unwrap_or(0);
+        let lnum = Win::current().cursor().lnum();
+        let col = usize::try_from(Win::current().cursor().col()).unwrap_or(0);
         let (split, tail) = {
             let mut lines = Buf::current().lines();
             let line = lines.line(lnum);
@@ -235,7 +236,7 @@ impl Put {
         self.nr_lines += 1;
         self.dir = FORWARD;
 
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         buf_updates_send_changes(Buf::current(), lnum, 1, 1);
         true
     }
@@ -245,10 +246,10 @@ impl Put {
     /// Answers false when undo could not be saved.
     fn save_for_undo(&self) -> bool {
         if self.kind == MotionType::BlockWise {
-            let mut lnum = Win::current().w_cursor.lnum + len_as_int(self.lines.len()) + 1;
+            let mut lnum = Win::current().cursor().lnum() + len_as_int(self.lines.len()) + 1;
             lnum = lnum.min(Buf::current().line_count() + 1);
             // `lnum` is capped at one past the last line.
-            return u_save(Win::current().w_cursor.lnum - 1, lnum).is_ok();
+            return u_save(Win::current().cursor().lnum() - 1, lnum).is_ok();
         }
 
         if self.kind != MotionType::LineWise {
@@ -257,7 +258,7 @@ impl Put {
 
         // Correct for a closed fold. The cursor must not move yet:
         // u_save() reads it.
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let mut lnum = if self.dir == BACKWARD {
             Win::current()
                 .fold_first(cursor_lnum)
@@ -279,8 +280,10 @@ impl Put {
         if saved.is_err() {
             return false;
         }
-        Win::current().w_cursor.lnum = if self.dir == FORWARD { lnum - 1 } else { lnum };
-        Buf::current().edit().b_op_start = Win::current().w_cursor; // for mark_adjust()
+        Win::current()
+            .cursor()
+            .set_lnum(if self.dir == FORWARD { lnum - 1 } else { lnum });
+        Buf::current().edit().b_op_start = Win::current().w_cursor(); // for mark_adjust()
         true
     }
 
@@ -298,14 +301,14 @@ impl Put {
             let splits_tab = if self.dir == FORWARD {
                 Buf::current().tab_padding(viscol) != 1
             } else {
-                Win::current().w_cursor.coladd > 0
+                Win::current().cursor().coladd() > 0
             };
             if splits_tab {
                 coladvance_force(viscol);
             } else {
-                Win::current().w_cursor.coladd = 0;
+                Win::current().cursor().set_coladd(0);
             }
-        } else if Win::current().w_cursor.coladd > 0 || gchar_cursor() == Codepoint::NUL {
+        } else if Win::current().cursor().coladd() > 0 || gchar_cursor() == Codepoint::NUL {
             let to = getviscol() + c_int::from(self.dir == FORWARD);
             coladvance_force(to);
         }
@@ -329,11 +332,11 @@ impl Put {
             }
             if self.flags & PUT_LINE_FORWARD != 0 {
                 // `p` over a Visual block puts the lines below the block.
-                Win::current().w_cursor = Buf::current().b_visual().vi_end;
+                Win::current().set_w_cursor(Buf::current().b_visual().vi_end);
                 self.dir = FORWARD;
             }
-            Buf::current().set_b_op_start(Win::current().w_cursor);
-            Buf::current().set_b_op_end(Win::current().w_cursor);
+            Buf::current().set_b_op_start(Win::current().w_cursor());
+            Buf::current().set_b_op_end(Win::current().w_cursor());
         }
 
         if self.flags & PUT_LINE != 0 {
@@ -358,8 +361,8 @@ impl Put {
         }
         self.make_room_for_virtualedit();
 
-        let mut lnum = Win::current().w_cursor.lnum;
-        let mut col = Win::current().w_cursor.col;
+        let mut lnum = Win::current().cursor().lnum();
+        let mut col = Win::current().cursor().col();
 
         if self.kind == MotionType::BlockWise {
             self.blockwise(lnum);
@@ -371,16 +374,18 @@ impl Put {
                     let bytelen = cursor_char_len();
                     col += bytelen.get();
                     if !self.lines[0].is_empty() {
-                        Win::current().w_cursor.col += bytelen.get();
+                        Win::current()
+                            .cursor()
+                            .set_col(Win::current().cursor().col() + bytelen.get());
                         Buf::current().edit().b_op_end.col += bytelen.get();
                     }
                 }
-                Buf::current().set_b_op_start(Win::current().w_cursor);
+                Buf::current().set_b_op_start(Win::current().w_cursor());
             } else if self.dir == BACKWARD {
                 // Linewise: BACKWARD is FORWARD on the previous line.
                 lnum -= 1;
             }
-            let new_cursor = Win::current().w_cursor;
+            let new_cursor = Win::current().w_cursor();
 
             if self.kind == MotionType::CharWise && self.lines.len() == 1 {
                 self.charwise_one_line(lnum, col);
@@ -390,15 +395,17 @@ impl Put {
         }
 
         msgmore(self.nr_lines);
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
 
         // Don't leave the cursor after the NUL.
         let len = get_cursor_line_len();
-        if Win::current().w_cursor.col > len {
+        if Win::current().cursor().col() > len {
             if self.ve_flags == OPT_VE_FLAG_ALL as c_uint {
-                Win::current().w_cursor.coladd = Win::current().w_cursor.col - len;
+                Win::current()
+                    .cursor()
+                    .set_coladd(Win::current().cursor().col() - len);
             }
-            Win::current().w_cursor.col = len;
+            Win::current().cursor().set_col(len);
         }
     }
 }
@@ -440,8 +447,8 @@ pub fn do_put(
     }
 
     // Defaults for the `'[` and `']` marks.
-    Buf::current().set_b_op_start(Win::current().w_cursor);
-    Buf::current().set_b_op_end(Win::current().w_cursor);
+    Buf::current().set_b_op_start(Win::current().w_cursor());
+    Buf::current().set_b_op_end(Win::current().w_cursor());
 
     if regname == b'.' && reg.is_none() {
         put_last_insert(dir, count, flags, ve_flags);
@@ -469,7 +476,7 @@ pub fn do_put(
     if Buf::current().terminal().is_null() {
         // Saving for undo can run autocommands, which may write the register,
         // so it happens before the register is read.
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         if u_save(lnum, lnum + 1).is_err() {
             return;
         }

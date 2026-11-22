@@ -298,7 +298,7 @@ pub(crate) fn ins_copychar(lnum: LineNr) -> Key {
 
     // Try to advance to the cursor column.
     validate_virtcol(Win::current());
-    let end_vcol = Win::current().w_virtcol;
+    let end_vcol = Win::current().w_virtcol();
     // A copy: the width walk is free to read the memline.
     let line = Lines::current().line_copy(lnum);
 
@@ -346,7 +346,7 @@ pub(crate) fn ins_ctrl_ey(tc: Key) -> Key {
         return c;
     }
 
-    c = ins_copychar(Win::current().w_cursor.lnum + if c == Key::CTRL_Y { -1 } else { 1 });
+    c = ins_copychar(Win::current().cursor().lnum() + if c == Key::CTRL_Y { -1 } else { 1 });
     if c.is_nul() {
         return c;
     }

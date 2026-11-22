@@ -81,7 +81,7 @@ fn skip_chars(cclass: c_int, dir: c_int) -> bool {
 /// cursor is inside -- without leaving the line.
 fn back_in_line() {
     let sclass = cls();
-    while Win::current().w_cursor.col != ColNr::ZERO {
+    while Win::current().cursor().col() != ColNr::ZERO {
         dec_cursor();
         if cls() != sclass {
             inc_cursor(); // stop at the start of the word
@@ -96,7 +96,7 @@ fn back_in_line() {
 /// With `eol`, the last word stops at end of line, which is what an operator
 /// wants: `dw` on the last word of a line must not eat the newline.
 pub(crate) fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), NoObject> {
-    Win::current().w_cursor.coladd = 0;
+    Win::current().cursor().set_coladd(0);
     CLS_BIGWORD.set(bigword);
     loop {
         count -= 1;
@@ -104,8 +104,8 @@ pub(crate) fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(),
             break;
         }
         // Inside a fold, move to the last character of the last line.
-        if let Some(last) = Win::current().fold_end(Win::current().w_cursor.lnum) {
-            Win::current().w_cursor.lnum = last;
+        if let Some(last) = Win::current().fold_end(Win::current().cursor().lnum()) {
+            Win::current().cursor().set_lnum(last);
             // `cur_win()` is a live window.
             coladvance(Win::current(), ColNr::MAX);
         }
@@ -113,7 +113,7 @@ pub(crate) fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(),
 
         // Always move at least one character, unless this is the last one
         // in the buffer.
-        let last_line = Win::current().w_cursor.lnum == Buf::current().line_count();
+        let last_line = Win::current().cursor().lnum() == Buf::current().line_count();
         let mut i = inc_cursor();
         if i.is_stuck() || (i.left_the_line() && last_line) {
             return Err(NoObject); // started on the last character of the file
@@ -134,7 +134,8 @@ pub(crate) fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(),
         // Then on to the next non-white character.
         while cls() == 0 {
             // Stop on a blank line.
-            if Win::current().w_cursor.col == ColNr::ZERO && get_cursor_line_len() == ColNr::ZERO {
+            if Win::current().cursor().col() == ColNr::ZERO && get_cursor_line_len() == ColNr::ZERO
+            {
                 break;
             }
             i = inc_cursor();
@@ -152,7 +153,7 @@ pub(crate) fn fwd_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(),
 /// With `stop`, a cursor already on the start of a word moves one word less,
 /// which is what makes `cb` from mid-word do the right thing.
 pub(crate) fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Result<(), NoObject> {
-    Win::current().w_cursor.coladd = 0;
+    Win::current().cursor().set_coladd(0);
     CLS_BIGWORD.set(bigword);
     loop {
         count -= 1;
@@ -160,9 +161,9 @@ pub(crate) fn bck_word(mut count: c_int, bigword: bool, mut stop: bool) -> Resul
             break;
         }
         // Inside a fold, move to the first character of the first line.
-        if let Some(first) = Win::current().fold_first(Win::current().w_cursor.lnum) {
-            Win::current().w_cursor.lnum = first;
-            Win::current().w_cursor.col = ColNr::ZERO;
+        if let Some(first) = Win::current().fold_first(Win::current().cursor().lnum()) {
+            Win::current().cursor().set_lnum(first);
+            Win::current().cursor().set_col(ColNr::ZERO);
         }
         let sclass = cls();
         if dec_cursor().is_stuck() {
@@ -196,7 +197,7 @@ pub(crate) fn end_word(
     mut stop: bool,
     empty: bool,
 ) -> Result<(), NoObject> {
-    Win::current().w_cursor.coladd = 0;
+    Win::current().cursor().set_coladd(0);
     CLS_BIGWORD.set(bigword);
 
     // Undo a cursor position adjusted for exclusive 'selection'.
@@ -215,8 +216,8 @@ pub(crate) fn end_word(
             break;
         }
         // Inside a fold, move to the last character of the last line.
-        if let Some(last) = Win::current().fold_end(Win::current().w_cursor.lnum) {
-            Win::current().w_cursor.lnum = last;
+        if let Some(last) = Win::current().fold_end(Win::current().cursor().lnum()) {
+            Win::current().cursor().set_lnum(last);
             // `cur_win()` is a live window.
             coladvance(Win::current(), ColNr::MAX);
         }
@@ -251,9 +252,9 @@ fn back_over_word(sclass: c_int, stop: bool) -> Option<Landing> {
     if !stop || sclass == cls() || sclass == 0 {
         // Skip the white space before the word, stopping on an empty line.
         while cls() == 0 {
-            if Win::current().w_cursor.col == ColNr::ZERO
+            if Win::current().cursor().col() == ColNr::ZERO
                 && Lines::current()
-                    .line(Win::current().w_cursor.lnum)
+                    .line(Win::current().cursor().lnum())
                     .is_empty()
             {
                 return Some(Landing::EmptyLine);
@@ -285,9 +286,9 @@ fn forward_over_word(sclass: c_int, stop: bool, empty: bool) -> Result<Landing, 
         // white space first.
         while cls() == 0 {
             if empty
-                && Win::current().w_cursor.col == ColNr::ZERO
+                && Win::current().cursor().col() == ColNr::ZERO
                 && Lines::current()
-                    .line(Win::current().w_cursor.lnum)
+                    .line(Win::current().cursor().lnum())
                     .is_empty()
             {
                 return Ok(Landing::EmptyLine);
@@ -308,7 +309,7 @@ fn forward_over_word(sclass: c_int, stop: bool, empty: bool) -> Result<Landing, 
 ///
 /// With `eol`, an end of line stops the motion.
 pub(crate) fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<(), NoObject> {
-    Win::current().w_cursor.coladd = 0;
+    Win::current().cursor().set_coladd(0);
     CLS_BIGWORD.set(bigword);
     loop {
         count -= 1;
@@ -334,9 +335,9 @@ pub(crate) fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<
         }
         // Then back to the end of the previous word.
         while cls() == 0 {
-            if Win::current().w_cursor.col == ColNr::ZERO
+            if Win::current().cursor().col() == ColNr::ZERO
                 && Lines::current()
-                    .line(Win::current().w_cursor.lnum)
+                    .line(Win::current().cursor().lnum())
                     .is_empty()
             {
                 break;
@@ -375,16 +376,18 @@ pub(crate) fn current_word(
     clearpos(&mut start_pos);
 
     // Correct the cursor when 'selection' is exclusive.
-    if visual_active() && P_SEL.first_byte() == b'e' && lt(visual_anchor(), Win::current().w_cursor)
+    if visual_active()
+        && P_SEL.first_byte() == b'e'
+        && lt(visual_anchor(), Win::current().w_cursor())
     {
         dec_cursor();
     }
 
     // Outside Visual mode, or with a one-character Visual area, select
     // the word and/or white space under the cursor.
-    if !visual_active() || equalpos(Win::current().w_cursor, visual_anchor()) {
+    if !visual_active() || equalpos(Win::current().w_cursor(), visual_anchor()) {
         back_in_line();
-        start_pos = Win::current().w_cursor;
+        start_pos = Win::current().w_cursor();
 
         // Starting on white space that is to be included (" word"), or
         // off white space that is not ("word"): find the end of the word.
@@ -397,7 +400,7 @@ pub(crate) fn current_word(
             // the next line (a single-character word) means backing up to
             // the end of this one.
             let _ = fwd_word(1, bigword, true);
-            if Win::current().w_cursor.col == ColNr::ZERO {
+            if Win::current().cursor().col() == ColNr::ZERO {
                 Win::current().cursor().modify(decl);
             } else {
                 let _ = oneleft();
@@ -421,7 +424,7 @@ pub(crate) fn current_word(
     // Any count still left extends by that many more objects.
     while count > 0 {
         inclusive = true;
-        if visual_active() && lt(Win::current().w_cursor, visual_anchor()) {
+        if visual_active() && lt(Win::current().w_cursor(), visual_anchor()) {
             // In Visual mode with the cursor at the start: move it back.
             if Win::current().cursor().modify(decl).is_stuck() {
                 return Err(NoObject);
@@ -454,32 +457,33 @@ pub(crate) fn current_word(
         count -= 1;
     }
 
-    if include_white && (cls() != 0 || (Win::current().w_cursor.col == ColNr::ZERO && !inclusive)) {
+    if include_white && (cls() != 0 || (Win::current().cursor().col() == ColNr::ZERO && !inclusive))
+    {
         // No white space was included at the end, so take some at the
         // start instead. That is what makes `daw` work on the last word
         // of a sentence (and `2daw` on the last but one), and what
         // handles `2daw` deleting `word.` at the end of a line, where the
         // cursor ends at the start of the next one. But never take the
         // white space at the start of a line: that is indent.
-        let pos = Win::current().w_cursor;
-        Win::current().w_cursor = start_pos;
+        let pos = Win::current().w_cursor();
+        Win::current().set_w_cursor(start_pos);
         if oneleft().is_ok() {
             back_in_line();
-            if cls() == 0 && Win::current().w_cursor.col > ColNr::ZERO {
+            if cls() == 0 && Win::current().cursor().col() > ColNr::ZERO {
                 if visual_active() {
-                    set_visual_anchor(Win::current().w_cursor);
+                    set_visual_anchor(Win::current().w_cursor());
                 } else {
-                    op.start = Win::current().w_cursor;
+                    op.start = Win::current().w_cursor();
                 }
             }
         }
-        Win::current().w_cursor = pos; // put the cursor back at the end
+        Win::current().set_w_cursor(pos); // put the cursor back at the end
     }
 
     if visual_active() {
         if P_SEL.first_byte() == b'e'
             && inclusive
-            && ltoreq(visual_anchor(), Win::current().w_cursor)
+            && ltoreq(visual_anchor(), Win::current().w_cursor())
         {
             inc_cursor();
         }

@@ -166,7 +166,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
     let mut width = 0;
     if yank_type == MotionType::BlockWise {
         // A `$`-extended block has no fixed width.
-        let narrow = Win::current().w_curswant == ColNr::MAX;
+        let narrow = Win::current().w_curswant() == ColNr::MAX;
         width = region.end_vcol - region.start_vcol;
         if narrow && width > 0 {
             width -= 1;

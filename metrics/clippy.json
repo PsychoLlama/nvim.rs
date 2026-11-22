@@ -14,6 +14,7 @@
     "crates/nvim/src/extmark/undo.rs": 1,
     "crates/nvim/src/indent_c/cino.rs": 1,
     "crates/nvim/src/mark/adjust.rs": 1,
+    "crates/nvim/src/mark/jumplist.rs": 1,
     "crates/nvim/src/mouse/domouse.rs": 1,
     "crates/nvim/src/statusline/stl/mod.rs": 1,
     "crates/nvim/src/syntax/attr.rs": 1,

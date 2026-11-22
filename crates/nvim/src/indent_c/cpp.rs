@@ -151,7 +151,7 @@ pub(crate) fn opens_extern_c(line: &[u8], at: usize) -> bool {
 /// re-run only once the cursor has moved above the line it was computed for,
 /// which is exactly how the backwards scan in `engine` walks.
 pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
-    let mut lnum = Win::current().w_cursor.lnum;
+    let mut lnum = Win::current().cursor().lnum();
     if cached.lpos.lnum <= lnum {
         return cached.found != 0; // use the cached result
     }
@@ -214,7 +214,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
         let line = lines.line(lnum);
         loop {
             if byte_at(line, at) == 0 {
-                if lnum == Win::current().w_cursor.lnum {
+                if lnum == Win::current().cursor().lnum() {
                     break 'lines;
                 }
                 lnum += 1; // continue into the cursor's line
@@ -286,7 +286,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
                 }
 
                 // When the line ends in a comma, do not align with it.
-                if lnum == Win::current().w_cursor.lnum
+                if lnum == Win::current().cursor().lnum()
                     && c == b','
                     && only_comment_left(line, at + 1)
                 {
@@ -311,7 +311,7 @@ pub(crate) fn get_baseclass_amount(col: c_int) -> c_int {
         let mut amount = get_indent();
         // The borrow ends with the statement: the match search reads other
         // lines, and only runs when a paren was found, as upstream has it.
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let has_paren = find_last_paren(Lines::current().line(cursor_lnum), b'(', b')');
         if let Some(trypos) = has_paren
             .then(|| find_match_paren(Buf::current().b_ind_maxparen()))
@@ -319,14 +319,14 @@ pub(crate) fn get_baseclass_amount(col: c_int) -> c_int {
         {
             amount = get_indent_lnum(trypos.lnum);
         }
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         if !ends_in(Lines::current().line(cursor_lnum), 0, b",") {
             amount += Buf::current().b_ind_cpp_baseclass();
         }
         amount
     } else {
-        let mut win = Win::current();
-        win.w_cursor.col = ColNr::new(col);
+        let win = Win::current();
+        win.cursor().set_col(ColNr::new(col));
         win.vcol(win.cursor()).get()
     };
     if amount < Buf::current().b_ind_cpp_baseclass() {

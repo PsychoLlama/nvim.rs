@@ -41,10 +41,10 @@ pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> bool {
     checkupdate(Win::current());
     for _ in 0..count {
         let win = Win::current();
-        if win.w_folds.is_empty() {
+        if win.read().w_folds.is_empty() {
             break;
         }
-        let cursor = win.w_cursor.lnum;
+        let cursor = win.cursor().lnum();
         let mut lnum_off: i32 = 0;
         let mut use_level = false;
         let mut maybe_small = false;
@@ -126,8 +126,8 @@ pub fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> bool {
         if !moved {
             setpcmark();
         }
-        Win::current().w_cursor.lnum = lnum_found;
-        Win::current().w_cursor.col = ColNr::ZERO;
+        Win::current().cursor().set_lnum(lnum_found);
+        Win::current().cursor().set_col(ColNr::ZERO);
         moved = true;
     }
     moved

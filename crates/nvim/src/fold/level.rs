@@ -220,7 +220,7 @@ impl Win {
                 })?;
             }
             if manual {
-                line.win.w_fold_manual = true;
+                line.win.set_w_fold_manual(true);
             }
             if lvl < level || line.lnum > linecount {
                 break;
@@ -312,15 +312,15 @@ impl Win {
 }
 
 /// Update the folding for window "wp", at least from lines "top" to "bot".
-pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineNr) {
+pub(super) fn fold_update_computed(win: Win, mut top: LineNr, mut bot: LineNr) {
     if INVALID_TOP.get() != LineNr::ZERO {
         // Already updating this window; the recursion would fight itself.
         return;
     }
-    if win.w_foldinvalid {
+    if win.w_foldinvalid() {
         top = LineNr::ONE;
         bot = win.buffer().line_count();
-        win.w_foldinvalid = false;
+        win.set_w_foldinvalid(false);
         win.with_folds(|folds| forget_small_flags(folds));
     }
     if foldmethod_is_diff(win) {
@@ -349,7 +349,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     let foldmarker;
     if foldmethod_is_marker(win) {
         parse_marker(win);
-        foldmarker = win.w_onebuf_opt.wo_fmr.get();
+        foldmarker = win.read().w_onebuf_opt.wo_fmr.get();
         let (start, end) = markers(&foldmarker);
         method = Method::Marker(start, end);
         if top > LineNr::ONE {
@@ -400,7 +400,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     if method == Method::Syntax {
         // A syntax fold can reach past `bot`, and the whole of it has to be
         // updated or its end is left dangling.
-        let mut folds: &[Fold] = &win.w_folds;
+        let mut folds: &[Fold] = &win.read().w_folds;
         let mut innermost = None;
         let mut current_fdl = 0;
         let mut fold_start_lnum: LineNr = LineNr::ZERO;
@@ -496,7 +496,7 @@ pub(super) fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineN
     if !lost {
         win.with_folds(|folds| fold_remove(folds, start, end));
     }
-    if FOLD_CHANGED.get() && win.w_onebuf_opt.wo_fen != 0 {
+    if FOLD_CHANGED.get() && win.wo_fen() != 0 {
         changed_window_setting(win);
     }
     if end != bot && !lost {
@@ -863,7 +863,12 @@ pub(super) fn foldlevel_indent(line: &mut FoldLine) {
     let first = byte_at(text, skip::white(text));
     // A blank line, or one starting with a 'foldignore' character, takes
     // its level from its neighbours.
-    if first == 0 || has_char(win.w_onebuf_opt.wo_fdi.cstr(), Codepoint::from(first)) {
+    if first == 0
+        || has_char(
+            win.read().w_onebuf_opt.wo_fdi.cstr(),
+            Codepoint::from(first),
+        )
+    {
         line.lvl = if lnum == LineNr::ONE || lnum == buf.line_count() {
             0
         } else {
@@ -872,7 +877,7 @@ pub(super) fn foldlevel_indent(line: &mut FoldLine) {
     } else {
         line.lvl = get_indent_buf(buf, lnum) / get_sw_value(buf);
     }
-    let foldnestmax = c_int::try_from(win.w_onebuf_opt.wo_fdn.max(0)).unwrap_or(c_int::MAX);
+    let foldnestmax = c_int::try_from(win.wo_fdn().max(0)).unwrap_or(c_int::MAX);
     line.lvl = line.lvl.min(foldnestmax);
 }
 

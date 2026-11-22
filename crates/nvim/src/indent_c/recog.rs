@@ -240,15 +240,17 @@ pub(crate) fn starts_while(line: &[u8], at: usize) -> bool {
 /// than opening one.  The condition may span lines, which is why the answer
 /// needs the cursor and `findmatchlimit` rather than the text alone.
 pub(crate) fn while_closes_do(lnum: LineNr) -> bool {
-    let cursor_save = Win::current().w_cursor;
-    Win::current().w_cursor.lnum = lnum;
+    let cursor_save = Win::current().w_cursor();
+    Win::current().cursor().set_lnum(lnum);
     // Step over any '}' until the 'w' of the "while".
     let w = {
         let mut lines = Lines::current();
         let text = lines.line(lnum);
         text.iter().position(|&b| b == b'w').unwrap_or(text.len())
     };
-    Win::current().w_cursor.col = ColNr::try_from(w).unwrap_or(ColNr::MAX);
+    Win::current()
+        .cursor()
+        .set_col(ColNr::try_from(w).unwrap_or(ColNr::MAX));
 
     let maxparen = int64_t::from(Buf::current().b_ind_maxparen());
     let matched = findmatchlimit(None, Codepoint::NUL, 0, maxparen);
@@ -260,7 +262,7 @@ pub(crate) fn while_closes_do(lnum: LineNr) -> bool {
         let after = usize::try_from(pos.col).unwrap_or(0) + 1;
         byte_at(text, code_at(text, after)) == b';'
     });
-    Win::current().w_cursor = cursor_save;
+    Win::current().set_w_cursor(cursor_save);
     retval
 }
 
@@ -335,7 +337,7 @@ pub(crate) fn ends_a_do_while(terminated: u8) -> bool {
         // have unlocked it, and it left the cursor where it found it.
         let closed = {
             let mut lines = Lines::current();
-            let line = lines.line(Win::current().w_cursor.lnum);
+            let line = lines.line(Win::current().cursor().lnum());
             if at >= line.len() {
                 return false;
             }
@@ -348,7 +350,9 @@ pub(crate) fn ends_a_do_while(terminated: u8) -> bool {
         if closed {
             // Found ");" at end of the line; now check there is a "while"
             // before the matching '('.
-            Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
+            Win::current()
+                .cursor()
+                .set_col(ColNr::try_from(at).unwrap_or(ColNr::MAX));
             if let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen()) {
                 // `trypos` is a position in this buffer, so the cache answers
                 // with the line the `(` sits on.
@@ -359,7 +363,7 @@ pub(crate) fn ends_a_do_while(terminated: u8) -> bool {
                     starts_with_word(opener, start, b"while")
                 };
                 if opens_while {
-                    Win::current().w_cursor.lnum = trypos.lnum;
+                    Win::current().cursor().set_lnum(trypos.lnum);
                     return true;
                 }
             }

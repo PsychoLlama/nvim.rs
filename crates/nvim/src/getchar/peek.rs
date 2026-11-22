@@ -79,16 +79,16 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
         unshowmode(true);
     }
     validate_cursor(Win::current());
-    let mut win = Win::current();
-    let old_wcol = win.w_wcol;
-    let old_wrow = win.w_wrow;
-    let lnum = win.w_cursor.lnum;
-    let cursor_col = usize::try_from(win.w_cursor.col).unwrap_or(0);
+    let win = Win::current();
+    let old_wcol = win.w_wcol();
+    let old_wrow = win.w_wrow();
+    let lnum = win.cursor().lnum();
+    let cursor_col = usize::try_from(win.cursor().col()).unwrap_or(0);
 
     // Move the cursor left, if that is possible.
     if cursor_col != 0 {
         let mut col: ColNr = ColNr::ZERO;
-        if win.w_wcol > 0 {
+        if win.w_wcol() > 0 {
             let trailing_white = {
                 let mut lines = Lines::current();
                 let line = lines.line(lnum);
@@ -107,26 +107,26 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
                     let mut lines = Lines::current();
                     last_non_white_start(lines.line(lnum), cursor_col)
                 };
-                win.w_wcol = start.map_or(0, |start| {
+                win.set_w_wcol(start.map_or(0, |start| {
                     let len =
                         ColNr::try_from(start).expect("a byte offset in a line fits a column");
                     win_line_prefix_cells(win, lnum, len).get()
-                });
+                }));
 
-                win.w_wrow = win.w_cline_row + win.w_wcol / win.w_view_width;
-                win.w_wcol %= win.w_view_width;
-                win.w_wcol += win.col_off();
+                win.set_w_wrow(win.w_cline_row() + win.w_wcol() / win.w_view_width());
+                win.set_w_wcol(win.w_wcol() % win.w_view_width());
+                win.set_w_wcol(win.w_wcol() + win.col_off());
                 col = ColNr::ZERO; // no correction needed
             } else {
-                win.w_wcol -= 1;
-                col = win.w_cursor.col - 1;
+                win.set_w_wcol(win.w_wcol() - 1);
+                col = win.cursor().col() - 1;
             }
-        } else if win.w_onebuf_opt.wo_wrap != 0 && win.w_wrow != 0 {
-            win.w_wrow -= 1;
-            win.w_wcol = win.w_view_width - 1;
-            col = win.w_cursor.col - 1;
+        } else if win.wo_wrap() != 0 && win.w_wrow() != 0 {
+            win.set_w_wrow(win.w_wrow() - 1);
+            win.set_w_wcol(win.w_view_width() - 1);
+            col = win.cursor().col() - 1;
         }
-        if col > ColNr::ZERO && win.w_wcol > 0 {
+        if col > ColNr::ZERO && win.w_wcol() > 0 {
             // Correct for the cursor sitting on the right half of a
             // double-width character.
             let mut lines = Lines::current();
@@ -134,17 +134,17 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
             let at = usize::try_from(col).expect("the cursor column is never negative");
             let start = at - head_off(line, at);
             if cells_at(line.get(start..).unwrap_or_default()) > 1 {
-                win.w_wcol -= 1;
+                win.set_w_wcol(win.w_wcol() - 1);
             }
         }
     }
     setcursor();
     ui_flush();
 
-    at.wcol = win.w_wcol;
-    at.wrow = win.w_wrow;
-    win.w_wcol = old_wcol;
-    win.w_wrow = old_wrow;
+    at.wcol = win.w_wcol();
+    at.wrow = win.w_wrow();
+    win.set_w_wcol(old_wcol);
+    win.set_w_wrow(old_wrow);
     deleted
 }
 
@@ -189,11 +189,11 @@ fn show_partial_key(at: CursorAt) -> Partial {
         }
         // The showcmd area is drawn relative to the cursor position the
         // <Esc> peek above left, not the one the cursor is at now.
-        let mut win = Win::current();
-        let old_wcol = win.w_wcol;
-        let old_wrow = win.w_wrow;
-        win.w_wcol = at.wcol;
-        win.w_wrow = at.wrow;
+        let win = Win::current();
+        let old_wcol = win.w_wcol();
+        let old_wrow = win.w_wrow();
+        win.set_w_wcol(at.wcol);
+        win.set_w_wrow(at.wrow);
         push_showcmd();
         if tb.len() > SHOWCMD_COLS {
             partial.showcmd_idx = tb.len() - SHOWCMD_COLS;
@@ -202,8 +202,8 @@ fn show_partial_key(at: CursorAt) -> Partial {
             add_byte_to_showcmd(tb.byte(partial.showcmd_idx));
             partial.showcmd_idx += 1;
         }
-        win.w_wcol = old_wcol;
-        win.w_wrow = old_wrow;
+        win.set_w_wcol(old_wcol);
+        win.set_w_wrow(old_wrow);
     }
 
     // The same on the command line, where `get_number()` has none.
@@ -352,8 +352,8 @@ fn read_from_typeahead(
         let mut got = Some(0);
         let win = Win::current();
         let mut at = CursorAt {
-            wcol: win.w_wcol,
-            wrow: win.w_wrow,
+            wcol: win.w_wcol(),
+            wrow: win.w_wrow(),
         };
         let tb = typeahead();
         // What the 25ms peek read, appended to the typeahead below.

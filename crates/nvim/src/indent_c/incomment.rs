@@ -34,12 +34,12 @@ const LEN: usize = COM_MAX_LEN;
 /// line directly above is searched for one starting *after* code.
 pub(crate) fn align_with_line_comment() -> Option<c_int> {
     let mut trypos = find_line_comment();
-    if trypos.is_none() && Win::current().w_cursor.lnum > LineNr::ONE {
+    if trypos.is_none() && Win::current().cursor().lnum() > LineNr::ONE {
         // There may be a statement before the comment; search from the
         // end of the line above for a comment start.
-        let lnum = Win::current().w_cursor.lnum - 1;
+        let lnum = Win::current().cursor().lnum() - 1;
         if let Some(col) = check_linecomment(Lines::current().line(lnum)) {
-            let lnum = Win::current().w_cursor.lnum - 1;
+            let lnum = Win::current().cursor().lnum() - 1;
             trypos = Some(Pos {
                 lnum,
                 col: ColNr::from_index(col),
@@ -180,8 +180,8 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
             && !ncmp_eq(theline, &lead_end, lead_end_len)
         {
             done = true;
-            if Win::current().w_cursor.lnum > LineNr::ONE {
-                let prev = Win::current().w_cursor.lnum - 1;
+            if Win::current().cursor().lnum() > LineNr::ONE {
+                let prev = Win::current().cursor().lnum() - 1;
                 // The line above starting with the start leader: its
                 // indent plus the offset.  With the middle leader: its
                 // indent and nothing more.
@@ -220,7 +220,7 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
         if !ncmp_eq(theline, &lead_middle, lead_middle_len)
             && ncmp_eq(theline, &lead_end, lead_end_len)
         {
-            *amount = get_indent_lnum(Win::current().w_cursor.lnum - 1);
+            *amount = get_indent_lnum(Win::current().cursor().lnum() - 1);
             if off != 0 {
                 *amount += off;
             } else if align == COM_RIGHT {

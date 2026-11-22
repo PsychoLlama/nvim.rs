@@ -186,10 +186,10 @@ pub fn cursor_pos_info(dict: Option<&mut Dict>) {
 ///
 /// `sel` must be the current window's selection.
 fn measure_selection(sel: VisualSelection) -> Selection {
-    let (mut min, mut max) = if lt(sel.anchor, Win::current().w_cursor) {
-        (sel.anchor, Win::current().w_cursor)
+    let (mut min, mut max) = if lt(sel.anchor, Win::current().w_cursor()) {
+        (sel.anchor, Win::current().w_cursor())
     } else {
-        (Win::current().w_cursor, sel.anchor)
+        (Win::current().w_cursor(), sel.anchor)
     };
     if sel_exclusive() && max.col > ColNr::ZERO {
         max.col -= 1;
@@ -199,7 +199,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
     if sel.mode.is_block() {
         // 'showbreak' would move the columns `getvcols` answers.
         let saved_sbr = P_SBR.clear();
-        let saved_w_sbr = Win::current().w_onebuf_opt.wo_sbr.take();
+        let saved_w_sbr = Win::current().edit().w_onebuf_opt.wo_sbr.take();
 
         oparg.is_visual = true;
         oparg.motion_type = MotionType::BlockWise;
@@ -207,9 +207,9 @@ fn measure_selection(sel: VisualSelection) -> Selection {
         (oparg.start_vcol, oparg.end_vcol) = getvcols(Win::current(), &mut min, &mut max);
 
         P_SBR.restore(saved_sbr);
-        Win::current().w_onebuf_opt.wo_sbr = saved_w_sbr;
+        Win::current().edit().w_onebuf_opt.wo_sbr = saved_w_sbr;
 
-        if Win::current().w_curswant == ColNr::MAX {
+        if Win::current().w_curswant() == ColNr::MAX {
             // `$`: the block has no right edge.
             oparg.end_vcol = ColNr::MAX;
         }
@@ -257,12 +257,12 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
             if lnum >= sel.min.lnum.get() && lnum <= sel.max.lnum.get() {
                 count_selected_line(counts, sel, &mut bd, LineNr::new(lnum), eol_size);
             }
-        } else if lnum == Win::current().w_cursor.lnum.get() {
+        } else if lnum == Win::current().cursor().lnum().get() {
             // Outside Visual mode the `_cursor` totals are the running
             // ones up to this line, plus this line up to the cursor.
             counts.words_cursor += counts.words;
             counts.chars_cursor += counts.chars;
-            let upto = VarNumber::from(Win::current().w_cursor.col) + 1;
+            let upto = VarNumber::from(Win::current().cursor().col()) + 1;
             let PosCounts {
                 words_cursor: wc,
                 chars_cursor: cc,
@@ -366,14 +366,14 @@ fn report_counts(counts: &PosCounts, selection: Option<&Selection>) -> String {
     let lines = int64_t::from(Buf::current().line_count());
 
     let Some(sel) = selection else {
-        let lnum = int64_t::from(Win::current().w_cursor.lnum);
+        let lnum = int64_t::from(Win::current().cursor().lnum());
         let (col, virtcol) = (
-            Win::current().w_cursor.col + 1,
-            Win::current().w_virtcol + 1,
+            Win::current().cursor().col() + 1,
+            Win::current().w_virtcol() + 1,
         );
         validate_virtcol(Win::current());
         let at = col_text(col.get(), virtcol.get());
-        let width = linetabsize_str(Lines::current().line(Win::current().w_cursor.lnum));
+        let width = linetabsize_str(Lines::current().line(Win::current().cursor().lnum()));
         let of = col_text(get_cursor_line_len().get(), width);
         return if same_as_bytes {
             tr!(
@@ -387,7 +387,7 @@ fn report_counts(counts: &PosCounts, selection: Option<&Selection>) -> String {
     };
 
     // A blockwise selection with a right edge also reports its width.
-    let width = if sel.mode.is_block() && Win::current().w_curswant < ColNr::MAX {
+    let width = if sel.mode.is_block() && Win::current().w_curswant() < ColNr::MAX {
         let mut min = sel.min;
         let mut max = sel.max;
         // Both vcols are `c_int`, so the difference cannot overflow an

@@ -74,12 +74,12 @@ pub(crate) fn current_block(
     };
     // `{` at the start of a line, so the object claims the line break.
     let mut sol = false;
-    let old_pos = Win::current().w_cursor;
-    let mut old_end = Win::current().w_cursor; // where we started
+    let old_pos = Win::current().w_cursor();
+    let mut old_end = Win::current().w_cursor(); // where we started
     let mut old_start = old_end;
 
     // Starting on a bracket takes the whole block, brackets included.
-    if !visual_active() || equalpos(visual_anchor(), Win::current().w_cursor) {
+    if !visual_active() || equalpos(visual_anchor(), Win::current().w_cursor()) {
         setpcmark();
         if what.get() == '{' as c_int {
             // Ignore the indent.
@@ -91,11 +91,13 @@ pub(crate) fn current_block(
         }
         if gchar_cursor().get() == what.get() {
             // On the opening bracket: move just past it.
-            Win::current().w_cursor.col += 1;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + 1);
         }
-    } else if lt(visual_anchor(), Win::current().w_cursor) {
+    } else if lt(visual_anchor(), Win::current().w_cursor()) {
         old_start = visual_anchor();
-        Win::current().w_cursor = visual_anchor(); // cursor at the low end
+        Win::current().set_w_cursor(visual_anchor()); // cursor at the low end
     } else {
         old_end = visual_anchor();
     }
@@ -128,21 +130,21 @@ pub(crate) fn current_block(
         let Some(found) = pos else {
             break;
         };
-        Win::current().w_cursor = found;
+        Win::current().set_w_cursor(found);
         start_pos = found;
     }
     drop(cpo);
 
     // Then the matching closing bracket.
     if pos.is_none() {
-        Win::current().w_cursor = old_pos;
+        Win::current().set_w_cursor(old_pos);
         return Err(NoObject);
     }
     let Some(mut end_pos) = findmatch(None, other) else {
-        Win::current().w_cursor = old_pos;
+        Win::current().set_w_cursor(old_pos);
         return Err(NoObject);
     };
-    Win::current().w_cursor = end_pos;
+    Win::current().set_w_cursor(end_pos);
 
     // Without `include`, leave the brackets out. A closing bracket
     // preceded only by indent takes that indent with it -- but only if
@@ -152,7 +154,7 @@ pub(crate) fn current_block(
     if !include {
         loop {
             incl(&mut start_pos);
-            sol = Win::current().w_cursor.col == ColNr::ZERO;
+            sol = Win::current().cursor().col() == ColNr::ZERO;
             Win::current().cursor().modify(decl);
             while inindent(1) {
                 sol = true;
@@ -163,34 +165,34 @@ pub(crate) fn current_block(
 
             // In Visual mode, an empty result means there is no inner block.
             if equalpos(start_pos, end_pos) && visual_active() {
-                Win::current().w_cursor = old_pos;
+                Win::current().set_w_cursor(old_pos);
                 return Err(NoObject);
             }
             // In Visual mode, a result no bigger than what we started with
             // extends to the next block out and excludes again. An empty area
             // is not expanded.
             if lt(start_pos, old_start)
-                || lt(old_end, Win::current().w_cursor)
-                || equalpos(start_pos, Win::current().w_cursor)
+                || lt(old_end, Win::current().w_cursor())
+                || equalpos(start_pos, Win::current().w_cursor())
                 || !visual_active()
             {
                 break;
             }
-            Win::current().w_cursor = old_start;
+            Win::current().set_w_cursor(old_start);
             Win::current().cursor().modify(decl);
             pos = findmatch(None, what);
             let Some(found) = pos else {
-                Win::current().w_cursor = old_pos;
+                Win::current().set_w_cursor(old_pos);
                 return Err(NoObject);
             };
             start_pos = found;
-            Win::current().w_cursor = found;
+            Win::current().set_w_cursor(found);
             let Some(found_end) = findmatch(None, other) else {
-                Win::current().w_cursor = old_pos;
+                Win::current().set_w_cursor(old_pos);
                 return Err(NoObject);
             };
             end_pos = found_end;
-            Win::current().w_cursor = end_pos;
+            Win::current().set_w_cursor(end_pos);
         }
     }
 
@@ -211,13 +213,13 @@ pub(crate) fn current_block(
         op.inclusive = false;
         if sol {
             Win::current().cursor().modify(incl);
-        } else if ltoreq(start_pos, Win::current().w_cursor) {
+        } else if ltoreq(start_pos, Win::current().w_cursor()) {
             // Include the character under the cursor.
             op.inclusive = true;
         } else {
             // The end is before the start -- nothing between `<>`, `[]`
             // and so on -- so operate on no text at all.
-            Win::current().w_cursor = start_pos;
+            Win::current().set_w_cursor(start_pos);
         }
     }
     Ok(())
@@ -226,7 +228,7 @@ pub(crate) fn current_block(
 /// Whether the cursor is inside a `<aaa>` tag, or with `end_tag` a `</aaa>`
 /// one. A self-closing `<aaa/>` is neither.
 fn in_html_tag(end_tag: bool) -> bool {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lc = 0;
     let at = {
         let mut lines = Lines::current();
@@ -301,15 +303,15 @@ pub(crate) fn current_tagblock(
     let mut is_inclusive = true;
     P_WS.set(false);
 
-    let old_pos = Win::current().w_cursor;
-    let mut old_end = Win::current().w_cursor; // where we started
+    let old_pos = Win::current().w_cursor();
+    let mut old_end = Win::current().w_cursor(); // where we started
     let mut old_start = old_end;
     if !visual_active() || P_SEL.first_byte() == b'e' {
         decl(&mut old_end); // `old_end` is inclusive
     }
 
     // Starting on a `<aaa>` selects that block.
-    if !visual_active() || equalpos(visual_anchor(), Win::current().w_cursor) {
+    if !visual_active() || equalpos(visual_anchor(), Win::current().w_cursor()) {
         setpcmark();
         // Ignore the indent.
         while inindent(1) {
@@ -334,11 +336,11 @@ pub(crate) fn current_tagblock(
                 }
             }
             dec_cursor();
-            old_end = Win::current().w_cursor;
+            old_end = Win::current().w_cursor();
         }
-    } else if lt(visual_anchor(), Win::current().w_cursor) {
+    } else if lt(visual_anchor(), Win::current().w_cursor()) {
         old_start = visual_anchor();
-        Win::current().w_cursor = visual_anchor(); // cursor at the low end
+        Win::current().set_w_cursor(visual_anchor()); // cursor at the low end
     } else {
         old_end = visual_anchor();
     }
@@ -353,17 +355,17 @@ pub(crate) fn current_tagblock(
         // Search backwards for the unclosed `<aaa>`.
         for _ in 0..count {
             if !search_tag_pair(ANY_START_TAG.to_bytes(), ANY_END_TAG.to_bytes(), BACKWARD) {
-                Win::current().w_cursor = old_pos;
+                Win::current().set_w_cursor(old_pos);
                 P_WS.set(save_p_ws);
                 return Err(NoObject);
             }
         }
-        start_pos = Win::current().w_cursor;
+        start_pos = Win::current().w_cursor();
 
         // Isolate the `aaa` so the matching `</aaa>` can be searched for.
         inc_cursor();
         let name = {
-            let cursor = Win::current().w_cursor;
+            let cursor = Win::current().w_cursor();
             let mut lines = Lines::current();
             let line = lines.line(cursor.lnum);
             let start = usize::try_from(cursor.col).unwrap_or(0).min(line.len());
@@ -375,7 +377,7 @@ pub(crate) fn current_tagblock(
             line[start..end].to_vec()
         };
         if name.is_empty() {
-            Win::current().w_cursor = old_pos;
+            Win::current().set_w_cursor(old_pos);
             P_WS.set(save_p_ws);
             return Err(NoObject);
         }
@@ -383,12 +385,12 @@ pub(crate) fn current_tagblock(
         let epat = [&b"</"[..], &name, NAMED_END_TAG_REST].concat();
         let found = search_tag_pair(&spat, &epat, FORWARD);
 
-        if !found || lt(Win::current().w_cursor, old_end) {
+        if !found || lt(Win::current().w_cursor(), old_end) {
             // No other end, or it is before the previous one: this could
             // be an HTML tag with no matching end. Search backwards for
             // another start tag.
             count = 1;
-            Win::current().w_cursor = start_pos;
+            Win::current().set_w_cursor(start_pos);
             continue 'again;
         }
 
@@ -407,38 +409,38 @@ pub(crate) fn current_tagblock(
             // operation exclusive instead, so the line feed is selected.
             if c.get() == '<' as c_int
                 && !visual_active()
-                && Win::current().w_cursor.col == ColNr::ZERO
+                && Win::current().cursor().col() == ColNr::ZERO
             {
                 is_inclusive = false;
             } else if c.get() == '<' as c_int {
                 dec_cursor();
             }
         }
-        end_pos = Win::current().w_cursor;
+        end_pos = Win::current().w_cursor();
 
         if !do_include {
             // Exclude the start tag, stepping over any `>` inside quotes.
             let mut in_quotes = false;
-            Win::current().w_cursor = start_pos;
+            Win::current().set_w_cursor(start_pos);
             // `inc_cursor` reports running off the buffer itself, so the
             // cursor is on a character whenever the body runs.
             while !inc_cursor().is_stuck() {
                 let q = gchar_cursor();
                 if q.get() == '>' as c_int && !in_quotes {
                     inc_cursor();
-                    start_pos = Win::current().w_cursor;
+                    start_pos = Win::current().w_cursor();
                     break;
                 } else if q == b'"' || q == b'\'' {
                     in_quotes = !in_quotes;
                 }
             }
-            Win::current().w_cursor = end_pos;
+            Win::current().set_w_cursor(end_pos);
 
             // In Visual mode with exactly the text we already had, take
             // the tags in and try again.
             if visual_active() && equalpos(start_pos, old_start) && equalpos(end_pos, old_end) {
                 do_include = true;
-                Win::current().w_cursor = old_start;
+                Win::current().set_w_cursor(old_start);
                 count = count_arg;
                 continue 'again;
             }
@@ -450,7 +452,7 @@ pub(crate) fn current_tagblock(
         // An end before the start means there is no text between the
         // tags: select the character under the cursor.
         if lt(end_pos, start_pos) {
-            Win::current().w_cursor = start_pos;
+            Win::current().set_w_cursor(start_pos);
         } else if P_SEL.first_byte() == b'e' {
             inc_cursor();
         }
@@ -463,7 +465,7 @@ pub(crate) fn current_tagblock(
         op.motion_type = MotionType::CharWise;
         if lt(end_pos, start_pos) {
             // No text between the tags: operate on an empty area.
-            Win::current().w_cursor = start_pos;
+            Win::current().set_w_cursor(start_pos);
             op.inclusive = false;
         } else {
             op.inclusive = is_inclusive;

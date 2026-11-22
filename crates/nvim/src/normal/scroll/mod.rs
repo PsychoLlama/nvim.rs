@@ -47,7 +47,7 @@ pub(crate) use self::zet::*;
 /// windows showing the same buffer at different widths wrap it differently,
 /// so buffer line numbers would not line up.
 pub(crate) fn get_vtopline(window: Win) -> c_int {
-    plines_m_win_fill(window, LineNr::ONE, window.w_topline) - window.w_topfill
+    plines_m_win_fill(window, LineNr::ONE, window.w_topline()) - window.w_topfill()
 }
 
 /// After a command that may have scrolled: bring the 'scrollbind' windows
@@ -61,31 +61,31 @@ pub(crate) fn do_check_scrollbind(check: bool) {
     static OLD_BUF: GlobalCell<Option<BufId>> = GlobalCell::new(None);
     static OLD_LEFTCOL: GlobalCell<ColNr> = GlobalCell::new(ColNr::ZERO);
 
-    let mut win = Win::current();
+    let win = Win::current();
     let vtopline = get_vtopline(win);
-    if check && win.w_onebuf_opt.wo_scb != 0 {
+    if check && win.wo_scb() != 0 {
         if DID_SYNCBIND.get() {
             // `:syncbind` has just set every bound window itself.
             DID_SYNCBIND.set(false);
         } else if OLD_CURWIN.get() == Some(win.id()) {
-            if (win.buffer().try_id() == OLD_BUF.get() || win.w_onebuf_opt.wo_diff != 0)
+            if (win.buffer().try_id() == OLD_BUF.get() || win.wo_diff() != 0)
                 && (LineNr::new(vtopline) != OLD_VTOPLINE.get()
-                    || win.w_leftcol != OLD_LEFTCOL.get())
+                    || win.w_leftcol() != OLD_LEFTCOL.get())
             {
                 let down = LineNr::new(vtopline) - OLD_VTOPLINE.get();
-                check_scrollbind(down, win.w_leftcol - OLD_LEFTCOL.get());
+                check_scrollbind(down, win.w_leftcol() - OLD_LEFTCOL.get());
             }
         } else if p_sbo(|value| value.to_bytes().contains(&b'j')) {
             // Just moved into this window, and 'scrollopt' has "jump":
             // bring it back to where the binding says it should be.
-            check_scrollbind((LineNr::new(vtopline) - win.w_scbind_pos).get(), 0);
+            check_scrollbind((LineNr::new(vtopline) - win.w_scbind_pos()).get(), 0);
         }
-        win.w_scbind_pos = vtopline;
+        win.set_w_scbind_pos(vtopline);
     }
     OLD_CURWIN.set(Some(win.id()));
     OLD_VTOPLINE.set(LineNr::new(vtopline));
     OLD_BUF.set(win.buffer().try_id());
-    OLD_LEFTCOL.set(win.w_leftcol);
+    OLD_LEFTCOL.set(win.w_leftcol());
 }
 
 /// Scroll every other 'scrollbind' window by the same amount this one just
@@ -98,10 +98,10 @@ pub(crate) fn check_scrollbind(vtopline_diff: i32, leftcol_diff: c_int) {
     let (old_curwin, old_curbuf) = (Win::current(), Buf::current());
     let old_visual_select = visual_select();
     let old_visual_active = visual_active();
-    let tgt_leftcol = old_curwin.w_leftcol;
+    let tgt_leftcol = old_curwin.w_leftcol();
     // Two windows in diff mode are always bound vertically; otherwise
     // 'scrollopt' says so.
-    let want_ver = old_curwin.w_onebuf_opt.wo_diff != 0
+    let want_ver = old_curwin.wo_diff() != 0
         || (p_sbo(|value| value.to_bytes().contains(&b'v')) && vtopline_diff != 0);
     let want_hor = p_sbo(|value| value.to_bytes().contains(&b'h'))
         && (leftcol_diff != 0 || vtopline_diff != 0);
@@ -110,24 +110,24 @@ pub(crate) fn check_scrollbind(vtopline_diff: i32, leftcol_diff: c_int) {
 
     // Upstream asks `CURTAB == CURTAB`, so this always walks the current
     // tab page's windows however it reads. Nothing in the body can free one.
-    for mut win in windows() {
+    for win in windows() {
         win.make_current();
         win.buffer().make_current();
-        if win != old_curwin && win.w_onebuf_opt.wo_scb != 0 {
+        if win != old_curwin && win.wo_scb() != 0 {
             if want_ver {
-                if old_curwin.w_onebuf_opt.wo_diff != 0 && win.w_onebuf_opt.wo_diff != 0 {
+                if old_curwin.wo_diff() != 0 && win.wo_diff() != 0 {
                     // Both windows are live for this walk.
                     diff_set_topline(old_curwin, win);
                 } else {
                     // The bound position may run past the end of this
                     // window's buffer; the *position* keeps the overshoot
                     // so that scrolling back lines up again.
-                    win.w_scbind_pos += vtopline_diff as c_int;
+                    win.set_w_scbind_pos(win.w_scbind_pos() + (vtopline_diff as c_int));
                     let curr_vtopline = get_vtopline(win);
                     let last = Buf::current().line_count();
-                    let filled = plines_m_win_fill(win, win.w_topline + 1, last);
-                    let max_vtopline = curr_vtopline + win.w_topfill + filled;
-                    let new_vtopline = win.w_scbind_pos.min(max_vtopline).max(1);
+                    let filled = plines_m_win_fill(win, win.w_topline() + 1, last);
+                    let max_vtopline = curr_vtopline + win.w_topfill() + filled;
+                    let new_vtopline = win.w_scbind_pos().min(max_vtopline).max(1);
                     let y = new_vtopline - curr_vtopline;
                     if y > 0 {
                         scrollup(win, y, false);
@@ -137,7 +137,7 @@ pub(crate) fn check_scrollbind(vtopline_diff: i32, leftcol_diff: c_int) {
                 }
                 redraw_later(win, UPD_VALID);
                 cursor_correct(win);
-                win.w_redr_status = true;
+                win.set_w_redr_status(true);
             }
             if want_hor {
                 set_leftcol(tgt_leftcol);

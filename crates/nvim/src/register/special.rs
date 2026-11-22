@@ -174,7 +174,7 @@ pub fn get_spec_reg(regname: RegName, errmsg: bool) -> Option<Option<XString>> {
             // or free the block the line was read out of.
             let win = Win::current();
             Some(XString::from_bytes(
-                win.buffer().lines().line(win.w_cursor.lnum),
+                win.buffer().lines().line(win.cursor().lnum()),
             ))
         }
         // `"_` -- the black hole, which reads as empty.

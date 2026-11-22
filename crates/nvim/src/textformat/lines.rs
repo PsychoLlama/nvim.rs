@@ -65,11 +65,11 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
     let mut old_line_count = Buf::current().line_count();
 
     // Put the cursor where the command was given, so `u` can put it back.
-    Win::current().w_cursor = op.cursor_start;
+    Win::current().set_w_cursor(op.cursor_start);
     if u_save(op.start.lnum - 1, op.end.lnum + 1).is_err() {
         return;
     }
-    Win::current().w_cursor = op.start;
+    Win::current().set_w_cursor(op.start);
 
     if op.is_visual {
         // When nothing changes, the Visual selection still has to go.
@@ -88,8 +88,10 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
     // Leave the cursor on the first non-blank of the last formatted line.
     // If it moved a line back (`Q}` does that), step forward so `.`
     // carries on with the next lines.
-    if op.end_adjusted && Win::current().w_cursor.lnum < Buf::current().line_count() {
-        Win::current().w_cursor.lnum += 1;
+    if op.end_adjusted && Win::current().cursor().lnum() < Buf::current().line_count() {
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() + 1);
     }
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     old_line_count = LineNr::new(Buf::current().line_count() - old_line_count);
@@ -97,10 +99,10 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // The `']` mark goes at the end of it.
-        Buf::current().set_b_op_end(Win::current().w_cursor);
+        Buf::current().set_b_op_end(Win::current().w_cursor());
     }
     if keep_cursor {
-        Win::current().w_cursor = SAVED_CURSOR.get();
+        Win::current().set_w_cursor(SAVED_CURSOR.get());
         SAVED_CURSOR.set(SAVED_CURSOR.get().with_lnum(LineNr::ZERO));
         // Formatting may have made the position invalid.
         check_cursor(Win::current());
@@ -109,14 +111,14 @@ pub(crate) fn op_format(op: &OpArg, keep_cursor: bool) {
         // `FOR_ALL_WINDOWS_IN_TAB(wp, CURTAB)`. The macro's tab page test is
         // `CURTAB == CURTAB` here, so it always takes the `FIRSTWIN` arm --
         // which is what [`windows`] walks.
-        for mut wp in windows() {
-            if wp.w_old_cursor_lnum != LineNr::ZERO {
+        for wp in windows() {
+            if wp.w_old_cursor_lnum() != LineNr::ZERO {
                 // Lines were inserted or deleted: move the end of the
                 // Visual area that has to be redrawn with them.
-                if wp.w_old_cursor_lnum > wp.w_old_visual_lnum {
-                    wp.w_old_cursor_lnum += old_line_count.get();
+                if wp.w_old_cursor_lnum() > wp.w_old_visual_lnum() {
+                    wp.set_w_old_cursor_lnum(wp.w_old_cursor_lnum() + old_line_count.get());
                 } else {
-                    wp.w_old_visual_lnum += old_line_count.get();
+                    wp.set_w_old_visual_lnum(wp.w_old_visual_lnum() + old_line_count.get());
                 }
             }
         }
@@ -164,7 +166,7 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
 /// indent is recomputed by whichever engine is in force, so that a paragraph
 /// moved under a different one lines up.
 fn paragraph_indent(first_line: LineNr) -> c_int {
-    if Win::current().w_cursor.lnum == first_line {
+    if Win::current().cursor().lnum() == first_line {
         get_indent()
     } else if Buf::current().b_p_lisp() != 0 {
         get_lisp_indent()
@@ -185,8 +187,10 @@ fn paragraph_indent(first_line: LineNr) -> c_int {
 ///
 /// Answers false when the join failed and the walk has to stop.
 fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_count: LineNr) -> bool {
-    Win::current().w_cursor.lnum += 1;
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current()
+        .cursor()
+        .set_lnum(Win::current().cursor().lnum() + 1);
+    Win::current().cursor().set_col(ColNr::ZERO);
     if line_count < LineNr::ZERO && u_save_cursor().is_err() {
         return false;
     }
@@ -200,9 +204,11 @@ fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_count: Line
     };
     if strip > 0 {
         let _ = del_bytes(strip, false, false);
-        mark_col_adjust(Win::current().w_cursor.lnum, ColNr::ZERO, 0, -strip, 0);
+        mark_col_adjust(Win::current().cursor().lnum(), ColNr::ZERO, 0, -strip, 0);
     }
-    Win::current().w_cursor.lnum -= 1;
+    Win::current()
+        .cursor()
+        .set_lnum(Win::current().cursor().lnum() - 1);
     if do_join(2 as size_t, true, false, false, false).is_err() {
         beep_flush();
         return false;
@@ -235,7 +241,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
     let mut second_indent: c_int = -1;
     let mut first_par_line = true;
     let mut need_set_indent = true;
-    let first_line = Win::current().w_cursor.lnum;
+    let first_line = Win::current().cursor().lnum();
     let mut force_format = false;
     let old_state = STATE.get();
 
@@ -252,43 +258,50 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
     let do_trail_white = has_format_option(FoFlag::WHITE_PAR);
 
     // The previous and current lines.
-    let mut is_not_par = if Win::current().w_cursor.lnum > LineNr::ONE {
-        fmt_check_par(Win::current().w_cursor.lnum - 1, &mut leader, do_comments)
+    let mut is_not_par = if Win::current().cursor().lnum() > LineNr::ONE {
+        fmt_check_par(Win::current().cursor().lnum() - 1, &mut leader, do_comments)
     } else {
         true
     };
-    let mut next_is_not_par =
-        fmt_check_par(Win::current().w_cursor.lnum, &mut next_leader, do_comments);
+    let mut next_is_not_par = fmt_check_par(
+        Win::current().cursor().lnum(),
+        &mut next_leader,
+        do_comments,
+    );
     let mut is_end_par = is_not_par || next_is_not_par;
     if !is_end_par && do_trail_white {
-        is_end_par = !ends_in_white(Win::current().w_cursor.lnum - 1);
+        is_end_par = !ends_in_white(Win::current().cursor().lnum() - 1);
     }
 
-    Win::current().w_cursor.lnum -= 1;
+    Win::current()
+        .cursor()
+        .set_lnum(Win::current().cursor().lnum() - 1);
     let mut count = i64::from(line_count);
     while count != 0 && !GOT_INT.get() {
         if advance {
-            Win::current().w_cursor.lnum += 1;
+            Win::current()
+                .cursor()
+                .set_lnum(Win::current().cursor().lnum() + 1);
             prev_is_end_par = is_end_par;
             is_not_par = next_is_not_par;
             leader = next_leader;
         }
 
         // The last line to be formatted.
-        if count == 1 || Win::current().w_cursor.lnum == Buf::current().line_count() {
+        if count == 1 || Win::current().cursor().lnum() == Buf::current().line_count() {
             next_is_not_par = true;
             next_leader = Leader::NONE;
         } else {
-            let next = Win::current().w_cursor.lnum + 1;
+            let next = Win::current().cursor().lnum() + 1;
             next_is_not_par = fmt_check_par(next, &mut next_leader, do_comments);
             if do_number_indent {
-                next_is_start_par = get_number_indent(Win::current().w_cursor.lnum + 1) > 0;
+                next_is_start_par = get_number_indent(Win::current().cursor().lnum() + 1) > 0;
             }
         }
         advance = true;
         is_end_par = is_not_par || next_is_not_par || next_is_start_par;
         if !is_end_par && do_trail_white {
-            is_end_par = !ends_in_white(Win::current().w_cursor.lnum);
+            is_end_par = !ends_in_white(Win::current().cursor().lnum());
         }
 
         if is_not_par {
@@ -302,16 +315,16 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
             if first_par_line
                 && (do_second_indent || do_number_indent)
                 && prev_is_end_par
-                && Win::current().w_cursor.lnum < Buf::current().line_count()
+                && Win::current().cursor().lnum() < Buf::current().line_count()
             {
                 let no_comment = leader.len == 0 && next_leader.len == 0;
                 if do_second_indent
                     && !Lines::current()
-                        .line(Win::current().w_cursor.lnum + 1)
+                        .line(Win::current().cursor().lnum() + 1)
                         .is_empty()
                 {
                     if no_comment {
-                        second_indent = get_indent_lnum(Win::current().w_cursor.lnum + 1);
+                        second_indent = get_indent_lnum(Win::current().cursor().lnum() + 1);
                     } else {
                         second_indent = next_leader.len;
                         do_comments_list = true;
@@ -322,7 +335,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                     // the list flag differs. It is never cleared again --
                     // one comment-bearing paragraph turns it on for the
                     // rest of the run.
-                    second_indent = get_number_indent(Win::current().w_cursor.lnum);
+                    second_indent = get_number_indent(Win::current().cursor().lnum());
                     if !no_comment {
                         do_comments_list = true;
                     }
@@ -330,8 +343,8 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
             }
 
             // A change of comment leader ends the paragraph.
-            if Win::current().w_cursor.lnum >= Buf::current().line_count()
-                || !same_leader(Win::current().w_cursor.lnum, leader, next_leader)
+            if Win::current().cursor().lnum() >= Buf::current().line_count()
+                || !same_leader(Win::current().cursor().lnum(), leader, next_leader)
             {
                 // Except when the next line opens a line comment and this
                 // one has a line comment after some text: then the
@@ -339,7 +352,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 if next_leader
                     .flags
                     .is_none_or(|flags| !flags.with_rest(|rest| rest.starts_with(b"://")))
-                    || check_linecomment(Lines::current().line(Win::current().w_cursor.lnum))
+                    || check_linecomment(Lines::current().line(Win::current().cursor().lnum()))
                         .is_none()
                 {
                     is_end_par = true;
@@ -358,7 +371,8 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 // Put the cursor on the last non-space.
                 STATE.set(MODE_NORMAL); // don't go past end-of-line
                 coladvance(Win::current(), ColNr::MAX);
-                while Win::current().w_cursor.col != ColNr::ZERO && ascii_isspace(gchar_cursor()) {
+                while Win::current().cursor().col() != ColNr::ZERO && ascii_isspace(gchar_cursor())
+                {
                     dec_cursor();
                 }
 

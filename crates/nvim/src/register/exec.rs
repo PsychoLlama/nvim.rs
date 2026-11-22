@@ -425,11 +425,11 @@ pub fn insert_reg(
                 // a C string reads it.
                 let count = char_count(until_nul(&lines[0]));
                 let _ = del_chars(c_int::try_from(count).unwrap_or(c_int::MAX), 1);
-                let curpos = Win::current().w_cursor;
+                let curpos = Win::current().w_cursor();
                 if oneright().is_err() {
                     dir = FORWARD;
                 }
-                Win::current().w_cursor = curpos;
+                Win::current().set_w_cursor(curpos);
             }
             append_to_redobuff_char(Key::ctrl(b'R'));
             append_to_redobuff_char(register_key(regname));

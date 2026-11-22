@@ -251,7 +251,7 @@ pub(crate) fn u_undo_end(did_undo: bool, absolute: bool, quiet: bool) {
     // What is concealed may have changed, so every window on this buffer with
     // 'conceallevel' set has to be redrawn in full.
     for wp in windows() {
-        if wp.buffer() == buf && wp.w_onebuf_opt.wo_cole > 0 {
+        if wp.buffer() == buf && wp.wo_cole() > 0 {
             wp.redraw_later(UPD_NOT_VALID);
         }
     }

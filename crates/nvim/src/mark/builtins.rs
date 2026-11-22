@@ -81,7 +81,7 @@ pub fn get_buf_local_marks(buffer: Buf, l: &mut List) {
     }
     // The context mark is the WINDOW's and is reported against the CURRENT
     // buffer, which is why it is the one row here that does not use `handle`.
-    let _ = add_mark(l, c"''", win.w_pcmark, Some(cur.handle()), None);
+    let _ = add_mark(l, c"''", win.w_pcmark(), Some(cur.handle()), None);
     let positions: [(&CStr, Pos); 7] = [
         (c"'\"", buf.read().b_last_cursor.mark),
         (c"'[", buf.b_op_start()),

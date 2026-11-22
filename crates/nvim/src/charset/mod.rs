@@ -61,7 +61,7 @@ mod digits;
 pub(crate) fn getwhitecols_curline() -> crate::types::ColNr {
     let win = crate::winlayer::Win::current();
     let mut lines = win.buffer().lines();
-    crate::types::ColNr::from_index(skip::white(lines.line(win.w_cursor.lnum)))
+    crate::types::ColNr::from_index(skip::white(lines.line(win.cursor().lnum())))
 }
 
 pub(crate) use digits::try_getdigits_at;

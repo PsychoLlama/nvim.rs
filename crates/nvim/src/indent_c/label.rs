@@ -76,8 +76,8 @@ pub(crate) fn get_indent_nolabel(lnum: LineNr) -> c_int {
 ///              ^
 /// ```
 pub(crate) fn skip_label(lnum: LineNr) -> (c_int, usize) {
-    let cursor_save = Win::current().w_cursor;
-    Win::current().w_cursor.lnum = lnum;
+    let cursor_save = Win::current().w_cursor();
+    Win::current().cursor().set_lnum(lnum);
     // The chain re-enters at `is_jump_label`, so the borrow the two tests in
     // front of it take is dropped before it runs.
     let labelled = {
@@ -98,7 +98,7 @@ pub(crate) fn skip_label(lnum: LineNr) -> (c_int, usize) {
         (get_indent(), 0)
     };
 
-    Win::current().w_cursor = cursor_save;
+    Win::current().set_w_cursor(cursor_save);
     answer
 }
 
@@ -113,7 +113,7 @@ pub(crate) fn skip_label(lnum: LineNr) -> (c_int, usize) {
 ///
 /// Zero when the line does not look like a declaration.
 pub(crate) fn first_id_amount() -> c_int {
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     let mut lines = Lines::current();
     let line = lines.line(lnum);
     let mut at = skip::white(line);

@@ -94,7 +94,7 @@ pub(crate) fn ident_under_cursor(find_type: c_int) -> Vec<u8> {
     let Some((col, len)) = find_ident_under_cursor(find_type) else {
         return Vec::new();
     };
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
     let from = usize::try_from(col).unwrap_or(0);
@@ -106,7 +106,7 @@ pub(crate) fn ident_under_cursor(find_type: c_int) -> Vec<u8> {
 /// given) when there is none.
 pub(crate) fn find_ident_under_cursor(find_type: c_int) -> Option<(ColNr, usize)> {
     let win = Win::current();
-    let pos = win.w_cursor;
+    let pos = win.w_cursor();
     find_ident_at_pos(win, pos.lnum, pos.col, find_type)
 }
 
@@ -324,7 +324,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
         pat.extend_from_slice(b"\\>");
     }
 
-    let old_pos = Win::current().w_cursor;
+    let old_pos = Win::current().w_cursor();
     let save_p_ws = p_ws();
     let save_p_scs = p_scs();
     // The search must not wrap round the file or guess at case.
@@ -337,13 +337,13 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
     let in_block = locally && findpar(BACKWARD as c_int, 1, b'{', false).is_some();
     if !in_block {
         setpcmark();
-        Win::current().w_cursor.lnum = LineNr::ONE;
-        par_pos = Win::current().w_cursor;
+        Win::current().cursor().set_lnum(LineNr::ONE);
+        par_pos = Win::current().w_cursor();
     } else {
-        par_pos = Win::current().w_cursor;
+        par_pos = Win::current().w_cursor();
         // Back up over the function's own header lines.
-        while Win::current().w_cursor.lnum > LineNr::ONE {
-            let lnum = Win::current().w_cursor.lnum;
+        while Win::current().cursor().lnum() > LineNr::ONE {
+            let lnum = Win::current().cursor().lnum();
             if Lines::current()
                 .line(lnum)
                 .iter()
@@ -351,10 +351,12 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
             {
                 break;
             }
-            Win::current().w_cursor.lnum -= 1;
+            Win::current()
+                .cursor()
+                .set_lnum(Win::current().cursor().lnum() - 1);
         }
     }
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_col(ColNr::ZERO);
 
     // The last match that was inside a comment or a string, kept as the
     // answer of last resort.
@@ -366,14 +368,14 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
     let mut found;
     loop {
         let wp = Win::current();
-        let mut pos = wp.w_cursor;
+        let mut pos = wp.w_cursor();
         let (win, buf) = (Some(wp), Buf::current());
         let opts = searchflags;
         let re = RE_LAST as c_int;
         let hit = searchit(win, buf, &mut pos, None, FORWARD, &pat, 1, opts, re, None);
-        Win::current().w_cursor = pos;
+        Win::current().set_w_cursor(pos);
         found = hit.is_ok();
-        if Win::current().w_cursor.lnum >= old_pos.lnum {
+        if Win::current().cursor().lnum() >= old_pos.lnum {
             // Found it below the cursor, which is not a declaration of
             // what is under the cursor.
             found = false;
@@ -381,51 +383,53 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
         if thisblock && found {
             // Refuse a match whose enclosing block closes before the
             // cursor: it is a different scope.
-            let travel = int64_t::from(old_pos.lnum - Win::current().w_cursor.lnum + 1);
+            let travel = int64_t::from(old_pos.lnum - Win::current().cursor().lnum() + 1);
             let brace = c_int::from(b'}');
             let close = findmatchlimit(None, Codepoint::new(brace), FM_FORWARD, travel);
             if let Some(close) = close
                 && close.lnum < old_pos.lnum
             {
-                Win::current().w_cursor = close;
+                Win::current().set_w_cursor(close);
                 continue;
             }
         }
         if !found {
             if found_pos.lnum != LineNr::ZERO {
-                Win::current().w_cursor = found_pos;
+                Win::current().set_w_cursor(found_pos);
                 found = true;
             }
             break;
         }
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         let leader = get_leader_len(Lines::current().line(lnum), false, true).0;
         if leader > 0 {
             // The whole line is a comment; skip past it.
-            Win::current().w_cursor.lnum += 1;
-            Win::current().w_cursor.col = ColNr::ZERO;
+            Win::current()
+                .cursor()
+                .set_lnum(Win::current().cursor().lnum() + 1);
+            Win::current().cursor().set_col(ColNr::ZERO);
             continue;
         }
-        let cursor = Win::current().w_cursor;
+        let cursor = Win::current().w_cursor();
         let valid = is_ident(Lines::current().line(cursor.lnum), cursor.col.get());
         if !valid && found_pos.lnum != LineNr::ZERO {
             // Nothing better than what was already found.
-            Win::current().w_cursor = found_pos;
+            Win::current().set_w_cursor(found_pos);
             break;
         }
         if valid && !locally {
             break;
         }
-        if valid && Win::current().w_cursor.lnum >= par_pos.lnum {
+        if valid && Win::current().cursor().lnum() >= par_pos.lnum {
             // Past the start of the block: a local search is done, and
             // the earlier match wins if there was one.
             if found_pos.lnum != LineNr::ZERO {
-                Win::current().w_cursor = found_pos;
+                Win::current().set_w_cursor(found_pos);
             }
             break;
         }
         if valid {
-            found_pos = Win::current().w_cursor;
+            found_pos = Win::current().w_cursor();
         } else {
             clearpos(&mut found_pos);
         }
@@ -434,9 +438,9 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
     }
 
     if !found {
-        Win::current().w_cursor = old_pos;
+        Win::current().set_w_cursor(old_pos);
     } else {
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
         reset_search_dir();
     }
     P_WS.set(save_p_ws);

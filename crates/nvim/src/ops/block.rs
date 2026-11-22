@@ -194,12 +194,16 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
 /// Safe: the only thing it touches is the current window, which is what
 /// [`Win::current`] already promises.
 pub fn reset_lbr() -> bool {
-    if Win::current().w_onebuf_opt.wo_lbr == 0 {
+    if Win::current().wo_lbr() == 0 {
         return false;
     }
-    Win::current().w_onebuf_opt.wo_lbr = 0;
+    Win::current().set_wo_lbr(0);
     // Changing 'linebreak' may require w_virtcol to be recomputed.
-    Win::current().w_valid -= WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL;
+    Win::current().set_w_valid(
+        Win::current()
+            .w_valid()
+            .without(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL),
+    );
     true
 }
 
@@ -207,11 +211,15 @@ pub fn reset_lbr() -> bool {
 ///
 /// Safe for the same reason [`reset_lbr`] is.
 pub fn restore_lbr(lbr_saved: bool) {
-    if Win::current().w_onebuf_opt.wo_lbr != 0 || !lbr_saved {
+    if Win::current().wo_lbr() != 0 || !lbr_saved {
         return;
     }
-    Win::current().w_onebuf_opt.wo_lbr = 1;
-    Win::current().w_valid -= WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL;
+    Win::current().set_wo_lbr(1);
+    Win::current().set_w_valid(
+        Win::current()
+            .w_valid()
+            .without(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL),
+    );
 }
 
 /// Where the block sits in one line: fill `bd` for `lnum` of the current
@@ -480,7 +488,7 @@ pub(crate) fn charwise_block_def(start: Pos, end: Pos, lnum: LineNr, inclusive: 
 /// instead of measuring the selection again.
 pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool) {
     if !visual_mode().is_block()
-        || (!initial && op.end.col < ColNr::new(Win::current().w_view_width))
+        || (!initial && op.end.col < ColNr::new(Win::current().w_view_width()))
     {
         return;
     }
@@ -503,26 +511,28 @@ pub(crate) fn get_op_vcol(op: &mut OpArg, redo_visual_vcol: ColNr, initial: bool
         }
     }
 
-    if Win::current().w_curswant == ColNr::MAX {
+    if Win::current().w_curswant() == ColNr::MAX {
         // `$` was used: the block's right edge is the longest line's.
-        Win::current().w_cursor.col = ColNr::MAX;
+        Win::current().cursor().set_col(ColNr::MAX);
         op.end_vcol = ColNr::ZERO;
-        Win::current().w_cursor.lnum = op.start.lnum;
-        while Win::current().w_cursor.lnum <= op.end.lnum {
+        Win::current().cursor().set_lnum(op.start.lnum);
+        while Win::current().cursor().lnum() <= op.end.lnum {
             let (_, end) = Win::current().virtual_vcol_span(Win::current().cursor());
             op.end_vcol = op.end_vcol.max(end);
-            Win::current().w_cursor.lnum += 1;
+            Win::current()
+                .cursor()
+                .set_lnum(Win::current().cursor().lnum() + 1);
         }
     } else if REDO_V_ISUAL_BUSY.get() {
         op.end_vcol = op.start_vcol + redo_visual_vcol.get() - 1;
     }
 
     // Turn the column pair back into the block's two corner *positions*.
-    Win::current().w_cursor.lnum = op.end.lnum;
+    Win::current().cursor().set_lnum(op.end.lnum);
     Win::current().coladvance(op.end_vcol);
-    op.end = Win::current().w_cursor;
+    op.end = Win::current().w_cursor();
 
-    Win::current().w_cursor = op.start;
+    Win::current().set_w_cursor(op.start);
     Win::current().coladvance(op.start_vcol);
-    op.start = Win::current().w_cursor;
+    op.start = Win::current().w_cursor();
 }

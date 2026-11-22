@@ -194,12 +194,12 @@ static FOLDSTARTMARKERLEN: GlobalCell<usize> = GlobalCell::new(0);
 static FOLDENDMARKERLEN: GlobalCell<usize> = GlobalCell::new(0);
 
 /// Copy the folding state from window `wp_from` to window `wp_to`.
-pub fn copy_folding_state(wp_from: Win, mut wp_to: Win) {
-    wp_to.w_fold_manual = wp_from.w_fold_manual;
-    wp_to.w_foldinvalid = wp_from.w_foldinvalid;
+pub fn copy_folding_state(wp_from: Win, wp_to: Win) {
+    wp_to.set_w_fold_manual(wp_from.w_fold_manual());
+    wp_to.set_w_foldinvalid(wp_from.w_foldinvalid());
     // Cloned before the assignment, so the two windows may be one.
-    let folds = wp_from.w_folds.clone();
-    wp_to.w_folds = folds;
+    let folds = wp_from.read().w_folds.clone();
+    wp_to.edit().w_folds = folds;
 }
 
 /// The fold questions a caller asks *of a window*, as [`Win`] methods.
@@ -259,8 +259,8 @@ impl Win {
     /// every option they need is read before the call.
     #[inline(always)]
     fn with_folds<R>(self, f: impl FnOnce(&mut Vec<Fold>) -> R) -> R {
-        let mut window = self;
-        f(&mut window.w_folds)
+        let window = self;
+        f(&mut window.edit().w_folds)
     }
 }
 
@@ -271,8 +271,8 @@ impl Win {
 pub fn has_any_folding(win: Win) -> c_int {
     c_int::from(
         win.buffer().terminal().is_null()
-            && win.w_onebuf_opt.wo_fen != 0
-            && (!foldmethod_is_manual(win) || !win.w_folds.is_empty()),
+            && win.wo_fen() != 0
+            && (!foldmethod_is_manual(win) || !win.read().w_folds.is_empty()),
     )
 }
 
@@ -332,7 +332,7 @@ impl Win {
             last,
         };
         if first == LineNr::ZERO {
-            let (foldlevel, foldminlines) = (self.w_onebuf_opt.wo_fdl, self.w_onebuf_opt.wo_fml);
+            let (foldlevel, foldminlines) = (self.wo_fdl(), self.wo_fml());
             loop {
                 let end = self.with_folds(|root| walk.descend(root, lnum, foldlevel, foldminlines));
                 match end {
@@ -532,7 +532,7 @@ pub fn fold_info(win: Win, lnum: LineNr) -> FoldInfo {
 fn foldmethod_byte_is(window: Win, at: usize, c: u8) -> bool {
     // Every legal 'foldmethod' is at least four bytes long, so a non-empty
     // value always has a byte at `at <= 3`.
-    window.w_onebuf_opt.wo_fdm.bytes().get(at) == Some(&c)
+    window.read().w_onebuf_opt.wo_fdm.bytes().get(at) == Some(&c)
 }
 
 /// Returns true if 'foldmethod' is "manual"
@@ -567,9 +567,9 @@ pub fn foldmethod_is_diff(window: Win) -> bool {
 
 /// Remove all folding for window "win".
 ///
-pub fn clear_folding(mut win: Win) {
-    win.w_folds = Vec::new();
-    win.w_foldinvalid = false;
+pub fn clear_folding(win: Win) {
+    win.edit().w_folds = Vec::new();
+    win.set_w_foldinvalid(false);
 }
 
 /// Update folds for changes in the buffer of a window.
@@ -626,15 +626,15 @@ pub fn fold_update_after_insert() {
 /// The actual updating is postponed until fold info is used, to avoid doing
 /// every time a setting is changed or a syntax item is added.
 ///
-pub fn fold_update_all(mut win: Win) {
-    win.w_foldinvalid = true;
+pub fn fold_update_all(win: Win) {
+    win.set_w_foldinvalid(true);
     win.redraw_later(UPD_NOT_VALID);
 }
 
 /// Returns fold level at line number "lnum" in window "wp".
 ///
 fn fold_level_win(window: Win, lnum: LineNr) -> c_int {
-    let mut folds: &[Fold] = &window.w_folds;
+    let mut folds: &[Fold] = &window.read().w_folds;
     let mut lnum_rel = lnum;
     let mut level = 0;
     while let Ok(i) = find(folds, lnum_rel) {
@@ -648,12 +648,12 @@ fn fold_level_win(window: Win, lnum: LineNr) -> c_int {
 
 /// Check if the folds in window "wp" are invalid and update them if needed.
 ///
-fn checkupdate(mut window: Win) {
-    if !window.w_foldinvalid {
+fn checkupdate(window: Win) {
+    if !window.w_foldinvalid() {
         return;
     }
     fold_update(window, LineNr::ONE, MAXLNUM);
-    window.w_foldinvalid = false;
+    window.set_w_foldinvalid(false);
 }
 
 /// Delete fold "idx" from fold list "folds".
@@ -685,7 +685,7 @@ fn delete_fold_entry(folds: &mut Vec<Fold>, idx: usize, recursive: bool) {
 ///
 pub fn deepest_fold_nesting(window: Win) -> c_int {
     checkupdate(window);
-    deepest_nesting_of(&window.w_folds)
+    deepest_nesting_of(&window.read().w_folds)
 }
 
 /// How many levels of fold `folds` holds, counting itself.

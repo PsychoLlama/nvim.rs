@@ -70,7 +70,7 @@ impl Line {
 /// string).
 pub fn get_c_indent() -> c_int {
     // Remember where the cursor was when we started.
-    let cur_curpos = Win::current().w_cursor;
+    let cur_curpos = Win::current().w_cursor();
 
     // At line 1, zero indent is fine, right?
     if cur_curpos.lnum == LineNr::ONE {
@@ -84,7 +84,7 @@ pub fn get_c_indent() -> c_int {
     // In Insert mode with the cursor on a ')', truncate the line there:
     // new text should not line up with the matching '('.  The cursor can
     // be past the end of the line, for unknown reasons, so check.
-    let col = usize::try_from(Win::current().w_cursor.col).unwrap_or(0);
+    let col = usize::try_from(Win::current().cursor().col()).unwrap_or(0);
     if STATE.get() & MODE_INSERT != 0 && copy.get(col) == Some(&b')') {
         copy.truncate(col);
     }
@@ -93,7 +93,7 @@ pub fn get_c_indent() -> c_int {
     // Move the cursor to the start of the line, and judge the line before
     // anything else moves: 'cinoptions' `L` reads the answer again at the
     // very end.
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_col(ColNr::ZERO);
     let line = Line {
         copy,
         start,
@@ -108,7 +108,7 @@ pub fn get_c_indent() -> c_int {
     };
 
     // Put the cursor back where it belongs.
-    Win::current().w_cursor = cur_curpos;
+    Win::current().set_w_cursor(cur_curpos);
     amount
 }
 

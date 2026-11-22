@@ -269,7 +269,7 @@ pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
     if visual_active() {
         end_visual_mode();
         check_cursor_col(Win::current());
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
         redraw_curbuf_later(UPD_INVERTED);
     } else if no_reason {
         vim_beep(OPT_BO_FLAG_ESC as c_uint);

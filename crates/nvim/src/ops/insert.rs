@@ -66,10 +66,10 @@ struct BlockInsertPre {
 pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
     let mut bd = BlockDef::ZERO;
     // `edit()` changes `w_curswant`; record it now, for `A`.
-    bd.is_max = Win::current().w_curswant == ColNr::MAX;
+    bd.is_max = Win::current().w_curswant() == ColNr::MAX;
 
     // The Visual block is still marked; get rid of it now.
-    Win::current().w_cursor.lnum = op.start.lnum;
+    Win::current().cursor().set_lnum(op.start.lnum);
     redraw_curbuf_later(UPD_INVERTED);
     let _ = update_screen();
 
@@ -90,7 +90,7 @@ pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
     }
 
     let t1 = op.start;
-    let start_insert = Win::current().w_cursor;
+    let start_insert = Win::current().w_cursor();
     let _ = edit(Key::NUL, false, count1);
 
     // When a TAB was inserted and the characters in front of it were
@@ -102,7 +102,7 @@ pub(crate) fn op_insert(op: &mut OpArg, count1: c_int) {
 
     // The user moved off the line, or left Insert mode with CTRL-C: there
     // is nothing to replay.
-    if Win::current().w_cursor.lnum != op.start.lnum || GOT_INT.get() {
+    if Win::current().cursor().lnum() != op.start.lnum || GOT_INT.get() {
         return;
     }
 
@@ -122,12 +122,12 @@ fn measure_before_insert(op: &OpArg, bd: &mut BlockDef) -> Option<BlockInsertPre
     // runs. When only "block" is set, virtual edit is already off here,
     // but `coladvance_force` still needs it -- and it reads the
     // *window-local* 'virtualedit', so that is what gets overridden.
-    if Win::current().w_cursor.coladd > 0 {
-        let old_ve_flags: c_uint = Win::current().w_onebuf_opt.wo_ve_flags;
+    if Win::current().cursor().coladd() > 0 {
+        let old_ve_flags: c_uint = Win::current().wo_ve_flags();
         if u_save_cursor().is_err() {
             return None;
         }
-        Win::current().w_onebuf_opt.wo_ve_flags = OPT_VE_FLAG_ALL as c_uint;
+        Win::current().set_wo_ve_flags(OPT_VE_FLAG_ALL as c_uint);
         let wcol = if op.op_type == OpType::Append {
             op.end_vcol + 1
         } else {
@@ -135,9 +135,11 @@ fn measure_before_insert(op: &OpArg, bd: &mut BlockDef) -> Option<BlockInsertPre
         };
         coladvance_force(wcol);
         if op.op_type == OpType::Append {
-            Win::current().w_cursor.col -= 1;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() - 1);
         }
-        Win::current().w_onebuf_opt.wo_ve_flags = old_ve_flags;
+        Win::current().set_wo_ve_flags(old_ve_flags);
     }
 
     block_prep(bd, op, op.start.lnum, true);
@@ -156,12 +158,14 @@ fn measure_before_insert(op: &OpArg, bd: &mut BlockDef) -> Option<BlockInsertPre
 ///
 /// `bd` must describe `op`'s first line.
 fn move_cursor_for_append(op: &OpArg, bd: &mut BlockDef) -> bool {
-    if op.motion_type == MotionType::BlockWise && Win::current().w_cursor.coladd == 0 {
+    if op.motion_type == MotionType::BlockWise && Win::current().cursor().coladd() == 0 {
         // To the character right of the block, or the end of the line.
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
         let len = get_cursor_line_len();
-        let col = Win::current().w_cursor.col;
-        Win::current().w_cursor.col = col.max(len.min(bd.textcol + bd.textlen));
+        let col = Win::current().cursor().col();
+        Win::current()
+            .cursor()
+            .set_col(col.max(len.min(bd.textcol + bd.textlen)));
         if bd.is_short && !bd.is_max {
             // The first line was too short: pad it out and say so in `bd`.
             if u_save_cursor().is_err() {
@@ -173,10 +177,10 @@ fn move_cursor_for_append(op: &OpArg, bd: &mut BlockDef) -> bool {
             bd.textlen += bd.endspaces;
         }
     } else {
-        Win::current().w_cursor = op.end;
+        Win::current().set_w_cursor(op.end);
         check_cursor_col(Win::current());
         // Works just like `i` on the next character.
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         if !Lines::current().line(lnum).is_empty() && op.start_vcol != op.end_vcol {
             inc_cursor();
         }
@@ -304,7 +308,7 @@ fn replay_insert(op: &mut OpArg, bd: &mut BlockDef, pre: &mut BlockInsertPre, st
             let insert = op.op_type == OpType::Insert;
             block_insert(op, &ins_text, insert, bd);
         }
-        Win::current().w_cursor.col = op.start.col;
+        Win::current().cursor().set_col(op.start.col);
         check_cursor(Win::current());
     }
 }
@@ -331,8 +335,8 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
         return 0;
     }
 
-    let cursor_lnum = Win::current().w_cursor.lnum;
-    if l > Win::current().w_cursor.col
+    let cursor_lnum = Win::current().cursor().lnum();
+    if l > Win::current().cursor().col()
         && !Lines::current().line(cursor_lnum).is_empty()
         && !op_virtual()
     {
@@ -344,7 +348,8 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
     let mut pre_indent = 0;
     if op.motion_type == MotionType::BlockWise {
         // Add the spaces before measuring the line's length.
-        if op_virtual() && (Win::current().w_cursor.coladd > 0 || gchar_cursor() == Codepoint::NUL)
+        if op_virtual()
+            && (Win::current().cursor().coladd() > 0 || gchar_cursor() == Codepoint::NUL)
         {
             coladvance_force(getviscol());
         }
@@ -352,7 +357,7 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
         let firstline = lines.line(op.start.lnum);
         pre_textlen = ColNr::try_from(firstline.len()).unwrap_or(ColNr::MAX).get();
         pre_indent = len_as_int(skip::white(firstline));
-        bd.textcol = Win::current().w_cursor.col;
+        bd.textcol = Win::current().cursor().col();
     }
 
     if op.motion_type == MotionType::LineWise {
@@ -462,7 +467,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
 /// not be sitting there.
 pub fn adjust_cursor_eol() {
     let cur_ve_flags = get_ve_flags(Win::current());
-    let adj_cursor = Win::current().w_cursor.col > ColNr::ZERO
+    let adj_cursor = Win::current().cursor().col() > ColNr::ZERO
         && gchar_cursor() == Codepoint::NUL
         && cur_ve_flags & OPT_VE_FLAG_ONEMORE as c_uint == 0
         && cur_ve_flags & OPT_VE_FLAG_ALL as c_uint == 0
@@ -477,6 +482,6 @@ pub fn adjust_cursor_eol() {
     if cur_ve_flags == OPT_VE_FLAG_ALL as c_uint {
         // `coladd` becomes the width of that last character.
         let (scol, ecol) = Win::current().vcol_span(Win::current().cursor());
-        Win::current().w_cursor.coladd = ecol - scol + 1;
+        Win::current().cursor().set_coladd(ecol - scol + 1);
     }
 }

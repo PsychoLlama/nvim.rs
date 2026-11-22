@@ -52,16 +52,16 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
 
     let mut block_col: ColNr = ColNr::ZERO;
     if op.motion_type == MotionType::BlockWise {
-        block_col = Win::current().w_cursor.col;
+        block_col = Win::current().cursor().col();
     }
 
     for _ in 0..op.line_count {
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         let first_char = c_int::from(byte_at(Lines::current().line(lnum), 0));
         if first_char == 0 {
             // Empty line: nothing to indent, but the cursor still has to
             // land somewhere legal.
-            Win::current().w_cursor.col = ColNr::ZERO;
+            Win::current().cursor().set_col(ColNr::ZERO);
         } else if op.motion_type == MotionType::BlockWise {
             shift_block(op, amount);
         } else if first_char != c_int::from(b'#') || !preprocs_left() {
@@ -70,18 +70,22 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
             let left = op.op_type == OpType::Lshift;
             shift_line(left, p_sr(), amount, false);
         }
-        Win::current().w_cursor.lnum += 1;
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() + 1);
     }
 
     if op.motion_type == MotionType::BlockWise {
-        Win::current().w_cursor.lnum = op.start.lnum;
-        Win::current().w_cursor.col = block_col;
+        Win::current().cursor().set_lnum(op.start.lnum);
+        Win::current().cursor().set_col(block_col);
     } else if curs_top {
-        Win::current().w_cursor.lnum = op.start.lnum;
+        Win::current().cursor().set_lnum(op.start.lnum);
         // `shift_line` may have moved the column.
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     } else {
-        Win::current().w_cursor.lnum -= 1;
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() - 1);
     }
     // The cursor line must not be in a closed fold.
     fold_open_cursor();
@@ -302,7 +306,7 @@ struct ShiftedLine {
 fn shift_block(op: &OpArg, amount: c_int) {
     let left = op.op_type == OpType::Lshift;
     let old_state = STATE.get();
-    let old_col = Win::current().w_cursor.col;
+    let old_col = Win::current().cursor().col();
     let sw_val = get_sw_value_indent(Buf::current(), left);
     let old_p_ri = p_ri();
 
@@ -311,7 +315,7 @@ fn shift_block(op: &OpArg, amount: c_int) {
     STATE.set(MODE_INSERT);
 
     let mut bd = BlockDef::ZERO;
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     block_prep(&mut bd, op, lnum, true);
     if bd.is_short {
         return;
@@ -348,7 +352,7 @@ fn shift_block(op: &OpArg, amount: c_int) {
     );
 
     STATE.set(old_state);
-    Win::current().w_cursor.col = old_col;
+    Win::current().cursor().set_col(old_col);
     P_RI.set(old_p_ri);
 }
 
@@ -381,7 +385,7 @@ fn shift_block_right(bd: &mut BlockDef, old: &[u8], mut total: c_int) -> Shifted
     }
 
     // Add the width of the white space that follows the block's edge.
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     let base = &old[text_at..];
     let (mut csarg, cstype) = CharsizeArg::new(Win::current(), lnum, base);
     let mut at = 0;
@@ -451,7 +455,7 @@ fn shift_block_left(op: &OpArg, bd: &mut BlockDef, old: &[u8], total: c_int) -> 
         non_white = c_cluster_len(base);
     }
     let mut non_white_col = bd.start_vcol;
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     let (mut csarg, mut cstype) = CharsizeArg::new(Win::current(), lnum, base);
     while ascii_iswhite(c_int::from(byte_at(base, non_white))) {
         let c = int32_t::from(base[non_white]);

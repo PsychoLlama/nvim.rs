@@ -33,7 +33,7 @@ pub(crate) fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int {
 
     let mut amount = if line.starts_with(b')') && Buf::current().b_ind_paren_prev() != 0 {
         // Line up with the start of the matching paren's line.
-        get_indent_lnum(Win::current().w_cursor.lnum - 1)
+        get_indent_lnum(Win::current().cursor().lnum() - 1)
     } else {
         // If the matching paren is more than one line away, use the
         // indent of a previous non-empty line that matches the *same*
@@ -80,7 +80,7 @@ fn previous_line_under_same_paren(
         };
         let skip = no_code || preproc_start(&mut lnum, &mut amount);
         if !skip {
-            Win::current().w_cursor.lnum = lnum;
+            Win::current().cursor().set_lnum(lnum);
 
             // Skip a comment or raw string.
             let trypos = ind_find_start_comment_or_raw_string(None);
@@ -122,17 +122,17 @@ fn align_with_unclosed_paren(
     if Buf::current().b_ind_if_for_while() != 0 {
         // Find the outermost opening paren on that line and ask whether
         // it belongs to an "if", "for" or "while".
-        let cursor_save = Win::current().w_cursor;
+        let cursor_save = Win::current().w_cursor();
         let mut outermost = *our_paren_pos;
         loop {
-            Win::current().w_cursor.lnum = outermost.lnum;
-            Win::current().w_cursor.col = outermost.col;
+            Win::current().cursor().set_lnum(outermost.lnum);
+            Win::current().cursor().set_col(outermost.col);
             match find_match_paren(Buf::current().b_ind_maxparen()) {
                 Some(pos) if pos.lnum == outermost.lnum => outermost = pos,
                 _ => break,
             }
         }
-        Win::current().w_cursor = cursor_save;
+        Win::current().set_w_cursor(cursor_save);
         // `outermost` is a paren position in the current buffer, so the
         // cache answers with the line it sits on; `outermost.col` is this
         // function's own copy.
@@ -149,9 +149,11 @@ fn align_with_unclosed_paren(
     if byte_at(Lines::current().line(our_paren_pos.lnum), look_col) == b'(' {
         // Ignore a '(' in front of the line that has a match *before* our
         // matching '(' -- a `(void)` cast, say.
-        let save_lnum = Win::current().w_cursor.lnum;
-        Win::current().w_cursor.lnum = our_paren_pos.lnum;
-        Win::current().w_cursor.col = ColNr::try_from(look_col).unwrap_or(ColNr::MAX - 1) + 1;
+        let save_lnum = Win::current().cursor().lnum();
+        Win::current().cursor().set_lnum(our_paren_pos.lnum);
+        Win::current()
+            .cursor()
+            .set_col(ColNr::try_from(look_col).unwrap_or(ColNr::MAX - 1) + 1);
         let maxparen = int64_t::from(Buf::current().b_ind_maxparen());
         let trypos = findmatchlimit(None, Codepoint::byte(b')'), 0, maxparen);
         if let Some(trypos) = trypos
@@ -160,7 +162,7 @@ fn align_with_unclosed_paren(
         {
             ignore_paren_col = (trypos.col + 1).get();
         }
-        Win::current().w_cursor.lnum = save_lnum;
+        Win::current().cursor().set_lnum(save_lnum);
     }
 
     // "line up with the paren itself" applies to a zero `(` with no `k`
@@ -267,8 +269,8 @@ fn align_with_unclosed_paren(
         if col == ColNr::MAX {
             amount += Buf::current().b_ind_unclosed();
         } else {
-            Win::current().w_cursor.lnum = our_paren_pos.lnum;
-            Win::current().w_cursor.col = col;
+            Win::current().cursor().set_lnum(our_paren_pos.lnum);
+            Win::current().cursor().set_col(col);
             if find_match_paren_after_brace(Buf::current().b_ind_maxparen()).is_some() {
                 amount += Buf::current().b_ind_unclosed2();
             } else if is_if_for_while {

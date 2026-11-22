@@ -86,15 +86,17 @@ fn search_backwards(line: &Line) -> c_int {
         },
     };
 
-    Win::current().w_cursor = line.cur_curpos;
-    while Win::current().w_cursor.lnum > LineNr::ONE {
-        Win::current().w_cursor.lnum -= 1;
-        Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().set_w_cursor(line.cur_curpos);
+    while Win::current().cursor().lnum() > LineNr::ONE {
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() - 1);
+        Win::current().cursor().set_col(ColNr::ZERO);
 
         // In a comment or raw string now: skip to the start of it.
         if let Some(trypos) = ind_find_start_comment_or_raw_string(None) {
-            Win::current().w_cursor.lnum = trypos.lnum + 1;
-            Win::current().w_cursor.col = ColNr::ZERO;
+            Win::current().cursor().set_lnum(trypos.lnum + 1);
+            Win::current().cursor().set_col(ColNr::ZERO);
             continue;
         }
 
@@ -105,10 +107,13 @@ fn search_backwards(line: &Line) -> c_int {
         }
         // Skip preprocessor directives and blank lines.  `preproc_start`
         // may move the cursor's line number, so the text is read after it.
-        let skipped = preproc_start(&mut Win::current().w_cursor.lnum, &mut amount) || {
-            let cursor_lnum = Win::current().w_cursor.lnum;
-            only_comment_left(Lines::current().line(cursor_lnum), 0)
-        };
+        let skipped = Win::current()
+            .cursor()
+            .modify(|c| preproc_start(&mut c.lnum, &mut amount))
+            || {
+                let cursor_lnum = Win::current().cursor().lnum();
+                only_comment_left(Lines::current().line(cursor_lnum), 0)
+            };
         if skipped {
             continue;
         }
@@ -122,7 +127,7 @@ fn search_backwards(line: &Line) -> c_int {
         //       ...
         //     } foo,
         //       bar;
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let (continued, ends_in_comma) = {
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
@@ -137,7 +142,7 @@ fn search_backwards(line: &Line) -> c_int {
                 .then(|| find_match_paren(Buf::current().b_ind_maxparen()))
                 .flatten();
             if let Some(trypos) = opening {
-                Win::current().w_cursor = trypos;
+                Win::current().set_w_cursor(trypos);
             }
 
             // A line ending in ',' that is a continuation line: go back
@@ -145,13 +150,15 @@ fn search_backwards(line: &Line) -> c_int {
             //     char *foo = "bla\
             //               bla",
             //          here;
-            while !continued && Win::current().w_cursor.lnum > LineNr::ONE {
-                let above = Win::current().w_cursor.lnum - 1;
+            while !continued && Win::current().cursor().lnum() > LineNr::ONE {
+                let above = Win::current().cursor().lnum() - 1;
                 if !ends_in_backslash(Lines::current().line(above)) {
                     break;
                 }
-                Win::current().w_cursor.lnum -= 1;
-                Win::current().w_cursor.col = ColNr::ZERO;
+                Win::current()
+                    .cursor()
+                    .set_lnum(Win::current().cursor().lnum() - 1);
+                Win::current().cursor().set_col(ColNr::ZERO);
             }
 
             amount = get_indent();
@@ -177,7 +184,7 @@ fn search_backwards(line: &Line) -> c_int {
         // '[' is probably an array constant:
         //     something = [
         //         234,  <- extra indent
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let (closes, opens_array) = {
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
@@ -202,29 +209,33 @@ fn search_backwards(line: &Line) -> c_int {
             byte_at(l, at) == b';' && only_comment_left(l, at + 1)
         };
         if lone_semicolon {
-            let curpos_save = Win::current().w_cursor;
-            while Win::current().w_cursor.lnum > LineNr::ONE {
-                Win::current().w_cursor.lnum -= 1;
-                let lnum = Win::current().w_cursor.lnum;
+            let curpos_save = Win::current().w_cursor();
+            while Win::current().cursor().lnum() > LineNr::ONE {
+                Win::current()
+                    .cursor()
+                    .set_lnum(Win::current().cursor().lnum() - 1);
+                let lnum = Win::current().cursor().lnum();
                 let no_code = only_comment_left(Lines::current().line(lnum), 0);
-                let keep_going =
-                    no_code || preproc_start(&mut Win::current().w_cursor.lnum, &mut amount);
+                let keep_going = no_code
+                    || Win::current()
+                        .cursor()
+                        .modify(|c| preproc_start(&mut c.lnum, &mut amount));
                 if !keep_going {
                     break;
                 }
             }
             // Upstream reads the line `cin_ispreproc_cont` last left it on,
             // which is the cursor's own either way.
-            let lnum = Win::current().w_cursor.lnum;
+            let lnum = Win::current().cursor().lnum();
             if lnum > LineNr::ZERO && ends_in(Lines::current().line(lnum), 0, b"}") {
                 return amount;
             }
-            Win::current().w_cursor = curpos_save;
+            Win::current().set_w_cursor(curpos_save);
         }
 
         // If the PREVIOUS line is a function declaration, this line (and
         // the ones after it) are parameters.
-        if is_func_decl(Win::current().w_cursor.lnum, LineNr::ZERO) {
+        if is_func_decl(Win::current().cursor().lnum(), LineNr::ZERO) {
             return Buf::current().b_ind_param();
         }
 
@@ -233,7 +244,7 @@ fn search_backwards(line: &Line) -> c_int {
         //     int foo,
         //         bar;
         //     indent_to_0 here;
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         if ends_in(Lines::current().line(cursor_lnum), 0, b";") {
             // Line 0 is line 1, as it is for `ml_get`.
             let mut lines = Lines::current();
@@ -248,7 +259,7 @@ fn search_backwards(line: &Line) -> c_int {
         // start of the line.  The borrow ends with the statement.
         find_last_paren(Lines::current().line(cursor_lnum), b'(', b')');
         if let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen()) {
-            Win::current().w_cursor = trypos;
+            Win::current().set_w_cursor(trypos);
         }
         return get_indent();
     }

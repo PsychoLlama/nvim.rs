@@ -293,7 +293,7 @@ pub fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
 
     if c.is('v') {
         // Redo a Visual-mode operator over the same area.
-        set_visual_anchor(Win::current().w_cursor);
+        set_visual_anchor(Win::current().w_cursor());
         set_visual_active(true);
         set_visual_select(false);
         V_ISUAL_RESELECT.set(1);

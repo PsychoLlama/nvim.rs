@@ -36,8 +36,8 @@ pub fn ins_compl_bs() -> Key {
     // C's MB_PTR_BACK from the cursor: step back over one whole character.
     let p_off = {
         let mut lines = Lines::current();
-        let line = lines.line(Win::current().w_cursor.lnum);
-        let col = usize::try_from(Win::current().w_cursor.col)
+        let line = lines.line(Win::current().cursor().lnum());
+        let col = usize::try_from(Win::current().cursor().col())
             .unwrap_or(usize::MAX)
             .min(line.len());
         let back = if col > 0 {
@@ -63,7 +63,7 @@ pub fn ins_compl_bs() -> Key {
 
     // Deleted more than what was used to find matches, or didn't finish
     // finding all matches: look for matches all over again.
-    if Win::current().w_cursor.col <= COMPL_COL.get() + COMPL_LENGTH.get()
+    if Win::current().cursor().col() <= COMPL_COL.get() + COMPL_LENGTH.get()
         || ins_compl_need_restart()
     {
         ins_compl_restart();
@@ -175,7 +175,7 @@ pub fn ins_compl_addleader(c: Key) {
 
     compl_leader().set(cursor_line_part(
         COMPL_COL.get(),
-        Win::current().w_cursor.col,
+        Win::current().cursor().col(),
     ));
     ins_compl_new_leader();
 }
@@ -218,7 +218,8 @@ pub(crate) fn ins_compl_set_original_text(text: &[u8]) {
 /// Append the next character of the shown match to the leader.
 pub fn ins_compl_addfrommatch() {
     let shown = shown_match().expect("a running completion has a shown match");
-    let len = usize::try_from(Win::current().w_cursor.col - COMPL_COL.get()).unwrap_or(usize::MAX);
+    let len =
+        usize::try_from(Win::current().cursor().col() - COMPL_COL.get()).unwrap_or(usize::MAX);
     let text = if shown.text_len() <= len {
         // The match is too short. When still at the original match use the
         // first entry that matches the leader.
@@ -279,7 +280,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: CtrlXMode, mut retval: bool) -> 
             want_cindent = false; // don't do it again
         }
     } else if !COMPL_AUTOCOMPLETE.get() || COMPL_USED_MATCH.get() {
-        let prev_col = Win::current().w_cursor.col;
+        let prev_col = Win::current().cursor().col();
 
         // Put the cursor on the last char, for 'tw' formatting.
         if prev_col > ColNr::ZERO {
@@ -289,7 +290,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: CtrlXMode, mut retval: bool) -> 
         if !ARROW_USED.get() && !ins_need_undo_get() && c != Key::CTRL_E {
             insertchar(Key::NUL, 0, -1);
         }
-        if prev_col > ColNr::ZERO && Win::current().w_cursor.col < get_cursor_line_len() {
+        if prev_col > ColNr::ZERO && Win::current().cursor().col() < get_cursor_line_len() {
             inc_cursor();
         }
     }
@@ -306,7 +307,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: CtrlXMode, mut retval: bool) -> 
         word = shown_match().map(MatchId::text_copy);
         retval = true;
         // May need to remove ComplMatchIns highlight.
-        redraw_win_line(Win::current(), Win::current().w_cursor.lnum);
+        redraw_win_line(Win::current(), Win::current().cursor().lnum());
     }
 
     // When a match was inserted but the pum was never displayed (e.g. only

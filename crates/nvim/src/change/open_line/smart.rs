@@ -92,14 +92,16 @@ fn indent_of_comment_start(line: &XString) -> Option<c_int> {
         if byte(&text, at) == b'/' && byte(&text, at - 1) == b'*' {
             // End of a C comment: line the indent up with the line
             // holding the start of it.
-            Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
+            Win::current()
+                .cursor()
+                .set_col(ColNr::try_from(at).unwrap_or(ColNr::MAX));
             if let Some(pos) = find_match(0) {
-                Win::current().w_cursor.lnum = pos.lnum;
+                Win::current().cursor().set_lnum(pos.lnum);
                 return Some(indent_here());
             }
             // findmatch may have left us on another line; fetch it again.
-            text = line_copy(Win::current().w_cursor.lnum);
-            at = usize::try_from(Win::current().w_cursor.col).unwrap_or(0);
+            text = line_copy(Win::current().cursor().lnum());
+            at = usize::try_from(Win::current().cursor().col()).unwrap_or(0);
         }
         at += 1;
     }
@@ -123,9 +125,11 @@ fn smart_indent_forward(
     let mut text = XString::from_bytes(line);
     // Skip preprocessor directives, unless they are comments.
     if lead_len == 0 && byte(&text, 0) == b'#' {
-        while byte(&text, 0) == b'#' && Win::current().w_cursor.lnum > LineNr::ONE {
-            Win::current().w_cursor.lnum -= 1;
-            text = line_copy(Win::current().w_cursor.lnum);
+        while byte(&text, 0) == b'#' && Win::current().cursor().lnum() > LineNr::ONE {
+            Win::current()
+                .cursor()
+                .set_lnum(Win::current().cursor().lnum() - 1);
+            text = line_copy(Win::current().cursor().lnum());
         }
         newindent = indent_here();
     }
@@ -171,11 +175,13 @@ fn smart_indent_forward(
     //         Should line up here!
     //     }
     if byte(&text, at) == b')' {
-        Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
+        Win::current()
+            .cursor()
+            .set_col(ColNr::try_from(at).unwrap_or(ColNr::MAX));
         if let Some(pos) = find_match(b'(') {
-            Win::current().w_cursor.lnum = pos.lnum;
+            Win::current().cursor().set_lnum(pos.lnum);
             newindent = indent_here();
-            text = line_copy(Win::current().w_cursor.lnum);
+            text = line_copy(Win::current().cursor().lnum());
         }
     }
 
@@ -203,11 +209,13 @@ fn smart_indent_backward(line: &XString, lead_len: c_int, mut newindent: c_int) 
     if lead_len == 0 && byte(&text, 0) == b'#' {
         let mut was_backslashed = false;
         while (byte(&text, 0) == b'#' || was_backslashed)
-            && Win::current().w_cursor.lnum < Buf::current().line_count()
+            && Win::current().cursor().lnum() < Buf::current().line_count()
         {
             was_backslashed = text.last() == Some(&b'\\');
-            Win::current().w_cursor.lnum += 1;
-            text = line_copy(Win::current().w_cursor.lnum);
+            Win::current()
+                .cursor()
+                .set_lnum(Win::current().cursor().lnum() + 1);
+            text = line_copy(Win::current().cursor().lnum());
         }
         newindent = if was_backslashed {
             0 // ran off the end of the file
@@ -237,7 +245,7 @@ pub(crate) fn smart_indent(
     saved_line: &[u8],
     newindent: c_int,
 ) -> (c_int, bool) {
-    let old_cursor = Win::current().w_cursor;
+    let old_cursor = Win::current().w_cursor();
     let line = XString::from_bytes(saved_line);
     let lead_len = if flags & OPENLINE_DO_COM != 0 {
         leader_len_of(&line)
@@ -249,6 +257,6 @@ pub(crate) fn smart_indent(
     } else {
         (smart_indent_backward(&line, lead_len, newindent), false)
     };
-    Win::current().w_cursor = old_cursor;
+    Win::current().set_w_cursor(old_cursor);
     answer
 }

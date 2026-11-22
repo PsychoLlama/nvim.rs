@@ -394,7 +394,7 @@ pub(crate) fn diff_update(excmd: Option<&mut ExArg>) {
             ..DiffIo::default()
         };
         diff_try_update(&mut diffio, idx_orig, excmd);
-        Win::current().w_valid_cursor.lnum = LineNr::ZERO;
+        Win::current().edit().w_valid_cursor.lnum = LineNr::ZERO;
     }
 
     if had_diffs || tp.diff_len() != 0 {

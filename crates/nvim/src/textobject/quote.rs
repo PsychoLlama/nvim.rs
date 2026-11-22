@@ -148,7 +148,7 @@ fn quoted_span(
             col_end = next_esc(col_start + 1).unwrap_or_else(|| {
                 // It was a starting quote after all.
                 let end = col_start;
-                col_start = Win::current().w_cursor.col.get();
+                col_start = Win::current().cursor().col().get();
                 end
             });
         } else {
@@ -160,7 +160,7 @@ fn quoted_span(
             if at(col_start) != quotechar {
                 // It was an ending quote after all.
                 col_start = end;
-                end = Win::current().w_cursor.col.get();
+                end = Win::current().cursor().col().get();
             }
             col_end = end;
         }
@@ -221,10 +221,10 @@ pub(crate) fn current_quote(
 ) -> Result<(), NoObject> {
     // A copy of the cursor line: the cursor moves to the next line below
     // when the string ends the line, and the line is still read after that.
-    let line = Lines::current().line_copy(Win::current().w_cursor.lnum);
+    let line = Lines::current().line_copy(Win::current().cursor().lnum());
     // Past the end reads as the terminator, which no quote character is.
     let at = |col: c_int| byte_of(&line, col);
-    let mut col_start = Win::current().w_cursor.col.get();
+    let mut col_start = Win::current().cursor().col().get();
     let mut inclusive = false;
     let mut vis_empty = true; // the Visual selection is one character or less
     let mut vis_bef_curs = false; // the Visual area starts before the cursor
@@ -238,11 +238,11 @@ pub(crate) fn current_quote(
     // moved forward again after the area has been adjusted.
     if visual_active() {
         // This only works within one line.
-        if visual_anchor().lnum != Win::current().w_cursor.lnum {
+        if visual_anchor().lnum != Win::current().cursor().lnum() {
             return Err(NoObject);
         }
-        vis_bef_curs = lt(visual_anchor(), Win::current().w_cursor);
-        vis_empty = equalpos(visual_anchor(), Win::current().w_cursor);
+        vis_bef_curs = lt(visual_anchor(), Win::current().w_cursor());
+        vis_empty = equalpos(visual_anchor(), Win::current().w_cursor());
         if P_SEL.first_byte() == b'e' {
             if vis_bef_curs {
                 dec_cursor();
@@ -251,7 +251,7 @@ pub(crate) fn current_quote(
                 with_visual_anchor(dec);
                 did_exclusive_adj = true;
             }
-            vis_empty = equalpos(visual_anchor(), Win::current().w_cursor);
+            vis_empty = equalpos(visual_anchor(), Win::current().w_cursor());
             if !vis_bef_curs && !vis_empty {
                 // `VIsual` has to be the start of the selection.
                 swap_cursor_and_anchor();
@@ -269,16 +269,16 @@ pub(crate) fn current_quote(
         if vis_bef_curs {
             inside_quotes = visual_anchor().col > ColNr::ZERO
                 && at((visual_anchor().col - 1).get()) == low_byte(quotechar)
-                && at(Win::current().w_cursor.col.get()) != 0
-                && at((Win::current().w_cursor.col + 1).get()) == low_byte(quotechar);
+                && at(Win::current().cursor().col().get()) != 0
+                && at((Win::current().cursor().col() + 1).get()) == low_byte(quotechar);
             i = visual_anchor().col.get();
-            sel_end = Win::current().w_cursor.col.get();
+            sel_end = Win::current().cursor().col().get();
         } else {
-            inside_quotes = Win::current().w_cursor.col > ColNr::ZERO
-                && at((Win::current().w_cursor.col - 1).get()) == low_byte(quotechar)
+            inside_quotes = Win::current().cursor().col() > ColNr::ZERO
+                && at((Win::current().cursor().col() - 1).get()) == low_byte(quotechar)
                 && at(visual_anchor().col.get()) != 0
                 && at((visual_anchor().col + 1).get()) == low_byte(quotechar);
-            i = Win::current().w_cursor.col.get();
+            i = Win::current().cursor().col().get();
             sel_end = visual_anchor().col.get();
         }
         // Is there a quote in the selection at all?
@@ -332,7 +332,7 @@ pub(crate) fn current_quote(
     if !include && count < 2 && (vis_empty || !inside_quotes) {
         col_start += 1;
     }
-    Win::current().w_cursor.col = ColNr::new(col_start);
+    Win::current().cursor().set_col(ColNr::new(col_start));
     if visual_active() {
         // Set the start of the Visual area when it was empty, when we
         // were just inside quotes, or when it neither started at a quote
@@ -346,16 +346,16 @@ pub(crate) fn current_quote(
                         && (anchor_col == ColNr::ZERO
                             || at((anchor_col - 1).get()) != low_byte(quotechar)))))
         {
-            set_visual_anchor(Win::current().w_cursor);
+            set_visual_anchor(Win::current().w_cursor());
             redraw_curbuf_later(UPD_INVERTED);
         }
     } else {
-        op.start = Win::current().w_cursor;
+        op.start = Win::current().w_cursor();
         op.motion_type = MotionType::CharWise;
     }
 
     // The end position.
-    Win::current().w_cursor.col = ColNr::new(col_end);
+    Win::current().cursor().set_col(ColNr::new(col_end));
     if (include || count > 1 || (!vis_empty && inside_quotes)) && inc_cursor() == Moved::OntoNul {
         inclusive = true;
     }
@@ -376,9 +376,9 @@ pub(crate) fn current_quote(
                         || at((visual_anchor().col + 1).get()) != low_byte(quotechar)))
             {
                 dec_cursor();
-                set_visual_anchor(Win::current().w_cursor);
+                set_visual_anchor(Win::current().w_cursor());
             }
-            Win::current().w_cursor.col = ColNr::new(col_start);
+            Win::current().cursor().set_col(ColNr::new(col_start));
         }
         if visual_mode().is_line() {
             set_visual_mode(VisualMode::CHAR);

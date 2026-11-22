@@ -120,8 +120,8 @@ pub(crate) fn shada_buffer_marks(buffer: Buf) -> Vec<(c_char, ShadaMark)> {
 
 /// The jump list of `win`, oldest first, copied.
 pub(crate) fn shada_jumps(win: Win) -> Vec<ShadaMark> {
-    let len = slot(win.w_jumplistlen);
-    win.w_jumplist[..len]
+    let len = slot(win.w_jumplistlen());
+    win.read().w_jumplist[..len]
         .iter()
         .map(|jump| ShadaMark::of(&jump.fmark, jump.file_name().map(XString::from_cstr)))
         .collect()
@@ -198,10 +198,10 @@ pub(crate) fn shada_restore_last_cursor(buffer: Buf, pos: Pos) {
 /// already full. A jump with a file name (no loaded buffer holds the file)
 /// is compared by name, one without by buffer number.
 pub(crate) fn shada_insert_jump(fm: ShadaMark) {
-    let mut win = Win::current();
-    let mut i = win.w_jumplistlen;
+    let win = Win::current();
+    let mut i = win.w_jumplistlen();
     while i > 0 {
-        let existing = &win.w_jumplist[list_index(i - 1)];
+        let existing = &win.read().w_jumplist[list_index(i - 1)];
         if existing.fmark.timestamp <= fm.timestamp {
             let same_file = match &fm.fname {
                 Some(fname) => existing.file_name() == Some(fname.as_cstr()),
@@ -216,18 +216,18 @@ pub(crate) fn shada_insert_jump(fm: ShadaMark) {
     }
     // A full list loses its oldest jump: the insertion below moves it to
     // the slot it then fills, which releases it.
-    let len = list_index(win.w_jumplistlen);
-    let Some(at) = marklist_insert(&mut win.w_jumplist, len, list_index(i)) else {
+    let len = list_index(win.w_jumplistlen());
+    let Some(at) = marklist_insert(&mut win.edit().w_jumplist, len, list_index(i)) else {
         return;
     };
     let i = c_int::try_from(at).expect("a position in the list");
-    win.w_jumplist[at] = fm.into_xfmark();
-    if win.w_jumplistlen < JUMPLISTSIZE {
-        win.w_jumplistlen += 1;
+    win.edit().w_jumplist[at] = fm.into_xfmark();
+    if win.w_jumplistlen() < JUMPLISTSIZE {
+        win.set_w_jumplistlen(win.w_jumplistlen() + 1);
     }
     // Keep the cursor into the list pointing at the same jump.
-    if win.w_jumplistidx >= i && win.w_jumplistidx < win.w_jumplistlen {
-        win.w_jumplistidx += 1;
+    if win.w_jumplistidx() >= i && win.w_jumplistidx() < win.w_jumplistlen() {
+        win.set_w_jumplistidx(win.w_jumplistidx() + 1);
     }
 }
 

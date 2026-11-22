@@ -89,11 +89,11 @@ fn white_run(text: &[u8]) -> usize {
 /// `b_prompt_start` stays where it is.
 fn move_prompt_down(text: &[u8]) -> Option<XString> {
     if !buf_is_prompt(current_buf())
-        || Win::current().w_cursor.lnum != Buf::current().read().b_prompt_start.mark.lnum
+        || Win::current().cursor().lnum() != Buf::current().read().b_prompt_start.mark.lnum
     {
         return None;
     }
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     let prompt = buf_prompt_text_owned(Buf::current());
     let prompt = prompt.as_bytes();
     let rest = {
@@ -118,28 +118,32 @@ fn move_prompt_down(text: &[u8]) -> Option<XString> {
 fn append_new_line(text: &XString, old_cursor: Pos) -> Option<bool> {
     if STATE.get() & VREPLACE_FLAG == 0 || old_cursor.lnum >= ORIG_LINE_COUNT.get() {
         let line = text.as_bytes_with_nul();
-        if ml_append_terminated(Win::current().w_cursor.lnum, line, false).is_err() {
+        if ml_append_terminated(Win::current().cursor().lnum(), line, false).is_err() {
             return None;
         }
         // changed_lines() is postponed: calling it here would upset
         // marker folding.
-        let below = Win::current().w_cursor.lnum + 1;
+        let below = Win::current().cursor().lnum() + 1;
         let max = MAXLNUM;
         mark_adjust(below, max, 1, 0, EXTMARK_NOOP);
         return Some(true);
     }
 
     // Virtual Replace: start replacing the next line.
-    Win::current().w_cursor.lnum += 1;
-    if Win::current().w_cursor.lnum >= INSSTART.get().lnum + VR_LINES_CHANGED.get() {
+    Win::current()
+        .cursor()
+        .set_lnum(Win::current().cursor().lnum() + 1);
+    if Win::current().cursor().lnum() >= INSSTART.get().lnum + VR_LINES_CHANGED.get() {
         // NL to a new line, BS back, NL again: don't save the new line
         // for undo twice. Errors are ignored.
         let _ = u_save_cursor();
         VR_LINES_CHANGED.set(VR_LINES_CHANGED.get() + 1);
     }
-    let _ = ml_replace_buf_text(Buf::current(), Win::current().w_cursor.lnum, text);
-    changed_bytes(Win::current().w_cursor.lnum, ColNr::ZERO);
-    Win::current().w_cursor.lnum -= 1;
+    let _ = ml_replace_buf_text(Buf::current(), Win::current().cursor().lnum(), text);
+    changed_bytes(Win::current().cursor().lnum(), ColNr::ZERO);
+    Win::current()
+        .cursor()
+        .set_lnum(Win::current().cursor().lnum() - 1);
     Some(false)
 }
 
@@ -155,7 +159,9 @@ fn apply_new_indent(
     newcol: &mut ColNr,
     no_si: bool,
 ) {
-    Win::current().w_cursor.lnum += 1;
+    Win::current()
+        .cursor()
+        .set_lnum(Win::current().cursor().lnum() + 1);
     if DID_SI.get() {
         let sw = get_sw_value(Buf::current());
         if p_sr() {
@@ -172,17 +178,17 @@ fn apply_new_indent(
     } else {
         set_indent(newindent, SIN_INSERT | SIN_NOMARK);
     }
-    *less_cols -= Win::current().w_cursor.col.get();
-    AI_COL.set(Win::current().w_cursor.col);
+    *less_cols -= Win::current().cursor().col().get();
+    AI_COL.set(Win::current().cursor().col());
 
     // In Replace mode every character of the new indent needs a NUL on
     // the replace stack, for when BS deletes it.
     if replace_normal(STATE.get()) {
-        for _ in 0..Win::current().w_cursor.col.get() {
+        for _ in 0..Win::current().cursor().col().get() {
             replace_push_nul();
         }
     }
-    *newcol += Win::current().w_cursor.col.get();
+    *newcol += Win::current().cursor().col().get();
     if no_si {
         DID_SI.set(false);
     }
@@ -210,7 +216,7 @@ fn truncate_old_line(
     split: Split,
     did_append: bool,
 ) {
-    saved_line.truncate(Win::current().w_cursor.col.as_usize());
+    saved_line.truncate(Win::current().cursor().col().as_usize());
     // Remove trailing white space, unless the caller asked to keep it --
     // and only when the line being left was auto-indented, so that white
     // space the user typed on purpose survives.
@@ -218,14 +224,17 @@ fn truncate_old_line(
         truncate_spaces(&mut saved_line);
     }
     let new_len = ColNr::from_index(saved_line.len());
-    let _ = ml_replace_owned(Win::current().w_cursor.lnum, XString::from_vec(saved_line));
+    let _ = ml_replace_owned(
+        Win::current().cursor().lnum(),
+        XString::from_vec(saved_line),
+    );
 
     let mut cols_spliced = 0;
-    if new_len < Win::current().w_cursor.col {
+    if new_len < Win::current().cursor().col() {
         // Trailing white space went as well as the split.
         let cb = Buf::current();
-        let row = Win::current().w_cursor.lnum - 1;
-        let gone = Win::current().w_cursor.col - new_len;
+        let row = Win::current().cursor().lnum() - 1;
+        let gone = Win::current().cursor().col() - new_len;
         extmark_splice_cols(
             cb,
             row.get(),
@@ -254,7 +263,10 @@ fn truncate_old_line(
         let old_b = off as BCount;
         let new_b = (added.get() + 1) as BCount;
         let undo = EXTMARK_UNDO;
-        let (cur_lnum, cur_col) = (Win::current().w_cursor.lnum, Win::current().w_cursor.col);
+        let (cur_lnum, cur_col) = (
+            Win::current().cursor().lnum(),
+            Win::current().cursor().col(),
+        );
         extmark_splice(
             cb,
             row.get(),
@@ -273,7 +285,10 @@ fn truncate_old_line(
             mark_col_adjust(cur_lnum, cur_col + off, 1, -less_cols, 0);
         }
     } else {
-        changed_bytes(Win::current().w_cursor.lnum, Win::current().w_cursor.col);
+        changed_bytes(
+            Win::current().cursor().lnum(),
+            Win::current().cursor().col(),
+        );
     }
 }
 
@@ -416,7 +431,7 @@ fn wants_cindent(dir: c_int, flags: c_int) -> bool {
     !p_paste()
         && (Buf::current().b_p_cin() != 0
             || c_int::from(Buf::current().read().b_p_inde.first_byte()) != 0)
-        && in_cinkeys(key, b' ', linewhite(Win::current().w_cursor.lnum))
+        && in_cinkeys(key, b' ', linewhite(Win::current().cursor().lnum()))
         && flags & OPENLINE_FORCE_INDENT == 0
 }
 
@@ -424,10 +439,14 @@ impl Opening {
     /// Copy the cursor line and decide where it is cut.
     fn cut(dir: c_int, flags: c_int, second_line_indent: c_int) -> Opening {
         let do_si = may_do_si();
-        let lnum = Win::current().w_cursor.lnum;
-        let mincol = Win::current().w_cursor.col + 1;
+        let lnum = Win::current().cursor().lnum();
+        let mincol = Win::current().cursor().col() + 1;
         let mut saved_line = Lines::current().line(lnum).to_vec();
-        let col = Win::current().w_cursor.col.as_usize().min(saved_line.len());
+        let col = Win::current()
+            .cursor()
+            .col()
+            .as_usize()
+            .min(saved_line.len());
         let mut next_line = None;
 
         if STATE.get() & VREPLACE_FLAG != 0 {
@@ -668,12 +687,14 @@ impl Opening {
         do_cindent: bool,
     ) -> Result<(), Failed> {
         let splice = Suppress::splice();
-        let old_cursor = Win::current().w_cursor;
+        let old_cursor = Win::current().w_cursor();
         if self.dir == BACKWARD {
             if let Some(moved) = move_prompt_down(&new_text) {
                 new_text = moved;
             }
-            Win::current().w_cursor.lnum -= 1;
+            Win::current()
+                .cursor()
+                .set_lnum(Win::current().cursor().lnum() - 1);
         }
 
         let mut did_append = append_new_line(&new_text, old_cursor).ok_or(Failed)?;
@@ -698,7 +719,7 @@ impl Opening {
             }
         }
 
-        Win::current().w_cursor = old_cursor;
+        Win::current().set_w_cursor(old_cursor);
         if self.dir == FORWARD {
             if self.trunc_line || STATE.get() & MODE_INSERT != 0 {
                 let split = Split {
@@ -714,11 +735,11 @@ impl Opening {
             }
             // Put the cursor on the new line. `old_cursor`, not
             // `w_cursor`: a scroll above may have moved the latter.
-            Win::current().w_cursor.lnum = old_cursor.lnum + 1;
+            Win::current().cursor().set_lnum(old_cursor.lnum + 1);
         }
         if did_append {
             let cb = Buf::current();
-            let at = Win::current().w_cursor.lnum;
+            let at = Win::current().cursor().lnum();
             let extra = BCount::try_from(cb.lines().line_len(at).get()).unwrap_or(0);
             extmark_splice(
                 cb,
@@ -736,8 +757,8 @@ impl Opening {
         }
         drop(splice);
 
-        Win::current().w_cursor.col = layout.newcol;
-        Win::current().w_cursor.coladd = 0;
+        Win::current().cursor().set_col(layout.newcol);
+        Win::current().cursor().set_coladd(0);
 
         reindent_new_line(has_leader, do_cindent);
 
@@ -745,13 +766,13 @@ impl Opening {
             // Take what ended up on the new line back off, put the original
             // line back, and insert the new text character by character so
             // that each replaced byte reaches the replace stack.
-            let at = Win::current().w_cursor.lnum;
+            let at = Win::current().cursor().lnum();
             let new_text = Lines::current().line(at).to_vec();
             if let Some(next_line) = self.next_line.take() {
                 let _ = ml_replace_owned(at, next_line);
             }
-            Win::current().w_cursor.col = ColNr::ZERO;
-            Win::current().w_cursor.coladd = 0;
+            Win::current().cursor().set_col(ColNr::ZERO);
+            Win::current().cursor().set_coladd(0);
             ins_bytes(&new_text); // calls changed_bytes()
         }
         Ok(())

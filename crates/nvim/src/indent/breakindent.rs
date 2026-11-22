@@ -124,7 +124,7 @@ pub fn briopt_check(briopt: Option<&CStr>, window: Option<Win>) -> bool {
     // parse reads before anything below writes the window.
     let parsed = match (briopt, window) {
         (Some(briopt), _) => parse_briopt(briopt.to_bytes()),
-        (None, Some(w)) => parse_briopt(w.w_onebuf_opt.wo_briopt.bytes()),
+        (None, Some(w)) => parse_briopt(w.read().w_onebuf_opt.wo_briopt.bytes()),
         // Upstream reads `empty_string_option` here, which is only ever
         // the empty string and is never written through.
         (None, None) => parse_briopt(b""),
@@ -132,14 +132,14 @@ pub fn briopt_check(briopt: Option<&CStr>, window: Option<Win>) -> bool {
     let Some(opt) = parsed else {
         return false;
     };
-    let Some(mut window) = window else {
+    let Some(window) = window else {
         return true; // Only the check was asked for.
     };
-    window.w_briopt_shift = opt.shift;
-    window.w_briopt_min = opt.min;
-    window.w_briopt_sbr = opt.sbr;
-    window.w_briopt_list = opt.list;
-    window.w_briopt_vcol = opt.vcol;
+    window.set_w_briopt_shift(opt.shift);
+    window.set_w_briopt_min(opt.min);
+    window.set_w_briopt_sbr(opt.sbr);
+    window.set_w_briopt_list(opt.list);
+    window.set_w_briopt_vcol(opt.vcol);
     true
 }
 
@@ -220,13 +220,13 @@ impl BreakindentCache {
         self.key = key;
         self.list = 0;
         // A fixed column needs no measurement.
-        if window.w_briopt_vcol == 0 {
+        if window.w_briopt_vcol() == 0 {
             self.indent = if self.key.no_ts {
                 indent_size_no_ts(line)
             } else {
                 indent_size_ts(line, self.key.ts, vts.as_deref())
             };
-            if window.w_briopt_list != 0 {
+            if window.w_briopt_list() != 0 {
                 self.add_list_indent(window, owned.as_cstr(), flp.as_cstr());
             }
         }
@@ -247,8 +247,8 @@ impl BreakindentCache {
             return;
         }
         if vim_regexec(&mut regmatch, line, 0) {
-            if window.w_briopt_list > 0 {
-                self.list += window.w_briopt_list;
+            if window.w_briopt_list() > 0 {
+                self.list += window.w_briopt_list();
             } else {
                 // Measure the match with `win_chartabsize`, so that a TAB
                 // is the right width and wrapping is ignored.
@@ -279,22 +279,22 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
         fnum: buf.handle().get(),
         ts: buf.b_p_ts(),
         tick: buf_get_changedtick(buf),
-        listopt: win.w_briopt_list,
-        no_ts: win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == 0,
+        listopt: win.w_briopt_list(),
+        no_ts: win.wo_list() != 0 && win.read().w_p_lcs_chars.tab1 == 0,
         dy_uhex: DY_FLAGS.get() & OPT_DY_FLAG_UHEX as c_uint,
     };
     let opt = Briopt {
-        shift: win.w_briopt_shift,
-        min: win.w_briopt_min,
-        sbr: win.w_briopt_sbr,
-        list: win.w_briopt_list,
-        vcol: win.w_briopt_vcol,
+        shift: win.w_briopt_shift(),
+        min: win.w_briopt_min(),
+        sbr: win.w_briopt_sbr(),
+        list: win.w_briopt_list(),
+        vcol: win.w_briopt_vcol(),
     };
     let col_off2 = win_col_off2(win);
     let held = buf.read();
     let flp = local_or_global(&held.b_p_flp, P_FLP);
     // The window width minus its margins: what is left for text.
-    let eff_wwidth = win.w_view_width - (window).col_off() + col_off2;
+    let eff_wwidth = win.w_view_width() - (window).col_off() + col_off2;
     // One exclusive borrow for the whole computation: nothing below calls
     // back into this function (the regex engine and chartabsize helpers run
     // no user code), and debug builds will catch it if that ever changes.

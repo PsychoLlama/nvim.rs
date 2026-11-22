@@ -552,7 +552,7 @@ fn common_prefix_len(leader: &[u8], text: &[u8], icase: bool) -> usize {
 pub(crate) fn ins_compl_longest_match(m: MatchId) {
     if compl_leader().is_unset() {
         compl_leader().set_string(m.text_copy());
-        let had_match = Win::current().w_cursor.col > COMPL_COL.get();
+        let had_match = Win::current().cursor().col() > COMPL_COL.get();
         ins_compl_longest_insert(&compl_leader().to_vec());
         if !had_match {
             ins_compl_delete(false);
@@ -566,7 +566,7 @@ pub(crate) fn ins_compl_longest_match(m: MatchId) {
         .with_bytes(|leader| m.with(|item| common_prefix_len(leader, &item.text, icase)));
     if keep < compl_leader().len() {
         compl_leader().truncate(keep);
-        let had_match = Win::current().w_cursor.col > COMPL_COL.get();
+        let had_match = Win::current().cursor().col() > COMPL_COL.get();
         ins_compl_longest_insert(&compl_leader().to_vec());
         if !had_match {
             ins_compl_delete(false);

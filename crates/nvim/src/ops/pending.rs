@@ -80,8 +80,8 @@ fn is_ex_cmdchar(cmd_arg: &CmdArg) -> bool {
 /// must not clear the selection, redraw, or leave a `.` behind.
 pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool) {
     let mut op = cmd_arg.op();
-    let lbr_saved = Win::current().w_onebuf_opt.wo_lbr;
-    let old_cursor = Win::current().w_cursor;
+    let lbr_saved = Win::current().wo_lbr();
+    let old_cursor = Win::current().w_cursor();
 
     if (!FINISH_OP.get() && !visual_active()) || op.op_type == OpType::Nop {
         restore_lbr(lbr_saved != 0);
@@ -134,7 +134,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
             op.end.col += l - 1;
         }
     }
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
 
     // `empty` is set when start and end are the same. `inclusive` affects
     // that too, unless yanking with the end on a NUL.
@@ -161,7 +161,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
 
     VIRTUAL_OP.set(None);
     if gui_yank {
-        Win::current().w_cursor = old_cursor;
+        Win::current().set_w_cursor(old_cursor);
     } else if !p_sol()
         && op.motion_type == MotionType::LineWise
         && !op.end_adjusted
@@ -172,8 +172,8 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
         // 'startofline' is off: go back to the column the command started
         // in.
         reset_lbr();
-        Win::current().w_curswant = ColNr::new(old_col);
-        Win::current().coladvance(Win::current().w_curswant);
+        Win::current().set_w_curswant(ColNr::new(old_col));
+        Win::current().coladvance(Win::current().w_curswant());
     }
     clear_op(op);
     MOTION_FORCE.set(Key::NUL);
@@ -274,26 +274,30 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
 /// the cursor.
 fn resume_redo_visual(cmd_arg: &mut CmdArg, mut op: Op) {
     let redo = REDO_VISUAL.get();
-    op.start = Win::current().w_cursor;
-    Win::current().w_cursor.lnum += redo.rv_line_count - 1;
-    Win::current().w_cursor.lnum = Win::current()
-        .w_cursor
-        .lnum
-        .min(Buf::current().line_count());
+    op.start = Win::current().w_cursor();
+    Win::current()
+        .cursor()
+        .set_lnum(Win::current().cursor().lnum() + (redo.rv_line_count - 1));
+    Win::current().cursor().set_lnum(
+        Win::current()
+            .w_cursor()
+            .lnum
+            .min(Buf::current().line_count()),
+    );
     set_visual_mode(VisualMode::from_raw(redo.rv_mode));
 
     if redo.rv_vcol == ColNr::MAX || visual_mode().is_char() {
         if !visual_mode().is_char() {
-            Win::current().w_curswant = ColNr::MAX;
+            Win::current().set_w_curswant(ColNr::MAX);
         } else if redo.rv_line_count <= 1 {
             // A one-line charwise region is that many columns *from the
             // cursor*, not to a fixed column.
             validate_virtcol(Win::current());
-            Win::current().w_curswant = Win::current().w_virtcol + redo.rv_vcol.get() - 1;
+            Win::current().set_w_curswant(Win::current().w_virtcol() + redo.rv_vcol.get() - 1);
         } else {
-            Win::current().w_curswant = redo.rv_vcol;
+            Win::current().set_w_curswant(redo.rv_vcol);
         }
-        Win::current().coladvance(Win::current().w_curswant);
+        Win::current().coladvance(Win::current().w_curswant());
     }
     cmd_arg.count0 = redo.rv_count;
     cmd_arg.count1 = if cmd_arg.count0 == 0 {
@@ -315,10 +319,10 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
     if !gui_yank {
         // Keep the area for `'<`/`'>` and for `gv`.
         Buf::current().edit().b_visual.vi_start = visual_anchor();
-        Buf::current().edit().b_visual.vi_end = Win::current().w_cursor;
+        Buf::current().edit().b_visual.vi_end = Win::current().w_cursor();
         Buf::current().edit().b_visual.vi_mode = visual_mode().raw();
         restore_visual_mode();
-        Buf::current().edit().b_visual.vi_curswant = Win::current().w_curswant;
+        Buf::current().edit().b_visual.vi_curswant = Win::current().w_curswant();
         Buf::current().set_b_visual_mode_eval(visual_mode().raw());
     }
 
@@ -327,12 +331,14 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
     // Both lines are the current buffer's -- one holds the cursor,
     // the other the Visual anchor. `unadjust_for_sel` only moves the cursor.
     if visual_select() && visual_mode().is_line() && op.op_type != OpType::Delete {
-        if lt(visual_anchor(), Win::current().w_cursor) {
+        if lt(visual_anchor(), Win::current().w_cursor()) {
             set_visual_anchor(visual_anchor().with_col(ColNr::ZERO));
-            let lnum = Win::current().w_cursor.lnum;
-            Win::current().w_cursor.col = Lines::current().line_len(lnum);
+            let lnum = Win::current().cursor().lnum();
+            Win::current()
+                .cursor()
+                .set_col(Lines::current().line_len(lnum));
         } else {
-            Win::current().w_cursor.col = ColNr::ZERO;
+            Win::current().cursor().set_col(ColNr::ZERO);
             let end = Lines::current().line_len(visual_anchor().lnum);
             set_visual_anchor(visual_anchor().with_col(end));
         }
@@ -357,31 +363,31 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
 /// is why this is more than a swap.
 fn order_region(mut op: Op) {
     let win = Win::current();
-    if lt(op.start, Win::current().w_cursor) {
+    if lt(op.start, Win::current().w_cursor()) {
         if !visual_active() {
             if let Some(first) = win.fold_first(op.start.lnum) {
                 op.start.lnum = first;
                 op.start.col = ColNr::ZERO;
             }
-            let past_start = Win::current().w_cursor.col > ColNr::ZERO
+            let past_start = Win::current().cursor().col() > ColNr::ZERO
                 || op.inclusive
                 || op.motion_type == MotionType::LineWise;
-            if past_start && let Some(last) = win.fold_end(Win::current().w_cursor.lnum) {
-                Win::current().w_cursor.lnum = last;
+            if past_start && let Some(last) = win.fold_end(Win::current().cursor().lnum()) {
+                Win::current().cursor().set_lnum(last);
                 // The cursor line is a line of the buffer.
-                Win::current().w_cursor.col = get_cursor_line_len();
+                Win::current().cursor().set_col(get_cursor_line_len());
             }
         }
-        op.end = Win::current().w_cursor;
-        Win::current().w_cursor = op.start;
+        op.end = Win::current().w_cursor();
+        Win::current().set_w_cursor(op.start);
         // `w_virtcol` was updated for the old position and is not
         // recomputed automatically when the cursor goes back.
-        Win::current().w_valid -= WinValid::VIRTCOL;
+        Win::current().set_w_valid(Win::current().w_valid().without(WinValid::VIRTCOL));
     } else {
         if !visual_active() && op.motion_type == MotionType::LineWise {
-            if let Some(first) = win.fold_first(Win::current().w_cursor.lnum) {
-                Win::current().w_cursor.lnum = first;
-                Win::current().w_cursor.col = ColNr::ZERO;
+            if let Some(first) = win.fold_first(Win::current().cursor().lnum()) {
+                Win::current().cursor().set_lnum(first);
+                Win::current().cursor().set_col(ColNr::ZERO);
             }
             if let Some(last) = win.fold_end(op.start.lnum) {
                 op.start.lnum = last;
@@ -389,7 +395,7 @@ fn order_region(mut op: Op) {
             }
         }
         op.end = op.start;
-        op.start = Win::current().w_cursor;
+        op.start = Win::current().w_cursor();
     }
 }
 
@@ -400,7 +406,7 @@ fn order_region(mut op: Op) {
 fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: bool) {
     if !REDO_V_ISUAL_BUSY.get() && !gui_yank {
         RESEL_V_ISUAL_MODE.set(visual_mode());
-        if Win::current().w_curswant == ColNr::MAX {
+        if Win::current().w_curswant() == ColNr::MAX {
             RESEL_V_ISUAL_VCOL.set(ColNr::MAX);
         } else {
             if !visual_mode().is_block() {
@@ -624,7 +630,7 @@ fn run_operator(
 
         OpType::JoinNs | OpType::Join => {
             op.line_count = op.line_count.max(2);
-            if Win::current().w_cursor.lnum + op.line_count - 1 > Buf::current().line_count() {
+            if Win::current().cursor().lnum() + op.line_count - 1 > Buf::current().line_count() {
                 beep_flush();
             } else {
                 let count = size_t::try_from(op.line_count).unwrap_or(0);

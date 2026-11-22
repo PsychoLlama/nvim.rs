@@ -44,8 +44,8 @@ impl BlockScan<'_> {
     /// Put the cursor one line *below* `lnum`, so that the scan's next
     /// decrement lands on `lnum` itself.
     fn resume_at(&self, lnum: LineNr) {
-        Win::current().w_cursor.lnum = lnum + 1;
-        Win::current().w_cursor.col = ColNr::ZERO;
+        Win::current().cursor().set_lnum(lnum + 1);
+        Win::current().cursor().set_col(ColNr::ZERO);
     }
 
     /// The scan reached the line the enclosing `{` is on.
@@ -75,7 +75,7 @@ impl BlockScan<'_> {
         }
 
         if self.lookfor_cpp_namespace {
-            let lnum = Win::current().w_cursor.lnum;
+            let lnum = Win::current().cursor().lnum();
             if lnum == self.ourscope {
                 return Step::Again;
             }
@@ -88,12 +88,15 @@ impl BlockScan<'_> {
                 return Step::Again;
             }
 
-            if preproc_start(&mut Win::current().w_cursor.lnum, &mut self.amount) {
+            if Win::current()
+                .cursor()
+                .modify(|c| preproc_start(&mut c.lnum, &mut self.amount))
+            {
                 return Step::Again;
             }
 
             // Finally, the actual check for "namespace".
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
             if opens_namespace(l, 0) {
@@ -120,7 +123,7 @@ impl BlockScan<'_> {
     ///        here  <-- an initialiser: do not
     /// ```
     fn at_scope_start_enum_or_init(&mut self) -> Step {
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         if lnum == LineNr::ZERO || lnum < self.ourscope - Buf::current().b_ind_maxparen() {
             // Nothing found (abusing `b_ind_maxparen` as the limit):
             // assume a terminated line, i.e. a variable initialisation.
@@ -139,21 +142,24 @@ impl BlockScan<'_> {
 
         // The chain stays whole: `preproc_start` may move the cursor's line
         // number on before the text is read.
-        let skipped = preproc_start(&mut Win::current().w_cursor.lnum, &mut self.amount) || {
-            let cursor_lnum = Win::current().w_cursor.lnum;
-            only_comment_left(Lines::current().line(cursor_lnum), 0)
-        };
+        let skipped = Win::current()
+            .cursor()
+            .modify(|c| preproc_start(&mut c.lnum, &mut self.amount))
+            || {
+                let cursor_lnum = Win::current().cursor().lnum();
+                only_comment_left(Lines::current().line(cursor_lnum), 0)
+            };
         if skipped {
             return Step::Again;
         }
 
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let terminated = terminator(Lines::current().line(cursor_lnum), 0, false, true);
 
         // At top level and looking like a function declaration: done, it
         // is a variable declaration.
         let is_var_decl = self.start_brace != BRACE_IN_COL0
-            || !is_func_decl(Win::current().w_cursor.lnum, LineNr::ZERO);
+            || !is_func_decl(Win::current().cursor().lnum(), LineNr::ZERO);
         if is_var_decl {
             // Terminated with another ',': a continued initialisation, so
             // no extra indent.
@@ -175,13 +181,13 @@ impl BlockScan<'_> {
             // Skip parens and braces: position on the rightmost paren so
             // that matching it takes us to the start of the line.
             let mut trypos = None;
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             // The borrow ends with the statement; the match runs only when a
             // paren was found, as upstream has it.
             if find_last_paren(Lines::current().line(cursor_lnum), b'(', b')') {
                 trypos = find_match_paren(Buf::current().b_ind_maxparen());
             }
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             if trypos.is_none() && find_last_paren(Lines::current().line(cursor_lnum), b'{', b'}') {
                 trypos = find_start_brace();
             }
@@ -209,7 +215,7 @@ impl BlockScan<'_> {
 
         // A switch() label or a C++ scope declaration may be what we line
         // up relative to.
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let (iscase, isscopedecl) = {
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
@@ -234,7 +240,7 @@ impl BlockScan<'_> {
         // Ignore jump labels with nothing after them.
         if Buf::current().b_ind_js() == 0 && is_jump_label() {
             // `is_jump_label` may have unlocked the line, so it is read again.
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             let mut lines = Lines::current();
             let text = lines.line(cursor_lnum);
             let nothing_after =
@@ -247,10 +253,13 @@ impl BlockScan<'_> {
         // Ignore #defines, comments and empty lines.  The chain stays whole:
         // `preproc_start` may move the cursor's line number on before the
         // text is read.
-        let skipped = preproc_start(&mut Win::current().w_cursor.lnum, &mut self.amount) || {
-            let cursor_lnum = Win::current().w_cursor.lnum;
-            only_comment_left(Lines::current().line(cursor_lnum), 0)
-        };
+        let skipped = Win::current()
+            .cursor()
+            .modify(|c| preproc_start(&mut c.lnum, &mut self.amount))
+            || {
+                let cursor_lnum = Win::current().cursor().lnum();
+                only_comment_left(Lines::current().line(cursor_lnum), 0)
+            };
         if skipped {
             return Step::Again;
         }
@@ -278,7 +287,7 @@ impl BlockScan<'_> {
             // Only interested in whether there is a base-class
             // declaration or initialisation before the opening brace.  The
             // check above may have unlocked the line, so it is read again.
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             return if terminator(Lines::current().line(cursor_lnum), 0, true, false) != 0 {
                 Step::Done
             } else {
@@ -292,7 +301,7 @@ impl BlockScan<'_> {
         //   123,
         //   sizeof
         //      here
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let terminated = terminator(Lines::current().line(cursor_lnum), 0, false, true);
 
         if self.js_cur_has_key {
@@ -313,7 +322,7 @@ impl BlockScan<'_> {
             return Step::Done;
         }
         if self.lookfor == LOOKFOR_COMMA {
-            if self.brace.lnum >= Win::current().w_cursor.lnum {
+            if self.brace.lnum >= Win::current().cursor().lnum() {
                 return Step::Done;
             }
             if terminated == b',' {
@@ -322,7 +331,7 @@ impl BlockScan<'_> {
                 return Step::Done;
             }
             self.amount = get_indent();
-            if Win::current().w_cursor.lnum - 1 == self.ourscope {
+            if Win::current().cursor().lnum() - 1 == self.ourscope {
                 // The line above starts the scope, so this line is the
                 // one that starts the comma-terminated line.
                 return Step::Done;
@@ -373,7 +382,7 @@ impl BlockScan<'_> {
             return Step::Again;
         }
 
-        let n = get_indent_nolabel(Win::current().w_cursor.lnum);
+        let n = get_indent_nolabel(Win::current().cursor().lnum());
 
         //   case xx: if (cond)         <- line up with this if
         //                y = y + 1;
@@ -399,7 +408,7 @@ impl BlockScan<'_> {
         // ->              y = y + 1;
         if n != 0 {
             self.amount = n;
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             let mut lines = Lines::current();
             let text = lines.line(cursor_lnum);
             let cinword =
@@ -458,7 +467,7 @@ impl BlockScan<'_> {
 
     /// The line is a terminated "normal" statement.
     fn on_terminated(&mut self) -> Step {
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let (isbreak, isdo) = {
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
@@ -520,7 +529,7 @@ impl BlockScan<'_> {
             //     here;
             // The borrow ends with the statement; the match runs only when a
             // paren was found, as upstream has it.
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             if find_last_paren(Lines::current().line(cursor_lnum), b'(', b')') {
                 let trypos = find_match_paren(Buf::current().b_ind_maxparen());
                 if let Some(trypos) = trypos {
@@ -528,7 +537,7 @@ impl BlockScan<'_> {
                     // handled above.
                     //         case xx:  if ( asdf &&
                     //                          asdf)
-                    Win::current().w_cursor = trypos;
+                    Win::current().set_w_cursor(trypos);
                     let labelled = {
                         let mut lines = Lines::current();
                         let l = lines.line(trypos.lnum);
@@ -536,7 +545,7 @@ impl BlockScan<'_> {
                     };
                     if labelled {
                         // Upstream's `w_cursor.lnum++; col = 0;`: re-read this line.
-                        self.resume_at(Win::current().w_cursor.lnum);
+                        self.resume_at(Win::current().cursor().lnum());
                         return Step::Again;
                     }
                 }
@@ -550,7 +559,7 @@ impl BlockScan<'_> {
             //  case 2:
             //        stat;
             // }
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             let iscase = Buf::current().b_ind_keep_case_label() != 0
                 && is_case_label(Lines::current().line(cursor_lnum), 0, false);
 
@@ -591,10 +600,10 @@ impl BlockScan<'_> {
             // At the end of a block: skip to the start of that block.  The
             // borrow ends with the statement; the hunt runs only when a
             // brace was found.
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             let has_brace = find_last_paren(Lines::current().line(cursor_lnum), b'{', b'}');
             if has_brace && let Some(trypos) = find_start_brace() {
-                Win::current().w_cursor = trypos;
+                Win::current().set_w_cursor(trypos);
                 // If not "else {", check for terminated again; but
                 // skip the block for "} else {".
                 let term_again = {
@@ -607,7 +616,7 @@ impl BlockScan<'_> {
                     continue;
                 }
                 // Upstream's `w_cursor.lnum++; col = 0;`: re-read this line.
-                self.resume_at(Win::current().w_cursor.lnum);
+                self.resume_at(Win::current().cursor().lnum());
             }
             return Step::Again;
         }
@@ -615,7 +624,7 @@ impl BlockScan<'_> {
 
     /// The line is *not* terminated (or ends in a `,` that does not count).
     fn on_unterminated(&mut self, terminated: u8) -> Step {
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let opens_bracket = self.lookfor != LOOKFOR_ENUM_OR_INIT && {
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
@@ -645,7 +654,7 @@ impl BlockScan<'_> {
 
         // Looking for a ',' means matching braces count too.
         if trypos.is_none() && terminated == b',' {
-            let cursor_lnum = Win::current().w_cursor.lnum;
+            let cursor_lnum = Win::current().cursor().lnum();
             // The hunt runs only when a brace was found.
             if find_last_paren(Lines::current().line(cursor_lnum), b'{', b'}') {
                 trypos = find_start_brace();
@@ -657,7 +666,7 @@ impl BlockScan<'_> {
             // above.
             //     case xx:  if ( asdf &&
             //                        asdf)
-            Win::current().w_cursor = trypos;
+            Win::current().set_w_cursor(trypos);
             let labelled = {
                 let mut lines = Lines::current();
                 let l = lines.line(trypos.lnum);
@@ -665,7 +674,7 @@ impl BlockScan<'_> {
             };
             if labelled {
                 // Upstream's `w_cursor.lnum++; col = 0;`: re-read this line.
-                self.resume_at(Win::current().w_cursor.lnum);
+                self.resume_at(Win::current().cursor().lnum());
                 return Step::Again;
             }
         }
@@ -676,20 +685,22 @@ impl BlockScan<'_> {
         //               bla",
         //          here;
         if terminated == b',' {
-            while Win::current().w_cursor.lnum > LineNr::ONE {
+            while Win::current().cursor().lnum() > LineNr::ONE {
                 // `lnum - 1` is at least 1, so it is a line of the buffer.
-                let above = Win::current().w_cursor.lnum - 1;
+                let above = Win::current().cursor().lnum() - 1;
                 if !ends_in_backslash(Lines::current().line(above)) {
                     break;
                 }
-                Win::current().w_cursor.lnum -= 1;
-                Win::current().w_cursor.col = ColNr::ZERO;
+                Win::current()
+                    .cursor()
+                    .set_lnum(Win::current().cursor().lnum() - 1);
+                Win::current().cursor().set_col(ColNr::ZERO);
             }
         }
 
         // The indent and the offset of the current line's text, ignoring
         // any jump label.
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let at = if Buf::current().b_ind_js() != 0 {
             self.cur_amount = get_indent();
             0
@@ -778,7 +789,7 @@ impl BlockScan<'_> {
         //     do
         //            x = 1;
         // ->  here
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         let (isdo, is_else_line, at) = {
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
@@ -803,7 +814,9 @@ impl BlockScan<'_> {
             // For "} else", find the opening brace of the enclosing
             // scope, not the one from "if () {".
             if is_else_line {
-                Win::current().w_cursor.col = ColNr::try_from(at).unwrap_or(ColNr::MAX - 1) + 1;
+                Win::current()
+                    .cursor()
+                    .set_col(ColNr::try_from(at).unwrap_or(ColNr::MAX - 1) + 1);
             }
             let unmatched = find_start_brace().is_none_or(|pos| !find_match(LOOKFOR_IF, pos.lnum));
             if unmatched {
@@ -847,7 +860,7 @@ impl BlockScan<'_> {
         // line up with, so remember its indent.
         //          100 +
         // ->       here;
-        let cursor_lnum = Win::current().w_cursor.lnum;
+        let cursor_lnum = Win::current().cursor().lnum();
         self.amount = self.cur_amount;
 
         let ends_in_bracket = Buf::current().b_ind_js() != 0 && terminated == b',' && {
@@ -895,7 +908,7 @@ impl BlockScan<'_> {
             }
             self.lookfor = LOOKFOR_COMMA;
             if let Some(trypos) = find_match_char(b'[', Buf::current().b_ind_maxparen()) {
-                if trypos.lnum == Win::current().w_cursor.lnum - 1 {
+                if trypos.lnum == Win::current().cursor().lnum() - 1 {
                     // The current line is the first inside [], so line up
                     // with it.
                     return Step::Done;
@@ -907,12 +920,12 @@ impl BlockScan<'_> {
 
         if self.lookfor == LOOKFOR_INITIAL && ends_in_backslash(Lines::current().line(cursor_lnum))
         {
-            self.cont_amount = equal_amount(Win::current().w_cursor.lnum);
+            self.cont_amount = equal_amount(Win::current().cursor().lnum());
         }
         if self.lookfor != LOOKFOR_TERM
             && self.lookfor != LOOKFOR_JS_KEY
             && self.lookfor != LOOKFOR_COMMA
-            && self.raw_string_start != Win::current().w_cursor.lnum
+            && self.raw_string_start != Win::current().cursor().lnum()
         {
             self.lookfor = LOOKFOR_UNTERM;
         }

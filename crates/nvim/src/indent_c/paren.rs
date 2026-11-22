@@ -54,14 +54,14 @@ pub(crate) fn first_code_col(trypos: Pos) -> c_int {
 /// the three lines of `foo()\n{\n}` indent -- and the search resumes from
 /// the start of whatever comment or raw string swallowed it.
 pub(crate) fn find_start_brace() -> Option<Pos> {
-    let cursor_save = Win::current().w_cursor;
+    let cursor_save = Win::current().w_cursor();
     let mut trypos;
     loop {
         trypos = findmatchlimit(None, Codepoint::byte(b'{'), FM_BLOCKSTOP, 0);
         let Some(brace) = trypos else {
             break;
         };
-        Win::current().w_cursor = brace;
+        Win::current().set_w_cursor(brace);
 
         // The comment search runs only when the `{` really sits at
         // `brace.col`, and the `&&` chain is left whole so that it keeps
@@ -75,10 +75,10 @@ pub(crate) fn find_start_brace() -> Option<Pos> {
             break;
         }
         if let Some(pos) = pos {
-            Win::current().w_cursor = pos;
+            Win::current().set_w_cursor(pos);
         }
     }
-    Win::current().w_cursor = cursor_save;
+    Win::current().set_w_cursor(cursor_save);
     trypos
 }
 
@@ -95,7 +95,7 @@ pub(crate) fn find_match_paren(ind_maxparen: c_int) -> Option<Pos> {
 /// the lines already walked -- so the total distance searched stays bounded
 /// however many comments are in the way.
 pub(crate) fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
-    let cursor_save = Win::current().w_cursor;
+    let cursor_save = Win::current().w_cursor();
     let mut ind_maxp_wk = ind_maxparen;
 
     let found = loop {
@@ -113,11 +113,11 @@ pub(crate) fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
             if ind_maxp_wk <= 0 {
                 break None;
             }
-            Win::current().w_cursor = trypos.with_col(ColNr::ZERO);
+            Win::current().set_w_cursor(trypos.with_col(ColNr::ZERO));
             continue;
         }
 
-        Win::current().w_cursor = trypos;
+        Win::current().set_w_cursor(trypos);
 
         let enclosing = ind_find_start_comment_or_raw_string(None);
         let Some(trypos_wk) = enclosing else {
@@ -127,10 +127,10 @@ pub(crate) fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
         if ind_maxp_wk <= 0 {
             break None;
         }
-        Win::current().w_cursor = trypos_wk;
+        Win::current().set_w_cursor(trypos_wk);
     };
 
-    Win::current().w_cursor = cursor_save;
+    Win::current().set_w_cursor(cursor_save);
     found
 }
 
@@ -155,7 +155,7 @@ pub(crate) fn find_match_paren_after_brace(ind_maxparen: c_int) -> Option<Pos> {
 /// and within half the budget shortens it.
 pub(crate) fn corr_ind_maxparen(startpos: &Pos) -> c_int {
     let maxparen = Buf::current().b_ind_maxparen();
-    let n = startpos.lnum - Win::current().w_cursor.lnum;
+    let n = startpos.lnum - Win::current().cursor().lnum();
     if n > 0 && n < maxparen / 2 {
         maxparen - n
     } else {
@@ -171,7 +171,7 @@ pub(crate) fn corr_ind_maxparen(startpos: &Pos) -> c_int {
 pub(crate) fn find_last_paren(line: &[u8], start: u8, end: u8) -> bool {
     let mut retval = false;
     let mut open_count = 0;
-    Win::current().w_cursor.col = ColNr::ZERO; // default is start of line
+    Win::current().cursor().set_col(ColNr::ZERO); // default is start of line
 
     let mut at = 0usize;
     while byte_at(line, at) != 0 {
@@ -184,8 +184,9 @@ pub(crate) fn find_last_paren(line: &[u8], start: u8, end: u8) -> bool {
             if open_count > 0 {
                 open_count -= 1;
             } else {
-                Win::current().w_cursor.col =
-                    ColNr::try_from(at).expect("a column within a line fits a ColNr");
+                Win::current()
+                    .cursor()
+                    .set_col(ColNr::try_from(at).expect("a column within a line fits a ColNr"));
                 retval = true;
             }
         }
@@ -208,18 +209,20 @@ pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
         (0, 1)
     };
 
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_col(ColNr::ZERO);
 
-    while Win::current().w_cursor.lnum > ourscope + 1 {
-        Win::current().w_cursor.lnum -= 1;
-        Win::current().w_cursor.col = ColNr::ZERO;
+    while Win::current().cursor().lnum() > ourscope + 1 {
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() - 1);
+        Win::current().cursor().set_col(ColNr::ZERO);
 
         // Upstream tests the four in this order and stops at the first that
         // answers; the `while`-of-`do` half that re-enters is asked last, so
         // the borrow the other three take is dropped before it runs.
         let (starts_while_of_do, interesting) = {
             let mut lines = Lines::current();
-            let line = lines.line(Win::current().w_cursor.lnum);
+            let line = lines.line(Win::current().cursor().lnum());
             let look = code_at(line, 0);
             (
                 starts_while(line, look),
@@ -227,7 +230,7 @@ pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
             )
         };
         let interesting =
-            interesting || (starts_while_of_do && while_closes_do(Win::current().w_cursor.lnum));
+            interesting || (starts_while_of_do && while_closes_do(Win::current().cursor().lnum()));
         if !interesting {
             continue;
         }
@@ -249,7 +252,7 @@ pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
         // again -- and dropped again before the `while`-of-`do` search.
         let (starts_while_of_do, is_else_line, plain_else, is_if_line, is_do_line) = {
             let mut lines = Lines::current();
-            let line = lines.line(Win::current().w_cursor.lnum);
+            let line = lines.line(Win::current().cursor().lnum());
             let look = code_at(line, 0);
             (
                 starts_while(line, look),
@@ -281,7 +284,7 @@ pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
             }
         }
 
-        if starts_while_of_do && while_closes_do(Win::current().w_cursor.lnum) {
+        if starts_while_of_do && while_closes_do(Win::current().cursor().lnum()) {
             whilelevel += 1;
             continue;
         }

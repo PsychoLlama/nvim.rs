@@ -301,8 +301,8 @@ fn echo_search_cmd(dirc: c_int, searchstr: &[u8], options: c_int) -> Option<(Ech
             echo = truncated.as_bytes_with_nul().to_vec();
         }
 
-        if Win::current().w_onebuf_opt.wo_rl != 0
-            && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's'
+        if Win::current().wo_rl() != 0
+            && Win::current().read().w_onebuf_opt.wo_rlc.first_byte() == b's'
         {
             let mut reversed = reverse_echo(cstr::until_nul(&echo));
             reversed.push(b'\0');
@@ -463,8 +463,8 @@ pub(crate) fn do_search(
         if options & SEARCH_MARK != 0 {
             setpcmark();
         }
-        Win::current().w_cursor = pos;
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_cursor(pos);
+        Win::current().set_w_set_curswant(true);
     }
 
     if options & SEARCH_KEEP != 0 || cmdmod_has(CmdModFlags::KEEPPATTERNS) {
@@ -477,7 +477,7 @@ pub(crate) fn do_search(
 /// (or before the start) of the closed fold it is in, so that the same fold
 /// is not found again.
 fn start_position(dirc: c_int) -> Pos {
-    let mut pos = Win::current().w_cursor;
+    let mut pos = Win::current().w_cursor();
     if dirc == '/' as c_int {
         if Win::current().has_folding(pos.lnum, None, Some(&mut pos.lnum)) {
             pos.col = ColNr::new(MAXCOL - 2); // avoid overflow when adding 1
@@ -749,10 +749,10 @@ fn search_leg(
         let inexact = count != 1
             || has_offset
             || (FDO_FLAGS.get() & OPT_FDO_FLAG_SEARCH == 0 && {
-                let (w, lnum) = (Win::current(), Win::current().w_cursor.lnum);
+                let (w, lnum) = (Win::current(), Win::current().cursor().lnum());
                 w.has_folding(lnum, None, None)
             });
-        let cursor = Win::current().w_cursor;
+        let cursor = Win::current().w_cursor();
         let (top_bot, maxcount) = (show_top_bot_msg, number_as_int(p_msc()));
         let tm = SEARCH_STAT_DEF_TIMEOUT;
         cmdline_search_stat(
@@ -772,7 +772,7 @@ fn search_leg(
 /// `'matchpairs'` is `"x:y,x:y"`: the opening character of each pair
 /// blinks in left-to-right mode and the closing one in right-to-left.
 fn mps_shows_match(c: c_int) -> bool {
-    let rightleft = (Win::current().w_onebuf_opt.wo_rl != 0) ^ p_ri();
+    let rightleft = (Win::current().wo_rl() != 0) ^ p_ri();
     let buf = Buf::current();
     let held = buf.read();
     let mps = held.b_p_mps.bytes();
@@ -810,14 +810,14 @@ pub fn showmatch(c: c_int) {
         vim_beep(OPT_BO_FLAG_SHOWMATCH); // no match, so beep
         return;
     };
-    if lpos.lnum < Win::current().w_topline || lpos.lnum >= Win::current().w_botline {
+    if lpos.lnum < Win::current().w_topline() || lpos.lnum >= Win::current().w_botline() {
         return;
     }
 
-    if Win::current().w_onebuf_opt.wo_wrap == 0 {
+    if Win::current().wo_wrap() == 0 {
         let vcol = getvcol(Win::current(), &mut lpos).1;
-        if !(vcol >= Win::current().w_leftcol
-            && vcol < Win::current().w_leftcol + Win::current().w_view_width)
+        if !(vcol >= Win::current().w_leftcol()
+            && vcol < Win::current().w_leftcol() + Win::current().w_view_width())
         {
             return;
         }
@@ -830,22 +830,22 @@ pub fn showmatch(c: c_int) {
     let siso = ScrollOff::of(win, ScrollMargin::Columns);
 
     let mpos = lpos; // save the pos, update_screen() may change it
-    let save_cursor = Win::current().w_cursor;
+    let save_cursor = Win::current().w_cursor();
     let save_so = so.get();
     let save_siso = siso.get();
 
     // Handle "$" in 'cpo': if the ')' is typed on top of the "$", stop
     // displaying the "$".
-    if DOLLAR_VCOL.get() >= ColNr::ZERO && DOLLAR_VCOL.get() == Win::current().w_virtcol {
+    if DOLLAR_VCOL.get() >= ColNr::ZERO && DOLLAR_VCOL.get() == Win::current().w_virtcol() {
         DOLLAR_VCOL.set(ColNr::NONE);
     }
-    Win::current().w_virtcol += 1; // do display ')' just before "$"
+    Win::current().set_w_virtcol(Win::current().w_virtcol() + 1); // do display ')' just before "$"
 
     let save_dollar_vcol = DOLLAR_VCOL.get();
     let save_state = STATE.get();
     STATE.set(MODE_SHOWMATCH);
     ui_cursor_shape(); // may show a different cursor shape
-    Win::current().w_cursor = mpos; // move to the matching char
+    Win::current().set_w_cursor(mpos); // move to the matching char
     so.set(0); // don't use 'scrolloff' here
     siso.set(0); // don't use 'sidescrolloff' here
     show_cursor_info_later(false);
@@ -865,7 +865,7 @@ pub fn showmatch(c: c_int) {
         os_delay(p_mat().cast_unsigned() * 100 + 9, false);
     }
 
-    Win::current().w_cursor = save_cursor; // restore cursor position
+    Win::current().set_w_cursor(save_cursor); // restore cursor position
     so.set(save_so);
     siso.set(save_siso);
     STATE.set(save_state);

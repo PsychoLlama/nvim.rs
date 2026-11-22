@@ -112,7 +112,7 @@ pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
         replace_chars(op, c);
     }
 
-    Win::current().w_cursor = op.start;
+    Win::current().set_w_cursor(op.start);
     let (lnum, col, last) = (op.start.lnum, op.start.col, op.end.lnum + 1);
     check_cursor(Win::current());
     changed_lines(Buf::current(), lnum, col, last, 0, true);
@@ -129,17 +129,19 @@ pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
 /// `op` must be blockwise.
 fn replace_block(op: &mut OpArg, c: Key, had_ctrl_v_cr: bool) {
     let mut bd = BlockDef::ZERO;
-    bd.is_max = Win::current().w_curswant == ColNr::MAX;
-    while Win::current().w_cursor.lnum <= op.end.lnum {
+    bd.is_max = Win::current().w_curswant() == ColNr::MAX;
+    while Win::current().cursor().lnum() <= op.end.lnum {
         // Make sure the cursor position is valid for `block_prep`.
-        Win::current().w_cursor.col = ColNr::ZERO;
+        Win::current().cursor().set_col(ColNr::ZERO);
         // The cursor walks the region, so its line is the buffer's.
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         block_prep(&mut bd, op, lnum, true);
         if bd.textlen != 0 || (op_virtual() && !bd.is_max) {
             replace_block_line(op, &mut bd, c, had_ctrl_v_cr);
         }
-        Win::current().w_cursor.lnum += 1;
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() + 1);
     }
 }
 
@@ -154,7 +156,7 @@ fn replace_block(op: &mut OpArg, c: Key, had_ctrl_v_cr: bool) {
 fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: bool) {
     // Replacing with `\r`/`\n` splits the line rather than overwriting.
     let splits_line = !had_ctrl_v_cr && (c == Key::CAR || c == Key::NL);
-    let baselnum = Win::current().w_cursor.lnum;
+    let baselnum = Win::current().cursor().lnum();
 
     // When the block starts in virtual space, that offset counts as
     // pre-padding. (Upstream also keeps a running count `n` of the extra
@@ -231,9 +233,11 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
     let _ = ml_replace_owned(baselnum, XString::from_vec(line));
     let splice = Suppress::splice();
     if let Some(after) = after {
-        let _ = ml_append_terminated(Win::current().w_cursor.lnum, &after, false);
-        Win::current().w_cursor.lnum += 1;
-        appended_lines_mark(Win::current().w_cursor.lnum, 1);
+        let _ = ml_append_terminated(Win::current().cursor().lnum(), &after, false);
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() + 1);
+        appended_lines_mark(Win::current().cursor().lnum(), 1);
         op.end.lnum += 1;
     }
     drop(splice);
@@ -264,7 +268,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
     // buffer at every step, which is what each of these asks for.
     if op.motion_type == MotionType::LineWise {
         op.start.col = ColNr::ZERO;
-        Win::current().w_cursor.col = ColNr::ZERO;
+        Win::current().cursor().set_col(ColNr::ZERO);
         op.end.col = Lines::current().line_len(op.end.lnum);
         if op.end.col != ColNr::ZERO {
             op.end.col -= 1;
@@ -273,14 +277,14 @@ fn replace_chars(op: &mut OpArg, c: Key) {
         dec(&mut op.end);
     }
 
-    while ltoreq(Win::current().w_cursor, op.end) {
+    while ltoreq(Win::current().w_cursor(), op.end) {
         let mut done = false;
 
         let under_cursor = gchar_cursor();
         if under_cursor != Codepoint::NUL {
             let new_byte_len = len_as_int(c.utf8_len());
             let old_byte_len = {
-                let cursor = Win::current().w_cursor;
+                let cursor = Win::current().w_cursor();
                 let mut lines = Lines::current();
                 let line = lines.line(cursor.lnum);
                 let col = usize::try_from(cursor.col).unwrap_or(0).min(line.len());
@@ -290,7 +294,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
             if new_byte_len > 1 || old_byte_len > 1 {
                 // Slow, but it handles a single-byte character replacing a
                 // multi-byte one and the other way around.
-                if Win::current().w_cursor.lnum == op.end.lnum {
+                if Win::current().cursor().lnum() == op.end.lnum {
                     op.end.col += new_byte_len - old_byte_len;
                 }
                 replace_character(c);
@@ -300,11 +304,11 @@ fn replace_chars(op: &mut OpArg, c: Key) {
                     // Breaking the TAB moves the end, so remember where it
                     // was in columns first.
                     let mut end_vcol = 0;
-                    if Win::current().w_cursor.lnum == op.end.lnum {
+                    if Win::current().cursor().lnum() == op.end.lnum {
                         end_vcol = getviscol2(op.end.col, op.end.coladd).get();
                     }
                     coladvance_force(getviscol());
-                    if Win::current().w_cursor.lnum == op.end.lnum {
+                    if Win::current().cursor().lnum() == op.end.lnum {
                         getvpos(Win::current(), &mut op.end, ColNr::new(end_vcol));
                     }
                 }
@@ -312,7 +316,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
                 if gchar_cursor() != Codepoint::NUL {
                     // Both sides are one byte, so the key is one.
                     pbyte(
-                        Win::current().w_cursor,
+                        Win::current().w_cursor(),
                         c.as_byte().expect("a one-byte character"),
                     );
                     done = true;
@@ -320,7 +324,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
             }
         }
 
-        if !done && op_virtual() && Win::current().w_cursor.lnum == op.end.lnum {
+        if !done && op_virtual() && Win::current().cursor().lnum() == op.end.lnum {
             replace_virtual_tail(op, c);
         }
 
@@ -340,7 +344,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
 /// The cursor must be on `op.end.lnum`.
 fn replace_virtual_tail(op: &OpArg, c: Key) {
     let mut virtcols = op.end.coladd;
-    if Win::current().w_cursor.lnum == op.start.lnum
+    if Win::current().cursor().lnum() == op.start.lnum
         && op.start.col == op.end.col
         && op.start.coladd != 0
     {
@@ -351,13 +355,15 @@ fn replace_virtual_tail(op: &OpArg, c: Key) {
     // +1 is what keeps the NUL byte from being trampled.
     let endcol = getviscol2(op.end.col, op.end.coladd);
     coladvance_force(endcol + 1);
-    Win::current().w_cursor.col -= virtcols + 1;
+    Win::current()
+        .cursor()
+        .set_col(Win::current().cursor().col() - (virtcols + 1));
     while virtcols >= 0 {
         match c.as_byte().filter(|_| c.utf8_len() == 1) {
-            Some(byte) => pbyte(Win::current().w_cursor, byte),
+            Some(byte) => pbyte(Win::current().w_cursor(), byte),
             None => replace_character(c),
         }
-        if inc(&mut Win::current().w_cursor).is_stuck() {
+        if Win::current().cursor().modify(inc).is_stuck() {
             break;
         }
         virtcols -= 1;

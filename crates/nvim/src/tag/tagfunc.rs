@@ -128,14 +128,15 @@ pub(crate) fn find_tagfunc_tags(
         // function may want. One past the top means nothing was popped,
         // so the newest entry is the interesting one.
         let win = Win::current();
-        let at = match win.w_tagstackidx {
-            at if at == win.w_tagstacklen => at - 1,
+        let at = match win.w_tagstackidx() {
+            at if at == win.w_tagstacklen() => at - 1,
             at => at,
         };
-        let user_data = (win.w_tagstacklen > 0)
+        let held = win.read();
+        let user_data = (win.w_tagstacklen() > 0)
             .then(|| usize::try_from(at).ok())
             .flatten()
-            .and_then(|at| win.w_tagstack.get(at))
+            .and_then(|at| held.w_tagstack.get(at))
             .and_then(|from| from.user_data.as_ref());
         if let Some(user_data) = user_data {
             let _ = info.edit().add_str(b"user_data", Some(user_data.as_cstr()));
@@ -152,14 +153,14 @@ pub(crate) fn find_tagfunc_tags(
     args.push_owned(TypVal::dict(Some(info.clone())));
 
     let mut rettv = TV_INITIAL_VALUE;
-    let save_pos = Win::current().w_cursor;
+    let save_pos = Win::current().w_cursor();
     // A copy: the function may set 'tagfunc' again.
     let mut callback = Buf::current().read().b_tfu_cb.duplicate();
     let called = callback_call(&callback, args.args(), &mut rettv) == Ok(true);
     callback_free(&mut callback);
     // The function may have moved the cursor, or left it somewhere
     // that no longer exists.
-    Win::current().w_cursor = save_pos;
+    Win::current().set_w_cursor(save_pos);
     check_cursor(Win::current());
     drop(args);
     drop(info);

@@ -113,8 +113,8 @@ pub fn do_join(
     debug_assert!(count >= 1);
     let remove_comments = use_formatoptions && has_format_option(FoFlag::REMOVE_COMS);
 
-    let above = Win::current().w_cursor.lnum - 1;
-    let past = Win::current().w_cursor.lnum + len_as_int(count);
+    let above = Win::current().cursor().lnum() - 1;
+    let past = Win::current().cursor().lnum() + len_as_int(count);
     if save_undo {
         u_save(above, past)?;
     }
@@ -154,13 +154,13 @@ fn measure_join(
 
     for t in 0..count {
         let mut lines = Lines::current();
-        let line = lines.line(Win::current().w_cursor.lnum + len_as_int(t));
+        let line = lines.line(Win::current().cursor().lnum() + len_as_int(t));
         let mut curr = 0;
         let mut spaces = 0;
 
         if t == 0 && setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
             let buf = Win::current().buffer();
-            buf.edit().b_op_start.lnum = Win::current().w_cursor.lnum;
+            buf.edit().b_op_start.lnum = Win::current().cursor().lnum();
             buf.edit().b_op_start.col = ColNr::from_index(line.len());
         }
 
@@ -207,7 +207,7 @@ fn measure_join(
         let added = spaces;
         if t > 0 && CURBUF_SPLICE_PENDING.get() == 0 {
             let removed = ColNr::from_index(curr);
-            let row = Win::current().w_cursor.lnum.get() - 1;
+            let row = Win::current().cursor().lnum().get() - 1;
             let (old, new) = ((removed + 1).get() as isize, added as BCount);
             let op = EXTMARK_UNDO;
             extmark_splice(
@@ -286,24 +286,24 @@ fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
     // was added.
     for t in (0..count).rev() {
         let (at, spaces_removed) = plan.landed[t];
-        let lnum = Win::current().w_cursor.lnum + len_as_int(t);
+        let lnum = Win::current().cursor().lnum() + len_as_int(t);
         mark_col_adjust(lnum, ColNr::ZERO, -len_as_int(t), at.get(), spaces_removed);
     }
 
     let joined = ::core::mem::take(&mut plan.joined);
-    let _ = ml_replace_owned(Win::current().w_cursor.lnum, XString::from_vec(joined));
+    let _ = ml_replace_owned(Win::current().cursor().lnum(), XString::from_vec(joined));
 
     if setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
         let buf = Win::current().buffer();
-        buf.edit().b_op_end.lnum = Win::current().w_cursor.lnum;
+        buf.edit().b_op_end.lnum = Win::current().cursor().lnum();
         buf.edit().b_op_end.col = ColNr::new(plan.sumsize);
     }
 
     // Only the first line's change is reported here; `del_lines` reports
     // the lines it deletes.
     let (lnum, next) = (
-        Win::current().w_cursor.lnum,
-        Win::current().w_cursor.lnum + 1,
+        Win::current().cursor().lnum(),
+        Win::current().cursor().lnum() + 1,
     );
     changed_lines(
         Buf::current(),
@@ -317,21 +317,25 @@ fn assemble_join(count: size_t, setmark: bool, plan: &mut JoinPlan) {
     // Delete the following lines with the cursor moved there briefly.
     // `del_lines` may move it up again if the last line went, so the line
     // number is kept.
-    let joined_lnum = Win::current().w_cursor.lnum;
-    Win::current().w_cursor.lnum += 1;
+    let joined_lnum = Win::current().cursor().lnum();
+    Win::current()
+        .cursor()
+        .set_lnum(Win::current().cursor().lnum() + 1);
     del_lines(len_as_int(count) - 1, false);
-    Win::current().w_cursor.lnum = joined_lnum;
+    Win::current().cursor().set_lnum(joined_lnum);
     drop(splice);
     Buf::current().set_deleted_bytes2(0);
 
     // 'cpoptions' `q`: Vi puts the cursor at the column of the *first*
     // join, Vim at the column of the last.
-    Win::current().w_cursor.col = if cpo_has(CpoFlag::JOINCOL) {
-        ColNr::new(plan.first_size)
-    } else {
-        ColNr::new(col)
-    };
+    Win::current()
+        .cursor()
+        .set_col(if cpo_has(CpoFlag::JOINCOL) {
+            ColNr::new(plan.first_size)
+        } else {
+            ColNr::new(col)
+        });
     check_cursor_col(Win::current());
-    Win::current().w_cursor.coladd = 0;
-    Win::current().w_set_curswant = true;
+    Win::current().cursor().set_coladd(0);
+    Win::current().set_w_set_curswant(true);
 }

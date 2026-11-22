@@ -585,7 +585,7 @@ impl Walk {
                 let end = if self.count > 0 {
                     self.match_pos
                 } else {
-                    Win::current().w_cursor
+                    Win::current().w_cursor()
                 };
                 // The borrow of `line` ends here: the scan below reads
                 // every line between the two positions out of the same
@@ -815,7 +815,7 @@ fn find_match(
     flags: c_int,
     maxtravel: int64_t,
 ) -> Option<Pos> {
-    let mut pos = Win::current().w_cursor;
+    let mut pos = Win::current().w_cursor();
     pos.coladd = 0;
     let mut lines = Lines::current();
     let lisp = Buf::current().b_p_lisp() != 0; // engage Lisp-specific hacks ;)
@@ -845,7 +845,7 @@ fn find_match(
 
     // This is just guessing: with 'rightleft' set, look for the
     // matching paren or brace in the other direction.
-    if Win::current().w_onebuf_opt.wo_rl != 0 && has_char(c"()[]{}<>", target.initc) {
+    if Win::current().wo_rl() != 0 && has_char(c"()[]{}<>", target.initc) {
         target.backwards = !target.backwards;
     }
 

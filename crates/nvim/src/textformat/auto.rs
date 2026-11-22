@@ -54,7 +54,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
         return;
     }
 
-    let pos = Win::current().w_cursor;
+    let pos = Win::current().w_cursor();
 
     // May remove an added space.
     check_auto_format(false);
@@ -74,17 +74,17 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
         dec_cursor();
         let mut cc = gchar_cursor();
         if !whitechar(cc.get())
-            && Win::current().w_cursor.col > ColNr::ZERO
+            && Win::current().cursor().col() > ColNr::ZERO
             && has_format_option(FoFlag::ONE_LETTER)
         {
             dec_cursor();
         }
         cc = gchar_cursor();
         if whitechar(cc.get()) {
-            Win::current().w_cursor = pos;
+            Win::current().set_w_cursor(pos);
             return;
         }
-        Win::current().w_cursor = pos;
+        Win::current().set_w_cursor(pos);
     }
 
     // Skip it as well when white space was just typed in the middle of a
@@ -106,7 +106,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
         // is given but the composing check at the *cursor*, which is one
         // byte further along than the byte named here.
         if whitechar(c_int::from(before)) {
-            Win::current().w_cursor = pos;
+            Win::current().set_w_cursor(pos);
             return;
         }
     }
@@ -120,8 +120,10 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     }
 
     // May start one line earlier, but not at the start of a paragraph.
-    if prev_line && !paragraph_start(Win::current().w_cursor.lnum) {
-        Win::current().w_cursor.lnum -= 1;
+    if prev_line && !paragraph_start(Win::current().cursor().lnum()) {
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() - 1);
         if u_save_cursor().is_err() {
             return;
         }
@@ -131,12 +133,14 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     // formatting as the text moves under it.
     SAVED_CURSOR.set(pos);
     format_lines(LineNr::new(-1), false);
-    Win::current().w_cursor = SAVED_CURSOR.get();
+    Win::current().set_w_cursor(SAVED_CURSOR.get());
     SAVED_CURSOR.set(SAVED_CURSOR.get().with_lnum(LineNr::ZERO));
 
-    if Win::current().w_cursor.lnum > Buf::current().line_count() {
+    if Win::current().cursor().lnum() > Buf::current().line_count() {
         // "cannot happen"
-        Win::current().w_cursor.lnum = Buf::current().line_count();
+        Win::current()
+            .cursor()
+            .set_lnum(Buf::current().line_count());
         coladvance(Win::current(), ColNr::MAX);
     } else {
         check_cursor_col(Win::current());
@@ -147,9 +151,9 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
     // rule above, `w` in 'formatoptions' then needs a space added to keep
     // the paragraph formatted.
     if !wasatend && has_format_option(FoFlag::WHITE_PAR) {
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         let len = get_cursor_line_len();
-        if Win::current().w_cursor.col == len {
+        if Win::current().cursor().col() == len {
             let mut spaced = XString::from_bytes(Lines::current().line(lnum));
             spaced.push_byte(b' ');
             let _ = ml_replace_owned(lnum, spaced);

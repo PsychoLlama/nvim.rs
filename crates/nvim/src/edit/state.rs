@@ -71,14 +71,14 @@ fn insert_enter(s: &mut InsertState) {
     if WHERE_PASTE_STARTED.get().lnum != LineNr::ZERO {
         INSSTART.set(WHERE_PASTE_STARTED.get());
     } else {
-        INSSTART.set(Win::current().w_cursor);
+        INSSTART.set(Win::current().w_cursor());
         if s.startln {
             INSSTART.set(INSSTART.get().with_col(ColNr::ZERO));
         }
     }
     let mut lines = Lines::current();
     INSSTART_TEXTLEN.set(ColNr::new(linetabsize_str(
-        lines.line(Win::current().w_cursor.lnum),
+        lines.line(Win::current().cursor().lnum()),
     )));
     INSSTART_BLANK_VCOL.set(ColNr::MAX);
     if !DID_AI.get() {
@@ -123,7 +123,11 @@ fn insert_enter(s: &mut InsertState) {
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
     if gchar_cursor() == b'\t' || buf_meta_total(Buf::current(), MT_META_INLINE) > 0 {
-        Win::current().w_valid -= WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL;
+        Win::current().set_w_valid(
+            Win::current()
+                .w_valid()
+                .without(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL),
+        );
     }
     if Buf::current().b_p_iminsert() == B_IMODE_LMAP {
         STATE.set(STATE.get() | MODE_LANGMAP);
@@ -191,7 +195,7 @@ fn insert_enter(s: &mut InsertState) {
     }
 
     if INS_AT_EOL.get() {
-        O_LNUM.set(Win::current().w_cursor.lnum);
+        O_LNUM.set(Win::current().cursor().lnum());
     }
     pum_check_clear();
     fold_update_after_insert();
@@ -215,7 +219,7 @@ fn insert_enter(s: &mut InsertState) {
 /// It is allowed to move the cursor deliberately by setting `v:char`; the
 /// restore only happens when `v:char` is still empty.
 fn trigger_insert_enter(cmdchar: Key) {
-    let save_cursor = Win::current().w_cursor;
+    let save_cursor = Win::current().w_cursor();
 
     let mode: &[u8] = if cmdchar.is('R') {
         b"r"
@@ -236,12 +240,12 @@ fn trigger_insert_enter(cmdchar: Key) {
     // Make sure the cursor did not move.  `check_cursor_col` is still
     // called in case the text was modified; Insert mode has not started
     // yet, so `State` is faked for it.
-    if !equalpos(Win::current().w_cursor, save_cursor)
+    if !equalpos(Win::current().w_cursor(), save_cursor)
         && with_vim_var_str(Vv::Char, |s| s.is_empty())
         && save_cursor.lnum <= Buf::current().line_count()
     {
         let save_state = STATE.get();
-        Win::current().w_cursor = save_cursor;
+        Win::current().set_w_cursor(save_cursor);
         STATE.set(MODE_INSERT);
         check_cursor_col(Win::current());
         STATE.set(save_state);
@@ -254,11 +258,11 @@ fn trigger_insert_enter(cmdchar: Key) {
 /// Only when the insert *was* at the end of the line (`INS_AT_EOL` on the
 /// same line) or the wanted column is past the last character.
 fn restore_ctrl_o_column() {
-    let at_eol = INS_AT_EOL.get() && Win::current().w_cursor.lnum == O_LNUM.get();
-    if !at_eol && Win::current().w_curswant <= Win::current().w_virtcol {
+    let at_eol = INS_AT_EOL.get() && Win::current().cursor().lnum() == O_LNUM.get();
+    if !at_eol && Win::current().w_curswant() <= Win::current().w_virtcol() {
         return;
     }
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let step = {
         let mut lines = Lines::current();
         let line = lines.line(cursor.lnum);
@@ -273,7 +277,9 @@ fn restore_ctrl_o_column() {
             if byte_at(tail, len) == 0 { len } else { 0 }
         }
     };
-    Win::current().w_cursor.col += len_as_int(step);
+    Win::current()
+        .cursor()
+        .set_col(Win::current().cursor().col() + len_as_int(step));
 }
 
 /// The state loop's `check` callback: everything that happens before the
@@ -308,7 +314,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
     }
 
     if !ARROW_USED.get() {
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
     }
     if stuff_empty() {
         DID_CHECK_TIMESTAMPS.set(false);
@@ -342,17 +348,17 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
 
     ins_redraw(true);
 
-    if Win::current().w_onebuf_opt.wo_scb != 0 {
+    if Win::current().wo_scb() != 0 {
         do_check_scrollbind(true);
     }
-    if Win::current().w_onebuf_opt.wo_crb != 0 {
+    if Win::current().wo_crb() != 0 {
         do_check_cursorbind();
     }
     if s.count <= 1 {
         update_curswant();
     }
-    s.old_topline = Win::current().w_topline;
-    s.old_topfill = Win::current().w_topfill;
+    s.old_topline = Win::current().w_topline();
+    s.old_topfill = Win::current().w_topfill();
 
     // `lastc` is the previous *real* key: a K_EVENT is not one.
     if s.c != SpecialKey::Event {
@@ -372,7 +378,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
         // start completing without waiting for another key.
         if ins_compl_has_autocomplete()
             && !key_available()
-            && Win::current().w_cursor.col > ColNr::ZERO
+            && Win::current().cursor().col() > ColNr::ZERO
         {
             // Upstream leaves its −1 in the key when there is no character.
             s.c = char_before_cursor().map_or(Key::from_raw(-1), Key::from_code);
@@ -396,37 +402,38 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
 /// allows.  Not with 'smoothscroll', and not while repeating an insert.
 fn may_scroll_for_wrap(s: &mut InsertState) {
     if !(Buf::current().b_mod_set()
-        && Win::current().w_onebuf_opt.wo_wrap != 0
-        && Win::current().w_onebuf_opt.wo_sms == 0
+        && Win::current().wo_wrap() != 0
+        && Win::current().wo_sms() == 0
         && !s.did_backspace
-        && Win::current().w_topline == s.old_topline
-        && Win::current().w_topfill == s.old_topfill
+        && Win::current().w_topline() == s.old_topline
+        && Win::current().w_topfill() == s.old_topfill
         && s.count <= 1)
     {
         return;
     }
 
-    s.mincol = Win::current().w_wcol;
+    s.mincol = Win::current().w_wcol();
     validate_cursor_col(Win::current());
 
     let vcol = get_nolist_virtcol();
     let tabstop = Buf::current().tab_width_at(vcol, false);
-    if Win::current().w_wcol < s.mincol - tabstop
-        && int64_t::from(Win::current().w_wrow)
-            == int64_t::from(Win::current().w_view_height - 1) - get_scrolloff_value(Win::current())
-        && (Win::current().w_cursor.lnum != Win::current().w_topline
-            || Win::current().w_topfill > 0)
+    if Win::current().w_wcol() < s.mincol - tabstop
+        && int64_t::from(Win::current().w_wrow())
+            == int64_t::from(Win::current().w_view_height() - 1)
+                - get_scrolloff_value(Win::current())
+        && (Win::current().cursor().lnum() != Win::current().w_topline()
+            || Win::current().w_topfill() > 0)
     {
-        if Win::current().w_topfill > 0 {
-            Win::current().w_topfill -= 1;
+        if Win::current().w_topfill() > 0 {
+            Win::current().set_w_topfill(Win::current().w_topfill() - 1);
         } else if Win::current().has_folding(
-            Win::current().w_topline,
+            Win::current().w_topline(),
             None,
             Some(&mut s.old_topline),
         ) {
             set_topline(Win::current(), s.old_topline + 1);
         } else {
-            set_topline(Win::current(), Win::current().w_topline + 1);
+            set_topline(Win::current(), Win::current().w_topline() + 1);
         }
     }
 }
@@ -518,7 +525,7 @@ pub(crate) fn insert_execute(s: &mut InsertState, key: Key) -> Step {
         }
     }
 
-    if Win::current().w_onebuf_opt.wo_rl != 0 {
+    if Win::current().wo_rl() != 0 {
         s.c = mirror_arrow_key(s.c);
     }
 
@@ -552,7 +559,7 @@ fn mirror_arrow_key(c: Key) -> Key {
 /// was consumed.
 fn compl_takes_key(s: &mut InsertState) -> bool {
     if !(ins_compl_active()
-        && Win::current().w_cursor.col >= ins_compl_col()
+        && Win::current().cursor().col() >= ins_compl_col()
         && ins_compl_has_shown_match()
         && pum_wanted())
     {
@@ -561,7 +568,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
 
     // Backspace inside the leader: shrink it rather than deleting text.
     if (s.c == SpecialKey::Bs || s.c == Key::CTRL_H)
-        && Win::current().w_cursor.col > ins_compl_col()
+        && Win::current().cursor().col() > ins_compl_col()
     {
         s.c = ins_compl_bs();
         if s.c.is_nul() {

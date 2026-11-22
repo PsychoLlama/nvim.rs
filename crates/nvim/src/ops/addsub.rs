@@ -112,7 +112,7 @@ pub fn op_addsub(op: &mut OpArg, prenum1: i32, g_cmd: bool) {
     let folds_frozen = Suppress::fold_update();
 
     if !visual_active() {
-        let mut pos = Win::current().w_cursor;
+        let mut pos = Win::current().w_cursor();
         if u_save_cursor().is_err() {
             return;
         }
@@ -191,7 +191,7 @@ fn addsub_line_span(op: &mut OpArg, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
         return bd.textlen;
     }
     if op.motion_type == MotionType::LineWise {
-        Win::current().w_cursor.col = ColNr::ZERO;
+        Win::current().cursor().set_col(ColNr::ZERO);
         pos.col = ColNr::ZERO;
         return Lines::current().line_len(pos.lnum).get();
     }
@@ -222,7 +222,7 @@ fn addsub_line_span(op: &mut OpArg, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
 pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32) -> bool {
     let fmt = NrFormats::current();
     let visual = visual_active();
-    let save_cursor = Win::current().w_cursor;
+    let save_cursor = Win::current().w_cursor();
 
     let mut save_coladd: i32 = 0;
     if virtual_active(Win::current()) {
@@ -230,7 +230,7 @@ pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32
         pos.coladd = 0;
     }
 
-    Win::current().w_cursor = *pos;
+    Win::current().set_w_cursor(*pos);
     // A copy: the number is *replaced* below, by deletions and insertions
     // that re-enter the editor, and the scan's reads of the line have to
     // survive them.  The copy keeps the line's terminator, which every walk
@@ -304,11 +304,11 @@ pub fn do_addsub(op_type: OpType, pos: &mut Pos, mut length: c_int, prenum1: i32
 /// Put the cursor back where the caller expects it, and answer `did_change`.
 fn finish_addsub(visual: bool, did_change: bool, save_cursor: Pos, save_coladd: i32) -> bool {
     if visual {
-        Win::current().w_cursor = save_cursor;
+        Win::current().set_w_cursor(save_cursor);
     } else if did_change {
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
     } else if virtual_active(Win::current()) {
-        Win::current().w_cursor.coladd = save_coladd;
+        Win::current().cursor().set_coladd(save_coladd);
     }
     did_change
 }
@@ -354,7 +354,7 @@ fn find_number_start(text: &[u8], start_col: ColNr, fmt: &NrFormats) -> ColNr {
     }
     if fmt.bin && fmt.hex && !prefixed_at(col, b'X', b'x', ascii_isxdigit) {
         // Binary and hexadecimal overlap: rescan over decimal digits.
-        col = Win::current().w_cursor.col;
+        col = Win::current().cursor().col();
         while col > ColNr::ZERO && ascii_isdigit(byte(col)) {
             col = ColNr::new(back(col));
         }
@@ -454,12 +454,12 @@ fn bump_alpha_char(firstdigit: u8, op_type: OpType, prenum1: i32, col: ColNr) ->
         letter(ord + prenum1)
     };
 
-    Win::current().w_cursor.col = col;
-    let startpos = Win::current().w_cursor;
+    Win::current().cursor().set_col(col);
+    let startpos = Win::current().w_cursor();
     let _ = del_char(false);
     ins_char(Key::ascii(bumped));
-    let endpos = Win::current().w_cursor;
-    Win::current().w_cursor.col = col;
+    let endpos = Win::current().w_cursor();
+    Win::current().cursor().set_col(col);
     (startpos, endpos)
 }
 
@@ -570,8 +570,8 @@ fn replace_number(
     }
 
     // Delete the old number.
-    Win::current().w_cursor.col = col;
-    let startpos = Win::current().w_cursor;
+    Win::current().cursor().set_col(col);
+    let startpos = Win::current().w_cursor();
     let mut todel = *length;
     let mut c = gchar_cursor();
     // The `-` is not part of the length: only the part after it keeps its
@@ -593,9 +593,11 @@ fn replace_number(
     let len = *length;
     render_number(n, pre, len, firstdigit, negative, visual, was_positive, fmt);
 
-    let endpos = Win::current().w_cursor;
-    if Win::current().w_cursor.col != ColNr::ZERO {
-        Win::current().w_cursor.col -= 1;
+    let endpos = Win::current().w_cursor();
+    if Win::current().cursor().col() != ColNr::ZERO {
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() - 1);
     }
     (startpos, endpos)
 }

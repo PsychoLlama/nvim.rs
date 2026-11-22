@@ -48,7 +48,7 @@ pub(crate) fn ins_compl_dictionaries(dict_start: &[u8], pat: &CStr, flags: c_int
     if dict.is_empty() {
         // When 'dictionary' is empty and spell checking is enabled use
         // "spell".
-        if !thesaurus && Win::current().w_onebuf_opt.wo_spell != 0 {
+        if !thesaurus && Win::current().wo_spell() != 0 {
             dict = b"spell";
         } else {
             return;
@@ -312,7 +312,7 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: u8) -> Buf {
             wp.set(Some(at.id()));
             // Stop if we're back at the start, or found an unscanned
             // buffer in a focusable window.
-            if at.is_current() || (!at.buffer().b_scanned() && at.w_config.focusable) {
+            if at.is_current() || (!at.buffer().b_scanned() && at.read().w_config.focusable) {
                 break;
             }
         }
@@ -666,7 +666,7 @@ pub(crate) fn get_next_default_completion(st: &mut InsComplNextState, start_pos:
         }
 
         if is_nearest_active() && in_curbuf {
-            score = (pos.lnum - Win::current().w_cursor.lnum) as c_int;
+            score = (pos.lnum - Win::current().cursor().lnum()) as c_int;
             score = score.abs();
         }
 

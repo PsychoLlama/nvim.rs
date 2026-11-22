@@ -45,7 +45,7 @@ pub(crate) fn op_colon(op: &OpArg) {
         stuff_readbuf(b"'<,'>");
     } else {
         // Make the range look nice, so it can be repeated.
-        if op.start.lnum == Win::current().w_cursor.lnum {
+        if op.start.lnum == Win::current().cursor().lnum() {
             stuff_readbuf_char(Key::ascii(b'.'));
         } else {
             stuff_readbuf_number(op.start.lnum.get());
@@ -57,11 +57,11 @@ pub(crate) fn op_colon(op: &OpArg) {
         if op.end.lnum != op.start.lnum && op.end.lnum != end_of_start_fold {
             // Make it a range with the end line.
             stuff_readbuf_char(Key::ascii(b','));
-            if op.end.lnum == Win::current().w_cursor.lnum {
+            if op.end.lnum == Win::current().cursor().lnum() {
                 stuff_readbuf_char(Key::ascii(b'.'));
             } else if op.end.lnum == Buf::current().line_count() {
                 stuff_readbuf_char(Key::ascii(b'$'));
-            } else if op.start.lnum == Win::current().w_cursor.lnum
+            } else if op.start.lnum == Win::current().cursor().lnum()
                 // Not ".+number" for a closed fold: that would count the
                 // folded lines twice.
                 && !Win::current().fold_span(op.end.lnum).0

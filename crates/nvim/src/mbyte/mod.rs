@@ -199,7 +199,7 @@ fn first_illegal(text: &[u8]) -> Option<usize> {
 /// the converted line rather than the buffer's, and the column has to be
 /// walked back character by character, because the two do not share offsets.
 pub fn utf_find_illegal() {
-    let start = Win::current().w_cursor;
+    let start = Win::current().w_cursor();
     let mut vimconv = CONV_NONE_INIT;
 
     let fenc = Buf::current().read().b_p_fenc.cstr().to_owned();
@@ -209,7 +209,7 @@ pub fn utf_find_illegal() {
         let _ = p_enc(|value| vimconv.setup(Some(value), Some(fenc.as_c_str())));
     }
 
-    Win::current().w_cursor.coladd = 0;
+    Win::current().cursor().set_coladd(0);
     let found = loop {
         let at = if vimconv.vc_type == CONV_NONE {
             with_cursor_rest(first_illegal).map(|at| ColNr::try_from(at).unwrap_or(ColNr::MAX))
@@ -235,19 +235,23 @@ pub fn utf_find_illegal() {
             })
         };
         if let Some(at) = at {
-            Win::current().w_cursor.col += at.get();
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + at.get());
             break true;
         }
 
-        if Win::current().w_cursor.lnum == Buf::current().line_count() {
+        if Win::current().cursor().lnum() == Buf::current().line_count() {
             break false;
         }
-        Win::current().w_cursor.lnum += 1;
-        Win::current().w_cursor.col = ColNr::ZERO;
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() + 1);
+        Win::current().cursor().set_col(ColNr::ZERO);
     };
 
     if !found {
-        Win::current().w_cursor = start;
+        Win::current().set_w_cursor(start);
         beep_flush();
     }
 }

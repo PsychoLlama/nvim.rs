@@ -48,13 +48,13 @@ use crate::winlayer::Win;
 /// The indent 'indentexpr' answers for the cursor line, or the line's
 /// current indent when the expression failed.
 pub fn get_expr_indent() -> c_int {
-    let mut win = Win::current();
+    let win = Win::current();
     let buf = Buf::current();
     let use_sandbox = was_set_insecurely(win, OPT_INDENTEXPR, OptionSetFlags::LOCAL);
     let save_sctx = CURRENT_SCTX.get();
     // Saved because the expression can move the cursor via `:normal`.
     let (save_pos, save_curswant, save_set_curswant) =
-        (win.w_cursor, win.w_curswant, win.w_set_curswant);
+        (win.w_cursor(), win.w_curswant(), win.w_set_curswant());
     set_vim_var_nr(Vv::Lnum, VarNumber::from(save_pos.lnum));
 
     let mut indent = {
@@ -75,9 +75,9 @@ pub fn get_expr_indent() -> c_int {
     // "o" command.
     let save_state = STATE.get();
     STATE.set(MODE_INSERT);
-    win.w_cursor = save_pos;
-    win.w_curswant = save_curswant;
-    win.w_set_curswant = save_set_curswant;
+    win.set_w_cursor(save_pos);
+    win.set_w_curswant(save_curswant);
+    win.set_w_set_curswant(save_set_curswant);
     check_cursor(win);
     STATE.set(save_state);
 
@@ -159,17 +159,17 @@ fn enclosing_open() -> Option<Pos> {
 /// Leaves the cursor on the line it answered for, which is what makes
 /// `get_indent` the answer.
 fn same_level_indent(open: &Pos) -> Option<c_int> {
-    let mut win = Win::current();
+    let win = Win::current();
     let mut parencount = 0;
     loop {
-        win.w_cursor.lnum -= 1;
-        if win.w_cursor.lnum < open.lnum {
+        win.cursor().set_lnum(win.cursor().lnum() - 1);
+        if win.cursor().lnum() < open.lnum {
             return None;
         }
-        if linewhite(win.w_cursor.lnum) {
+        if linewhite(win.cursor().lnum()) {
             continue;
         }
-        count_parens(Lines::current().line(win.w_cursor.lnum), &mut parencount);
+        count_parens(Lines::current().line(win.cursor().lnum()), &mut parencount);
         if parencount == 0 {
             return Some(get_indent());
         }
@@ -198,9 +198,9 @@ fn skip_white_measuring(
 /// The indent for a line that opens a new form: the column just after
 /// `open`, plus whatever the form's own convention adds.
 fn indent_after_open(open: &Pos) -> c_int {
-    let mut win = Win::current();
-    win.w_cursor.lnum = open.lnum;
-    win.w_cursor.col = open.col;
+    let win = Win::current();
+    win.cursor().set_lnum(open.lnum);
+    win.cursor().set_col(open.col);
     // The line `open` is on, which nothing below changes.
     let mut lines = Lines::current();
     let line = lines.line(open.lnum);
@@ -306,9 +306,9 @@ fn measure_first_argument(
 /// same bracket level, and failing that, line up after the bracket that
 /// encloses this one.
 pub fn get_lisp_indent() -> c_int {
-    let mut win = Win::current();
-    let realpos = win.w_cursor;
-    win.w_cursor.col = ColNr::ZERO;
+    let win = Win::current();
+    let realpos = win.w_cursor();
+    win.cursor().set_col(ColNr::ZERO);
     let amount = match enclosing_open() {
         // No enclosing '(' or '[': no indent.
         None => 0,
@@ -317,7 +317,7 @@ pub fn get_lisp_indent() -> c_int {
             None => indent_after_open(&open),
         },
     };
-    win.w_cursor = realpos;
+    win.set_w_cursor(realpos);
     amount
 }
 
@@ -351,7 +351,7 @@ pub fn fixthisline(get_the_indent: Indenter) {
         return;
     }
     change_indent(INDENT_SET, amount, 0, true);
-    if linewhite(Win::current().w_cursor.lnum) {
+    if linewhite(Win::current().cursor().lnum()) {
         // Delete the indent again if the line stays empty.
         DID_AI.set(true);
     }
@@ -396,14 +396,14 @@ pub fn f_indent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 }
 /// `lispindent(lnum)`.
 pub fn f_lispindent(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    let mut win = Win::current();
-    let pos = win.w_cursor;
+    let win = Win::current();
+    let pos = win.w_cursor();
     let lnum = tv_get_lnum(&args[0]);
     (*result).write_number(
         if (LineNr::ONE..=Buf::current().line_count()).contains(&lnum) {
-            win.w_cursor.lnum = lnum;
+            win.cursor().set_lnum(lnum);
             let amount = VarNumber::from(get_lisp_indent());
-            win.w_cursor = pos;
+            win.set_w_cursor(pos);
             amount
         } else {
             -1

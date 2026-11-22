@@ -106,7 +106,7 @@ pub(crate) fn ins_left() {
     may_open_fold_hor();
     hide_dollar();
 
-    let tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor();
     if oneleft().is_ok() {
         start_arrow_changing(InsertEnd::At(tpos), end_change);
         if !end_change {
@@ -114,18 +114,21 @@ pub(crate) fn ins_left() {
         }
         // Only the characters 'revins' itself put there are legal to go
         // back over.
-        if REVINS_SCOL.get() != -1 && Win::current().w_cursor.col >= ColNr::new(REVINS_SCOL.get()) {
+        if REVINS_SCOL.get() != -1 && Win::current().cursor().col() >= ColNr::new(REVINS_SCOL.get())
+        {
             REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
         }
         REVINS_CHARS.set(REVINS_CHARS.get() + 1);
     } else if p_ww(|value| value.to_bytes().contains(&b'['))
-        && Win::current().w_cursor.lnum > LineNr::ONE
+        && Win::current().cursor().lnum() > LineNr::ONE
     {
         // 'whichwrap' allows the motion to leave the line.
         start_arrow_at(InsertEnd::At(tpos));
-        Win::current().w_cursor.lnum -= 1;
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() - 1);
         coladvance_to(MAXCOL);
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
     } else {
         beep_cursor();
     }
@@ -137,13 +140,13 @@ pub(crate) fn ins_home(c: Key) {
     may_open_fold_hor();
     hide_dollar();
 
-    let tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor();
     if c == SpecialKey::CHome {
-        Win::current().w_cursor.lnum = LineNr::ONE;
+        Win::current().cursor().set_lnum(LineNr::ONE);
     }
-    Win::current().w_cursor.col = ColNr::ZERO;
-    Win::current().w_cursor.coladd = 0;
-    Win::current().w_curswant = ColNr::ZERO;
+    Win::current().cursor().set_col(ColNr::ZERO);
+    Win::current().cursor().set_coladd(0);
+    Win::current().set_w_curswant(ColNr::ZERO);
     start_arrow_at(InsertEnd::At(tpos));
 }
 
@@ -152,12 +155,14 @@ pub(crate) fn ins_end(c: Key) {
     may_open_fold_hor();
     hide_dollar();
 
-    let tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor();
     if c == SpecialKey::CEnd {
-        Win::current().w_cursor.lnum = Buf::current().line_count();
+        Win::current()
+            .cursor()
+            .set_lnum(Buf::current().line_count());
     }
     coladvance_to(MAXCOL);
-    Win::current().w_curswant = ColNr::MAX;
+    Win::current().set_w_curswant(ColNr::MAX);
     start_arrow_at(InsertEnd::At(tpos));
 }
 
@@ -167,13 +172,13 @@ pub(crate) fn ins_s_left() {
     may_open_fold_hor();
     hide_dollar();
 
-    if Win::current().w_cursor.lnum > LineNr::ONE || Win::current().w_cursor.col > ColNr::ZERO {
+    if Win::current().cursor().lnum() > LineNr::ONE || Win::current().cursor().col() > ColNr::ZERO {
         start_arrow_changing(InsertEnd::cursor(), end_change);
         if !end_change {
             append_to_redobuff_char(Key::from(SpecialKey::SLeft));
         }
         let _ = bck_word(1, false, false);
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
     } else {
         beep_cursor();
     }
@@ -191,11 +196,11 @@ pub(crate) fn ins_right() {
         if !end_change {
             append_to_redobuff_char(Key::from(SpecialKey::Right));
         }
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
         if virtual_active(Win::current()) {
             let _ = oneright();
         } else {
-            let cursor = Win::current().w_cursor;
+            let cursor = Win::current().w_cursor();
             let step = {
                 let mut lines = Lines::current();
                 let line = lines.line(cursor.lnum);
@@ -205,7 +210,9 @@ pub(crate) fn ins_right() {
                         .min(line.len())..],
                 )
             };
-            Win::current().w_cursor.col += ColNr::try_from(step).unwrap_or(ColNr::MAX).get();
+            Win::current().cursor().set_col(
+                Win::current().cursor().col() + ColNr::try_from(step).unwrap_or(ColNr::MAX).get(),
+            );
         }
 
         REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
@@ -213,13 +220,15 @@ pub(crate) fn ins_right() {
             REVINS_CHARS.set(REVINS_CHARS.get() - 1);
         }
     } else if p_ww(|value| value.to_bytes().contains(&b']'))
-        && Win::current().w_cursor.lnum < Buf::current().line_count()
+        && Win::current().cursor().lnum() < Buf::current().line_count()
     {
         // 'whichwrap' allows the motion to leave the line.
         start_arrow_at(InsertEnd::cursor());
-        Win::current().w_set_curswant = true;
-        Win::current().w_cursor.lnum += 1;
-        Win::current().w_cursor.col = ColNr::ZERO;
+        Win::current().set_w_set_curswant(true);
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() + 1);
+        Win::current().cursor().set_col(ColNr::ZERO);
     } else {
         beep_cursor();
     }
@@ -234,7 +243,7 @@ pub(crate) fn ins_s_right() {
     may_open_fold_hor();
     hide_dollar();
 
-    if Win::current().w_cursor.lnum < Buf::current().line_count()
+    if Win::current().cursor().lnum() < Buf::current().line_count()
         || gchar_cursor() != Codepoint::NUL
     {
         start_arrow_changing(InsertEnd::cursor(), end_change);
@@ -242,7 +251,7 @@ pub(crate) fn ins_s_right() {
             append_to_redobuff_char(Key::from(SpecialKey::SRight));
         }
         let _ = fwd_word(1, false, false);
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
     } else {
         beep_cursor();
     }
@@ -256,11 +265,11 @@ pub(crate) fn ins_s_right() {
 /// `w_topline`/`w_topfill` check is because the motion may have scrolled the
 /// window even when the cursor stayed in view.
 pub(crate) fn ins_updown(up: bool, startcol: bool) {
-    let old_topline = Win::current().w_topline;
-    let old_topfill = Win::current().w_topfill;
+    let old_topline = Win::current().w_topline();
+    let old_topfill = Win::current().w_topfill();
     hide_dollar();
 
-    let tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor();
     let moved = if up {
         cursor_up(1, true)
     } else {
@@ -272,7 +281,7 @@ pub(crate) fn ins_updown(up: bool, startcol: bool) {
             // of the call's reach.
             coladvance_to(getvcol_nolist(&mut INSSTART.get()).get());
         }
-        if old_topline != Win::current().w_topline || old_topfill != Win::current().w_topfill {
+        if old_topline != Win::current().w_topline() || old_topfill != Win::current().w_topfill() {
             redraw_later(Win::current(), UPD_VALID);
         }
         start_arrow_at(InsertEnd::At(tpos));
@@ -296,7 +305,7 @@ pub(crate) fn ins_page(back: bool) {
         return;
     }
 
-    let tpos = Win::current().w_cursor;
+    let tpos = Win::current().w_cursor();
     let dir = if back { BACKWARD } else { FORWARD };
     if pagescroll(dir, 1, false) {
         start_arrow_at(InsertEnd::At(tpos));

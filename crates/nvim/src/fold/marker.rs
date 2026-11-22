@@ -49,7 +49,8 @@ pub(super) fn fold_create_markers(window: Win, start: Pos, end: Pos) {
     parse_marker(window);
     // Copies: `u_save` may run autocommands, which may set 'foldmarker'.
     let (open, close) = {
-        let (open, close) = markers(window.w_onebuf_opt.wo_fmr.bytes());
+        let held = window.read();
+        let (open, close) = markers(held.w_onebuf_opt.wo_fmr.bytes());
         (open.to_vec(), close.to_vec())
     };
     fold_add_marker(buf, start, &open);
@@ -146,7 +147,8 @@ impl Win {
             // Re-read per fold, as upstream reads 'foldmarker' per call; copied
             // because the deletion may run autocommands.
             let (open, close) = {
-                let (open, close) = markers(self.w_onebuf_opt.wo_fmr.bytes());
+                let held = self.read();
+                let (open, close) = markers(held.w_onebuf_opt.wo_fmr.bytes());
                 (open.to_vec(), close.to_vec())
             };
             fold_del_marker(self.buffer(), first, &open);
@@ -215,7 +217,8 @@ pub(super) fn fold_del_marker(buffer: Buf, lnum: LineNr, marker: &[u8]) {
 /// moment the option is set again — which is why every caller re-runs this.
 ///
 pub(super) fn parse_marker(window: Win) {
-    let foldmarker = window.w_onebuf_opt.wo_fmr.bytes();
+    let held = window.read();
+    let foldmarker = held.w_onebuf_opt.wo_fmr.bytes();
     // 'foldmarker' has already been validated as two non-empty halves
     // separated by a comma.
     let comma = foldmarker

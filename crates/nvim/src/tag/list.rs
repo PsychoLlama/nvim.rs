@@ -130,8 +130,9 @@ fn is_current(i: c_int, use_tagstack: bool) -> bool {
     // The index is one past the end when nothing has been popped;
     // upstream reads that slot anyway.
     let win = Win::current();
-    let at = usize::try_from(win.w_tagstackidx).unwrap_or(usize::MAX);
-    win.w_tagstack
+    let at = usize::try_from(win.w_tagstackidx()).unwrap_or(usize::MAX);
+    win.read()
+        .w_tagstack
         .get(at)
         .is_some_and(|entry| i == entry.cur_match)
 }

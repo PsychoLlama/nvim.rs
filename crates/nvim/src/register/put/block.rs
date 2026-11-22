@@ -48,7 +48,7 @@ struct Landing {
 /// Walk `line`, the cursor line, to screen column `col` and work out what has
 /// to happen there.
 fn land_block(line: &[u8], col: ColNr) -> Landing {
-    let (win, lnum) = (Win::current(), Win::current().w_cursor.lnum);
+    let (win, lnum) = (Win::current(), Win::current().cursor().lnum());
     let (mut csarg, cstype) = CharsizeArg::new(win, lnum, line);
 
     // Walk to the block's screen column, or to the end of the line.
@@ -134,32 +134,40 @@ impl Put {
             }
             // Move to the start of the next character: `c` is not the NUL
             // that ends the line, so there is one to step over.
-            Win::current().w_cursor.col += super::cursor_char_len().get();
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + super::cursor_char_len().get());
             col += 1;
         } else {
             (col, endcol2) = Win::current().vcol_span(Win::current().cursor());
         }
 
-        col += Win::current().w_cursor.coladd;
+        col += Win::current().cursor().coladd();
         if self.ve_flags == OPT_VE_FLAG_ALL as ::core::ffi::c_uint
-            && (Win::current().w_cursor.coladd > 0 || endcol2 == Win::current().w_cursor.col)
+            && (Win::current().cursor().coladd() > 0 || endcol2 == Win::current().cursor().col())
         {
             if self.dir == FORWARD && c == Codepoint::NUL {
                 col += 1;
             }
-            if self.dir != FORWARD && c != Codepoint::NUL && Win::current().w_cursor.coladd > 0 {
-                Win::current().w_cursor.col += 1;
+            if self.dir != FORWARD && c != Codepoint::NUL && Win::current().cursor().coladd() > 0 {
+                Win::current()
+                    .cursor()
+                    .set_col(Win::current().cursor().col() + 1);
             }
             if c == TAB {
-                if self.dir == BACKWARD && Win::current().w_cursor.col != ColNr::ZERO {
-                    Win::current().w_cursor.col -= 1;
+                if self.dir == BACKWARD && Win::current().cursor().col() != ColNr::ZERO {
+                    Win::current()
+                        .cursor()
+                        .set_col(Win::current().cursor().col() - 1);
                 }
                 if self.dir == FORWARD && col - 1 == endcol2 {
-                    Win::current().w_cursor.col += 1;
+                    Win::current()
+                        .cursor()
+                        .set_col(Win::current().cursor().col() + 1);
                 }
             }
         }
-        Win::current().w_cursor.coladd = 0;
+        Win::current().cursor().set_coladd(0);
         col
     }
 
@@ -182,14 +190,14 @@ impl Put {
     ) -> Result<(), Stopped> {
         // Pasting past the end of the buffer appends empty lines.
         let mut lines_appended = 0;
-        if Win::current().w_cursor.lnum > Buf::current().line_count() {
+        if Win::current().cursor().lnum() > Buf::current().line_count() {
             let last = Buf::current().line_count();
             ml_append_cstr(last, c"").map_err(|_| Stopped::NoLine)?;
             self.nr_lines += 1;
             lines_appended = 1;
         }
 
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         let put = &self.lines[i];
         let yanklen = c_int::try_from(put.len()).unwrap_or(c_int::MAX);
         let spaces = if self.flags & PUT_BLOCK_INNER == 0 {
@@ -241,7 +249,7 @@ impl Put {
         let _ = ml_replace_owned(lnum, XString::from_vec(newline));
 
         let buf = Buf::current();
-        let at = Win::current().w_cursor.lnum - 1;
+        let at = Win::current().cursor().lnum() - 1;
         let inserted = len_as_int(*totlen) + lines_appended;
         extmark_splice_cols(
             buf,
@@ -252,9 +260,13 @@ impl Put {
             EXTMARK_UNDO,
         );
 
-        Win::current().w_cursor.lnum += 1;
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() + 1);
         if i == 0 {
-            Win::current().w_cursor.col += land.startspaces;
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + land.startspaces);
         }
         Ok(())
     }
@@ -281,21 +293,25 @@ impl Put {
         // The range is the lines the put rewrote.
         changed_lines(Buf::current(), lnum, ColNr::ZERO, to, self.nr_lines, true);
 
-        Buf::current().set_b_op_start(Win::current().w_cursor);
+        Buf::current().set_b_op_start(Win::current().w_cursor());
         Buf::current().edit().b_op_start.lnum = lnum;
 
-        Buf::current().edit().b_op_end.lnum = Win::current().w_cursor.lnum - 1;
+        Buf::current().edit().b_op_end.lnum = Win::current().cursor().lnum() - 1;
         Buf::current().edit().b_op_end.col = (textcol + len_as_int(totlen) - 1).max(ColNr::ZERO);
         Buf::current().edit().b_op_end.coladd = 0;
 
         if self.flags & PUT_CURSEND != 0 {
-            Win::current().w_cursor = Buf::current().b_op_end();
-            Win::current().w_cursor.col += 1;
+            Win::current().set_w_cursor(Buf::current().b_op_end());
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col() + 1);
             // In Insert mode the cursor may be past the NUL.
             let len = get_cursor_line_len();
-            Win::current().w_cursor.col = Win::current().w_cursor.col.min(len);
+            Win::current()
+                .cursor()
+                .set_col(Win::current().cursor().col().min(len));
         } else {
-            Win::current().w_cursor.lnum = lnum;
+            Win::current().cursor().set_lnum(lnum);
         }
     }
 }

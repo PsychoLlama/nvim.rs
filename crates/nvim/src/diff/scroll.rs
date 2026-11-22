@@ -135,7 +135,7 @@ fn calculate_topfill_and_topline(
 /// Set `towin`'s topline and topfill from `fromwin`'s.
 ///
 /// Safe: two [`Win`]s carry the whole of the promise this needs.
-pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
+pub fn diff_set_topline(fromwin: Win, towin: Win) {
     let tp = TabPage::current();
     let frombuf = fromwin.buffer();
     let fromidx = tp.diff_index(frombuf);
@@ -150,15 +150,15 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
     //
     let tobuf = towin.buffer();
 
-    let lnum = fromwin.w_topline;
-    towin.w_topfill = 0;
+    let lnum = fromwin.w_topline();
+    towin.set_w_topfill(0);
     let tpr = tp.read();
     let blocks = &tpr.tp_diff;
     match blocks.iter().find(|dp| lnum <= dp.end(fromidx)) {
         // Below every block: the two buffers' tails line up by counting
         // back from the end.
         None => {
-            towin.w_topline = tobuf.line_count() - (frombuf.line_count() - lnum);
+            towin.set_w_topline(tobuf.line_count() - (frombuf.line_count() - lnum));
         }
         Some(dp) => {
             let toidx = tp.diff_index(tobuf);
@@ -166,9 +166,9 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
                 return;
             }
             let toidx = slot_index(toidx);
-            towin.w_topline = lnum + (dp.df_lnum[toidx] - dp.df_lnum[fromidx]);
+            towin.set_w_topline(lnum + (dp.df_lnum[toidx] - dp.df_lnum[fromidx]));
             if lnum >= dp.df_lnum[fromidx] {
-                let from_topfill = fromwin.w_topfill;
+                let from_topfill = fromwin.w_topfill();
                 let (topfill, topline) = calculate_topfill_and_topline(
                     blocks,
                     &tp.tp_diffbuf(),
@@ -178,28 +178,28 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
                     from_topfill,
                 );
                 if let Some(topfill) = topfill {
-                    towin.w_topfill = topfill;
+                    towin.set_w_topfill(topfill);
                 }
-                towin.w_topline = topline;
+                towin.set_w_topline(topline);
             }
         }
     }
 
-    towin.w_botfill = false;
-    if towin.w_topline > tobuf.line_count() {
-        towin.w_topline = tobuf.line_count();
-        towin.w_botfill = true;
+    towin.set_w_botfill(false);
+    if towin.w_topline() > tobuf.line_count() {
+        towin.set_w_topline(tobuf.line_count());
+        towin.set_w_botfill(true);
     }
-    if towin.w_topline < LineNr::ONE {
-        towin.w_topline = LineNr::ONE;
-        towin.w_topfill = 0;
+    if towin.w_topline() < LineNr::ONE {
+        towin.set_w_topline(LineNr::ONE);
+        towin.set_w_topfill(0);
     }
     invalidate_botline_win(towin);
     changed_line_abv_curs_win(towin);
     towin.check_topfill(false);
     // `has_folding` writes the first line of the fold only when there is one.
-    if let Some(first) = towin.fold_first(towin.w_topline) {
-        towin.w_topline = first;
+    if let Some(first) = towin.fold_first(towin.w_topline()) {
+        towin.set_w_topline(first);
     }
 }
 
@@ -207,7 +207,7 @@ pub fn diff_set_topline(fromwin: Win, mut towin: Win) {
 /// previous change.
 pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
     let tp = TabPage::current();
-    let mut lnum = Win::current().w_cursor.lnum;
+    let mut lnum = Win::current().cursor().lnum();
     let idx = tp.diff_index(Buf::current());
     if idx == DB_COUNT || tp.diff_len() == 0 {
         return Err(Failed);
@@ -245,12 +245,12 @@ pub fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
 
     drop(tpr);
     lnum = lnum.min(Buf::current().line_count());
-    if lnum == Win::current().w_cursor.lnum {
+    if lnum == Win::current().cursor().lnum() {
         return Err(Failed);
     }
     setpcmark();
-    Win::current().w_cursor.lnum = lnum;
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_lnum(lnum);
+    Win::current().cursor().set_col(ColNr::ZERO);
     Ok(())
 }
 
@@ -272,7 +272,7 @@ fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
         return lnum1;
     }
     let (idx1, idx2) = (slot_index(idx1), slot_index(idx2));
-    let cursor = Win::current().w_cursor.lnum;
+    let cursor = Win::current().cursor().lnum();
 
     let mut baseline = 0;
     for dp in &tp.read().tp_diff {

@@ -25,9 +25,10 @@ use crate::message::msg_put_ascii;
 use crate::narrow::number_as_int;
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
+use crate::slot::EditPart;
 use crate::tag::TAGSTACKSIZE;
-use crate::types::Handle;
 use crate::types::{Failed, VAR_LIST};
+use crate::types::{Handle, Window};
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
 
@@ -82,18 +83,26 @@ impl TagStack {
     pub(crate) fn len(&self) -> usize {
         // Upstream never lets the count past the array, but clamp anyway:
         // every index below is taken from this.
-        usize::try_from(self.win.w_tagstacklen).map_or(TAGSTACKSIZE, |len| len.min(TAGSTACKSIZE))
+        usize::try_from(self.win.w_tagstacklen()).map_or(TAGSTACKSIZE, |len| len.min(TAGSTACKSIZE))
     }
 
     /// The entry `CTRL-T` would pop next; one past the end at the top.
     pub(crate) fn curidx(&self) -> c_int {
-        self.win.w_tagstackidx
+        self.win.w_tagstackidx()
     }
 
-    /// The entries in use, oldest first.
-    pub(crate) fn entries(&mut self) -> &mut [Taggy] {
+    /// The entries in use, oldest first, lent under the window's edit: no
+    /// other way to the window while it is held.
+    pub(crate) fn entries<'a>(&mut self) -> EditPart<'a, Window, [Taggy]> {
         let len = self.len();
-        &mut self.win.w_tagstack[..len]
+        self.win.edit().map(|w| &mut w.w_tagstack[..len])
+    }
+
+    /// A copy of the entries in use, oldest first, for a walk that prints
+    /// or calls out (a message may redraw, and the redraw reads the window).
+    pub(crate) fn snapshot(&self) -> Vec<Taggy> {
+        let len = self.len();
+        self.win.read().w_tagstack[..len].to_vec()
     }
 
     /// Move the current index, clamped to the entries that exist.
@@ -101,13 +110,14 @@ impl TagStack {
     /// The stack length is a valid index: it means "at the top", where
     /// `CTRL-T` pops the newest entry.
     pub(crate) fn set_curidx(&mut self, curidx: c_int) {
-        self.win.w_tagstackidx = curidx.clamp(0, depth(self.len()));
+        self.win
+            .set_w_tagstackidx(curidx.clamp(0, depth(self.len())));
     }
 
     /// Throw the whole stack away.
     pub(crate) fn clear(&mut self) {
         self.truncate(0);
-        self.win.w_tagstackidx = 0;
+        self.win.set_w_tagstackidx(0);
     }
 
     /// Drop every entry from `len` on, leaving the index alone.
@@ -116,14 +126,14 @@ impl TagStack {
             tagstack_clear_entry(item);
         }
         // `len` is no larger than the count it replaces.
-        self.win.w_tagstacklen = depth(len);
+        self.win.set_w_tagstacklen(depth(len));
     }
 
     /// Drop the oldest entry, shifting the rest down to free the top.
     fn shift(&mut self) {
-        drop_oldest(self.entries());
+        drop_oldest(&mut self.entries());
         // The count was at least one.
-        self.win.w_tagstacklen -= 1;
+        self.win.set_w_tagstacklen(self.win.w_tagstacklen() - 1);
     }
 
     /// Put a new entry on top, dropping the oldest if the stack is full.
@@ -133,10 +143,11 @@ impl TagStack {
         }
         let idx = self.len();
         // `idx` is now within the array, because `shift` made room for it.
-        self.win.w_tagstacklen += 1;
+        self.win.set_w_tagstacklen(self.win.w_tagstacklen() + 1);
         // Field by field, not a whole `Taggy`: the timestamp and the
         // additional data of the slot are deliberately left as they were.
-        let entry = &mut self.entries()[idx];
+        let mut entries = self.entries();
+        let entry = &mut entries[idx];
         entry.tagname = Some(item.tagname);
         entry.cur_fnum = item.cur_fnum;
         // A match number below zero would index the wrong way on the way
@@ -213,12 +224,12 @@ pub(crate) fn drop_oldest(entries: &mut [Taggy]) {
 
 /// `:tags` — print the tag stack of the current window.
 pub fn do_tags(_excmd: &mut ExArg) {
-    let mut stack = TagStack::of(Win::current());
+    let stack = TagStack::of(Win::current());
     let curidx = stack.curidx();
     let len = stack.len();
 
     msg_title(gettext(c"\n  # TO tag         FROM line  in file/text"));
-    for (i, item) in stack.entries().iter().enumerate() {
+    for (i, item) in stack.snapshot().iter().enumerate() {
         let Some(tagname) = &item.tagname else {
             continue;
         };
@@ -289,13 +300,13 @@ fn tag_details(tag: &Taggy, retdict: &mut Dict) {
 
 /// `gettagstack()` — describe the tag stack of `window` into `retdict`.
 pub fn get_tagstack(window: Win, retdict: &mut Dict) {
-    let mut stack = TagStack::of(window);
+    let stack = TagStack::of(window);
     let _ = retdict.add_number(b"length", VarNumber::from(depth(stack.len())));
     let _ = retdict.add_number(b"curidx", VarNumber::from(stack.curidx() + 1));
 
     let items = tv_list_alloc(2);
     let _ = retdict.add_list(b"items", Some(items.clone()));
-    for entry in stack.entries() {
+    for entry in &stack.snapshot() {
         let d = tv_dict_alloc();
         items.edit().push_dict(Some(d.clone()));
         let arg = &mut d.edit();

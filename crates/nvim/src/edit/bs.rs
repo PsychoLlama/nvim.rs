@@ -68,7 +68,7 @@ pub(crate) enum Backspace {
 /// curwin->w_cursor.col;`: a deletion that went back past where the insert
 /// started drags that mark along with it.
 fn pull_insstart_orig_to_cursor() {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let orig = INSSTART_ORIG.get();
     if cursor.lnum == orig.lnum && cursor.col < orig.col {
         INSSTART_ORIG.set(orig.with_col(cursor.col));
@@ -85,11 +85,11 @@ pub(crate) fn ins_del() {
     }
     if char_at_cursor() == 0 {
         // Delete the newline.
-        let temp = Win::current().w_cursor.col;
+        let temp = Win::current().cursor().col();
         if !can_bs(BsFlag::EOL) || do_join(2, false, true, false, false).is_err() {
             beep_backspace();
         } else {
-            Win::current().w_cursor.col = temp;
+            Win::current().cursor().set_col(temp);
             // Adjust `ORIG_LINE_COUNT` when more lines were deleted than
             // added, so a later `open_line` can still reach every line.
             if STATE.get() & VREPLACE_FLAG != 0
@@ -123,7 +123,7 @@ fn bs_blocked() -> bool {
     if REVINS_ON.get() {
         return false;
     }
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let start = INSSTART_ORIG.get();
     (cursor.lnum == LineNr::ONE && cursor.col == ColNr::ZERO)
         || (!can_bs(BsFlag::START)
@@ -165,22 +165,24 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
     // In 'virtualedit': BACKSPACE_CHAR eats one virtual space,
     // BACKSPACE_WORD eats all the `coladd`, and BACKSPACE_LINE eats all
     // of it and keeps going.
-    if Win::current().w_cursor.coladd > 0 {
+    if Win::current().cursor().coladd() > 0 {
         if mode == Backspace::Char {
-            Win::current().w_cursor.coladd -= 1;
+            Win::current()
+                .cursor()
+                .set_coladd(Win::current().cursor().coladd() - 1);
             return true;
         }
         if mode == Backspace::Word {
-            Win::current().w_cursor.coladd = 0;
+            Win::current().cursor().set_coladd(0);
             return true;
         }
-        Win::current().w_cursor.coladd = 0;
+        Win::current().cursor().set_coladd(0);
     }
 
     let mut did_backspace = false;
     let mut call_fix_indent = false;
 
-    if Win::current().w_cursor.col == ColNr::ZERO {
+    if Win::current().cursor().col() == ColNr::ZERO {
         if !bs_join_line() {
             return false;
         }
@@ -197,15 +199,15 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
             && (Buf::current().b_p_ai() != 0 || cindent_on())
             && !REVINS_ON.get()
         {
-            let save_col = Win::current().w_cursor.col;
+            let save_col = Win::current().cursor().col();
             beginline(BeginlineOpts::WHITE);
-            if Win::current().w_cursor.col < save_col {
-                mincol = Win::current().w_cursor.col;
+            if Win::current().cursor().col() < save_col {
+                mincol = Win::current().cursor().col();
                 // The indent should now be fixed to match the previous
                 // line.
                 call_fix_indent = true;
             }
-            Win::current().w_cursor.col = save_col;
+            Win::current().cursor().set_col(save_col);
         }
 
         // One BS deletes a whole 'shiftwidth' or 'softtabstop' when
@@ -215,7 +217,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
         // 'smarttab' has had its say and the column has been checked.
         let soft_tab = || {
             (get_sts_value() != 0 || Buf::current().stop_count(StopList::SoftTab) != 0)
-                && Win::current().w_cursor.col > ColNr::ZERO
+                && Win::current().cursor().col() > ColNr::ZERO
                 && {
                     // The cursor is past column 0, so the byte before it is
                     // a byte of the cursor's own line.
@@ -236,7 +238,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
     DID_SI.set(false);
     CAN_SI.set(false);
     CAN_SI_BACK.set(false);
-    if Win::current().w_cursor.col <= ColNr::new(1) {
+    if Win::current().cursor().col() <= ColNr::new(1) {
         DID_AI.set(false);
     }
     if call_fix_indent {
@@ -255,7 +257,7 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
     // dollar is displayed even when there is not one.
     //  --pkv Sun Jan 19 01:56:40 EST 2003
     if cpo_has(CpoFlag::BACKSPACE) && DOLLAR_VCOL.get() == ColNr::NONE {
-        DOLLAR_VCOL.set(Win::current().w_virtcol);
+        DOLLAR_VCOL.set(Win::current().w_virtcol());
     }
 
     // After deleting a character the cursor line must never be in a
@@ -277,10 +279,10 @@ pub(crate) fn ins_bs(c: Key, mode: Backspace, inserted_space: &mut bool) -> bool
 /// the cursor, then the characters the NL itself replaced.
 fn bs_join_line() -> bool {
     let lnum = INSSTART.get().lnum;
-    if Win::current().w_cursor.lnum == lnum || REVINS_ON.get() {
+    if Win::current().cursor().lnum() == lnum || REVINS_ON.get() {
         if u_save(
-            Win::current().w_cursor.lnum - 2,
-            Win::current().w_cursor.lnum + 1,
+            Win::current().cursor().lnum() - 2,
+            Win::current().cursor().lnum() + 1,
         )
         .is_err()
         {
@@ -301,14 +303,16 @@ fn bs_join_line() -> bool {
 
     // In Replace mode, on the line the replacing started on, only the
     // cursor moves.
-    if STATE.get() & REPLACE_FLAG != 0 && Win::current().w_cursor.lnum <= lnum {
+    if STATE.get() & REPLACE_FLAG != 0 && Win::current().cursor().lnum() <= lnum {
         cursor_back();
         return true;
     }
 
-    if STATE.get() & VREPLACE_FLAG == 0 || Win::current().w_cursor.lnum > ORIG_LINE_COUNT.get() {
+    if STATE.get() & VREPLACE_FLAG == 0 || Win::current().cursor().lnum() > ORIG_LINE_COUNT.get() {
         let temp = char_at_cursor(); // remember the current character
-        Win::current().w_cursor.lnum -= 1;
+        Win::current()
+            .cursor()
+            .set_lnum(Win::current().cursor().lnum() - 1);
 
         // With `aw` in 'formatoptions' the space at the end of the line
         // has to go too, or auto-formatting would break the line again.
@@ -342,9 +346,9 @@ fn bs_join_line() -> bool {
         // Restore the characters (blanks) that were deleted after the
         // cursor...
         while open {
-            let save_col = Win::current().w_cursor.col;
+            let save_col = Win::current().cursor().col();
             mb_replace_pop_ins();
-            Win::current().w_cursor.col = save_col;
+            Win::current().cursor().set_col(save_col);
             open = is_open(replace_pop_if_nul());
         }
         // ... and then the ones the NL replaced.
@@ -362,7 +366,7 @@ fn bs_join_line() -> bool {
 /// then pads forward with spaces.  `charsize_nowrap` is used throughout so
 /// that virtual text and wrapping cannot change the answer.
 fn bs_one_shiftwidth(in_indent: bool) {
-    let use_ts = Win::current().w_onebuf_opt.wo_list == 0 || Win::current().w_p_lcs_chars.tab1 != 0;
+    let use_ts = Win::current().wo_list() == 0 || Win::current().lcs_tab1() != 0;
     let (want_vcol, want_col, mut space_vcol) = with_cursor_line(|line, cursor_at| {
         // The cursor's virtual column, and the last white space before it
         // that is preceded by non-white space.
@@ -412,12 +416,12 @@ fn bs_one_shiftwidth(in_indent: bool) {
     });
 
     // Delete until at or before `want_col`.
-    while Win::current().w_cursor.col > want_col {
+    while Win::current().cursor().col() > want_col {
         cursor_back();
         if STATE.get() & REPLACE_FLAG != 0 {
             // Don't delete before the insert point in Replace mode.
-            if Win::current().w_cursor.lnum != INSSTART.get().lnum
-                || Win::current().w_cursor.col >= INSSTART.get().col
+            if Win::current().cursor().lnum() != INSSTART.get().lnum
+                || Win::current().cursor().col() >= INSSTART.get().col
             {
                 replace_do_bs(-1);
             }
@@ -518,10 +522,10 @@ fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
         // The `do`-`while` condition: keep going while there is
         // something left this key is allowed to take.
         let more = REVINS_ON.get()
-            || (Win::current().w_cursor.col > mincol
+            || (Win::current().cursor().col() > mincol
                 && (can_bs(BsFlag::NOSTOP)
-                    || (Win::current().w_cursor.lnum != INSSTART_ORIG.get().lnum
-                        || Win::current().w_cursor.col != INSSTART_ORIG.get().col)));
+                    || (Win::current().cursor().lnum() != INSSTART_ORIG.get().lnum
+                        || Win::current().cursor().col() != INSSTART_ORIG.get().col)));
         if !more {
             break;
         }
@@ -577,7 +581,7 @@ fn charsize_at(line: &[u8], use_ts: bool, vcol: ColNr, at: usize, chr: CharInfo)
 /// `f` of the cursor's line and the cursor's column in it.
 #[inline(always)]
 fn with_cursor_line<R>(f: impl FnOnce(&[u8], usize) -> R) -> R {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lines = Lines::current();
     f(
         lines.line(cursor.lnum),

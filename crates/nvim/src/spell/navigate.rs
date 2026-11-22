@@ -108,7 +108,7 @@ impl Win {
     ///
     /// Returns the length of the bad word, or 0 if none was found.
     pub fn spell_move_to(
-        mut self,
+        self,
         dir: c_int,
         behaviour: SpellMoveType,
         curline: bool,
@@ -123,7 +123,7 @@ impl Win {
             behaviour,
             curline,
             has_syntax: syntax_present(self),
-            lnum: self.w_cursor.lnum,
+            lnum: self.cursor().lnum(),
             buf: Vec::new(),
             skip: 0,
             capcol: ColNr::NONE,
@@ -147,7 +147,7 @@ impl Win {
             let (line_len, blank) = scan.load_line(self, &mut lines);
             let p = match scan.scan_line(self, line_len) {
                 LineScan::Found(len) => {
-                    self.w_cursor = scan.found_pos;
+                    self.set_w_cursor(scan.found_pos);
                     if let Some(found_attr) = found_attr {
                         *found_attr = scan.attr;
                     }
@@ -159,7 +159,7 @@ impl Win {
 
             if dir == BACKWARD && scan.found_pos.lnum != LineNr::ZERO {
                 // Take the last match in the line, before the cursor.
-                self.w_cursor = scan.found_pos;
+                self.set_w_cursor(scan.found_pos);
                 ret = scan.found_len;
                 break;
             }
@@ -253,7 +253,7 @@ impl SpellScan {
             self.buf[line_len] = 0;
             skip::white(line) == line.len()
         };
-        if lnum < window.w_buffer.line_count() {
+        if lnum < window.w_buffer().line_count() {
             let next = lines.line(lnum + 1);
             spell_cat_line(&mut self.buf[line_len..], next, MAXWLEN);
         }
@@ -269,9 +269,9 @@ impl SpellScan {
             // Searching backwards, stop at the cursor — unless the search
             // already wrapped past the end of the buffer.
             if self.dir == BACKWARD
-                && lnum == window.w_cursor.lnum
+                && lnum == window.cursor().lnum()
                 && !self.wrapped
-                && ColNr::from_index(p) >= window.w_cursor.col
+                && ColNr::from_index(p) >= window.cursor().col()
             {
                 break;
             }
@@ -284,9 +284,9 @@ impl SpellScan {
                 // counts.
                 let col = ColNr::from_index(p);
                 let past_cursor = self.dir == BACKWARD
-                    || lnum != window.w_cursor.lnum
+                    || lnum != window.cursor().lnum()
                     || self.wrapped
-                    || col + if self.curline { len_as_int(len) } else { 0 } > window.w_cursor.col;
+                    || col + if self.curline { len_as_int(len) } else { 0 } > window.cursor().col();
 
                 if !past_cursor {
                     self.found_one = true;
@@ -342,12 +342,12 @@ impl SpellScan {
     /// the line's length and `blank` whether it was blank. Answers `false`
     /// when the search is over.
     fn next_line(&mut self, window: Win, p: usize, endp: usize, blank: bool) -> bool {
-        let start = window.w_cursor.lnum;
+        let start = window.cursor().lnum();
         // Back at the starting line having searched it twice: give up.
         if self.lnum == start && self.wrapped {
             return false;
         }
-        let line_count = window.w_buffer.line_count();
+        let line_count = window.w_buffer().line_count();
 
         if self.dir == BACKWARD {
             if self.lnum > LineNr::ONE {

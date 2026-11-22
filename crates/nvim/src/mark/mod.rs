@@ -129,8 +129,8 @@ pub(crate) static NAMEDFM: GlobalCell<[XFileMark; 36]> = GlobalCell::new([XFileM
 /// Answers `Ok` on success, `Err` if bad name given.
 pub fn setmark(c: u8) -> Result<(), Failed> {
     let (win, buf) = (Win::current(), Buf::current());
-    let view = mark_view_make_at(win, win.w_cursor);
-    setmark_pos(c, win.w_cursor, true, Some(buf.handle()), view)
+    let view = mark_view_make_at(win, win.w_cursor());
+    setmark_pos(c, win.w_cursor(), true, Some(buf.handle()), view)
 }
 
 /// Schedules "MarkSet" event.
@@ -187,12 +187,12 @@ fn setmark_pos(
     // the buffer's: setting it from the cursor pushes a jumplist entry, while
     // setting it from anywhere else just moves it.
     if c == b'\'' || c == b'`' {
-        let mut win = Win::current();
+        let win = Win::current();
         if from_cursor {
             setpcmark();
-            win.w_prev_pcmark = win.w_pcmark;
+            win.set_w_prev_pcmark(win.w_pcmark());
         } else {
-            win.w_pcmark = at;
+            win.set_w_pcmark(at);
         }
         return Ok(());
     }
@@ -259,22 +259,22 @@ pub(crate) fn setmark_at(c: u8, pos: Pos, fnum: Option<Handle>) -> Result<(), Fa
 impl Win {
     /// Delete every entry referring to file "fnum" from both the jumplist and the
     /// tag stack.
-    pub fn forget_file_marks(mut self, fnum: Option<Handle>) {
+    pub fn forget_file_marks(self, fnum: Option<Handle>) {
         self.forget_file_in_jumplist(fnum);
         // Backwards, so removing an entry cannot skip the one after it.
-        for i in (0..self.w_tagstacklen).rev() {
+        for i in (0..self.w_tagstacklen()).rev() {
             let at = slot(i);
-            if self.w_tagstack[at].fmark.fnum() != fnum {
+            if self.read().w_tagstack[at].fmark.fnum() != fnum {
                 continue;
             }
-            let len = slot(self.w_tagstacklen);
-            if self.w_tagstackidx > i {
-                self.w_tagstackidx -= 1;
+            let len = slot(self.w_tagstacklen());
+            if self.w_tagstackidx() > i {
+                self.set_w_tagstackidx(self.w_tagstackidx() - 1);
             }
-            self.w_tagstacklen -= 1;
+            self.set_w_tagstacklen(self.w_tagstacklen() - 1);
             // Close the gap: the entries above move down one, and the cleared
             // one goes to the top, past the end of what is in use.
-            let stack = &mut self.w_tagstack[at..len];
+            let stack = &mut self.edit().w_tagstack[at..len];
             tagstack_clear_entry(&mut stack[0]);
             stack.rotate_left(1);
         }
@@ -313,7 +313,7 @@ pub fn mark_view_restore(fm: Option<&FileMark>) {
     if topline < LineNr::ONE {
         return;
     }
-    let mut win = Win::current();
+    let win = Win::current();
     set_topline(win, topline);
     // A remembered `skipcol` is dropped when the line it names is now folded
     // away or has become too short to reach — restoring it would scroll the
@@ -325,7 +325,7 @@ pub fn mark_view_restore(fm: Option<&FileMark>) {
     let keep = skipcol > ColNr::ZERO
         && !win.has_folding(topline, None, None)
         && skipcol < ColNr::new(linetabsize_eol(win, topline));
-    win.w_skipcol = if keep { skipcol } else { ColNr::ZERO };
+    win.set_w_skipcol(if keep { skipcol } else { ColNr::ZERO });
 }
 
 pub fn mark_view_make(window: Win, pos: Pos) -> FileMarkView {
@@ -336,8 +336,8 @@ pub fn mark_view_make(window: Win, pos: Pos) -> FileMarkView {
 /// position sits, and where the window was scrolled to sideways.
 fn mark_view_make_at(window: Win, pos: Pos) -> FileMarkView {
     FileMarkView {
-        topline_offset: pos.lnum - window.w_topline,
-        skipcol: window.w_skipcol,
+        topline_offset: pos.lnum - window.w_topline(),
+        skipcol: window.w_skipcol(),
     }
 }
 
@@ -394,9 +394,9 @@ pub fn fmarks_check_names(buffer: Buf) {
     });
     // The current tab page's windows only, as upstream: a mark in another
     // tab page's jumplist keeps its file name until that window is used.
-    for mut win in windows() {
-        let len = slot(win.w_jumplistlen);
-        for jump in &mut win.w_jumplist[..len] {
+    for win in windows() {
+        let len = slot(win.w_jumplistlen());
+        for jump in &mut win.edit().w_jumplist[..len] {
             fmarks_check_one(jump, name, handle);
         }
     }
@@ -499,7 +499,7 @@ pub fn set_last_cursor(win: Win) {
     };
     // `fnum` 0, not the buffer's handle: this mark is written when the buffer
     // is left, and the shada writer is what fills the file name in.
-    buf.edit().b_last_cursor = FileMark::fresh(win.w_cursor, None, FileMarkView::NONE);
+    buf.edit().b_last_cursor = FileMark::fresh(win.w_cursor(), None, FileMarkView::NONE);
 }
 
 /// Adjust position to point to the first byte of a multi-byte character

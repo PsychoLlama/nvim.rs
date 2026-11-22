@@ -197,7 +197,7 @@ impl ComplOrigExtmarks {
     /// `splice_delete` runs no editor code that could look, and nothing
     /// sees it half-grown.
     pub(crate) fn save(self) {
-        let lnum = Win::current().w_cursor.lnum.get() - 1;
+        let lnum = Win::current().cursor().lnum().get() - 1;
         let buf = Buf::current();
         let (start, end) = (COMPL_COL.get(), COMPL_COL.get() + COMPL_LENGTH.get());
         COMPL_ORIG_EXTMARKS.update(|saved| {
@@ -243,12 +243,12 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
     COMPL_GET_LONGEST.set(compl_longest);
 
     COMPL_DIRECTION.set(FORWARD);
-    if startcol > Win::current().w_cursor.col {
-        startcol = Win::current().w_cursor.col;
+    if startcol > Win::current().cursor().col() {
+        startcol = Win::current().cursor().col();
     }
     COMPL_COL.set(startcol);
-    COMPL_LNUM.set(Win::current().w_cursor.lnum);
-    COMPL_LENGTH.set(Win::current().w_cursor.col - startcol);
+    COMPL_LNUM.set(Win::current().cursor().lnum());
+    COMPL_LENGTH.set(Win::current().cursor().col() - startcol);
     // compl_pattern doesn't need to be set.
     compl_orig_text().set(compl_text_from_line());
     compl_orig_extmarks().save();
@@ -270,8 +270,8 @@ pub(crate) fn set_completion(mut startcol: ColNr, list: Option<&ListRef>) {
     COMPL_STARTED.set(true);
     COMPL_USED_MATCH.set(true);
     COMPL_CONT_STATUS.set(0);
-    let save_w_wrow = Win::current().w_wrow;
-    let save_w_leftcol = Win::current().w_leftcol;
+    let save_w_wrow = Win::current().w_wrow();
+    let save_w_leftcol = Win::current().w_leftcol();
 
     COMPL_CURR_MATCH.set(COMPL_FIRST_MATCH.get());
     let no_select = compl_no_select || compl_longest;
@@ -393,7 +393,7 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
     }
 
     if ret.is_ok() && what_flag & CI_WHAT_PREINSERTED_TEXT != 0 {
-        let cursor = Win::current().w_cursor;
+        let cursor = Win::current().w_cursor();
         let len = usize::try_from(COMPL_INS_END_COL.get() - cursor.col).unwrap_or(0);
         let text = if len > 0 {
             let mut lines = Lines::current();
@@ -461,7 +461,7 @@ pub(crate) fn get_complete_info(what_list: Option<&List>, retdict: &mut Dict) {
     if ret.is_ok() && what_flag & CI_WHAT_SELECTED != 0 {
         ret = add_nr(retdict, "selected", VarNumber::from(selected_idx));
         if let Some(wp) = win_float_find_preview() {
-            let _ = add_nr(retdict, "preview_winid", VarNumber::from(wp.handle.get()));
+            let _ = add_nr(retdict, "preview_winid", VarNumber::from(wp.handle().get()));
             let _ = add_nr(
                 retdict,
                 "preview_bufnr",

@@ -157,7 +157,7 @@ impl DoTag {
         // `:help` tags are literal, and 'tagfunc' has no business
         // answering for them.
         let help = kind == TagCmd::Help;
-        let idx = win.w_tagstackidx;
+        let idx = win.w_tagstackidx();
 
         let cmd = DoTag {
             tag: XString::from_cstr(tag),
@@ -167,7 +167,7 @@ impl DoTag {
             verbose,
             win: win.id(),
             idx,
-            len: win.w_tagstacklen,
+            len: win.w_tagstacklen(),
             old_idx: idx,
             prev_idx: idx,
             cur_match: 0,
@@ -198,9 +198,9 @@ impl DoTag {
     /// Answers `None` when that window has gone, or the entry is not one
     /// the stack has.
     fn with_entry<R>(&self, at: c_int, f: impl FnOnce(&mut Taggy) -> R) -> Option<R> {
-        let mut win = self.win.get()?;
+        let win = self.win.get()?;
         let at = usize::try_from(at).ok()?;
-        win.w_tagstack.get_mut(at).map(f)
+        win.edit().w_tagstack.get_mut(at).map(f)
     }
 
     /// [`with_entry`](Self::with_entry) for the entry the command stands on.
@@ -273,10 +273,11 @@ impl DoTag {
             return;
         }
 
-        let Some(mut win) = self.win.get() else {
+        let Some(win) = self.win.get() else {
             return;
         };
-        let stack = &mut win.w_tagstack;
+        let mut edit = win.edit();
+        let stack = &mut edit.w_tagstack;
         // Anything above the entry last used is now unreachable.
         while self.idx < self.len {
             self.len -= 1;
@@ -292,7 +293,8 @@ impl DoTag {
         }
 
         stack[stack_index(self.idx)].tagname = Some(ThinCString::from_bytes(&self.tag));
-        win.w_tagstacklen = self.len;
+        drop(edit);
+        win.set_w_tagstacklen(self.len);
         // Worth remembering where the cursor was.
         self.save_pos = true;
     }
@@ -363,13 +365,13 @@ impl DoTag {
             }
             // A BufReadPost autocommand may jump to the '" mark, which
             // is not wanted here.
-            Win::current().w_cursor.lnum = mark.mark.lnum;
+            Win::current().cursor().set_lnum(mark.mark.lnum);
         } else {
             setpcmark();
-            Win::current().w_cursor.lnum = mark.mark.lnum;
+            Win::current().cursor().set_lnum(mark.mark.lnum);
         }
-        Win::current().w_cursor.col = mark.mark.col;
-        Win::current().w_set_curswant = true;
+        Win::current().cursor().set_col(mark.mark.col);
+        Win::current().set_w_set_curswant(true);
         if JOP_FLAGS.get() & OPT_JOP_FLAG_VIEW as c_uint != 0 {
             mark_view_restore(Some(&self.saved_fmark));
         }
@@ -449,7 +451,7 @@ impl DoTag {
         let save_pos = self.save_pos;
         let selecting = self.selecting();
         let (cur_match, cur_fnum) = (self.cur_match, self.cur_fnum);
-        let cursor = Win::current().w_cursor;
+        let cursor = Win::current().w_cursor();
         let view = mark_view_make(Win::current(), cursor);
         let handle = Buf::current().handle();
         let saved = self.with_current(|entry| {
@@ -471,7 +473,7 @@ impl DoTag {
 
         // `curwin` changes in `jumpto_tag` for `:stag`, or when an
         // autocommand jumps to another window, so store the index now.
-        Win::current().w_tagstackidx = self.idx;
+        Win::current().set_w_tagstackidx(self.idx);
     }
 
     /// Prioritise matches against the buffer `cur_fnum` names.
@@ -725,8 +727,8 @@ impl DoTag {
         if result != Ok(Jumped::NoSuchFile) {
             // We may have jumped to another window; check the index is
             // still one this window has.
-            if self.use_tagstack && self.idx > Win::current().w_tagstacklen {
-                self.idx = Win::current().w_tagstackidx;
+            if self.use_tagstack && self.idx > Win::current().w_tagstacklen() {
+                self.idx = Win::current().w_tagstackidx();
             }
             return Ok(false);
         }
@@ -790,8 +792,8 @@ impl DoTag {
     fn finish(&mut self) {
         // Only when using the tag stack, and only when the index is
         // one this window still has.
-        if self.use_tagstack && self.idx <= Win::current().w_tagstacklen {
-            Win::current().w_tagstackidx = self.idx;
+        if self.use_tagstack && self.idx <= Win::current().w_tagstacklen() {
+            Win::current().set_w_tagstackidx(self.idx);
         }
         // Don't split, or preview, next time.
         POSTPONED_SPLIT.set(0);

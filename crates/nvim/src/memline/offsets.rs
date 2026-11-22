@@ -434,14 +434,16 @@ pub fn goto_byte(cnt: c_int) {
     }
     let found = Buf::current().find_line_or_offset(LineNr::ZERO, Some(&mut boff), false);
     if let Some(lnum) = found.filter(|&lnum| lnum >= 1) {
-        Win::current().w_cursor.lnum = LineNr::new(lnum);
-        Win::current().w_cursor.col = ColNr::new(boff);
-        Win::current().w_cursor.coladd = 0;
-        Win::current().w_set_curswant = true;
+        Win::current().cursor().set_lnum(LineNr::new(lnum));
+        Win::current().cursor().set_col(ColNr::new(boff));
+        Win::current().cursor().set_coladd(0);
+        Win::current().set_w_set_curswant(true);
     } else {
         // Past the end.
-        Win::current().w_cursor.lnum = Buf::current().line_count();
-        Win::current().w_curswant = ColNr::MAX;
+        Win::current()
+            .cursor()
+            .set_lnum(Buf::current().line_count());
+        Win::current().set_w_curswant(ColNr::MAX);
         coladvance(Win::current(), ColNr::MAX);
     }
     check_cursor(Win::current());

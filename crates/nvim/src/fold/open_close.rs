@@ -103,7 +103,7 @@ pub fn fold_open_cursor() {
     }
     loop {
         let mut done: c_int = DONE_NOTHING;
-        set_manual_fold(Win::current().w_cursor, true, false, Some(&mut done));
+        set_manual_fold(Win::current().w_cursor(), true, false, Some(&mut done));
         // The loop's only exit. Each pass opens the outermost fold still
         // closed over the cursor, so once a pass opens nothing there is
         // nothing left to open.
@@ -116,28 +116,28 @@ pub fn fold_open_cursor() {
 /// Set new foldlevel for current window.
 pub fn new_fold_level() {
     new_fold_level_win(Win::current());
-    if !(foldmethod_is_diff(Win::current()) && Win::current().w_onebuf_opt.wo_scb != 0) {
+    if !(foldmethod_is_diff(Win::current()) && Win::current().wo_scb() != 0) {
         return;
     }
     // 'scrollbind' in a diff: the other diffed windows follow.
-    for mut win in windows_in_tab(TabPage::current()) {
-        if !win.is_current() && foldmethod_is_diff(win) && win.w_onebuf_opt.wo_scb != 0 {
-            win.w_onebuf_opt.wo_fdl = Win::current().w_onebuf_opt.wo_fdl;
+    for win in windows_in_tab(TabPage::current()) {
+        if !win.is_current() && foldmethod_is_diff(win) && win.wo_scb() != 0 {
+            win.set_wo_fdl(Win::current().wo_fdl());
             new_fold_level_win(win);
         }
     }
 }
 
 /// Hand `win`'s toplevel folds back to 'foldlevel'.
-pub(super) fn new_fold_level_win(mut win: Win) {
+pub(super) fn new_fold_level_win(win: Win) {
     checkupdate(win);
-    if win.w_fold_manual {
+    if win.w_fold_manual() {
         win.with_folds(|folds| {
             for fold in folds {
                 fold.state = FoldState::Level;
             }
         });
-        win.w_fold_manual = false;
+        win.set_w_fold_manual(false);
     }
     changed_window_setting(win);
 }
@@ -150,8 +150,8 @@ pub fn fold_check_close() {
     let win = Win::current();
     checkupdate(win);
     let (lnum, level) = (
-        win.w_cursor.lnum,
-        c_int::try_from(win.w_onebuf_opt.wo_fdl).unwrap_or(c_int::MAX),
+        win.cursor().lnum(),
+        c_int::try_from(win.wo_fdl()).unwrap_or(c_int::MAX),
     );
     let changed = win.with_folds(|folds| close_folds_off_cursor(folds, lnum, level));
     if changed {
@@ -290,7 +290,7 @@ fn insert_new_fold(
 
 /// Create a fold from line "start" to line "end" (inclusive) in window `window`.
 pub fn fold_create(window: Win, start_pos: Pos, end_pos: Pos) {
-    let mut win = window;
+    let win = window;
     let (start, end) = if start_pos.lnum > end_pos.lnum {
         (end_pos, start_pos)
     } else {
@@ -302,7 +302,7 @@ pub fn fold_create(window: Win, start_pos: Pos, end_pos: Pos) {
         return;
     }
     checkupdate(win);
-    let foldlevel = win.w_onebuf_opt.wo_fdl;
+    let foldlevel = win.wo_fdl();
     let new = win.with_folds(|root| insert_new_fold(root, start.lnum, end.lnum, foldlevel));
     // We want the new fold to be closed. If it would remain open because of
     // using 'foldlevel', the folds containing it have to be closed by hand.
@@ -311,7 +311,7 @@ pub fn fold_create(window: Win, start_pos: Pos, end_pos: Pos) {
         close_fold(start, 1);
     }
     if !new.use_level {
-        win.w_fold_manual = true;
+        win.set_w_fold_manual(true);
     }
     // Closing changed only states, so the new fold is still the one over
     // `start` at its depth.
@@ -442,13 +442,13 @@ pub(super) fn set_manual_fold(
     recurse: bool,
     donep: Option<&mut c_int>,
 ) -> LineNr {
-    if foldmethod_is_diff(Win::current()) && Win::current().w_onebuf_opt.wo_scb != 0 {
+    if foldmethod_is_diff(Win::current()) && Win::current().wo_scb() != 0 {
         // 'scrollbind' in a diff: the matching fold in the other windows.
         for win in windows_in_tab(TabPage::current()) {
-            if win.is_current() || !foldmethod_is_diff(win) || win.w_onebuf_opt.wo_scb == 0 {
+            if win.is_current() || !foldmethod_is_diff(win) || win.wo_scb() == 0 {
                 continue;
             }
-            let dlnum = diff_lnum_win(Win::current().w_cursor.lnum, win);
+            let dlnum = diff_lnum_win(Win::current().cursor().lnum(), win);
             if dlnum != LineNr::ZERO {
                 win.set_manual_fold(dlnum, opening, recurse, None);
             }
@@ -564,21 +564,21 @@ impl Win {
     ///                 It's only valid when "opening" is true!
     ///
     pub(super) fn set_manual_fold(
-        mut self,
+        self,
         lnum: LineNr,
         opening: bool,
         recurse: bool,
         donep: Option<&mut c_int>,
     ) -> LineNr {
         checkupdate(self);
-        let foldlevel = self.w_onebuf_opt.wo_fdl;
+        let foldlevel = self.wo_fdl();
         let ManualFold {
             found_fold,
             mut done,
             next,
         } = self.with_folds(|root| set_folds_on_line(root, lnum, opening, recurse, foldlevel));
         if found_fold {
-            self.w_fold_manual = true;
+            self.set_w_fold_manual(true);
             if done & DONE_ACTION != 0 {
                 changed_window_setting(self);
             }
@@ -667,7 +667,7 @@ pub(super) fn closed_at(
     maybe_smallp: &mut bool,
     lnum_off: i32,
 ) -> bool {
-    let (foldlevel, foldminlines) = (win.w_onebuf_opt.wo_fdl, win.w_onebuf_opt.wo_fml);
+    let (foldlevel, foldminlines) = (win.wo_fdl(), win.wo_fml());
     let verdict = win.with_folds(|root| {
         let fold = fold_on_line(root, lnum, depth)?;
         let verdict = check_closed(

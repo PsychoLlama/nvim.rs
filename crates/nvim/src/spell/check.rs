@@ -383,12 +383,12 @@ pub fn spell_valid_case(wordflags: WordFlags, treeflags: WordFlags) -> bool {
 /// Whether spell checking is on for `window` and a language is actually loaded.
 pub fn spell_check_window(window: Win) -> bool {
     let syn = window.syn_block();
-    window.w_onebuf_opt.wo_spell != 0 && syn.b_p_spl.first_byte() != 0 && !syn.b_langp.is_empty()
+    window.wo_spell() != 0 && syn.b_p_spl.first_byte() != 0 && !syn.b_langp.is_empty()
 }
 
 /// Whether spell checking is *off* for `window`, giving an error if so.
 pub fn no_spell_checking(window: Win) -> bool {
-    if window.w_onebuf_opt.wo_spell == 0
+    if window.wo_spell() == 0
         || window.syn_block().b_p_spl.first_byte() == 0
         || window.syn_block().b_langp.is_empty()
     {
@@ -511,7 +511,7 @@ pub fn spell_word_start(startcol: c_int) -> c_int {
     }
 
     let mut lines = Lines::current();
-    let line = lines.line(win.w_cursor.lnum);
+    let line = lines.line(win.cursor().lnum());
 
     // Back up to a word character.
     let mut p = usize::try_from(startcol).unwrap_or(0).min(line.len());
@@ -548,7 +548,7 @@ static SPELL_EXPAND_NEED_CAP: GlobalCell<bool> = GlobalCell::new(false);
 pub fn spell_expand_check_cap(col: ColNr) {
     SPELL_EXPAND_NEED_CAP.set(check_need_cap(
         Win::current(),
-        Win::current().w_cursor.lnum,
+        Win::current().cursor().lnum(),
         col,
     ));
 }

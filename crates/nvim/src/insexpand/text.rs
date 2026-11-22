@@ -293,7 +293,7 @@ pub(crate) fn find_common_prefix(curbuf_only: bool) -> Option<(XString, usize)> 
     let first = first.expect("a prefix longer than the leader came from a match");
     // Avoid inserting text that duplicates the text already after the cursor.
     if len == first.len() {
-        let cursor = Win::current().w_cursor;
+        let cursor = Win::current().w_cursor();
         let mut lines = Lines::current();
         let line = lines.line(cursor.lnum);
         let p = usize::try_from(cursor.col).unwrap_or(0);
