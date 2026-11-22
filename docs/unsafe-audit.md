@@ -87,8 +87,8 @@ unsafe_placement` lists any misplaced attribute (none);
 | `allocator.rs`                              | memory   |     1 |         16 |            4 | the global allocator                             |
 | `memory/`                                   | memory   |     4 |         99 |           36 | `xmalloc`, the block pool, owned C strings       |
 | `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
-| `slot.rs`                                   | memory   |     1 |         19 |            2 | type-stable slots and their checked handles      |
-| `winlayer.rs`, `winlayer/`                  | memory   |     6 |         42 |           10 | window, buffer, grid and terminal handles        |
+| `slot.rs`                                   | memory   |     1 |         32 |            7 | type-stable slots and their checked handles      |
+| `winlayer.rs`, `winlayer/`                  | memory   |     6 |         49 |            9 | window, buffer, grid and terminal handles        |
 | `eval/typval/handle.rs`                     | memory   |     1 |         50 |            8 | Vimscript value handles                          |
 | `vterm/abi/`                                | test ABI |     3 |         90 |           31 | libvterm's C interface                           |
 | `harness.rs`                                | test ABI |     1 |          8 |            5 | editor symbols the harnesses resolve             |
@@ -278,12 +278,16 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 - **What:** `SlotPool<T>`, which allocates each slot once and never gives
   its memory back, `SlotRef<T>`, a `Copy` handle of the slot's address and
   the generation its value was handed out under, and `SlotBox<T>`, the one
-  owner of a value in its type's pool (19): the header reads (generation,
-  index; 2), the value's writes, reads and drops as it enters and leaves a
-  slot (7), the dereferences of a live handle, a detached slot, a vacant
-  place being filled and the pool's own borrow (6), and the two `unsafe fn`s
-  that take a value address apart (`generation_at`, `SlotRef::from_parts`;
-  the graph handles' constructors from a bare address) with their tests (4).
+  owner of a value in its type's pool, and the two guards a value is lent
+  through, `SlotEdit` (the edit bit) and `SlotRead` (a counted borrow)
+  (32): the header reads (generation, index, reader count; 3), the value's
+  writes, reads and drops as it enters and leaves a slot (7), the
+  dereferences of a live handle, a detached slot, a vacant place being
+  filled, the pool's own borrow and the two guards (9), and the `unsafe
+fn`s that take a value address apart (`slot_of`, `generation_at`,
+  `word_at`, `SlotRef::from_parts`; the graph handles' constructors and
+  checks from a bare address) or lend through one (`edit_at`, `read_at`,
+  `check_write`), with their tests (13).
   `IdTable` (`id_table.rs`, forbid) is built on it, and so are the window,
   buffer, tab page and frame pools (`winlayer/handles.rs`, forbid).
 - **Contract:** a slot's value is initialised exactly while its generation
@@ -293,9 +297,14 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   run, reading the generation through any handle ever made is sound, so a
   dereference is one load and one compare, and a stale one panics. A pool
   has no destructor: every pool is a field of a static. A value address
-  handed to `generation_at`/`from_parts` must be a slot's (`SlotRef::raw`).
-  What it does not hold is exclusivity — two copies may lend overlapping
-  `&mut`, as the `winlayer` handles do ([safe-surface.md](safe-surface.md)
+  handed to any of the value-address `unsafe fn`s must be a slot's
+  (`SlotRef::raw`). The generation's top bit is the edit bit: `edit_at`
+  sets it while its guard lends the value, so every exact compare refuses
+  meanwhile; `read_at` counts its guard, and an edit, `check_write` or
+  emptying the slot refuses while the count is not zero. Exclusivity holds
+  only for what is lent through those guards (`TabPage`, `FrameRef`,
+  `PosRef`): a `SlotRef`'s and `Win`/`Buf`'s `DerefMut` through two
+  copies still lend overlapping `&mut` ([safe-surface.md](safe-surface.md)
   S5).
 - **Retires:** never; it is the floor the window, buffer and tab page
   handles stand on.
@@ -304,8 +313,10 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 
 - **What:** `Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, the
   screen grid handle `GridRef` and the terminal handle `Term` — each a
-  `Copy` value over one pointer (`winlayer.rs` 12, `graph.rs` 17,
-  `deref.rs` 3 — the checked dereference —, `grid.rs` 2, `terminal.rs` 2). Building one from an address is the
+  `Copy` value over one pointer (`winlayer.rs` 10, `graph.rs` 17,
+  `deref.rs` 18 — the checked dereference, and `TabPage`/`FrameRef`/
+  `PosRef`'s place getters and setters and `edit()`/`read()` —, `grid.rs`
+  2, `terminal.rs` 2). Building one from an address is the
   unsafe step; dereferencing it is not. `curwin`/`CURBUF`/`CURTAB` are cells
   holding a raw pointer (`curwin` is a C symbol a functional spec reads).
 - **Contract:** the constructor's caller promises the object is live when
@@ -318,8 +329,10 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   **The re-entry rule:** a handle held across a call that may fire an
   autocommand or run Lua or Vimscript is re-derived from its id afterwards
   (now checked: the stale use panics), and no `&mut` reached through one is
-  held across such a call (still review: two copies alias, S5 in
-  [safe-surface.md](safe-surface.md)). A freed window's block is an owned
+  held across such a call (still review for `Win`/`Buf`: two copies alias,
+  S5 in [safe-surface.md](safe-surface.md); `TabPage`, `FrameRef` and
+  `PosRef` lend no reference but through checked guards, so for them a
+  breach panics). A freed window's block is an owned
   `ParkedWindow`, freed by dropping it; freeing an unregistered window is
   debug-asserted impossible.
 - **Retires:** only with a different object model (owning registries with

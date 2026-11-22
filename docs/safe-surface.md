@@ -266,7 +266,7 @@ gains a `Cell` or a raw pointer fails to build.
 
 ### S5 — `Copy` object handles lending `&`/`&mut` (sound-by-convention)
 
-`Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, ~~`Live<T>`~~, `GridRef`, `Term`:
+`Win`, `Buf`, ~~`TabPage`, `FrameRef`, `PosRef`~~, ~~`Live<T>`~~, `GridRef`, `Term`:
 `Deref`/`DerefMut` from a `Copy` value. Constructors are `unsafe` (or the
 registries, which check); every dereference after is safe and unchecked.
 Rows: the eight `Deref`/`DerefMut` pairs; `Win::syn_block`/~~`syn_block_mut`~~
@@ -397,8 +397,8 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   panics at its next dereference instead of reading what is left of it.
   Functional, oldtest and the sweep (debug and release) ran unchanged with
   it: nothing read a parked object. **Liveness is what closed; aliasing is
-  not:** two copies still lend overlapping `&mut` (the `edit()` + EDIT-bit
-  slices), and `PosRef`, `GridRef` and `Term` carry no generation yet.
+  not** for `Win`/`Buf`: two copies still lend overlapping `&mut` (the
+  `edit()` slices below), and `GridRef` and `Term` carry no generation yet.
 - **Closed — `Live<T>` (check-always):** ~~`Live<T>`~~ is deleted, with
   the promise it recorded. Its last two users: the command line, `Cc`, is
   now a place rather than an address (`ex_getln/line.rs`: the `CCLINE` cell,
@@ -416,6 +416,57 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   cachegrind Ir, two runs): scrbench +0.32..0.37 % (the syntax block's owner check),
   mkspellbench +0.5..0.6 % (its base moves 0.6 % between runs), every
   other bench within ±0.3 %.
+- **Closed — `TabPage`, `FrameRef`, `PosRef` (type holds it, checked,
+  both halves):** ~~`DerefMut`~~ and ~~`Deref`~~ are gone from all three.
+  A `Copy` field is read by value and written in place by a generated
+  getter/setter (`slot_fields!`, `winlayer/deref.rs`): a place access
+  through the slot's raw address, which forms no reference to the object.
+  A compound change goes through `TabPage::edit()`, a guard that sets the
+  **edit bit**, the top bit of the slot's generation word (`slot::edit_at`),
+  and puts the word back on drop or unwind. Every handle check compares the
+  whole word with its generation _exactly_, so the one compare that asks
+  "alive?" also asks "not lent out?": while an edit is held, a getter, a
+  setter, a read, another edit or a free through any copy panics. A borrow
+  of a field that is not `Copy` (`tp_diff`, `tp_winvar`, `tp_localdir`,
+  `tp_prevdir`) goes through `TabPage::read()`, a guard the slot counts
+  (`slot::read_at`, a reader count beside the generation): an edit, a
+  setter or emptying the slot refuses while one is out, so the read half
+  is closed too (a borrow held across code that writes the tab page through
+  another copy panics at that write). `PosRef` is no longer an address into
+  a window but the window's handle: `get`/`set`/`set_lnum`/… checked
+  against the window's slot, and `modify(f)` for the `inc`/`decl` helpers
+  (copy, step, store back), so no `&mut Pos` into a window outlives a
+  statement. `with_diff` lends `tp_diff` under an edit; the diff code
+  already copied the slot table out first, and nothing reached the tab
+  page from inside. ~520 sites, rewritten from the compiler's errors; none
+  fired across functional (9,365) and oldtest (4,682). The same `edit()`/
+  `read()` (`guarded_handles!`) serve `Win` and `Buf` when they give up
+  `DerefMut`. `SynBlockRef`'s aliasing rides on its owner handle (`Buf`/
+  `Win`), so it closes with theirs. Cost (release, codegen-units = 1,
+  cachegrind Ir) against the build before: scrbench +0.70 % (a
+  register-allocation shift inside `win_line`, where the checks of
+  `Win`/`Buf` dereferences moved; no check was added there), rpcbench
+  +0.44 %, undobench +0.40 %, mlbench +0.39 %, evalbench +0.34 %,
+  readbench +0.26 %, the rest ≤ 0.2 %. The reader count is not asked
+  when a pool lends its own `&mut` (`get_mut`: the condition stacks take
+  it per command line, +0.15 % evalbench when it was).
+- **Decided — the read half for `Win`/`Buf` (Q3):** a transient field read
+  through `Deref` is already refused while an edit is out (the exact
+  compare); what stays open is a `&Window`/`&Buffer` _held_ past its
+  expression across another copy's edit. Closing it means what closed it
+  above: `Deref` deleted, a getter per `Copy` field (no runtime cost: the
+  same compare and load) and a counted `read()` for every borrow. Sites
+  (grep, `crates/nvim/src`): ~6,200 `.w_*` and ~3,200 `.b_*` accesses, of
+  which ~3,900 are nested projections (`w_cursor.lnum`,
+  `w_onebuf_opt.wo_*`, `b_ml.*`: a getter per leaf, or per parent
+  returning a copy), ~810 method calls on a field and ~130 `&x.w_*`/
+  `&x.b_*` borrows — ~950 sites that need a counted `read()` (two loads
+  and two stores each, several on hot paths: option strings in the
+  drawer, `b_ml` in memline walks). Recommendation: do it in the `Win`/
+  `Buf` slices together with `DerefMut`'s removal (the same sweep visits
+  every site), counted reads only where a borrow outlives its statement,
+  and budget it like S6b's read count (evalbench +1.8 % there):
+  expect ≤ ~1 % on ml/scr/ed once hot walks take one guard per walk.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with
@@ -432,7 +483,7 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   across a call that runs user code (an autocommand, a Lua callback — the
   p45 hazard — Vimscript) and dereferenced after `:bwipeout`/`:close` freed
   the object: now a panic at the dereference, not a use-after-free. Still
-  open for `PosRef`/`GridRef`/`Term`.
+  open for `GridRef`/`Term` (`PosRef` is its window's handle now).
 - **Closure:** restructure. Liveness: a handle is an id plus a generation
   checked against a side table on dereference (the object's own memory
   cannot carry it — it may be freed); a check-always that wants its own
@@ -440,8 +491,8 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   through a checked handle, writes through a scoped, tracked `with_mut`
   (S1's tracker keyed by object). Order: ~~`GridRef` + `of_cell` (S)~~, ~~`Term`
   (S)~~, ~~`syn_block_mut` (13 sites, S)~~, ~~`held_line` (the matcher's line
-  cursor, M)~~, ~~`Live<T>` users (M)~~, then `Win`/`Buf`/`TabPage` (XL; 553 files
-  name them). **XL** overall.
+  cursor, M)~~, ~~`Live<T>` users (M)~~, ~~`TabPage`/`FrameRef`/`PosRef`
+  (M)~~, then `Win`/`Buf` (XL; 553 files name them). **XL** overall.
 
 ### ~~S6 — value-handle edits~~ (closed: check-always, and a type for partials)
 
