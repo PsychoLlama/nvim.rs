@@ -90,7 +90,7 @@ pub(crate) fn get_fpos_of_mouse(mpos: &mut Pos) -> c_int {
     }
 
     // winpos and height may change in win_enter()!
-    if winrow >= win.w_view_height + win.w_status_height {
+    if winrow >= win.w_view_height() + win.w_status_height() {
         // Below the window; the global status line spans the whole screen.
         let below_screen = OptInt::from(ROWS.get()) - p_ch();
         if MOUSE_GRID.get() <= 1
@@ -100,14 +100,14 @@ pub(crate) fn get_fpos_of_mouse(mpos: &mut Pos) -> c_int {
             return IN_STATUS_LINE;
         }
         return IN_UNKNOWN;
-    } else if winrow >= win.w_view_height {
+    } else if winrow >= win.w_view_height() {
         return IN_STATUS_LINE; // In window status line
     }
 
-    if winrow < 0 && winrow + win.w_winbar_height >= 0 {
+    if winrow < 0 && winrow + win.w_winbar_height() >= 0 {
         return MOUSE_WINBAR; // In winbar
     }
-    if wincol >= win.w_view_width {
+    if wincol >= win.w_view_width() {
         return IN_SEP_LINE; // In vertical separator line
     }
     if !win.is_current() || below_buffer {
@@ -159,7 +159,7 @@ fn leaves_selection(m_pos_flag: c_int, mut m_pos: Pos) -> bool {
     }
 
     let win = Win::current();
-    let cursor = win.w_cursor;
+    let cursor = win.w_cursor();
     let visual = visual_anchor();
 
     if visual_mode().is_line() {

@@ -46,7 +46,7 @@ pub(crate) fn ins_mouse(c: Key) {
     let old_curwin = Win::current();
 
     undisplay_dollar();
-    let tpos = old_curwin.w_cursor;
+    let tpos = old_curwin.w_cursor();
 
     if do_mouse(None, c, BACKWARD, 1, false) {
         let new_curwin = Win::current();
@@ -98,7 +98,7 @@ pub(crate) fn do_mousescroll(cmd_arg: &mut CmdArg) {
             return;
         }
         let count = if shift_or_ctrl {
-            win.w_botline - win.w_topline
+            win.w_botline() - win.w_topline()
         } else {
             number_as_int(P_MOUSESCROLL_VERT.get())
         };
@@ -114,11 +114,11 @@ pub(crate) fn do_mousescroll(cmd_arg: &mut CmdArg) {
 
     // Horizontal scrolling.
     let step = if shift_or_ctrl {
-        win.w_view_width
+        win.w_view_width()
     } else {
         number_as_int(P_MOUSESCROLL_HOR.get())
     };
-    do_mousescroll_horiz(win, wheel_leftcol(win.w_leftcol, step, arg));
+    do_mousescroll_horiz(win, wheel_leftcol(win.w_leftcol(), step, arg));
 }
 
 /// Scrolling in Insert mode in direction `dir`, which is one of the `MSCR_`
@@ -162,13 +162,13 @@ fn ins_mousescroll_with(cmd_arg: &mut CmdArg, dir: c_int) {
         undisplay_dollar();
     }
 
-    let orig_cursor = win.w_cursor;
+    let orig_cursor = win.w_cursor();
 
     // Call the common mouse scroll function shared with other modes.
     do_mousescroll(cmd_arg);
 
     win = Win::current();
-    win.w_redr_status = true;
+    win.set_w_redr_status(true);
     // `old_curwin` was live when it was taken and nothing above closes a
     // window, so it is still the window to go back to.
     let restored = old_curwin;
@@ -178,7 +178,7 @@ fn ins_mousescroll_with(cmd_arg: &mut CmdArg, dir: c_int) {
     // Upstream compares the *restored* window's cursor against the cursor of
     // the window that was scrolled, which are two different windows whenever
     // the wheel was over another one.
-    if !equalpos(restored.w_cursor, orig_cursor) {
+    if !equalpos(restored.w_cursor(), orig_cursor) {
         start_arrow(Some(InsertEnd::At(orig_cursor)));
         set_can_cindent(true);
     }

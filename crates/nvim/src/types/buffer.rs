@@ -200,7 +200,7 @@ pub struct DiffLineChange {
 pub type DispTick = uint64_t;
 pub type DoBufAction = ::core::ffi::c_int;
 pub type DoBufStart = ::core::ffi::c_int;
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct FcsChars {
     pub stl: ScreenChar,
     pub stlnc: ScreenChar,

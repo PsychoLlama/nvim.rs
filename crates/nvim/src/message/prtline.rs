@@ -35,10 +35,10 @@ pub fn msg_prt_line(line: &CStr, list: bool) {
     let at = |i: usize| cstr::byte_at(text, i);
     // `'list'` on the window forces the listing form whatever the caller
     // asked for.
-    let list = list || Win::current().w_onebuf_opt.wo_list != 0;
+    let list = list || Win::current().wo_list() != 0;
     // The window's 'listchars', copied: printing can redraw, and the walk
     // holds no borrow of the window across it.
-    let lcs = Win::current().w_p_lcs_chars.clone();
+    let lcs = Win::current().read().w_p_lcs_chars.clone();
     let (multispace, leadmultispace) = lcs.multispace_runs();
 
     // Where the trailing whitespace starts, and where the leading

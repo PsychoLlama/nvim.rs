@@ -235,7 +235,7 @@ pub(crate) fn pum_show_popupmenu(menu: MenuId) {
     pum_compute_size();
     PUM_SCROLLBAR.set(0);
     PUM_HEIGHT.set(PUM_SIZE.get());
-    PUM_RL.set(Win::current().w_onebuf_opt.wo_rl != 0);
+    PUM_RL.set(Win::current().wo_rl() != 0);
     pum_position_at_mouse(PUM_POPUP_MIN_WIDTH);
 
     PUM_SELECTED.set(-1);
@@ -286,26 +286,26 @@ pub fn pum_make_popup(path_name: &CStr, use_mouse_pos: c_int) {
     if use_mouse_pos == 0 {
         // Put the mouse where the cursor is, so the menu pops up there.
         let win = Win::current();
-        MOUSE_ROW.set(win.w_grid.row_offset + win.w_wrow);
+        MOUSE_ROW.set(win.w_grid().row_offset + win.w_wrow());
         MOUSE_COL.set(
-            win.w_grid.col_offset
-                + if win.w_onebuf_opt.wo_rl != 0 {
-                    win.w_view_width - win.w_wcol - 1
+            win.w_grid().col_offset
+                + if win.wo_rl() != 0 {
+                    win.w_view_width() - win.w_wcol() - 1
                 } else {
-                    win.w_wcol
+                    win.w_wcol()
                 },
         );
         if ui_has(UI_MULTIGRID) {
             // Only under multigrid is the window's own grid guaranteed to
             // have been allocated -- headless it can still be null, which is
             // why this read stays inside the branch.
-            MOUSE_GRID.set(grid_of_view(win.w_grid).handle.get());
-        } else if !ptr::eq(win.w_grid.target, default_grid_ref().raw()) {
+            MOUSE_GRID.set(grid_of_view(win.w_grid()).handle.get());
+        } else if !ptr::eq(win.w_grid().target, default_grid_ref().raw()) {
             // Without multigrid the window's own grid is composed onto the
             // screen, so the position has to be screen-relative.
             MOUSE_GRID.set(0);
-            MOUSE_ROW.set(MOUSE_ROW.get() + win.w_winrow);
-            MOUSE_COL.set(MOUSE_COL.get() + win.w_wincol);
+            MOUSE_ROW.set(MOUSE_ROW.get() + win.w_winrow());
+            MOUSE_COL.set(MOUSE_COL.get() + win.w_wincol());
         }
     }
 

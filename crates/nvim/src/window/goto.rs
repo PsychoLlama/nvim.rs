@@ -60,18 +60,18 @@ pub fn win_goto(window: Win) {
 
 /// Make `window` the current window and redraw what the move uncovers.
 pub(crate) fn goto_win(window: Win) {
-    let mut window = window;
+    let window = window;
     let owp = Win::current();
     if text_or_buf_locked() {
         beep();
         return;
     }
 
-    if !window.w_buffer.is_current() {
+    if !window.w_buffer().is_current() {
         // careful: triggers ModeChanged autocommand
         reset_visual_and_resel();
     } else if visual_active() {
-        window.w_cursor = Win::current().w_cursor;
+        window.set_w_cursor(Win::current().w_cursor());
     }
 
     // autocommand may have made `window` invalid
@@ -82,19 +82,19 @@ pub(crate) fn goto_win(window: Win) {
 
     // Conceal cursor line in previous window, unconceal in current window.
     if let Some(owp) = valid_win(owp.id())
-        && owp.w_onebuf_opt.wo_cole > 0 as OptInt
+        && owp.wo_cole() > 0 as OptInt
         && MSG_SCROLLED.get() == 0
     {
         redraw_winline(owp);
     }
-    if Win::current().w_onebuf_opt.wo_cole > 0 as OptInt && MSG_SCROLLED.get() == 0 {
+    if Win::current().wo_cole() > 0 as OptInt && MSG_SCROLLED.get() == 0 {
         redraw_winline(Win::current());
     }
 }
 
 /// Redraw the line the cursor of `window` is on.
 fn redraw_winline(window: Win) {
-    let lnum = window.w_cursor.lnum;
+    let lnum = window.cursor().lnum();
     redraw_win_line(window, lnum);
 }
 
@@ -141,8 +141,8 @@ impl Axis {
     /// Where the cursor of `window` sits along the crossed axis.
     fn cursor(self, window: Win) -> c_int {
         match self {
-            Axis::Vertical => window.w_wincol + window.w_wcol,
-            Axis::Horizontal => window.w_winrow + window.w_wrow,
+            Axis::Vertical => window.w_wincol() + window.w_wcol(),
+            Axis::Horizontal => window.w_winrow() + window.w_wrow(),
         }
     }
 
@@ -150,8 +150,8 @@ impl Axis {
     fn frame_end(self, fr: FrameRef) -> c_int {
         let win = fr.first_window();
         match self {
-            Axis::Vertical => win.w_wincol + fr.fr_width(),
-            Axis::Horizontal => win.w_winrow + fr.fr_height(),
+            Axis::Vertical => win.w_wincol() + fr.fr_width(),
+            Axis::Horizontal => win.w_winrow() + fr.fr_height(),
         }
     }
 }
@@ -203,8 +203,8 @@ fn neighbor(
     backwards: bool,
     count: c_int,
 ) -> Option<Win> {
-    if window.w_floating {
-        let prev = prev_window().filter(|p| !p.w_floating);
+    if window.w_floating() {
+        let prev = prev_window().filter(|p| !p.w_floating());
         return Some(prev.or_else(first_window).expect("the editor has a window"));
     }
 
@@ -284,7 +284,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
     if !curwin_invalid && flags & WEE_TRIGGER_LEAVE_AUTOCMDS != 0 {
         // Be careful: if autocommands delete the window, return now.
-        if !window.w_buffer.is_current() {
+        if !window.w_buffer().is_current() {
             fire(AutoEvent::BufLeave, Buf::current());
             other_buffer = true;
             if valid_win(window.id()).is_none() {
@@ -302,7 +302,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
 
     // sync undo before leaving the current buffer
-    if flags & WEE_UNDO_SYNC != 0 && !window.w_buffer.is_current() {
+    if flags & WEE_UNDO_SYNC != 0 && !window.w_buffer().is_current() {
         u_sync(false);
     }
     // Might need to scroll the old window before switching, e.g. when the
@@ -311,20 +311,20 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         update_topline(Win::current());
     }
     // may have to copy the buffer options when 'cpo' contains 'S'
-    if !window.w_buffer.is_current() {
+    if !window.w_buffer().is_current() {
         let flags = BCO_ENTER | BCO_NOHELP;
         buf_copy_options(window.buffer(), flags);
     }
     if !curwin_invalid {
         PREVWIN.set(Win::current_or_none().map(Win::id)); // remember for CTRL-W p
-        Win::current().w_redr_status = true;
+        Win::current().set_w_redr_status(true);
     }
     window.make_current();
     window.buffer().make_current();
 
     revalidate_cursor(Win::current());
     if !virtual_active(Win::current()) {
-        Win::current().w_cursor.coladd = 0;
+        Win::current().cursor().set_coladd(0);
     }
     if split_keep_cursor() {
         changed_line_abv_curs(); // assume cursor position needs updating
@@ -349,32 +349,32 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
 
     maketitle();
-    Win::current().w_redr_status = true;
+    Win::current().set_w_redr_status(true);
     REDRAW_TABLINE.set(true);
     if !RESTART_EDIT.get().is_nul() {
         Win::current().redraw_later(UPD_VALID); // causes status line redraw
     }
     // Change background colour according to NormalNC, but only if actually
     // defined (otherwise no extra redraw).
-    if Win::current().w_hl_attr_normal != Win::current().w_hl_attr_normalnc {
+    if Win::current().w_hl_attr_normal() != Win::current().w_hl_attr_normalnc() {
         Win::current().redraw_later(UPD_NOT_VALID);
     }
     if let Some(prev) = current_prevwin()
-        && prev.w_hl_attr_normal != prev.w_hl_attr_normalnc
+        && prev.w_hl_attr_normal() != prev.w_hl_attr_normalnc()
     {
         prev.redraw_later(UPD_NOT_VALID);
     }
 
     // set window height to desired minimal value
     let cur = Win::current();
-    if OptInt::from(cur.w_height) < p_wh() && cur.w_onebuf_opt.wo_wfh == 0 && !cur.w_floating {
+    if OptInt::from(cur.w_height()) < p_wh() && cur.wo_wfh() == 0 && !cur.w_floating() {
         setheight_win(number_as_int(p_wh()), cur);
-    } else if cur.w_height == 0 {
+    } else if cur.w_height() == 0 {
         setheight_win(1, cur);
     }
     // set window width to desired minimal value
     let cur = Win::current();
-    if OptInt::from(cur.w_width) < p_wiw() && cur.w_onebuf_opt.wo_wfw == 0 && !cur.w_floating {
+    if OptInt::from(cur.w_width()) < p_wiw() && cur.wo_wfw() == 0 && !cur.w_floating() {
         setwidth_win(number_as_int(p_wiw()), cur);
     }
 
@@ -411,7 +411,7 @@ pub(crate) enum DirOwner {
 /// none.
 pub(crate) fn own_dir(owner: DirOwner) -> Option<XString> {
     match owner {
-        DirOwner::Window(window) => window.w_localdir.clone(),
+        DirOwner::Window(window) => window.read().w_localdir.clone(),
         DirOwner::TabPage(tabpage) => tabpage.read().tp_localdir.clone(),
         DirOwner::Global => GLOBALDIR.with(Clone::clone),
     }
@@ -420,7 +420,7 @@ pub(crate) fn own_dir(owner: DirOwner) -> Option<XString> {
 /// Whether `owner` has a directory of its own.
 pub(crate) fn has_own_dir(owner: DirOwner) -> bool {
     match owner {
-        DirOwner::Window(window) => window.w_localdir.is_some(),
+        DirOwner::Window(window) => window.read().w_localdir.is_some(),
         DirOwner::TabPage(tabpage) => tabpage.has_localdir(),
         DirOwner::Global => GLOBALDIR.with(Option::is_some),
     }
@@ -429,7 +429,7 @@ pub(crate) fn has_own_dir(owner: DirOwner) -> bool {
 /// Replace the directory `owner` has of its own, releasing the old one.
 pub(crate) fn set_own_dir(owner: DirOwner, dir: Option<XString>) {
     match owner {
-        DirOwner::Window(mut window) => window.w_localdir = dir,
+        DirOwner::Window(window) => window.edit().w_localdir = dir,
         DirOwner::TabPage(tabpage) => tabpage.edit().tp_localdir = dir,
         DirOwner::Global => GLOBALDIR.set(dir),
     }
@@ -438,7 +438,7 @@ pub(crate) fn set_own_dir(owner: DirOwner, dir: Option<XString>) {
 /// A copy of the directory `:cd -` goes back to at `scope`'s owner.
 pub(crate) fn prev_dir_of(owner: DirOwner) -> Option<XString> {
     match owner {
-        DirOwner::Window(window) => window.w_prevdir.clone(),
+        DirOwner::Window(window) => window.read().w_prevdir.clone(),
         DirOwner::TabPage(tabpage) => tabpage.read().tp_prevdir.clone(),
         DirOwner::Global => crate::ex_docmd::global_prev_dir(),
     }
@@ -447,7 +447,7 @@ pub(crate) fn prev_dir_of(owner: DirOwner) -> Option<XString> {
 /// Replace the directory `:cd -` goes back to, releasing the old one.
 pub(crate) fn set_prev_dir(owner: DirOwner, dir: Option<XString>) {
     match owner {
-        DirOwner::Window(mut window) => window.w_prevdir = dir,
+        DirOwner::Window(window) => window.edit().w_prevdir = dir,
         DirOwner::TabPage(tabpage) => tabpage.edit().tp_prevdir = dir,
         DirOwner::Global => crate::ex_docmd::set_global_prev_dir(dir),
     }
@@ -460,7 +460,7 @@ pub(crate) fn set_prev_dir(owner: DirOwner, dir: Option<XString>) {
 fn fix_current_dir() {
     // The new directory is the window's own, the tab page's, or none. A copy:
     // the directory-change autocommands below may replace either.
-    let window_dir = Win::current().w_localdir.clone();
+    let window_dir = Win::current().read().w_localdir.clone();
     let has_window_dir = window_dir.is_some();
     let new_dir = window_dir.or_else(|| TabPage::current().read().tp_localdir.clone());
     // What `os_dirname` leaves when it fails is not a directory: the empty
@@ -512,11 +512,11 @@ pub fn buf_jump_open_win(buffer: Buf) -> Option<Win> {
 /// Enter the first window of the current tab page showing `buffer`, if there is
 /// one.
 pub(crate) fn jump_open_win(buffer: Buf) -> Option<Win> {
-    if Win::current().w_buffer == buffer {
+    if Win::current().w_buffer() == buffer {
         enter(Win::current(), false);
         return Some(Win::current());
     }
-    let wp = windows().find(|wp| wp.w_buffer == buffer)?;
+    let wp = windows().find(|wp| wp.w_buffer() == buffer)?;
     enter(wp, false);
     Some(wp)
 }
@@ -537,7 +537,7 @@ pub(crate) fn jump_open_tab(buffer: Buf) -> Option<Win> {
             continue;
         }
         for wp in windows_in_tab(tp) {
-            if wp.w_buffer == buffer {
+            if wp.w_buffer() == buffer {
                 goto_tab_win(tp, wp);
                 // If the current window did not switch, something went wrong.
                 return wp.is_current().then_some(wp);

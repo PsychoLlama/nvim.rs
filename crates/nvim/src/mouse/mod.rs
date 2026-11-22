@@ -168,8 +168,8 @@ pub(crate) fn reset_dragwin() {
 /// Remember the window's top line, so a later double click can tell whether
 /// the text moved under the pointer.
 fn set_mouse_topline(win: Win) {
-    ORIG_TOPLINE.set(win.w_topline);
-    ORIG_TOPFILL.set(win.w_topfill);
+    ORIG_TOPLINE.set(win.w_topline());
+    ORIG_TOPFILL.set(win.w_topfill());
 }
 
 // ---------------------------------------------------------------------------
@@ -192,8 +192,8 @@ impl Win {
     /// Whether screen column `col` is inside this window's `'statuscolumn'`,
     /// which sits on the right in a 'rightleft' window.
     fn in_statuscolumn(self, col: c_int) -> bool {
-        if self.w_onebuf_opt.wo_rl != 0 {
-            col >= self.w_view_width - self.col_off()
+        if self.wo_rl() != 0 {
+            col >= self.w_view_width() - self.col_off()
         } else {
             col < self.col_off()
         }
@@ -201,7 +201,7 @@ impl Win {
 
     /// Whether `'statuscolumn'` is unset for this window.
     fn statuscolumn_empty(self) -> bool {
-        self.w_onebuf_opt.wo_stc.first_byte() == 0
+        self.read().w_onebuf_opt.wo_stc.first_byte() == 0
     }
 
     /// Whether the window's status line runs into a window to its right, so
@@ -237,17 +237,17 @@ impl Win {
     /// The click definitions drawn for this window's status line, winbar and
     /// `'statuscolumn'`, with the number of columns each covers.
     fn status_click_defs(self) -> (Option<ClickDefs>, c_int) {
-        let defs = &self.w_click_defs.status.cells;
+        let defs = &self.read().w_click_defs.status.cells;
         let len = c_int::try_from(defs.len()).unwrap_or(c_int::MAX);
         ((!defs.is_empty()).then_some(ClickDefs::Status(self)), len)
     }
 
     fn winbar_click_defs(self) -> Option<ClickDefs> {
-        (!self.w_click_defs.winbar.cells.is_empty()).then_some(ClickDefs::Winbar(self))
+        (!self.read().w_click_defs.winbar.cells.is_empty()).then_some(ClickDefs::Winbar(self))
     }
 
     fn statuscol_click_defs(self) -> (Option<ClickDefs>, c_int) {
-        let defs = &self.w_click_defs.statuscol.cells;
+        let defs = &self.read().w_click_defs.statuscol.cells;
         let len = c_int::try_from(defs.len()).unwrap_or(c_int::MAX);
         (
             (!defs.is_empty()).then_some(ClickDefs::Statuscol(self)),
@@ -278,9 +278,9 @@ impl ClickDefs {
     fn with_line<R>(self, f: impl FnOnce(&ClickLine) -> R) -> R {
         match self {
             Self::Tabline => TAB_PAGE_CLICK_DEFS.with(f),
-            Self::Status(win) => f(&win.w_click_defs.status),
-            Self::Winbar(win) => f(&win.w_click_defs.winbar),
-            Self::Statuscol(win) => f(&win.w_click_defs.statuscol),
+            Self::Status(win) => f(&win.read().w_click_defs.status),
+            Self::Winbar(win) => f(&win.read().w_click_defs.winbar),
+            Self::Statuscol(win) => f(&win.read().w_click_defs.statuscol),
         }
     }
 
@@ -456,17 +456,17 @@ fn scroll_line_len(win: Win, lnum: LineNr) -> ColNr {
 /// Topline and botline can be invalid when displaying is postponed, which is
 /// what the range check is for; then only the cursor line is considered.
 fn find_longest_lnum(win: Win) -> LineNr {
-    let cursor = win.w_cursor.lnum;
-    if !(win.w_topline <= cursor
-        && win.w_botline > cursor
-        && win.w_botline <= win.buffer().line_count() + 1)
+    let cursor = win.cursor().lnum();
+    if !(win.w_topline() <= cursor
+        && win.w_botline() > cursor
+        && win.w_botline() <= win.buffer().line_count() + 1)
     {
         return cursor;
     }
 
     let mut ret: LineNr = LineNr::ZERO;
     let mut max: ColNr = ColNr::ZERO;
-    for lnum in win.w_topline.up_to(win.w_botline) {
+    for lnum in win.w_topline().up_to(win.w_botline()) {
         let len = scroll_line_len(win, lnum);
         if len > max {
             max = len;
@@ -479,19 +479,19 @@ fn find_longest_lnum(win: Win) -> LineNr {
 }
 
 /// Make a horizontal scroll to `leftcol`.  Answers whether the cursor moved.
-fn do_mousescroll_horiz(mut win: Win, leftcol: ColNr) -> bool {
-    if win.w_onebuf_opt.wo_wrap != 0 {
+fn do_mousescroll_horiz(win: Win, leftcol: ColNr) -> bool {
+    if win.wo_wrap() != 0 {
         return false; // no horizontal scrolling when wrapping
     }
-    if win.w_leftcol == leftcol {
+    if win.w_leftcol() == leftcol {
         return false; // already there
     }
 
     // When the line of the cursor is too short, move the cursor to the
     // longest visible line.
-    if !virtual_active(win) && leftcol > scroll_line_len(win, win.w_cursor.lnum) {
-        win.w_cursor.lnum = find_longest_lnum(win);
-        win.w_cursor.col = ColNr::ZERO;
+    if !virtual_active(win) && leftcol > scroll_line_len(win, win.cursor().lnum()) {
+        win.cursor().set_lnum(find_longest_lnum(win));
+        win.cursor().set_col(ColNr::ZERO);
     }
 
     set_leftcol(leftcol)
@@ -510,12 +510,12 @@ fn mouse_check_grid() -> (Option<ColNr>, c_int) {
     let mut pos = MousePos::current();
     // XXX: this doesn't change `pos.grid` if it is 1, even with multigrid.
     let win = match find_win_inner(&mut pos) {
-        Some(win) if win.is_current() && win.w_redr_type == 0 => win,
+        Some(win) if win.is_current() && win.w_redr_type() == 0 => win,
         _ => return (None, 0),
     };
 
     let (mut start_row, mut start_col) = (0, 0);
-    let gp = grid_adjust(win.w_grid, &mut start_row, &mut start_col);
+    let gp = grid_adjust(win.w_grid(), &mut start_row, &mut start_col);
     let (handle, drawn, rows, cols) = (gp.handle, gp.is_allocated(), gp.rows, gp.cols);
     let (row, col) = (pos.row + start_row, pos.col + start_col);
     if handle != Handle::new(pos.grid) || !drawn || row < 0 || row >= rows || col < 0 || col >= cols
@@ -555,7 +555,7 @@ pub(crate) fn nv_mousescroll(cmd_arg: &mut CmdArg) {
     }
 
     do_mousescroll(cmd_arg);
-    Win::current().w_redr_status = true;
+    Win::current().set_w_redr_status(true);
     // `old_curwin` was live when it was taken and nothing above closes a
     // window, so it is still the window to go back to.
     old_curwin.make_current();
@@ -598,20 +598,20 @@ pub(crate) fn f_getmousepos(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
     if let Some(win) = find_win_inner(&mut pos) {
         // `w_height` / `w_width` here, where the rest of the family reads
         // `w_view_height` / `w_view_width`: upstream's own mixture, kept.
-        let height = win.w_height + win.w_hsep_height + win.w_status_height;
+        let height = win.w_height() + win.w_hsep_height() + win.w_status_height();
         // The height is adjusted by 1 when there is a bottom border. This is
         // not necessary for a top border since `row` starts at -1 in that
         // case.
-        if pos.row < height + win.w_border_adj[2] {
-            winid = VarNumber::from(win.handle.get());
+        if pos.row < height + win.w_border_adj()[2] {
+            winid = VarNumber::from(win.handle().get());
             // Adjust by 1 for a top/left border.  Summed in the answer's own
             // width rather than in the C's `int`: `nvim_input_mouse` accepts
             // a column up to INT_MAX, and the C's sum then overflows -- which
             // the C wraps on and a checked build of this port traps on.  Both
             // fields are `VarNumber` at the end of it either way.
-            winrow = VarNumber::from(pos.row) + 1 + VarNumber::from(win.w_winrow_off);
-            wincol = VarNumber::from(pos.col) + 1 + VarNumber::from(win.w_wincol_off);
-            if pos.row >= 0 && pos.row < win.w_height && pos.col >= 0 && pos.col < win.w_width {
+            winrow = VarNumber::from(pos.row) + 1 + VarNumber::from(win.w_winrow_off());
+            wincol = VarNumber::from(pos.col) + 1 + VarNumber::from(win.w_wincol_off());
+            if pos.row >= 0 && pos.row < win.w_height() && pos.col >= 0 && pos.col < win.w_width() {
                 (lnum, _) = comp_pos(win, &mut pos.row, &mut pos.col);
                 let col;
                 (col, coladd) = vcol_to_col(win, lnum, ColNr::new(pos.col));

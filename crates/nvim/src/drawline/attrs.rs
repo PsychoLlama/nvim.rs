@@ -62,7 +62,7 @@ impl Cells {
             area = self.vi_attr;
             self.area_active = true;
         } else if area != 0
-            && (wlv.inverted.ends_at(wlv.vcol) || (self.noinvcur && wlv.vcol == window.w_virtcol))
+            && (wlv.inverted.ends_at(wlv.vcol) || (self.noinvcur && wlv.vcol == window.w_virtcol()))
         {
             area = 0;
             self.area_active = false;
@@ -138,13 +138,13 @@ impl Cells {
         {
             self.area_active = true;
         } else if self.area_active
-            && (wlv.inverted.ends_at(wlv.vcol) || (self.noinvcur && wlv.vcol == window.w_virtcol))
+            && (wlv.inverted.ends_at(wlv.vcol) || (self.noinvcur && wlv.vcol == window.w_virtcol()))
         {
             self.area_active = false;
         }
 
         let selected = self.area_active
-            || (self.area_highlighting && self.noinvcur && wlv.vcol == window.w_virtcol);
+            || (self.area_highlighting && self.noinvcur && wlv.vcol == window.w_virtcol());
 
         // Where non-inline virtual text goes can only be decided once the
         // inline text with a lower priority has been drawn.
@@ -284,9 +284,9 @@ impl Cells {
         {
             return;
         }
-        if window.w_onebuf_opt.wo_cuc != 0
-            && wlv.hl_vcol() == window.w_virtcol.get()
-            && wlv.lnum != window.w_cursor.lnum
+        if window.wo_cuc() != 0
+            && wlv.hl_vcol() == window.w_virtcol().get()
+            && wlv.lnum != window.cursor().lnum()
         {
             self.attr_before_vcol_hl = Some(wlv.char_attr);
             wlv.char_attr = hl_combine_attr(win_hl_attr(window, HLF_CUC), wlv.char_attr);

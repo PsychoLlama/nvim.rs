@@ -18,8 +18,7 @@ use super::*;
 /// Whether there may be filler lines anywhere in `window`.
 ///
 pub(crate) fn win_may_fill(window: Win) -> bool {
-    window.w_onebuf_opt.wo_diff != 0 && diffopt_filler()
-        || buf_meta_total(window.buffer(), MT_META_LINES) != 0
+    window.wo_diff() != 0 && diffopt_filler() || buf_meta_total(window.buffer(), MT_META_LINES) != 0
 }
 
 /// Filler lines above `lnum`: virtual lines plus, in a diff, the lines the
@@ -47,7 +46,7 @@ pub(crate) fn plines_win_nofill(window: Win, lnum: LineNr, limit_winheight: bool
     if decor_conceal_line(window, (lnum - 1).get(), false) {
         return 0;
     }
-    if window.w_onebuf_opt.wo_wrap == 0 || window.w_view_width == 0 {
+    if window.wo_wrap() == 0 || window.w_view_width() == 0 {
         return 1;
     }
     // A folded line is handled just like an empty one.
@@ -56,8 +55,8 @@ pub(crate) fn plines_win_nofill(window: Win, lnum: LineNr, limit_winheight: bool
     }
 
     let lines = plines_win_nofold(window, lnum);
-    if limit_winheight && lines > window.w_view_height {
-        return window.w_view_height;
+    if limit_winheight && lines > window.w_view_height() {
+        return window.w_view_height();
     }
     lines
 }
@@ -79,12 +78,12 @@ pub(crate) fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
     });
 
     // In 'list' mode the trailing '$' may take one more column.
-    if window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.eol != 0 {
+    if window.wo_list() != 0 && window.read().w_p_lcs_chars.eol != 0 {
         col += 1;
     }
 
     // Column offset for 'number', 'relativenumber' and 'foldcolumn'.
-    let mut width = window.w_view_width - window.col_off();
+    let mut width = window.w_view_width() - window.col_off();
     if width <= 0 {
         // Bigger than the number of screen lines.
         return 32000;
@@ -106,7 +105,7 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
     // Filler lines above this buffer line.
     let mut lines = win_get_fill(window, lnum);
 
-    if window.w_onebuf_opt.wo_wrap == 0 || window.w_view_width == 0 {
+    if window.wo_wrap() == 0 || window.w_view_width() == 0 {
         return lines + 1;
     }
 
@@ -151,7 +150,7 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
     }
 
     // Column offset for 'number', 'relativenumber', 'foldcolumn', etc.
-    let width = window.w_view_width - window.col_off();
+    let width = window.w_view_width() - window.col_off();
     if width <= 0 {
         return 9999;
     }
@@ -179,8 +178,8 @@ impl Win {
         if let Some(foldedp) = foldedp {
             *foldedp = folded;
         }
-        let filler_lines = if lnum == self.w_topline {
-            self.w_topfill
+        let filler_lines = if lnum == self.w_topline() {
+            self.w_topfill()
         } else {
             win_get_fill(self, lnum)
         };
@@ -215,7 +214,7 @@ impl Win {
         fill: Option<&mut int64_t>,
         max: int64_t,
     ) -> int64_t {
-        let first_width = self.w_view_width - self.col_off();
+        let first_width = self.w_view_width() - self.col_off();
         let width1 = first_width.max(0);
         let width2 = (first_width + win_col_off2(self)).max(0);
 
@@ -300,7 +299,7 @@ pub(crate) fn plines_m_win(window: Win, mut first: LineNr, last: LineNr, max: c_
         count += window.screen_lines_full(first, Some(&mut next), None, false, false);
         first = next + 1;
     }
-    if first == window.w_buffer.line_count() + 1 {
+    if first == window.w_buffer().line_count() + 1 {
         count += win_get_fill(window, first);
     }
     max.min(count)

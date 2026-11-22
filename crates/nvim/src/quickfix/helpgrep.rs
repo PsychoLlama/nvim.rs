@@ -44,7 +44,7 @@ fn hgr_get_ll(new_ll: &mut bool) -> Qi {
     } else {
         qf_find_help_win()
     };
-    if let Some(existing) = wp.and_then(|wp| wp.w_llist) {
+    if let Some(existing) = wp.and_then(|wp| wp.w_llist()) {
         return existing.stack();
     }
     *new_ll = true;
@@ -248,15 +248,15 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
     drop(busy);
 
     if excmd.cmdidx == CmdIdx::lhelpgrep && new_qi {
-        let mut win = Win::current();
-        if !buf_is_help(win.buffer_or_none()) || win.w_llist == Some(qi.id()) {
+        let win = Win::current();
+        if !buf_is_help(win.buffer_or_none()) || win.w_llist() == Some(qi.id()) {
             // The help window was not opened, or it already points at
             // the right location list: the new one is not wanted.
             drop_stack_ref(Some(qi.id()));
-        } else if win.w_llist.is_none() {
+        } else if win.w_llist().is_none() {
             // The current window had no location list before, so it
             // takes the new one.
-            win.w_llist = Some(qi.id());
+            win.set_w_llist(Some(qi.id()));
         }
     }
 }

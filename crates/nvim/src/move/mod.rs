@@ -136,7 +136,7 @@ impl Win {
         self.number_col()
             + c_int::from(CMDWIN_WIN.get() == Some(self.id()))
             + self.fdccol_count()
-            + self.w_scwidth * SIGN_WIDTH
+            + self.w_scwidth() * SIGN_WIDTH
     }
 
     /// The extra offset the *second* and later screen lines of a wrapped line
@@ -151,13 +151,13 @@ impl Win {
     /// ones. Upstream reads the two offsets once each and so does this --
     /// asking [`Win::col_off`] twice would ask [`number_width`] twice.
     pub(super) fn text_widths(self) -> (c_int, c_int) {
-        let width1 = self.w_view_width - self.col_off();
+        let width1 = self.w_view_width() - self.col_off();
         (width1, width1 + self.col_off2())
     }
 
     /// Text width of a line's first screen line.
     pub(super) fn text_width(self) -> c_int {
-        self.w_view_width - self.col_off()
+        self.w_view_width() - self.col_off()
     }
 
     /// The width the 'number'/'statuscolumn' column takes: 'numberwidth'
@@ -168,8 +168,8 @@ impl Win {
     /// into `w_nrwidth_width`, and this is on the per-line draw path, so
     /// asking it where upstream would not both costs and writes.
     fn number_col(self) -> c_int {
-        let stc_empty = self.w_onebuf_opt.wo_stc.first_byte() == 0;
-        if self.w_onebuf_opt.wo_nu == 0 && self.w_onebuf_opt.wo_rnu == 0 && stc_empty {
+        let stc_empty = self.read().w_onebuf_opt.wo_stc.first_byte() == 0;
+        if self.wo_nu() == 0 && self.wo_rnu() == 0 && stc_empty {
             return 0;
         }
         number_width(self) + c_int::from(stc_empty)
@@ -270,7 +270,7 @@ impl Win {
 
     /// Redraw just the cursor's line.
     pub(super) fn redraw_cursor_line(self) {
-        redraw_win_line(self, self.w_cursor.lnum);
+        redraw_win_line(self, self.cursor().lnum());
     }
 
     /// Let any float anchored to this window follow it.
@@ -288,15 +288,15 @@ impl Win {
     /// Copied rather than borrowed because the walk that reads these also
     /// calls back into the fold and decoration layers between reads.
     pub(super) fn remembered_line(self, i: c_int) -> WLine {
-        debug_assert!(i >= 0 && i < self.w_lines_valid, "i < wp->w_lines_valid");
-        self.w_lines[usize::try_from(i).expect("a valid w_lines index")].clone()
+        debug_assert!(i >= 0 && i < self.w_lines_valid(), "i < wp->w_lines_valid");
+        self.read().w_lines[usize::try_from(i).expect("a valid w_lines index")].clone()
     }
 }
 
 /// Screen lines of the top line that `w_skipcol` scrolls out of sight.
 fn adjust_plines_for_skipcol(win: Win) -> c_int {
     let (width1, width2) = win.text_widths();
-    arith::skipped_plines(win.w_skipcol, width1, width2)
+    arith::skipped_plines(win.w_skipcol(), width1, width2)
 }
 
 impl Win {
@@ -310,11 +310,11 @@ impl Win {
         limit_winheight: bool,
     ) -> (c_int, LineNr, bool) {
         let (mut n, next, folded) = self.plines_full(lnum, true, false);
-        if lnum == self.w_topline {
+        if lnum == self.w_topline() {
             n -= adjust_plines_for_skipcol(self);
         }
-        if limit_winheight && n > self.w_view_height {
-            n = self.w_view_height;
+        if limit_winheight && n > self.w_view_height() {
+            n = self.w_view_height();
         }
         (n, next, folded)
     }
@@ -331,33 +331,33 @@ pub fn plines_correct_topline(window: Win, lnum: LineNr, limit_winheight: bool) 
 }
 
 /// Recompute `w_botline` for the current `w_topline`.
-fn comp_botline(mut win: Win) {
+fn comp_botline(win: Win) {
     win.check_cursor_moved();
     // If `w_cline_row` is valid start there, otherwise at the top line.
-    let (mut lnum, mut done) = if win.w_valid.has(WinValid::CROW) {
-        (win.w_cursor.lnum, win.w_cline_row)
+    let (mut lnum, mut done) = if win.w_valid().has(WinValid::CROW) {
+        (win.cursor().lnum(), win.w_cline_row())
     } else {
-        (win.w_topline, 0)
+        (win.w_topline(), 0)
     };
     while lnum <= win.buffer().line_count() {
         let (n, last, folded) = win.corrected_plines(lnum, true);
-        if lnum <= win.w_cursor.lnum && last >= win.w_cursor.lnum {
-            win.w_cline_row = done;
-            win.w_cline_height = n;
-            win.w_cline_folded = folded;
+        if lnum <= win.cursor().lnum() && last >= win.cursor().lnum() {
+            win.set_w_cline_row(done);
+            win.set_w_cline_height(n);
+            win.set_w_cline_folded(folded);
             redraw_for_cursorline(win);
-            win.w_valid |= WinValid::CROW | WinValid::CHEIGHT;
+            win.set_w_valid(win.w_valid() | (WinValid::CROW | WinValid::CHEIGHT));
         }
-        if done + n > win.w_view_height {
+        if done + n > win.w_view_height() {
             break;
         }
         done += n;
         lnum = last + 1;
     }
     // `w_botline` is the line just below the window.
-    win.w_botline = lnum;
-    win.w_valid |= WinValid::BOTLINE | WinValid::BOTLINE_AP;
-    win.w_viewport_invalid = true;
+    win.set_w_botline(lnum);
+    win.set_w_valid(win.w_valid() | (WinValid::BOTLINE | WinValid::BOTLINE_AP));
+    win.set_w_viewport_invalid(true);
     win.set_empty_rows(done);
     win.check_anchored_floats();
 }
@@ -365,10 +365,10 @@ fn comp_botline(mut win: Win) {
 /// Redraw when `w_cline_row` changed and 'relativenumber' or 'cursorline' is
 /// set, or when concealing is on and 'concealcursor' is not active.
 fn redraw_for_cursorline(win: Win) {
-    if win.w_valid.has(WinValid::CROW) {
+    if win.w_valid().has(WinValid::CROW) {
         return;
     }
-    if win.w_onebuf_opt.wo_rnu != 0 || win.cursorline_standout() {
+    if win.wo_rnu() != 0 || win.cursorline_standout() {
         // `win_line()` will redraw the number column and cursorline only.
         win.redraw_later(UPD_VALID);
     }
@@ -380,31 +380,31 @@ fn redraw_for_cursorline(win: Win) {
 fn redraw_for_cursorcolumn(win: Win) {
     // Moving horizontally under 'concealcursor' changes what the line looks
     // like, so it has to be drawn again to place the cursor.
-    if win.is_current() && win.w_onebuf_opt.wo_cole > 0 && win.conceal_cursor_line() {
+    if win.is_current() && win.wo_cole() > 0 && win.conceal_cursor_line() {
         win.redraw_cursor_line();
     }
-    if win.w_valid.has(WinValid::VIRTCOL) {
+    if win.w_valid().has(WinValid::VIRTCOL) {
         return;
     }
-    if win.w_onebuf_opt.wo_cuc != 0 {
+    if win.wo_cuc() != 0 {
         win.redraw_later(UPD_SOME_VALID);
-    } else if win.w_onebuf_opt.wo_cul != 0
-        && OptCuloptFlags::from(win.w_p_culopt_flags) & OPT_CULOPT_FLAG_SCREENLINE != 0
+    } else if win.wo_cul() != 0
+        && OptCuloptFlags::from(win.w_p_culopt_flags()) & OPT_CULOPT_FLAG_SCREENLINE != 0
     {
         win.redraw_later(UPD_VALID);
     }
     // The current buffer's cursor moving in Visual mode changes the highlight.
-    if visual_active() && win.w_buffer.is_current() {
+    if visual_active() && win.w_buffer().is_current() {
         redraw_buf_later(Buf::current(), UPD_INVERTED);
     }
 }
 
 /// Record a `w_virtcol` the caller has already computed, redrawing if it was
 /// invalid before.
-pub fn set_valid_virtcol(mut win: Win, vcol: ColNr) {
-    win.w_virtcol = vcol;
+pub fn set_valid_virtcol(win: Win, vcol: ColNr) {
+    win.set_w_virtcol(vcol);
     redraw_for_cursorcolumn(win);
-    win.w_valid |= WinValid::VIRTCOL;
+    win.set_w_valid(win.w_valid() | WinValid::VIRTCOL);
 }
 
 /// [`Win::marker_overlap`], for the callers still holding a raw window.
@@ -425,7 +425,7 @@ impl Win {
         arith::marker_overlap(
             extra2,
             self.has_showbreak(),
-            self.w_onebuf_opt.wo_list != 0 && self.w_p_lcs_chars.prec != 0,
+            self.wo_list() != 0 && self.read().w_p_lcs_chars.prec != 0,
         )
     }
 
@@ -436,11 +436,11 @@ impl Win {
     }
 
     /// Set `w_skipcol` back to zero, redrawing if it was not already.
-    pub(super) fn reset_skipcol(mut self) {
-        if self.w_skipcol == ColNr::ZERO {
+    pub(super) fn reset_skipcol(self) {
+        if self.w_skipcol() == ColNr::ZERO {
             return;
         }
-        self.w_skipcol = ColNr::ZERO;
+        self.set_w_skipcol(ColNr::ZERO);
         // The cheapest redraw that shows everything that changed:
         // UPD_NOT_VALID is too expensive and UPD_REDRAW_TOP redraws too
         // little when the top line gains a screen line.
@@ -468,20 +468,22 @@ pub fn changed_line_abv_curs_win(window: Win) {
 
 impl Win {
     /// Forget everything that depends on the cursor line's screen height.
-    fn invalidate_above_cursor(mut self) {
-        self.w_valid -= WinValid::WROW
-            | WinValid::WCOL
-            | WinValid::VIRTCOL
-            | WinValid::CROW
-            | WinValid::CHEIGHT
-            | WinValid::TOPLINE;
+    fn invalidate_above_cursor(self) {
+        self.set_w_valid(self.w_valid().without(
+            WinValid::WROW
+                | WinValid::WCOL
+                | WinValid::VIRTCOL
+                | WinValid::CROW
+                | WinValid::CHEIGHT
+                | WinValid::TOPLINE,
+        ));
     }
 }
 
 impl Win {
     /// Make sure `w_botline` is right.
     pub(super) fn validate_botline(self) {
-        if !self.w_valid.has(WinValid::BOTLINE) {
+        if !self.w_valid().has(WinValid::BOTLINE) {
             comp_botline(self);
         }
     }
@@ -490,20 +492,20 @@ impl Win {
     pub(super) fn validate_cursor(self) {
         self.check_cursor_lnum();
         self.check_cursor_moved();
-        if !self.w_valid.has_all(WinValid::WCOL | WinValid::WROW) {
+        if !self.w_valid().has_all(WinValid::WCOL | WinValid::WROW) {
             self.curs_columns(true);
         }
     }
 
     /// Make sure `w_virtcol` is right.
-    pub(super) fn validate_virtcol(mut self) {
+    pub(super) fn validate_virtcol(self) {
         self.check_cursor_moved();
-        if self.w_valid.has(WinValid::VIRTCOL) {
+        if self.w_valid().has(WinValid::VIRTCOL) {
             return;
         }
-        self.w_virtcol = self.virtual_cursor_vcol(self.cursor());
+        self.set_w_virtcol(self.virtual_cursor_vcol(self.cursor()));
         redraw_for_cursorcolumn(self);
-        self.w_valid |= WinValid::VIRTCOL;
+        self.set_w_valid(self.w_valid() | WinValid::VIRTCOL);
     }
 }
 
@@ -519,22 +521,23 @@ pub fn invalidate_botline_win(window: Win) {
 
 impl Win {
     /// Mark `w_botline` invalid, because the buffer changed.
-    pub(super) fn invalidate_botline(mut self) {
-        self.w_valid = self
-            .w_valid
-            .without(WinValid::BOTLINE | WinValid::BOTLINE_AP);
+    pub(super) fn invalidate_botline(self) {
+        self.set_w_valid(
+            self.w_valid()
+                .without(WinValid::BOTLINE | WinValid::BOTLINE_AP),
+        );
     }
 }
 
 /// Mark `w_botline` as only approximately right.
-pub fn approximate_botline_win(mut win: Win) {
-    win.w_valid -= WinValid::BOTLINE;
+pub fn approximate_botline_win(win: Win) {
+    win.set_w_valid(win.w_valid().without(WinValid::BOTLINE));
 }
 
 /// Whether `w_wrow` and `w_wcol` are both right.
 pub fn cursor_valid(win: Win) -> c_int {
     win.check_cursor_moved();
-    c_int::from(win.w_valid.has_all(WinValid::WROW | WinValid::WCOL))
+    c_int::from(win.w_valid().has_all(WinValid::WROW | WinValid::WCOL))
 }
 
 /// Make sure `w_wrow` and `w_wcol` are right. `w_topline` must already be --
@@ -544,17 +547,18 @@ pub fn validate_cursor(window: Win) {
 }
 
 /// Compute `w_cline_row` and `w_cline_height` from the current `w_topline`.
-fn curs_rows(mut win: Win) {
+fn curs_rows(win: Win) {
     // Are the remembered `w_lines[].wl_size` usable at all?
-    let all_invalid =
-        !redrawing() || win.w_lines_valid == 0 || win.remembered_line(0).wl_lnum > win.w_topline;
+    let all_invalid = !redrawing()
+        || win.w_lines_valid() == 0
+        || win.remembered_line(0).wl_lnum > win.w_topline();
     let mut i: c_int = 0;
-    win.w_cline_row = 0;
-    let mut lnum = win.w_topline;
-    while lnum < win.w_cursor.lnum {
+    win.set_w_cline_row(0);
+    let mut lnum = win.w_topline();
+    while lnum < win.cursor().lnum() {
         let mut valid = false;
         let mut skipped = false;
-        if !all_invalid && i < win.w_lines_valid {
+        if !all_invalid && i < win.w_lines_valid() {
             let wl = win.remembered_line(i);
             if wl.wl_lnum < lnum || !wl.wl_valid {
                 // A changed or deleted line; move on to the next entry.
@@ -563,7 +567,7 @@ fn curs_rows(mut win: Win) {
                 // Newly inserted lines below this row mean the folds have to
                 // be looked at again.
                 if !win.buffer().b_mod_set()
-                    || wl.wl_lastlnum < win.w_cursor.lnum
+                    || wl.wl_lastlnum < win.cursor().lnum()
                     || win.buffer().b_mod_top() > wl.wl_lastlnum + 1
                 {
                     valid = true;
@@ -574,53 +578,55 @@ fn curs_rows(mut win: Win) {
             }
         }
         if !skipped {
-            if valid && (lnum != win.w_topline || (win.w_skipcol == ColNr::ZERO && !win.may_fill()))
+            if valid
+                && (lnum != win.w_topline() || (win.w_skipcol() == ColNr::ZERO && !win.may_fill()))
             {
                 let wl = win.remembered_line(i);
                 lnum = wl.wl_lastlnum + 1;
                 // The cursor is inside folded or concealed lines; this row
                 // does not count.
-                if lnum > win.w_cursor.lnum {
+                if lnum > win.cursor().lnum() {
                     break;
                 }
-                win.w_cline_row += c_int::from(wl.wl_size);
+                win.set_w_cline_row(win.w_cline_row() + c_int::from(wl.wl_size));
             } else {
                 let (n, last, _) = win.corrected_plines(lnum, true);
                 lnum = last + 1;
-                if lnum + i32::from(win.conceals_line((lnum - 1).get(), false)) > win.w_cursor.lnum
+                if lnum + i32::from(win.conceals_line((lnum - 1).get(), false))
+                    > win.cursor().lnum()
                 {
                     break;
                 }
-                win.w_cline_row += n;
+                win.set_w_cline_row(win.w_cline_row() + n);
             }
         }
         i += 1;
     }
 
     win.check_cursor_moved();
-    if !win.w_valid.has(WinValid::CHEIGHT) {
+    if !win.w_valid().has(WinValid::CHEIGHT) {
         // The remembered entry is unusable when it names another line or was
         // marked stale.
-        let stale = i < win.w_lines_valid && {
+        let stale = i < win.w_lines_valid() && {
             let wl = win.remembered_line(i);
-            !wl.wl_valid || wl.wl_lnum != win.w_cursor.lnum
+            !wl.wl_valid || wl.wl_lnum != win.cursor().lnum()
         };
-        if all_invalid || i == win.w_lines_valid || stale {
-            let (height, _, folded) = win.plines_full(win.w_cursor.lnum, true, true);
-            win.w_cline_height = height;
-            win.w_cline_folded = folded;
-        } else if i > win.w_lines_valid {
+        if all_invalid || i == win.w_lines_valid() || stale {
+            let (height, _, folded) = win.plines_full(win.cursor().lnum(), true, true);
+            win.set_w_cline_height(height);
+            win.set_w_cline_folded(folded);
+        } else if i > win.w_lines_valid() {
             // A line too long to fit on the last screen line.
-            win.w_cline_height = 0;
-            win.w_cline_folded = win.fold_span(win.w_cursor.lnum).0;
+            win.set_w_cline_height(0);
+            win.set_w_cline_folded(win.fold_span(win.cursor().lnum()).0);
         } else {
             let wl = win.remembered_line(i);
-            win.w_cline_height = c_int::from(wl.wl_size);
-            win.w_cline_folded = wl.wl_folded;
+            win.set_w_cline_height(c_int::from(wl.wl_size));
+            win.set_w_cline_folded(wl.wl_folded);
         }
     }
     redraw_for_cursorline(win);
-    win.w_valid |= WinValid::CROW | WinValid::CHEIGHT;
+    win.set_w_valid(win.w_valid() | (WinValid::CROW | WinValid::CHEIGHT));
 }
 
 /// Make sure `w_virtcol` is right, and nothing else.
@@ -635,34 +641,34 @@ pub fn validate_cheight(window: Win) {
 
 impl Win {
     /// Make sure `w_cline_height` is right, and nothing else.
-    pub(super) fn validate_cheight(mut self) {
+    pub(super) fn validate_cheight(self) {
         self.check_cursor_moved();
-        if self.w_valid.has(WinValid::CHEIGHT) {
+        if self.w_valid().has(WinValid::CHEIGHT) {
             return;
         }
-        let (height, _, folded) = self.plines_full(self.w_cursor.lnum, true, true);
-        self.w_cline_height = height;
-        self.w_cline_folded = folded;
-        self.w_valid |= WinValid::CHEIGHT;
+        let (height, _, folded) = self.plines_full(self.cursor().lnum(), true, true);
+        self.set_w_cline_height(height);
+        self.set_w_cline_folded(folded);
+        self.set_w_valid(self.w_valid() | WinValid::CHEIGHT);
     }
 }
 
 /// Make sure `w_wcol` and `w_virtcol` are right, and nothing else.
-pub fn validate_cursor_col(mut win: Win) {
+pub fn validate_cursor_col(win: Win) {
     win.validate_virtcol();
-    if win.w_valid.has(WinValid::WCOL) {
+    if win.w_valid().has(WinValid::WCOL) {
         return;
     }
     let off = win.col_off();
-    win.w_wcol = arith::cursor_screen_col(
-        win.w_virtcol,
+    win.set_w_wcol(arith::cursor_screen_col(
+        win.w_virtcol(),
         off,
-        win.w_view_width,
-        win.w_view_width - off + win.col_off2(),
-        win.w_onebuf_opt.wo_wrap != 0,
-        win.w_leftcol,
-    );
-    win.w_valid |= WinValid::WCOL;
+        win.w_view_width(),
+        win.w_view_width() - off + win.col_off2(),
+        win.wo_wrap() != 0,
+        win.w_leftcol(),
+    ));
+    win.set_w_valid(win.w_valid() | WinValid::WCOL);
 }
 
 /// The extra column offset a wrapped line's later screen lines get.

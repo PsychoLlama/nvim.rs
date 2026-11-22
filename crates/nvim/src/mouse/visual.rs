@@ -72,7 +72,7 @@ pub(crate) fn visual_jump_flags(
 
     // Remember the start and end of visual before moving the cursor.
     let corners = (is_click && visual_active()).then(|| {
-        let (cursor, visual) = (old_curwin.w_cursor, visual_anchor());
+        let (cursor, visual) = (old_curwin.w_cursor(), visual_anchor());
         if lt(cursor, visual) {
             (cursor, visual)
         } else {
@@ -87,7 +87,7 @@ pub(crate) fn visual_jump_flags(
 /// A right click inside a Visual selection moves the nearest corner to the
 /// pointer.  In Visual-block mode the area is divided in four and the corner
 /// in the quarter the cursor is in is the one that moves.
-pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: Pos, mut end_visual: Pos) {
+pub(crate) fn extend_visual_block(win: Win, mut start_visual: Pos, mut end_visual: Pos) {
     // When ALT is pressed make Visual mode blockwise.
     if MOD_MASK.get().has(ModMask::ALT) {
         set_visual_mode(VisualMode::BLOCK);
@@ -95,28 +95,28 @@ pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: Pos, mut end_v
 
     if visual_mode().is_block() {
         let (leftcol, rightcol) = vcols_between(win, start_visual, end_visual);
-        end_visual.col = if win.w_curswant > ColNr::new((leftcol + rightcol.get()).get() / 2) {
+        end_visual.col = if win.w_curswant() > ColNr::new((leftcol + rightcol.get()).get() / 2) {
             leftcol
         } else {
             rightcol
         };
-        if win.w_cursor.lnum.get() >= (start_visual.lnum.get() + end_visual.lnum.get()) / 2 {
+        if win.cursor().lnum().get() >= (start_visual.lnum.get() + end_visual.lnum.get()) / 2 {
             end_visual.lnum = start_visual.lnum;
         }
 
         // Move VIsual to the right column.
-        start_visual = win.w_cursor; // save the cursor pos
-        win.w_cursor = end_visual;
+        start_visual = win.w_cursor(); // save the cursor pos
+        win.set_w_cursor(end_visual);
         win.coladvance(end_visual.col);
-        set_visual_anchor(win.w_cursor);
-        win.w_cursor = start_visual; // restore the cursor
+        set_visual_anchor(win.w_cursor());
+        win.set_w_cursor(start_visual); // restore the cursor
         return;
     }
 
     // If the click is before the start of visual, change the start.  If the
     // click is after the end of visual, change the end.  If the click is
     // inside the visual, change the closest side.
-    let cursor = win.w_cursor;
+    let cursor = win.w_cursor();
     set_visual_anchor(if lt(cursor, start_visual) {
         end_visual
     } else if lt(end_visual, cursor) {

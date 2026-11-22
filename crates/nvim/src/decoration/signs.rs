@@ -64,13 +64,13 @@ impl DecorSignHighlight {
 /// unplacing the first sign in `buffer` has to make the number column's width be
 /// recomputed rather than reused.
 fn may_force_numberwidth_recompute(buffer: Buf, unplace: bool) {
-    for mut wp in tab_windows() {
-        if wp.w_buffer == buffer
-            && wp.w_minscwidth == SCL_NUM
-            && (wp.w_onebuf_opt.wo_nu != 0 || wp.w_onebuf_opt.wo_rnu != 0)
-            && (unplace || wp.w_nrwidth_width < 2)
+    for wp in tab_windows() {
+        if wp.w_buffer() == buffer
+            && wp.w_minscwidth() == SCL_NUM
+            && (wp.wo_nu() != 0 || wp.wo_rnu() != 0)
+            && (unplace || wp.w_nrwidth_width() < 2)
         {
-            wp.w_nrwidth_line_count = LineNr::ZERO;
+            wp.set_w_nrwidth_line_count(LineNr::ZERO);
         }
     }
 }
@@ -215,10 +215,10 @@ pub fn decor_redraw_signs(
 
     // A sign shown in the number column takes one cell whatever
     // 'signcolumn' says.
-    let width = if wp.w_minscwidth == SCL_NUM {
+    let width = if wp.w_minscwidth() == SCL_NUM {
         1
     } else {
-        wp.w_scwidth
+        wp.w_scwidth()
     };
     let len = usize::try_from(width).unwrap_or(0).min(num_text);
 

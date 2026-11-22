@@ -31,14 +31,14 @@ impl Cells {
     /// Show the `'listchars'` "precedes" character in column zero of a row
     /// that starts part-way into the line.
     pub(super) fn draw_precedes(&mut self, wlv: &mut WinLineVars, window: Win) {
-        let scrolled = if window.w_onebuf_opt.wo_wrap != 0 {
-            let skipcol = window.w_skipcol;
+        let scrolled = if window.wo_wrap() != 0 {
+            let skipcol = window.w_skipcol();
             skipcol > ColNr::ZERO && wlv.row == 0
         } else {
-            window.w_leftcol > ColNr::ZERO
+            window.w_leftcol() > ColNr::ZERO
         };
         if self.lcs_prec_todo == 0
-            || window.w_onebuf_opt.wo_list == 0
+            || window.wo_list() == 0
             || !scrolled
             || wlv.filler_todo > 0
             || wlv.skip_cells > 0
@@ -62,7 +62,7 @@ impl Cells {
             wlv.extra_todo = 1;
             wlv.extra_attr = win_hl_attr(window, HLF_AT);
         }
-        self.cell_char = window.w_p_lcs_chars.prec;
+        self.cell_char = window.lcs_prec();
         self.char_code = schar_get_first_codepoint(self.cell_char);
         self.attr_before_prec = wlv.char_attr;
         wlv.char_attr = win_hl_attr(window, HLF_AT);
@@ -137,11 +137,9 @@ impl Cells {
             && wlv.col < self.view_width
             && (self.has_foldtext
                 || (self.byte() == b'\0'
-                    && (window.w_onebuf_opt.wo_list == 0
-                        || !self.lcs_eol_todo
-                        || self.lcs_eol == 0)))
+                    && (window.wo_list() == 0 || !self.lcs_eol_todo || self.lcs_eol == 0)))
         {
-            wlv.extra_fill = window.w_p_fcs_chars.fold;
+            wlv.extra_fill = window.fcs_fold();
             wlv.extra_last = 0;
             wlv.extra_todo = self.view_width - wlv.col;
             // Search highlighting stops at the first filler character.
@@ -167,7 +165,7 @@ impl Cells {
                 && wlv.inverted.starts_at(wlv.vcol)
                 && (!visual_mode().is_block()
                     || wlv.lnum == visual_anchor().lnum
-                    || wlv.lnum == Win::current().w_cursor.lnum))
+                    || wlv.lnum == Win::current().cursor().lnum()))
                 || prevcol_hl_flag);
         if !want {
             return;
@@ -204,7 +202,7 @@ impl Cells {
     /// that ends the line, or something that shows as `^X` or `<xx>`.
     pub(super) fn unprintable(&mut self, wlv: &mut WinLineVars, window: Win) {
         if self.char_code == ::core::ffi::c_int::from(TAB)
-            && (window.w_onebuf_opt.wo_list == 0 || window.w_p_lcs_chars.tab1 != 0)
+            && (window.wo_list() == 0 || window.lcs_tab1() != 0)
         {
             self.tab(wlv, window);
         } else if self.cell_char == 0 && self.wants_eol_cell(wlv, window) {
@@ -228,12 +226,9 @@ impl Cells {
 
     /// Turn a Tab into the cells it occupies.
     pub(super) fn tab(&mut self, wlv: &mut WinLineVars, window: Win) {
-        let lcs = &window.w_p_lcs_chars;
+        let lcs = &window.read().w_p_lcs_chars;
         let (mut lcs_tab1, mut lcs_tab2, mut lcs_tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);
-        if window.w_onebuf_opt.wo_list != 0
-            && lcs.leadtab1 != 0
-            && self.byte_col() < self.leadcol.get()
-        {
+        if window.wo_list() != 0 && lcs.leadtab1 != 0 && self.byte_col() < self.leadcol.get() {
             lcs_tab1 = lcs.leadtab1;
             lcs_tab2 = lcs.leadtab2;
             lcs_tab3 = lcs.leadtab3;
@@ -241,18 +236,16 @@ impl Cells {
 
         // The Tab's width depends on the column, with `'showbreak'`
         // removed: it is not part of the buffer line.
-        let vcol_adjusted = if window.has_showbreak()
-            && wlv.vcol == wlv.showbreak_vcol
-            && window.w_onebuf_opt.wo_wrap != 0
-        {
-            let sbr_chars = window.with_showbreak(char_count);
-            wlv.vcol - ::core::ffi::c_int::try_from(sbr_chars).unwrap_or(0)
-        } else {
-            wlv.vcol
-        };
-        let mut tab_len = window.w_buffer.tab_padding(vcol_adjusted) - 1;
+        let vcol_adjusted =
+            if window.has_showbreak() && wlv.vcol == wlv.showbreak_vcol && window.wo_wrap() != 0 {
+                let sbr_chars = window.with_showbreak(char_count);
+                wlv.vcol - ::core::ffi::c_int::try_from(sbr_chars).unwrap_or(0)
+            } else {
+                wlv.vcol
+            };
+        let mut tab_len = window.w_buffer().tab_padding(vcol_adjusted) - 1;
 
-        if window.w_onebuf_opt.wo_lbr == 0 || window.w_onebuf_opt.wo_list == 0 {
+        if window.wo_lbr() == 0 || window.wo_list() == 0 {
             wlv.extra_todo = tab_len;
         } else {
             let saved_nextra = wlv.extra_todo;
@@ -319,20 +312,20 @@ impl Cells {
             // Put back what the line below needs to get the Tab's own
             // highlight right.
             if wlv.extra_todo == (tab_len + vc_saved)
-                && window.w_onebuf_opt.wo_list != 0
-                && window.w_p_lcs_chars.tab1 != 0
+                && window.wo_list() != 0
+                && window.read().w_p_lcs_chars.tab1 != 0
             {
                 tab_len += vc_saved;
             }
         }
 
-        if window.w_onebuf_opt.wo_list != 0 {
+        if window.wo_list() != 0 {
             self.cell_char = if wlv.extra_todo == 0 && lcs_tab3 != 0 {
                 lcs_tab3
             } else {
                 lcs_tab1
             };
-            if window.w_onebuf_opt.wo_lbr != 0 && wlv.extra.byte() != b'\0' {
+            if window.wo_lbr() != 0 && wlv.extra.byte() != b'\0' {
                 // Using the run's text from above.
                 wlv.extra_fill = 0;
             } else {
@@ -359,7 +352,7 @@ impl Cells {
         if wlv.extra_todo == 0 {
             wlv.extra_todo = u8::try_from(self.char_code).map_or(0, byte2cells) - 1;
         }
-        if DY_FLAGS.get() & OPT_DY_FLAG_UHEX != 0 && window.w_onebuf_opt.wo_rl != 0 {
+        if DY_FLAGS.get() & OPT_DY_FLAG_UHEX != 0 && window.wo_rl() != 0 {
             // Reverse "<12>".
             mirror_ascii(text);
         }
@@ -369,7 +362,7 @@ impl Cells {
         let first = text.first().copied().unwrap_or(0);
         self.char_code = ::core::ffi::c_int::from(first);
         let tail = text.get(1..).unwrap_or_default();
-        if window.w_onebuf_opt.wo_lbr != 0 {
+        if window.wo_lbr() != 0 {
             // With 'linebreak' the escape has to be padded out to the
             // width the character would have had -- or cut to it, as
             // upstream's terminator cuts it.
@@ -393,13 +386,13 @@ impl Cells {
     /// Either because `'list'` asks for one, or because a Visual or
     /// `'incsearch'` range includes the break and needs somewhere to show it.
     pub(super) fn wants_eol_cell(&self, wlv: &WinLineVars, window: Win) -> bool {
-        (window.w_onebuf_opt.wo_list != 0
+        (window.wo_list() != 0
             || (wlv.inverted.reaches_eol(self.invert_resume, wlv.vcol)
                 && !visual_mode().is_block()
                 && wlv.col < self.view_width
                 && !(self.noinvcur
-                    && wlv.lnum == window.w_cursor.lnum
-                    && wlv.vcol == window.w_virtcol)))
+                    && wlv.lnum == window.cursor().lnum()
+                    && wlv.vcol == window.w_virtcol())))
             && self.lcs_eol_todo
             && self.lcs_eol != 0
     }
@@ -419,8 +412,8 @@ impl Cells {
             }
             wlv.extra_todo = 0;
         }
-        self.cell_char = if window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.eol > 0 {
-            window.w_p_lcs_chars.eol
+        self.cell_char = if window.wo_list() != 0 && window.read().w_p_lcs_chars.eol > 0 {
+            window.lcs_eol()
         } else {
             schar_from_ascii(b' ')
         };
@@ -435,9 +428,9 @@ impl Cells {
     /// Concealment: either replace the first character of a concealed run with
     /// one stand-in character, or drop the cell entirely.
     pub(super) fn conceal(&mut self, wlv: &mut WinLineVars, window: Win) {
-        let wants_conceal = window.w_onebuf_opt.wo_cole > 0
+        let wants_conceal = window.wo_cole() > 0
             && (window.raw() != Win::current_raw()
-                || wlv.lnum != window.w_cursor.lnum
+                || wlv.lnum != window.cursor().lnum()
                 || conceal_cursor_line(window))
             && (self.syntax_flags.has(SynFlags::CONCEAL)
                 || self.has_match_conc > 0
@@ -445,7 +438,7 @@ impl Cells {
             // 'concealcursor' does not name "v", so the Visual area shows
             // its text.
             && !(self.lnum_in_visual_area
-                && !has_char(window.w_onebuf_opt.wo_cocu.cstr(), Codepoint::byte(b'v')));
+                && !has_char(window.read().w_onebuf_opt.wo_cocu.cstr(), Codepoint::byte(b'v')));
         if !wants_conceal {
             self.prev_syntax_id = 0;
             self.is_concealing = false;
@@ -464,8 +457,8 @@ impl Cells {
         let have_char = (syntax_conceal && syn_get_sub_char() != 0)
             || (self.has_match_conc != 0 && self.match_conc != 0)
             || (self.decor_conceal != 0 && decor_conceal().1 != 0)
-            || window.w_onebuf_opt.wo_cole == 1;
-        if first_of_run && have_char && window.w_onebuf_opt.wo_cole != 3 {
+            || window.wo_cole() == 1;
+        if first_of_run && have_char && window.wo_cole() != 3 {
             if schar_cells(self.cell_char) > 1 {
                 // The first concealed character is double-width, so one
                 // more virtual column goes with it.
@@ -481,8 +474,8 @@ impl Cells {
                 conceal_char
             } else if syntax_conceal && syn_get_sub_char() != 0 {
                 schar_from_char(Codepoint::new(syn_get_sub_char()))
-            } else if window.w_p_lcs_chars.conceal != 0 {
-                window.w_p_lcs_chars.conceal
+            } else if window.lcs_conceal() != 0 {
+                window.lcs_conceal()
             } else {
                 schar_from_ascii(b' ')
             };

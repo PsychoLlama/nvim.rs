@@ -220,7 +220,7 @@ fn show_mode_name(hl_id: c_int) {
     }
 
     if STATE.get() & MODE_LANGMAP != 0 {
-        if Win::current().w_onebuf_opt.wo_arab != 0 {
+        if Win::current().wo_arab() != 0 {
             put_translated(c" Arabic");
         } else if let Some(keymap_name) = keymap_str(Win::current()) {
             // Shown only when it would have fitted upstream's `MAXPATHL`

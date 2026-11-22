@@ -44,7 +44,7 @@ pub(crate) fn restore_start_dir(dirname_start: &CStr) {
     // Return to the original directory, ignoring any error.
     let mut ea = ExArg {
         line: CmdLine::from_bytes(dirname_start.to_bytes()),
-        cmdidx: if Win::current().w_localdir.is_none() {
+        cmdidx: if Win::current().read().w_localdir.is_none() {
             CmdIdx::cd
         } else {
             CmdIdx::lcd
@@ -142,7 +142,7 @@ impl Buf {
             // closing it actually worked — otherwise this would spin.
             let mut did_one = false;
             if windows().nth(1).is_some()
-                && let Some(wp) = windows().find(|wp| wp.w_buffer == self)
+                && let Some(wp) = windows().find(|wp| wp.w_buffer() == self)
             {
                 did_one = win_close(wp, false, false).is_ok();
             }

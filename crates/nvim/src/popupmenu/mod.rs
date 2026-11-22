@@ -211,7 +211,7 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     let mut below_row = if cmdline {
         CMDLINE_ROW.get()
     } else {
-        CMDLINE_ROW.get().max(win.w_winrow + win.w_view_height)
+        CMDLINE_ROW.get().max(win.w_winrow() + win.w_view_height())
     };
 
     PUM_WIN_ROW_OFFSET.set(0);
@@ -222,12 +222,12 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
         // wildoptions=pum
         let cw = cmdline_window();
         win_row = match cw {
-            Some(cw) => cw.w_wrow,
+            Some(cw) => cw.w_wrow(),
             None if ui_has(UI_CMDLINE) => 0,
             None => CMDLINE_ROW.get(),
         };
-        cursor_col = cw.map_or(0, |cw| cw.w_config._cmdline_offset) + cmd_startcol;
-        cursor_col %= cw.map_or_else(|| COLUMNS.get(), |cw| cw.w_view_width);
+        cursor_col = cw.map_or(0, |cw| cw.read().w_config._cmdline_offset) + cmd_startcol;
+        cursor_col %= cw.map_or_else(|| COLUMNS.get(), |cw| cw.w_view_width());
         PUM_ANCHOR_GRID.set(if ui_has(UI_CMDLINE) {
             -1
         } else {
@@ -235,24 +235,24 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
         });
     } else {
         // The start of the completed word.
-        win_row = win.w_wrow;
+        win_row = win.w_wrow();
         cursor_col = if PUM_RL.get() {
-            win.w_view_width - win.w_wcol - 1
+            win.w_view_width() - win.w_wcol() - 1
         } else {
-            win.w_wcol
+            win.w_wcol()
         };
     }
 
     if let Some(target) = target_win {
-        PUM_ANCHOR_GRID.set(grid_of_view(target.w_grid).handle.get());
-        win_row += target.w_grid.row_offset;
-        cursor_col += target.w_grid.col_offset;
-        if target.w_grid.target != default_grid_ref().raw() {
-            win_row += target.w_winrow;
-            cursor_col += target.w_wincol;
+        PUM_ANCHOR_GRID.set(grid_of_view(target.w_grid()).handle.get());
+        win_row += target.w_grid().row_offset;
+        cursor_col += target.w_grid().col_offset;
+        if target.w_grid().target != default_grid_ref().raw() {
+            win_row += target.w_winrow();
+            cursor_col += target.w_wincol();
             if ui_has(UI_MULTIGRID) {
-                PUM_WIN_ROW_OFFSET.set(target.w_winrow);
-                PUM_WIN_COL_OFFSET.set(target.w_wincol);
+                PUM_WIN_ROW_OFFSET.set(target.w_winrow());
+                PUM_WIN_COL_OFFSET.set(target.w_wincol());
             } else {
                 // ext_popupmenu always anchors to the default grid when
                 // multigrid is off.
@@ -262,11 +262,11 @@ fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     }
 
     // A preview window takes its space away from the menu.
-    if let Some(pvwin) = windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
-        if pvwin.w_winrow < win.w_winrow {
-            above_row = pvwin.w_winrow + pvwin.w_height;
-        } else if pvwin.w_winrow > win.w_winrow + win.w_height {
-            below_row = pvwin.w_winrow;
+    if let Some(pvwin) = windows().find(|wp| wp.wo_pvw() != 0) {
+        if pvwin.w_winrow() < win.w_winrow() {
+            above_row = pvwin.w_winrow() + pvwin.w_height();
+        } else if pvwin.w_winrow() > win.w_winrow() + win.w_height() {
+            below_row = pvwin.w_winrow();
         }
     }
 
@@ -323,7 +323,7 @@ pub fn pum_display(
         PUM_EXTERNAL
             .set(ui_has(UI_POPUPMENU) || (STATE.get() & MODE_CMDLINE != 0 && ui_has(UI_WILDMENU)));
     }
-    PUM_RL.set(STATE.get() & MODE_CMDLINE == 0 && Win::current().w_onebuf_opt.wo_rl != 0);
+    PUM_RL.set(STATE.get() & MODE_CMDLINE == 0 && Win::current().wo_rl() != 0);
     let border_width = pum_border_width();
 
     // Placing the menu can resize a window, which invalidates the

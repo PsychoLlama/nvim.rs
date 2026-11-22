@@ -272,9 +272,9 @@ pub(crate) fn new_tabpage(
     newtp.set_tp_firstwin(newtp.tp_lastwin());
 
     win_init_size();
-    let mut firstw = first_win();
-    firstw.w_winrow = tabline_rows();
-    firstw.w_prev_winrow = firstw.w_winrow;
+    let firstw = first_win();
+    firstw.set_w_winrow(tabline_rows());
+    firstw.set_w_prev_winrow(firstw.w_winrow());
     comp_scroll(Win::current());
     newtp.set_tp_topframe(TOPFRAME.get());
     update_last_status(false);
@@ -494,7 +494,7 @@ fn enter_tab(
         .tp_firstwin()
         .and_then(WinId::get)
         .expect("a live tab page has a first window")
-        .w_winrow;
+        .w_winrow();
     let next_prevwin = tabpage.tp_prevwin();
     let old_curtab = TabPage::current();
     adopt_tabpage(tabpage);
@@ -546,7 +546,7 @@ fn enter_tab(
 
     // The tabline may have appeared or disappeared, so the frames may need
     // resizing; the same when the editor was resized.
-    if TabPage::current().tp_old_rows_avail() != rows_avail() || old_off != first_win().w_winrow {
+    if TabPage::current().tp_old_rows_avail() != rows_avail() || old_off != first_win().w_winrow() {
         new_screen_rows();
     }
     if TabPage::current().tp_old_columns() != int64_t::from(COLUMNS.get()) {
@@ -582,30 +582,30 @@ fn set_cmdheight(n: OptInt) {
 /// always moving them to `CURTAB`.
 fn check_tabpage_windows(old_curtab: TabPage) {
     let mut cur = old_curtab.tp_firstwin().and_then(WinId::get);
-    while let Some(mut wp) = cur {
+    while let Some(wp) = cur {
         let next_wp = wp.next();
-        if wp.w_floating {
-            if wp.w_config.external {
+        if wp.w_floating() {
+            if wp.config_external() {
                 win_remove(wp, Some(old_curtab));
                 win_append(Some(lastwin_nofloating(None)), wp, None);
             } else {
                 drop_grid(wp);
             }
         }
-        wp.w_pos_changed = true;
+        wp.set_w_pos_changed(true);
         cur = next_wp;
     }
-    for mut wp in windows() {
-        if wp.w_floating && !wp.w_config.external {
+    for wp in windows() {
+        if wp.w_floating() && !wp.config_external() {
             config_float(wp);
         }
-        wp.w_pos_changed = true;
+        wp.set_w_pos_changed(true);
     }
 }
 
 /// Re-place a floating window under its own configuration.
 fn config_float(window: Win) {
-    let config = window.w_config.clone();
+    let config = window.config();
     win_config_float(window, config);
 }
 

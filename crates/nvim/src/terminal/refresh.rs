@@ -160,9 +160,9 @@ pub(crate) fn refresh_terminal(term: Term) {
     if resized {
         // The child now knows the width, so a window scrolled sideways is
         // showing a column that no longer means anything.
-        for mut wp in windows_showing(buf) {
-            if wp.w_leftcol != ColNr::ZERO {
-                wp.w_leftcol = ColNr::ZERO;
+        for wp in windows_showing(buf) {
+            if wp.w_leftcol() != ColNr::ZERO {
+                wp.set_w_leftcol(ColNr::ZERO);
                 // SAFETY: a window of the current tab page's own list.
                 curs_columns(wp, 1);
             }
@@ -267,7 +267,7 @@ fn clear_invalid(term: Term) {
 
 /// Every window showing `buffer`.
 fn windows_showing(buffer: Buf) -> impl Iterator<Item = Win> {
-    tab_windows().filter(move |wp| wp.w_buffer == buffer)
+    tab_windows().filter(move |wp| wp.w_buffer() == buffer)
 }
 
 /// Keep every window on `buffer` looking at the bottom of the terminal.
@@ -277,18 +277,18 @@ fn windows_showing(buffer: Buf) -> impl Iterator<Item = Win> {
 /// stays where it was, clamped to the buffer.
 pub(crate) fn adjust_topline_cursor(term: Term, buffer: Buf, added: c_int) {
     let ml_end = buffer.line_count();
-    for mut wp in windows_showing(buffer) {
+    for wp in windows_showing(buffer) {
         if wp.is_current() && is_focused(term) {
             terminal_check_cursor(term);
             continue;
         }
-        if ml_end == wp.w_cursor.lnum + added {
-            wp.w_cursor.lnum = ml_end;
-            let topline = (wp.w_cursor.lnum - wp.w_view_height + 1).max(LineNr::ONE);
+        if ml_end == wp.cursor().lnum() + added {
+            wp.cursor().set_lnum(ml_end);
+            let topline = (wp.cursor().lnum() - wp.w_view_height() + 1).max(LineNr::ONE);
             // SAFETY: a window of the current tab page's own list.
             set_topline(wp, topline);
         } else {
-            wp.w_cursor.lnum = wp.w_cursor.lnum.min(ml_end);
+            wp.cursor().set_lnum(wp.cursor().lnum().min(ml_end));
         }
         // SAFETY: as above; the column is clamped against the line the
         // cursor was just moved to.

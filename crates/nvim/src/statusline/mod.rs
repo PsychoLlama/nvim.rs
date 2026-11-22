@@ -347,9 +347,9 @@ pub(crate) fn push(array: &mut Vec<Object>, value: Object) {
 /// The fill character and highlight group of `win`'s status line.
 pub(crate) fn fillchar_status_of(win: Win) -> (Hlf, ScreenChar) {
     if win.is_current() {
-        (HLF_S, win.w_p_fcs_chars.stl)
+        (HLF_S, win.fcs_stl())
     } else {
-        (HLF_SNC, win.w_p_fcs_chars.stlnc)
+        (HLF_SNC, win.fcs_stlnc())
     }
 }
 
@@ -379,10 +379,10 @@ pub(crate) fn build_statuscol_str(
     stcp: &mut StatusCol,
     signs: &[SignTextAttrs],
 ) -> StlOutput {
-    let mut win = window;
+    let win = window;
     // Only update the click definitions once per window per redraw, and not
     // at all while the column is empty -- it is redrawn again once it is not.
-    let fillclick = relnum >= LineNr::ZERO && stcp.width > 0 && lnum == win.w_topline;
+    let fillclick = relnum >= LineNr::ZERO && stcp.width > 0 && lnum == win.w_topline();
 
     if relnum >= LineNr::ZERO {
         set_vim_var_nr(Vv::Lnum, i64::from(lnum));
@@ -391,7 +391,7 @@ pub(crate) fn build_statuscol_str(
 
     let job = StlJob {
         win,
-        fmt: win.w_onebuf_opt.wo_stc.bytes().to_vec(),
+        fmt: win.read().w_onebuf_opt.wo_stc.bytes().to_vec(),
         opt: (OPT_STATUSCOLUMN, OptionSetFlags::LOCAL),
         fillchar: 0,
         maxwidth: stcp.width,
@@ -413,7 +413,7 @@ pub(crate) fn build_statuscol_str(
     }
 
     if fillclick {
-        let defs = &mut win.w_click_defs.statuscol;
+        let defs = &mut win.edit().w_click_defs.statuscol;
         clear_click_defs(defs);
         reserve_click_defs(defs, built.width);
         let recs = core::mem::take(&mut built.clicks);

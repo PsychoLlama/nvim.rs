@@ -14,6 +14,8 @@
     "crates/nvim/src/extmark/undo.rs": 1,
     "crates/nvim/src/indent_c/cino.rs": 1,
     "crates/nvim/src/mark/adjust.rs": 1,
+    "crates/nvim/src/mouse/domouse.rs": 1,
+    "crates/nvim/src/statusline/stl/mod.rs": 1,
     "crates/nvim/src/syntax/attr.rs": 1,
     "crates/nvim/src/syntax/clear.rs": 1,
     "crates/nvim/src/syntax/cluster.rs": 1,
@@ -22,6 +24,14 @@
     "crates/nvim/src/syntax/list.rs": 1,
     "crates/nvim/src/syntax/state.rs": 1,
     "crates/nvim/src/syntax/sync.rs": 1,
-    "crates/nvim/src/window/alloc.rs": 1
+    "crates/nvim/src/window/alloc.rs": 5,
+    "crates/nvim/src/window/close.rs": 3,
+    "crates/nvim/src/window/config.rs": 1,
+    "crates/nvim/src/window/goto.rs": 1,
+    "crates/nvim/src/window/resize.rs": 8,
+    "crates/nvim/src/window/size.rs": 2,
+    "crates/nvim/src/window/split.rs": 2,
+    "crates/nvim/src/window/winclose.rs": 1,
+    "crates/nvim/src/winfloat.rs": 1
   }
 }

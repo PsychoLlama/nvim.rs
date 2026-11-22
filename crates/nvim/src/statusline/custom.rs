@@ -106,7 +106,7 @@ impl Target {
     /// the top, or a width of nothing.
     fn of(win: Option<Win>, draw_winbar: bool, draw_ruler: bool) -> Option<(Target, Source)> {
         let is_stl_global = stl_is_global();
-        let floating = win.is_some_and(|w| w.w_floating) && !is_stl_global;
+        let floating = win.is_some_and(|w| w.w_floating()) && !is_stl_global;
         // A floating window owns its grid allocation.
         let own = || win.expect("a float is a window").grid_alloc();
         let mut canvas = if floating { own() } else { screen_canvas() };
@@ -131,27 +131,27 @@ impl Target {
         };
 
         if draw_winbar {
-            let local = !win.w_onebuf_opt.wo_wbr.bytes().is_empty();
+            let local = !win.read().w_onebuf_opt.wo_wbr.bytes().is_empty();
             let mut row = -1; // Row zero is the first row of text.
             // Scrolled off the top -- asked before the view is resolved,
             // since a window with no room for a winbar may have no grid.
-            if row + win.w_grid.row_offset < 0 {
+            if row + win.w_grid().row_offset < 0 {
                 return None;
             }
-            canvas = grid_adjust(win.w_grid, &mut row, &mut col);
+            canvas = grid_adjust(win.w_grid(), &mut row, &mut col);
             let group = if win.is_current() { HLF_WBR } else { HLF_WBRNC };
-            let maxwidth = win.w_view_width;
+            let maxwidth = win.w_view_width();
             reset_click_defs(win, ClickKind::Winbar, maxwidth);
             let target = Target {
                 canvas,
                 row,
                 col,
                 maxwidth,
-                fillchar: win.w_p_fcs_chars.wbr,
+                fillchar: win.fcs_wbr(),
                 group,
                 attr: win_hl(win, group as c_int),
             };
-            let wbr = local_or_global(&win.w_onebuf_opt.wo_wbr, P_WBR).get();
+            let wbr = local_or_global(&win.read().w_onebuf_opt.wo_wbr, P_WBR).get();
             let source = Source {
                 fmt: wbr.to_vec(),
                 opt: (
@@ -167,21 +167,21 @@ impl Target {
         }
 
         // 'statusline' or 'rulerformat'.
-        let in_status_line = win.w_status_height != 0 || is_stl_global;
+        let in_status_line = win.w_status_height() != 0 || is_stl_global;
         let mut row;
         let mut maxwidth;
-        if win.w_floating && !is_stl_global && !draw_ruler {
-            row = win.w_winrow_off + win.w_view_height;
-            col = win.w_wincol_off;
-            maxwidth = win.w_view_width;
+        if win.w_floating() && !is_stl_global && !draw_ruler {
+            row = win.w_winrow_off() + win.w_view_height();
+            col = win.w_wincol_off();
+            maxwidth = win.w_view_width();
         } else {
             row = if is_stl_global {
                 ROWS.get() - number_as_int(p_ch()) - 1
             } else {
-                win.w_winrow + win.w_height
+                win.w_winrow() + win.w_height()
             };
             maxwidth = if in_status_line && !is_stl_global {
-                win.w_width
+                win.w_width()
             } else {
                 COLUMNS.get()
             };
@@ -205,8 +205,8 @@ impl Target {
                 opt: (OPT_RULERFORMAT, OptionSetFlags::NONE),
             }
         } else {
-            let local = !win.w_onebuf_opt.wo_stl.bytes().is_empty();
-            let stl = local_or_global(&win.w_onebuf_opt.wo_stl, P_STL).get();
+            let local = !win.read().w_onebuf_opt.wo_stl.bytes().is_empty();
+            let stl = local_or_global(&win.read().w_onebuf_opt.wo_stl, P_STL).get();
             Source {
                 fmt: stl.to_vec(),
                 opt: (
@@ -221,8 +221,8 @@ impl Target {
         };
 
         let attr = win_hl(win, group as c_int);
-        if !win.w_floating && in_status_line && !is_stl_global {
-            col += win.w_wincol;
+        if !win.w_floating() && in_status_line && !is_stl_global {
+            col += win.w_wincol();
         }
         let target = Target {
             canvas,
@@ -279,10 +279,10 @@ enum ClickKind {
 
 /// Free the click definitions recorded last time and make room for `width`
 /// cells of new ones.
-fn reset_click_defs(mut win: Win, kind: ClickKind, width: c_int) {
+fn reset_click_defs(win: Win, kind: ClickKind, width: c_int) {
     let defs = match kind {
-        ClickKind::Status => &mut win.w_click_defs.status,
-        ClickKind::Winbar => &mut win.w_click_defs.winbar,
+        ClickKind::Status => &mut win.edit().w_click_defs.status,
+        ClickKind::Winbar => &mut win.edit().w_click_defs.winbar,
     };
     clear_click_defs(defs);
     reserve_click_defs(defs, width);
@@ -300,11 +300,11 @@ fn record_clicks(
     match win {
         None => with_tab_click_defs(|defs| fill_click_defs(defs, recs, text, width, true)),
         // `Target::of` sized the window's definitions a moment ago.
-        Some(mut w) => {
+        Some(w) => {
             let defs = if draw_winbar {
-                &mut w.w_click_defs.winbar
+                &mut w.edit().w_click_defs.winbar
             } else {
-                &mut w.w_click_defs.status
+                &mut w.edit().w_click_defs.status
             };
             fill_click_defs(defs, recs, text, width, false);
         }
@@ -382,7 +382,7 @@ fn run_highlight(
     // `%N*`: one of the nine User highlights -- or their "status line of a
     // window that is not the current one" counterparts, which only exist
     // for a window that has a status line of its own.
-    let stlnc = win.is_some_and(|w| !w.is_current() && w.w_status_height != 0);
+    let stlnc = win.is_some_and(|w| !w.is_current() && w.w_status_height() != 0);
     let idx = as_index(run.userhl - 1);
     let attr = if stlnc {
         HIGHLIGHT_STLNC.with(|hl| hl[idx])
@@ -429,12 +429,12 @@ fn draw_custom(window: Option<Win>, draw_winbar: bool, draw_ruler: bool, ui_even
     let Some((target, source)) = Target::of(window, draw_winbar, draw_ruler) else {
         return;
     };
-    let (win, mut ewp) = (window, window.unwrap_or_else(Win::current));
+    let (win, ewp) = (window, window.unwrap_or_else(Win::current));
 
     // Temporarily reset 'cursorbind': a side effect from moving the cursor
     // away and back is not wanted.
-    let crb_save = ewp.w_onebuf_opt.wo_crb;
-    ewp.w_onebuf_opt.wo_crb = 0;
+    let crb_save = ewp.wo_crb();
+    ewp.set_wo_crb(0);
     let job = StlJob {
         win: ewp,
         fmt: source.fmt,
@@ -448,7 +448,7 @@ fn draw_custom(window: Option<Win>, draw_winbar: bool, draw_ruler: bool, ui_even
     };
     // The expander re-enters the editor; nothing is held across it.
     let built = job.run();
-    ewp.w_onebuf_opt.wo_crb = crb_save;
+    ewp.set_wo_crb(crb_save);
 
     let start_col = target.col;
 
@@ -480,9 +480,9 @@ pub fn win_redr_winbar(window: Win) {
     }
     ENTERED.set(true);
     let win = window;
-    if win.w_winbar_height != 0
+    if win.w_winbar_height() != 0
         && is_redrawing()
-        && (P_WBR.first_byte() != 0 || !win.w_onebuf_opt.wo_wbr.bytes().is_empty())
+        && (P_WBR.first_byte() != 0 || !win.read().w_onebuf_opt.wo_wbr.bytes().is_empty())
     {
         win_redr_custom(Some(window), true, false, false);
     }
@@ -502,8 +502,8 @@ pub fn redraw_ruler() {
     // The ruler belongs to the window it describes, unless that window has a
     // status line of its own to put it on -- then it is the last window's.
     let cur = Win::current();
-    let use_cur = !is_aucmd_win(cur) && cur.w_status_height == 0;
-    let mut win = if use_cur {
+    let use_cur = !is_aucmd_win(cur) && cur.w_status_height() == 0;
+    let win = if use_cur {
         cur
     } else {
         lastwin_nofloating(None)
@@ -512,7 +512,7 @@ pub fn redraw_ruler() {
 
     // Should the ruler be drawn at all? If not, clear what was drawn before.
     if !p_ru()
-        || win.w_status_height > 0
+        || win.w_status_height() > 0
         || is_stl_global
         || (p_ch() == 0 as OptInt && !ui_has(UI_MESSAGES))
     {
@@ -530,16 +530,16 @@ pub fn redraw_ruler() {
 
     // `redraw_ruler()` can be called after deleting lines but before the
     // cursor has been corrected, so the line number may be out of range.
-    if win.w_cursor.lnum > win.buffer().line_count() {
+    if win.cursor().lnum() > win.buffer().line_count() {
         return;
     }
     // Not while insert-completion is running: it might overwrite the (long)
     // mode message.
-    if win.w_status_height == 0 && !is_stl_global && EDIT_SUBMODE.get().is_some() {
+    if win.w_status_height() == 0 && !is_stl_global && EDIT_SUBMODE.get().is_some() {
         return;
     }
 
-    let part_of_status = win.w_status_height != 0 || is_stl_global;
+    let part_of_status = win.w_status_height() != 0 || is_stl_global;
     if P_RUF.first_byte() != 0 && (p_ch() > 0 as OptInt || (ui_has(UI_MESSAGES) && !part_of_status))
     {
         win_redr_custom(Some(win), false, true, ui_has(UI_MESSAGES));
@@ -547,13 +547,13 @@ pub fn redraw_ruler() {
     }
 
     let mut group = HLF_MSG;
-    let off = if win.w_status_height != 0 {
-        win.w_wincol
+    let off = if win.w_status_height() != 0 {
+        win.w_wincol()
     } else {
         0
     };
-    let width = if win.w_status_height != 0 {
-        win.w_width
+    let width = if win.w_status_height() != 0 {
+        win.w_width()
     } else {
         COLUMNS.get()
     };
@@ -572,11 +572,11 @@ pub fn redraw_ruler() {
 
     // In list mode the virtual column has to be recomputed, because the
     // cursor is drawn where the tab is shown rather than where it ends.
-    let mut virtcol = win.w_virtcol;
-    if win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == 0 {
-        win.w_onebuf_opt.wo_list = 0;
+    let mut virtcol = win.w_virtcol();
+    if win.wo_list() != 0 && win.read().w_p_lcs_chars.tab1 == 0 {
+        win.set_wo_list(0);
         virtcol = win.virtual_cursor_vcol(win.cursor());
-        win.w_onebuf_opt.wo_list = 1;
+        win.set_wo_list(1);
     }
 
     // The text as upstream's `RULER_BUF_LEN` buffer would hold it.
@@ -587,7 +587,7 @@ pub fn redraw_ruler() {
     // the last column: that scrolls the screen up on some terminals.
     let rel_pos = get_rel_pos(win, room);
     let mut n1 = len_as_int(buffer.len()) + strsize(&rel_pos);
-    if win.w_status_height == 0 && !is_stl_global {
+    if win.w_status_height() == 0 && !is_stl_global {
         n1 += 1; // Can't use the last character of the screen.
     }
 
@@ -629,12 +629,12 @@ pub fn redraw_ruler() {
 /// Insert mode on an empty line -- which is what makes that read "0-1".
 fn ruler_position(win: Win, virtcol: ColNr) -> Vec<u8> {
     let empty_buffer = win.buffer().ml_flags().has(MlFlags::EMPTY);
-    let cursor_line_empty = win.buffer().lines().line(win.w_cursor.lnum).is_empty();
+    let cursor_line_empty = win.buffer().lines().line(win.cursor().lnum()).is_empty();
     let empty_line = STATE.get() & MODE_INSERT == 0 && cursor_line_empty;
     let lnum = if empty_buffer {
         0 as int64_t
     } else {
-        i64::from(win.w_cursor.lnum)
+        i64::from(win.cursor().lnum())
     };
     let room = RULER_BUF_LEN as usize;
     // l10n: leave as-is unless a space after the comma is preferred
@@ -643,7 +643,7 @@ fn ruler_position(win: Win, virtcol: ColNr) -> Vec<u8> {
     let col = if empty_line {
         0
     } else {
-        (win.w_cursor.col + 1).get()
+        (win.cursor().col() + 1).get()
     };
     let col = col_text(col, (virtcol + 1).get());
     let keep = col.len().min(room.saturating_sub(text.len() + 1));

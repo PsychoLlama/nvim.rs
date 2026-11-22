@@ -165,14 +165,14 @@ static CONCEAL_CURSOR_USED: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// That is where its horizontal separator or status line goes.
 pub(crate) fn win_endrow(window: Win) -> c_int {
-    window.w_winrow + window.w_height
+    window.w_winrow() + window.w_height()
 }
 
 /// The screen column right of window `window`'s last one -- `W_ENDCOL`.
 ///
 /// That is where its vertical separator goes.
 pub(crate) fn win_endcol(window: Win) -> c_int {
-    window.w_wincol + window.w_width
+    window.w_wincol() + window.w_width()
 }
 
 /// Redraw the cursor line if `'concealcursor'` changed what it does to it.
@@ -182,14 +182,14 @@ pub(crate) fn win_endcol(window: Win) -> c_int {
 pub fn conceal_check_cursor_line() {
     let wp = Win::current();
     let should_conceal = conceal_cursor_line(wp);
-    if wp.w_onebuf_opt.wo_cole <= 0 || CONCEAL_CURSOR_USED.get() == should_conceal {
+    if wp.wo_cole() <= 0 || CONCEAL_CURSOR_USED.get() == should_conceal {
         return;
     }
 
-    redraw_win_line(wp, wp.w_cursor.lnum);
+    redraw_win_line(wp, wp.cursor().lnum());
 
     // Whether the line is displayed at all may have changed with it.
-    if decor_conceal_line(wp, (wp.w_cursor.lnum - 1).get(), true) {
+    if decor_conceal_line(wp, (wp.cursor().lnum() - 1).get(), true) {
         changed_window_setting(wp);
     }
     // The cursor column has to be recomputed, e.g. when entering Visual
@@ -242,21 +242,21 @@ fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
             dg.clear_line(off, COLUMNS.get(), false);
             row += 1;
         }
-        for mut wp in winlayer::windows() {
-            if wp.w_floating {
+        for wp in winlayer::windows() {
+            if wp.w_floating() {
                 continue;
             }
             if win_endrow(wp) > valid {
                 // Pessimistic: `redr_type` could be UPD_NOT_VALID only
                 // because of windows above the separator.
-                wp.w_redr_type = wp.w_redr_type.max(UPD_NOT_VALID);
+                wp.set_w_redr_type(wp.w_redr_type().max(UPD_NOT_VALID));
             }
-            if !is_stl_global && win_endrow(wp) + wp.w_status_height > valid {
-                wp.w_redr_status = true;
+            if !is_stl_global && win_endrow(wp) + wp.w_status_height() > valid {
+                wp.set_w_redr_status(true);
             }
         }
         if is_stl_global && OptInt::from(ROWS.get()) - p_ch() - 1 > OptInt::from(valid) {
-            Win::current().w_redr_status = true;
+            Win::current().set_w_redr_status(true);
         }
     }
 
@@ -340,27 +340,28 @@ pub fn update_screen() -> Result<(), Failed> {
     let mut did_one = false;
     SearchHl::current().forget_regprog();
 
-    for mut wp in winlayer::windows() {
-        if wp.w_redr_type == UPD_CLEAR && wp.w_floating && wp.w_grid_alloc.is_allocated() {
-            wp.w_grid_alloc.invalidate();
-            wp.w_redr_type = UPD_NOT_VALID;
+    for wp in winlayer::windows() {
+        if wp.w_redr_type() == UPD_CLEAR && wp.w_floating() && wp.read().w_grid_alloc.is_allocated()
+        {
+            wp.edit().w_grid_alloc.invalidate();
+            wp.set_w_redr_type(UPD_NOT_VALID);
         }
 
         win_check_ns_hl(Some(wp));
         win_grid_alloc(wp);
 
-        if wp.w_redr_border || wp.w_redr_type >= UPD_NOT_VALID {
-            let hl_attr = wp.w_ns_hl_attr.map(GlobalCell::get);
+        if wp.w_redr_border() || wp.w_redr_type() >= UPD_NOT_VALID {
+            let hl_attr = wp.w_ns_hl_attr().map(GlobalCell::get);
             grid_draw_border(
                 wp.grid_alloc(),
-                &wp.w_config,
-                Some(wp.w_border_adj),
-                number_as_int(wp.w_onebuf_opt.wo_winbl),
+                &wp.read().w_config,
+                Some(wp.w_border_adj()),
+                number_as_int(wp.wo_winbl()),
                 hl_attr.as_ref().map(|table| &table[..]),
             );
         }
 
-        if wp.w_redr_type != 0 {
+        if wp.w_redr_type() != 0 {
             if !did_one {
                 did_one = true;
                 start_search_hl();
@@ -370,7 +371,7 @@ pub fn update_screen() -> Result<(), Failed> {
 
         // The status line and window bar go after the window, to minimise
         // cursor movement.
-        if wp.w_redr_status {
+        if wp.w_redr_status() {
             win_redr_winbar(wp);
             win_redr_status(wp);
         }
@@ -398,7 +399,7 @@ pub fn update_screen() -> Result<(), Failed> {
     // Reset `b_mod_set`. Going through the windows is probably faster than
     // going through every buffer.
     for wp in winlayer::windows() {
-        wp.w_buffer.set_b_mod_set(false);
+        wp.w_buffer().set_b_mod_set(false);
     }
 
     UPDATING_SCREEN.set(false);
@@ -524,25 +525,25 @@ fn draw_global_elements(redr_type: c_int) {
     //
     // Upstream special-cases `curwin` here and says so in a comment; either
     // every window should be checked or none should. Reproduced.
-    let mut wp = Win::current();
+    let wp = Win::current();
     // `number_width` is NOT pure -- it caches its answer in the window and
     // resets the 'statuscolumn' width estimate -- so it stays behind the
     // `w_redr_type` test, where upstream's `&&` puts it.
-    if wp.w_redr_type < UPD_NOT_VALID {
-        let nrwidth = if wp.w_onebuf_opt.wo_nu != 0
-            || wp.w_onebuf_opt.wo_rnu != 0
-            || wp.w_onebuf_opt.wo_stc.first_byte() != 0
+    if wp.w_redr_type() < UPD_NOT_VALID {
+        let nrwidth = if wp.wo_nu() != 0
+            || wp.wo_rnu() != 0
+            || wp.read().w_onebuf_opt.wo_stc.first_byte() != 0
         {
             number_width(wp)
         } else {
             0
         };
-        if wp.w_nrwidth != nrwidth {
-            wp.w_redr_type = UPD_NOT_VALID;
+        if wp.w_nrwidth() != nrwidth {
+            wp.set_w_redr_type(UPD_NOT_VALID);
         }
     }
 
-    if wp.w_redr_type == UPD_INVERTED {
+    if wp.w_redr_type() == UPD_INVERTED {
         // So the end of the Visual selection is right.
         update_curswant();
     }
@@ -624,15 +625,15 @@ pub fn setcursor_mayforce(window: Win, force: bool) {
     }
     validate_cursor(window);
 
-    let mut row = window.w_wrow;
-    let mut col = window.w_wcol;
-    if window.w_onebuf_opt.wo_rl != 0 {
+    let mut row = window.w_wrow();
+    let mut col = window.w_wcol();
+    if window.wo_rl() != 0 {
         // With 'rightleft' and the cursor on a double-width character, the
         // cursor goes on its leftmost column.
         let mut lines = window.buffer().lines();
-        let line = lines.line(window.w_cursor.lnum);
+        let line = lines.line(window.cursor().lnum());
         let cursor = line
-            .get(usize::try_from(window.w_cursor.col).unwrap_or(0)..)
+            .get(usize::try_from(window.cursor().col()).unwrap_or(0)..)
             .unwrap_or_default();
         let cells = if c_cells_at(cursor) == 2
             && vim_isprintc(Codepoint::new(c_char_info(cursor, 0).value))
@@ -641,12 +642,12 @@ pub fn setcursor_mayforce(window: Win, force: bool) {
         } else {
             1
         };
-        col = window.w_view_width - window.w_wcol - cells;
+        col = window.w_view_width() - window.w_wcol() - cells;
     }
 
     // A window whose view is not resolved yet has no cursor to place.
-    if !window.w_grid.target.is_null() {
-        let grid = grid_adjust(window.w_grid, &mut row, &mut col);
+    if !window.w_grid().target.is_null() {
+        let grid = grid_adjust(window.w_grid(), &mut row, &mut col);
         ui_grid_cursor_goto(grid.handle, row, col);
     }
 }
@@ -664,7 +665,7 @@ pub fn compute_foldcolumn(window: Win, col: c_int) -> c_int {
     } else {
         number_as_int(p_wmw())
     };
-    fdc.min(window.w_view_width - (col + min_width))
+    fdc.min(window.w_view_width() - (col + min_width))
 }
 
 /// The width of window `window`'s `'number'`/`'relativenumber'` column.
@@ -672,29 +673,30 @@ pub fn compute_foldcolumn(window: Win, col: c_int) -> c_int {
 /// Callers check whether either option is set; this only decides how wide the
 /// column would be. The answer is cached against the line count it was computed
 /// for, since it only changes when that crosses a power of ten.
-pub fn number_width(mut window: Win) -> c_int {
+pub fn number_width(window: Win) -> c_int {
     // With 'relativenumber' alone the largest number shown is the window
     // height (the cursor line shows "0"); otherwise it is the line count.
-    let largest = if window.w_onebuf_opt.wo_rnu != 0 && window.w_onebuf_opt.wo_nu == 0 {
-        LineNr::new(window.w_view_height)
+    let largest = if window.wo_rnu() != 0 && window.wo_nu() == 0 {
+        LineNr::new(window.w_view_height())
     } else {
-        window.w_buffer.line_count()
+        window.w_buffer().line_count()
     };
 
-    if largest == window.w_nrwidth_line_count {
-        return window.w_nrwidth_width;
+    if largest == window.w_nrwidth_line_count() {
+        return window.w_nrwidth_width();
     }
-    window.w_nrwidth_line_count = largest;
+    window.set_w_nrwidth_line_count(largest);
 
-    if window.w_onebuf_opt.wo_stc.first_byte() != 0 {
+    if window.read().w_onebuf_opt.wo_stc.first_byte() != 0 {
         // 'statuscolumn' draws the number itself, so all that is reserved
         // here is 'numberwidth'; the real width is re-estimated from the
         // expression's output.
-        window.w_statuscol_line_count = LineNr::ZERO;
-        window.w_nrwidth_width =
-            c_int::from(window.w_onebuf_opt.wo_nu != 0 || window.w_onebuf_opt.wo_rnu != 0)
-                * number_as_int(window.w_onebuf_opt.wo_nuw);
-        return window.w_nrwidth_width;
+        window.set_w_statuscol_line_count(LineNr::ZERO);
+        window.set_w_nrwidth_width(
+            c_int::from(window.wo_nu() != 0 || window.wo_rnu() != 0)
+                * number_as_int(window.wo_nuw()),
+        );
+        return window.w_nrwidth_width();
     }
 
     // Digits in `largest`, at least one -- upstream's do-while, which
@@ -710,25 +712,25 @@ pub fn number_width(mut window: Win) -> c_int {
     }
 
     // 'numberwidth' is the minimal width plus one.
-    n = n.max(number_as_int(window.w_onebuf_opt.wo_nuw) - 1);
+    n = n.max(number_as_int(window.wo_nuw()) - 1);
 
     // With `'signcolumn'` "number" and a sign to show, the number column
     // needs room for the two-cell sign text.
     if n < 2
         && buf_meta_total(window.buffer(), MT_META_SIGN_TEXT) != 0
-        && window.w_minscwidth == SCL_NUM
+        && window.w_minscwidth() == SCL_NUM
     {
         n = 2;
     }
 
-    window.w_nrwidth_width = n;
+    window.set_w_nrwidth_width(n);
     n
 }
 
 /// Whether the cursor line in window `window` may be concealed, per
 /// `'concealcursor'`.
 pub fn conceal_cursor_line(window: Win) -> bool {
-    if window.w_onebuf_opt.wo_cocu.first_byte() == 0 {
+    if window.read().w_onebuf_opt.wo_cocu.first_byte() == 0 {
         return false;
     }
     let mode = if get_real_state() & MODE_VISUAL != 0 {
@@ -742,7 +744,7 @@ pub fn conceal_cursor_line(window: Win) -> bool {
     } else {
         return false;
     };
-    window.w_onebuf_opt.wo_cocu.has_byte(mode)
+    window.read().w_onebuf_opt.wo_cocu.has_byte(mode)
 }
 
 /// Whether the cursor line of window `window` is drawn differently from any other.
@@ -750,10 +752,8 @@ pub fn conceal_cursor_line(window: Win) -> bool {
 /// When it is, moving the cursor within the window means redrawing both the old
 /// cursor line and the new one.
 pub fn win_cursorline_standout(window: Win) -> bool {
-    window.w_onebuf_opt.wo_cul != 0
-        || (window == Win::current()
-            && window.w_onebuf_opt.wo_cole > 0
-            && !conceal_cursor_line(window))
+    window.wo_cul() != 0
+        || (window == Win::current() && window.wo_cole() > 0 && !conceal_cursor_line(window))
 }
 
 /// Update `w_cursorline`, and answer the cursor line's fold info through
@@ -762,16 +762,16 @@ pub fn win_cursorline_standout(window: Win) -> bool {
 /// On a closed fold the whole fold is the cursor line, so `w_cursorline` is
 /// moved to its first line -- otherwise the fold would not be redrawn when the
 /// cursor moves onto it.
-pub fn win_update_cursorline(mut window: Win, foldinfo: &mut FoldInfo) {
-    window.w_cursorline = if win_cursorline_standout(window) {
-        window.w_cursor.lnum
+pub fn win_update_cursorline(window: Win, foldinfo: &mut FoldInfo) {
+    window.set_w_cursorline(if win_cursorline_standout(window) {
+        window.cursor().lnum()
     } else {
         LineNr::ZERO
-    };
-    if window.w_onebuf_opt.wo_cul != 0 {
-        *foldinfo = fold_info(window, window.w_cursor.lnum);
+    });
+    if window.wo_cul() != 0 {
+        *foldinfo = fold_info(window, window.cursor().lnum());
         if foldinfo.fi_level != 0 && foldinfo.fi_lines > 0 {
-            window.w_cursorline = foldinfo.fi_lnum;
+            window.set_w_cursorline(foldinfo.fi_lnum);
         }
     }
 }

@@ -136,7 +136,7 @@ fn window_command(nchar: Key, prenum: c_int, xchar: Key) {
         WindowCommand::Quit => run_with_count(c"quit", prenum),
         WindowCommand::Close => run_with_count(c"close", prenum),
         WindowCommand::ClosePreview => run_cmd(c"pclose"),
-        WindowCommand::GotoPreview => match windows().find(|wp| wp.w_onebuf_opt.wo_pvw != 0) {
+        WindowCommand::GotoPreview => match windows().find(|wp| wp.wo_pvw() != 0) {
             None => {
                 err(WinError::NoPreviewWindow);
             }
@@ -157,8 +157,10 @@ fn window_command(nchar: Key, prenum: c_int, xchar: Key) {
         WindowCommand::RotateUp => rotate(true, prenum1),
         WindowCommand::MoveToEdge => move_to_edge(nchar, prenum),
         WindowCommand::Equalise => equalise(),
-        WindowCommand::Taller => setheight_win(Win::current().w_height + prenum1, Win::current()),
-        WindowCommand::Shorter => setheight_win(Win::current().w_height - prenum1, Win::current()),
+        WindowCommand::Taller => setheight_win(Win::current().w_height() + prenum1, Win::current()),
+        WindowCommand::Shorter => {
+            setheight_win(Win::current().w_height() - prenum1, Win::current())
+        }
         WindowCommand::SetHeight => {
             let height = if prenum != 0 {
                 prenum
@@ -167,8 +169,8 @@ fn window_command(nchar: Key, prenum: c_int, xchar: Key) {
             };
             setheight_win(height, Win::current());
         }
-        WindowCommand::Wider => setwidth_win(Win::current().w_width + prenum1, Win::current()),
-        WindowCommand::Narrower => setwidth_win(Win::current().w_width - prenum1, Win::current()),
+        WindowCommand::Wider => setwidth_win(Win::current().w_width() + prenum1, Win::current()),
+        WindowCommand::Narrower => setwidth_win(Win::current().w_width() - prenum1, Win::current()),
         WindowCommand::SetWidth => {
             let width = if prenum != 0 { prenum } else { COLUMNS.get() };
             setwidth_win(width, Win::current());
@@ -366,7 +368,7 @@ impl WindowCommand {
 /// configuration without asking whether the window floats, unlike
 /// [`focusable`] below.
 fn goto_last_used() {
-    let prev = prev_window().filter(|wp| !wp.w_config.hide && wp.w_config.focusable);
+    let prev = prev_window().filter(|wp| !wp.config_hide() && wp.read().w_config.focusable);
     match prev {
         None => beep(),
         Some(wp) => goto_win(wp),
@@ -401,7 +403,7 @@ fn split_or_new(nchar: Key, prenum: c_int, flags: c_int) {
 /// `prenum` when there is a count.
 fn split_alternate(prenum: c_int) {
     let fnum = if prenum == 0 {
-        Win::current().w_alt_fnum
+        Win::current().w_alt_fnum()
     } else {
         Handle::from_number(prenum)
     };
@@ -465,7 +467,7 @@ fn cycle_windows(nchar: Key, prenum: c_int) {
 /// Whether the cursor may be put in `window`: a hidden or unfocusable float is
 /// skipped over.
 fn focusable(window: Win) -> bool {
-    !window.w_floating || (!window.w_config.hide && window.w_config.focusable)
+    !window.w_floating() || (!window.config_hide() && window.read().w_config.focusable)
 }
 
 /// The `prenum`th window of the list, or the last focusable one before it when
@@ -595,9 +597,9 @@ fn goto_file(nchar: Key, prenum1: c_int) {
         wp = find_buffer_by_name(name.as_cstr()).and_then(swbuf_goto_win);
     }
     if wp.is_none() && split(0, 0).is_ok() {
-        let mut cur = Win::current();
-        cur.w_onebuf_opt.wo_scb = 0;
-        cur.w_onebuf_opt.wo_crb = 0;
+        let cur = Win::current();
+        cur.set_wo_scb(0);
+        cur.set_wo_crb(0);
         if edit_file(name.as_cstr()).is_err() {
             // Failed to open the file: close the window opened for it.
             let _ = close(Win::current(), false, false);
@@ -607,8 +609,8 @@ fn goto_file(nchar: Key, prenum1: c_int) {
         }
     }
     if wp.is_some() && nchar == FILE_LINE && lnum >= LineNr::ZERO {
-        let mut cur = Win::current();
-        cur.w_cursor.lnum = lnum;
+        let cur = Win::current();
+        cur.cursor().set_lnum(lnum);
         revalidate_cursor_lnum(cur);
         first_non_blank();
     }
@@ -623,7 +625,7 @@ fn find_in_path(kind: c_int, prenum: c_int, prenum1: c_int) {
         return;
     }
     search_path(&found, kind, prenum == 0, prenum1);
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
 }
 
 /// CTRL-W g -- read the second letter and dispatch on it.
@@ -671,13 +673,13 @@ fn g_jump_to_tag(prenum: c_int, xchar: Key) {
 
 /// CTRL-W ge -- hand the current window to the UI as an external window.
 fn detach_window() {
-    if Win::current().w_floating || !ui_has(UI_MULTIGRID) {
+    if Win::current().w_floating() || !ui_has(UI_MULTIGRID) {
         beep();
         return;
     }
     let config = WinConfig {
-        width: Win::current().w_width,
-        height: Win::current().w_height,
+        width: Win::current().w_width(),
+        height: Win::current().w_height(),
         external: true,
         ..WIN_CONFIG_INIT
     };

@@ -536,7 +536,7 @@ pub(crate) fn syn_ns_get_final_id(ns_id: &mut NS, hl_idp: &mut c_int) -> bool {
 /// The group id every `:highlight link` chain from `hl_id` ends at, in the
 /// namespace the current window has active.
 pub(crate) fn syn_get_final_id(hl_id: c_int) -> c_int {
-    let mut ns_id = Win::current().w_ns_hl_active;
+    let mut ns_id = Win::current().w_ns_hl_active();
     let mut hl_id = hl_id;
     syn_ns_get_final_id(&mut ns_id, &mut hl_id);
     hl_id

@@ -102,9 +102,9 @@ pub fn screenclear() {
     REDRAW_TABLINE.set(true);
     REDRAW_POPUPMENU.set(true);
     pum_invalidate();
-    for mut wp in winlayer::windows() {
-        if wp.w_floating {
-            wp.w_redr_type = UPD_CLEAR;
+    for wp in winlayer::windows() {
+        if wp.w_floating() {
+            wp.set_w_redr_type(UPD_CLEAR);
         }
     }
     if MUST_REDRAW.get() == UPD_CLEAR {
@@ -239,7 +239,7 @@ pub extern "C" fn screen_resize(width: c_int, height: c_int) {
             ui_comp_set_screen_valid(true);
             repeat_message();
         } else {
-            if Win::current().w_onebuf_opt.wo_scb != 0 {
+            if Win::current().wo_scb() != 0 {
                 do_check_scrollbind(true);
             }
             if STATE.get() & MODE_CMDLINE != 0 {

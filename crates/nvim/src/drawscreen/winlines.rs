@@ -76,8 +76,11 @@ struct Walk {
 /// the line number can be wrong), and the walk stops at the first valid entry
 /// below `lnum`, as upstream's `find_wl_entry` does.
 pub(crate) fn find_wl_entry(win: Win, lnum: LineNr) -> Option<WLine> {
-    let valid = usize::try_from(win.w_lines_valid).unwrap_or(0);
-    for entry in win.w_lines[..valid].iter().filter(|entry| entry.wl_valid) {
+    let valid = usize::try_from(win.w_lines_valid()).unwrap_or(0);
+    for entry in win.read().w_lines[..valid]
+        .iter()
+        .filter(|entry| entry.wl_valid)
+    {
         if lnum < entry.wl_lnum {
             return None;
         }
@@ -93,7 +96,7 @@ pub(crate) fn find_wl_entry(win: Win, lnum: LineNr) -> Option<WLine> {
 /// The answer is what [`win_update`]'s tail compares against to decide whether
 /// the approximation it had been carrying was wrong.
 pub(crate) fn draw_window_lines(
-    mut window: Win,
+    window: Win,
     buffer: Buf,
     rg: &mut Regions,
     cursorline_fi: FoldInfo,
@@ -105,7 +108,7 @@ pub(crate) fn draw_window_lines(
         idx: 0,
         row: 0,
         srow: 0,
-        lnum: window.w_topline,
+        lnum: window.w_topline(),
         eof: false,
         didline: false,
         syntax_last_parsed: LineNr::ZERO,
@@ -121,14 +124,14 @@ pub(crate) fn draw_window_lines(
     'restart: loop {
         w.idx = 0;
         w.row = 0;
-        w.lnum = window.w_topline;
+        w.lnum = window.w_topline();
         w.eof = false;
         w.didline = false;
 
         loop {
             // Stop at the end of the window; the check for going *past* it
             // is at the bottom.
-            if w.row == window.w_view_height {
+            if w.row == window.w_view_height() {
                 w.didline = true;
                 break;
             }
@@ -146,12 +149,12 @@ pub(crate) fn draw_window_lines(
                 }
             } else {
                 skip_one_line(window, buffer, rg, &mut w, cursorline_fi, spv);
-                if w.row > window.w_view_height {
+                if w.row > window.w_view_height() {
                     break;
                 }
             }
 
-            if window.w_redr_statuscol {
+            if window.w_redr_statuscol() {
                 restart_for_statuscol(window);
                 continue 'restart;
             }
@@ -163,23 +166,23 @@ pub(crate) fn draw_window_lines(
 
         // The window has been drawn with both the old and the new cursor
         // line, so the remembered one can move.
-        window.w_last_cursorline = window.w_cursorline;
-        window.w_last_cursor_lnum_rnu = if window.w_onebuf_opt.wo_rnu != 0 {
-            window.w_cursor.lnum
+        window.set_w_last_cursorline(window.w_cursorline());
+        window.set_w_last_cursor_lnum_rnu(if window.wo_rnu() != 0 {
+            window.cursor().lnum()
         } else {
             LineNr::ZERO
-        };
-        window.w_lines_valid = window.w_lines_valid.max(w.idx);
-        window.w_display_tick = display_tick.get();
+        });
+        window.set_w_lines_valid(window.w_lines_valid().max(w.idx));
+        window.set_w_display_tick(display_tick.get());
 
         // Tell the syntax machinery where parsing stopped.
         if w.syntax_last_parsed != LineNr::ZERO && syntax_present(window) {
             syntax_end_parsing(window, w.syntax_last_parsed + 1);
         }
 
-        let old_botline = window.w_botline;
-        window.w_empty_rows = 0;
-        window.w_filler_rows = 0;
+        let old_botline = window.w_botline();
+        window.set_w_empty_rows(0);
+        window.set_w_filler_rows(0);
 
         if !w.eof && !w.didline {
             draw_unfinished_last_line(window, &w);
@@ -187,28 +190,28 @@ pub(crate) fn draw_window_lines(
             if w.eof {
                 // Filler text below the last line. `win_line` recognises
                 // `ml_line_count + 1` and draws only the filler.
-                window.w_botline = buffer.line_count() + 1;
-                let fill = win_get_fill(window, window.w_botline);
-                if fill > 0 && !window.w_botfill && w.row < window.w_view_height {
+                window.set_w_botline(buffer.line_count() + 1);
+                let fill = win_get_fill(window, window.w_botline());
+                if fill > 0 && !window.w_botfill() && w.row < window.w_view_height() {
                     let mut zero_spv = SpellVars::default();
                     w.row = win_line(
                         window,
-                        window.w_botline,
+                        window.w_botline(),
                         w.row,
-                        window.w_view_height,
+                        window.w_view_height(),
                         0,
                         false,
                         &mut zero_spv,
                         FoldInfo::default(),
                     );
-                    if window.w_redr_statuscol {
+                    if window.w_redr_statuscol() {
                         w.eof = false;
                         restart_for_statuscol(window);
                         continue 'restart;
                     }
                 }
             } else if DOLLAR_VCOL.get() == ColNr::NONE || window.raw() != Win::current_raw() {
-                window.w_botline = w.lnum;
+                window.set_w_botline(w.lnum);
             }
 
             draw_end_of_buffer(window, buffer, rg, &w);
@@ -229,8 +232,8 @@ fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -> bool 
     if w.row < rg.top_end
         || (w.row >= rg.mid_start && w.row < rg.mid_end)
         || rg.top_to_mod
-        || w.idx >= window.w_lines_valid
-        || w.row + c_int::from(window.w_lines[as_index(w.idx)].wl_size) > rg.bot_start
+        || w.idx >= window.w_lines_valid()
+        || w.row + c_int::from(window.read().w_lines[as_index(w.idx)].wl_size) > rg.bot_start
     {
         return true;
     }
@@ -255,14 +258,14 @@ fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -> bool 
                             || syntax_check_changed(w.lnum)))
                     // A match at a fixed position may need redrawing when
                     // lines were inserted or deleted.
-                    || (!window.w_matches.is_empty()
+                    || (!window.read().w_matches.is_empty()
                         && buffer.b_mod_set()
                         && buffer.b_mod_xlines() != 0))))
     {
         return true;
     }
 
-    w.lnum == window.w_cursorline || w.lnum == window.w_last_cursorline
+    w.lnum == window.w_cursorline() || w.lnum == window.w_last_cursorline()
 }
 
 /// Draw the line at `w.lnum`, and record what it took.
@@ -270,7 +273,7 @@ fn line_needs_drawing(window: Win, buffer: Buf, rg: &Regions, w: &Walk) -> bool 
 /// Answers false when the walk must stop -- the line ran past the end of the
 /// window.
 fn draw_one_line(
-    mut window: Win,
+    window: Win,
     buffer: Buf,
     rg: &mut Regions,
     w: &mut Walk,
@@ -283,7 +286,7 @@ fn draw_one_line(
 
     // Folded lines are drawn as one line for all of them. The cursor line's
     // fold info was computed once, before the walk.
-    let foldinfo = if window.w_onebuf_opt.wo_cul != 0 && w.lnum == window.w_cursor.lnum {
+    let foldinfo = if window.wo_cul() != 0 && w.lnum == window.cursor().lnum() {
         cursorline_fi
     } else {
         fold_info(window, w.lnum)
@@ -309,17 +312,17 @@ fn draw_one_line(
 
     let idx = as_index(w.idx);
     if foldinfo.fi_lines == 0
-        && w.idx < window.w_lines_valid
-        && window.w_lines[idx].wl_valid
-        && window.w_lines[idx].wl_lnum == w.lnum
-        && w.lnum > window.w_topline
+        && w.idx < window.w_lines_valid()
+        && window.read().w_lines[idx].wl_valid
+        && window.read().w_lines[idx].wl_lnum == w.lnum
+        && w.lnum > window.w_topline()
         && DY_FLAGS.get() & (OPT_DY_FLAG_LASTLINE | OPT_DY_FLAG_TRUNCATE) == 0
-        && w.srow + c_int::from(window.w_lines[idx].wl_size) > window.w_view_height
+        && w.srow + c_int::from(window.read().w_lines[idx].wl_size) > window.w_view_height()
         && win_get_fill(window, w.lnum) == 0
     {
         // This line is not going to fit. Draw nothing here; the "@" lines
         // below take the rest.
-        w.row = window.w_view_height + 1;
+        w.row = window.w_view_height() + 1;
     } else {
         prepare_search_hl(window, w.lnum);
         // Let the syntax machinery know lines were skipped.
@@ -332,8 +335,8 @@ fn draw_one_line(
 
         // Spell checking only applies to real buffer text: a concealed line
         // or a fold whose 'foldtext' replaces it has none.
-        let display_buf_line =
-            !concealed && (foldinfo.fi_lines == 0 || window.w_onebuf_opt.wo_fdt.first_byte() == 0);
+        let display_buf_line = !concealed
+            && (foldinfo.fi_lines == 0 || window.read().w_onebuf_opt.wo_fdt.first_byte() == 0);
 
         let mut zero_spv = SpellVars::default();
         let spv_arg: &mut SpellVars = if display_buf_line {
@@ -345,7 +348,7 @@ fn draw_one_line(
             window,
             w.lnum,
             w.srow,
-            window.w_view_height,
+            window.w_view_height(),
             0,
             concealed,
             spv_arg,
@@ -359,10 +362,13 @@ fn draw_one_line(
         }
 
         let lastlnum = w.lnum + foldinfo.fi_lines - i32::from(foldinfo.fi_lines > 0);
-        let wl = &mut window.w_lines[idx];
-        wl.wl_folded = foldinfo.fi_lines > 0;
-        wl.wl_foldend = LineNr::new(lastlnum.get());
-        wl.wl_lastlnum = LineNr::new(lastlnum.get());
+        {
+            let mut edit = window.edit();
+            let wl = &mut edit.w_lines[idx];
+            wl.wl_folded = foldinfo.fi_lines > 0;
+            wl.wl_foldend = LineNr::new(lastlnum.get());
+            wl.wl_lastlnum = LineNr::new(lastlnum.get());
+        }
         w.did_update = if foldinfo.fi_lines > 0 {
             DidUpdate::Fold
         } else {
@@ -384,29 +390,33 @@ fn draw_one_line(
             last += 1;
             window.has_folding(LineNr::new(last.get()), None, Some(&mut last));
         }
-        window.w_lines[idx].wl_lastlnum = LineNr::new(last.get());
+        window.edit().w_lines[idx].wl_lastlnum = LineNr::new(last.get());
     }
 
-    let wl = &mut window.w_lines[idx];
-    wl.wl_lnum = w.lnum;
-    wl.wl_valid = true;
+    {
+        let mut edit = window.edit();
+        let wl = &mut edit.w_lines[idx];
+        wl.wl_lnum = w.lnum;
+        wl.wl_valid = true;
+    }
 
     // `DOLLAR_VCOL >= 0` on the cursor line means it was not fully drawn
     // for a change command, so its recorded height must not move.
-    let is_curline = window.raw() == Win::current_raw() && w.lnum == window.w_cursor.lnum;
+    let is_curline = window.raw() == Win::current_raw() && w.lnum == window.cursor().lnum();
 
-    if w.row > window.w_view_height {
+    if w.row > window.w_view_height() {
         // Past the end of the grid. The height may still be needed later.
         if DOLLAR_VCOL.get() == ColNr::NONE || !is_curline {
-            window.w_lines[idx].wl_size = number_as_u16(plines_win(window, w.lnum, true).into());
+            let size = number_as_u16(plines_win(window, w.lnum, true).into());
+            window.edit().w_lines[idx].wl_size = size;
         }
         w.idx += 1;
         return false;
     }
     if DOLLAR_VCOL.get() == ColNr::NONE || !is_curline {
-        window.w_lines[idx].wl_size = number_as_u16((w.row - w.srow).into());
+        window.edit().w_lines[idx].wl_size = number_as_u16((w.row - w.srow).into());
     }
-    w.lnum = window.w_lines[idx].wl_lastlnum + 1;
+    w.lnum = window.read().w_lines[idx].wl_lastlnum + 1;
     w.idx += 1;
     true
 }
@@ -433,14 +443,14 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
     let mut old_cline_height = 0;
     let mut old_rows = 0;
     let mut i = w.idx;
-    while i < window.w_lines_valid {
-        let wl = &window.w_lines[as_index(i)];
+    while i < window.w_lines_valid() {
+        let wl = window.wline(as_index(i));
         // Only valid entries have a meaningful `wl_lnum`; invalid ones are
         // part of the changed area.
         if wl.wl_valid && wl.wl_lnum == rg.mod_bot {
             break;
         }
-        if wl.wl_lnum == window.w_cursor.lnum {
+        if wl.wl_lnum == window.cursor().lnum() {
             old_cline_height = c_int::from(wl.wl_size);
         }
         old_rows += c_int::from(wl.wl_size);
@@ -448,8 +458,8 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
             // The last valid entry above `mod_bot`; the invalid entries
             // after it are part of the change too.
             i += 1;
-            while i < window.w_lines_valid && !window.w_lines[as_index(i)].wl_valid {
-                old_rows += c_int::from(window.w_lines[as_index(i)].wl_size);
+            while i < window.w_lines_valid() && !window.read().w_lines[as_index(i)].wl_valid {
+                old_rows += c_int::from(window.read().w_lines[as_index(i)].wl_size);
                 i += 1;
             }
             break;
@@ -457,7 +467,7 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
         i += 1;
     }
 
-    if i >= window.w_lines_valid {
+    if i >= window.w_lines_valid() {
         // No valid line below the change: redraw to the end of the window.
         // Inserting or deleting rows would buy nothing.
         rg.bot_start = 0;
@@ -473,7 +483,7 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
         if DOLLAR_VCOL.get() >= ColNr::ZERO
             && window.raw() == Win::current_raw()
             && old_cline_height > 0
-            && l == window.w_cursor.lnum
+            && l == window.cursor().lnum()
         {
             // The cursor line is not fully redrawn, so its height is
             // unchanged.
@@ -484,7 +494,7 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
             (l, new_rows) = (l_last, new_rows + n);
             j += c_int::from(n > 0); // do not count concealed lines
         }
-        if new_rows > window.w_view_height - w.row - 2 {
+        if new_rows > window.w_view_height() - w.row - 2 {
             new_rows = 9999; // too much: redraw the rest
             break;
         }
@@ -496,17 +506,17 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
         // The text got shorter: scroll the rows below it up, and redraw
         // from where they used to end. Not worth it if there is barely any
         // text left, or if the scroll fails.
-        if w.row - xtra_rows >= window.w_view_height - 2 {
+        if w.row - xtra_rows >= window.w_view_height() - 2 {
             rg.mod_bot = MAXLNUM;
         } else {
             win_scroll_lines(window, w.row, xtra_rows);
-            rg.bot_start = window.w_view_height + xtra_rows;
+            rg.bot_start = window.w_view_height() + xtra_rows;
             rg.bot_scroll_start = rg.bot_start;
         }
     } else if xtra_rows > 0 {
         // The text got taller: scroll the rows below it down. They keep
         // their contents, so only the end-of-buffer area is stale.
-        if w.row + xtra_rows >= window.w_view_height - 2 {
+        if w.row + xtra_rows >= window.w_view_height() - 2 {
             rg.mod_bot = MAXLNUM;
         } else {
             win_scroll_lines(window, w.row + old_rows, xtra_rows);
@@ -530,7 +540,7 @@ fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) {
 ///
 /// `i` is where the entries below the change start now, `j` where they belong.
 fn move_line_entries(
-    mut window: Win,
+    window: Win,
     rg: &mut Regions,
     w: &Walk,
     mut i: c_int,
@@ -541,15 +551,18 @@ fn move_line_entries(
         // Upwards.
         let mut at_row = w.row + new_rows;
         loop {
-            if i >= window.w_lines_valid {
-                window.w_lines_valid = j;
+            if i >= window.w_lines_valid() {
+                window.set_w_lines_valid(j);
                 break;
             }
-            window.w_lines[as_index(j)] = window.w_lines[as_index(i)].clone();
-            let size = c_int::from(window.w_lines[as_index(j)].wl_size);
+            let size = {
+                let mut edit = window.edit();
+                edit.w_lines[as_index(j)] = edit.w_lines[as_index(i)].clone();
+                c_int::from(edit.w_lines[as_index(j)].wl_size)
+            };
             // Stop at a line that will not fit.
-            if at_row + size > window.w_view_height {
-                window.w_lines_valid = j + 1;
+            if at_row + size > window.w_view_height() {
+                window.set_w_lines_valid(j + 1);
                 break;
             }
             at_row += size;
@@ -560,16 +573,18 @@ fn move_line_entries(
     } else {
         // Downwards.
         j -= i;
-        window.w_lines_valid = (window.w_lines_valid + j).min(window.w_view_height);
-        let mut at = window.w_lines_valid;
+        window.set_w_lines_valid((window.w_lines_valid() + j).min(window.w_view_height()));
+        let mut at = window.w_lines_valid();
         while at - j >= w.idx {
-            window.w_lines[as_index(at)] = window.w_lines[as_index(at - j)].clone();
+            let mut edit = window.edit();
+            edit.w_lines[as_index(at)] = edit.w_lines[as_index(at - j)].clone();
+            drop(edit);
             at -= 1;
         }
         // The entries for the inserted lines are invalid now, but `wl_size`
         // is read above, so it is zeroed rather than left alone.
         while at >= w.idx {
-            let wl = &mut window.w_lines[as_index(at)];
+            let wl = &mut window.edit().w_lines[as_index(at)];
             wl.wl_size = 0;
             wl.wl_valid = false;
             at -= 1;
@@ -590,16 +605,15 @@ fn skip_one_line(
     cursorline_fi: FoldInfo,
     spv: &mut SpellVars,
 ) {
-    let size = c_int::from(window.w_lines[as_index(w.idx)].wl_size);
-    let numbers_moved = (window.w_onebuf_opt.wo_nu != 0
+    let size = c_int::from(window.read().w_lines[as_index(w.idx)].wl_size);
+    let numbers_moved = (window.wo_nu() != 0
         && rg.mod_top != LineNr::ZERO
         && w.lnum >= rg.mod_bot
         && buffer.b_mod_set()
         && buffer.b_mod_xlines() != 0)
-        || (window.w_onebuf_opt.wo_rnu != 0
-            && window.w_last_cursor_lnum_rnu != window.w_cursor.lnum);
+        || (window.wo_rnu() != 0 && window.w_last_cursor_lnum_rnu() != window.cursor().lnum());
     if numbers_moved {
-        let info = if window.w_onebuf_opt.wo_cul != 0 && w.lnum == window.w_cursor.lnum {
+        let info = if window.wo_cul() != 0 && w.lnum == window.cursor().lnum() {
             cursorline_fi
         } else {
             fold_info(window, w.lnum)
@@ -609,7 +623,7 @@ fn skip_one_line(
             window,
             w.lnum,
             w.srow,
-            window.w_view_height,
+            window.w_view_height(),
             size,
             false,
             spv,
@@ -619,65 +633,65 @@ fn skip_one_line(
 
     w.row += size;
     w.idx += 1;
-    if w.row > window.w_view_height {
+    if w.row > window.w_view_height() {
         return;
     }
-    w.lnum = window.w_lines[as_index(w.idx - 1)].wl_lastlnum + 1;
+    w.lnum = window.read().w_lines[as_index(w.idx - 1)].wl_lastlnum + 1;
     w.did_update = DidUpdate::None;
     spv.spv_capcol_lnum = LineNr::ZERO;
 }
 
 /// Reset the walk state so the window is drawn again from its top line.
-fn restart_for_statuscol(mut window: Win) {
-    window.w_redr_statuscol = false;
-    window.w_lines_valid = 0;
-    window.w_valid -= WinValid::WCOL;
+fn restart_for_statuscol(window: Win) {
+    window.set_w_redr_statuscol(false);
+    window.set_w_lines_valid(0);
+    window.set_w_valid(window.w_valid().without(WinValid::WCOL));
     window.decor_redraw_reset();
     decor_providers_invoke_win(window);
 }
 
 /// The last line did not fit in the window: say so, per `'display'`.
-fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
+fn draw_unfinished_last_line(window: Win, w: &Walk) {
     let at_attr = hl_combine_attr(win_bg_attr(window), win_hl_attr(window, HLF_AT));
 
-    if w.lnum == window.w_topline {
+    if w.lnum == window.w_topline() {
         // A single line that does not fit. Do not overwrite it -- it can
         // still be edited.
-        window.w_botline = w.lnum + 1;
+        window.set_w_botline(w.lnum + 1);
         return;
     }
 
-    if win_get_fill(window, w.lnum) >= window.w_view_height - w.srow {
+    if win_get_fill(window, w.lnum) >= window.w_view_height() - w.srow {
         // The window ends in filler lines.
-        window.w_botline = w.lnum;
-        window.w_filler_rows = window.w_view_height - w.srow;
+        window.set_w_botline(w.lnum);
+        window.set_w_filler_rows(window.w_view_height() - w.srow);
         return;
     }
 
     if DY_FLAGS.get() & OPT_DY_FLAG_TRUNCATE != 0 {
         // "@@@" in the last screen line, and nothing else on it.
-        grid_line_start(window.w_grid, window.w_view_height - 1);
+        grid_line_start(window.w_grid(), window.w_view_height() - 1);
         grid_line_fill(
             0,
-            window.w_view_width.min(3),
-            window.w_p_fcs_chars.lastline,
+            window.w_view_width().min(3),
+            window.fcs_lastline(),
             at_attr,
         );
-        grid_line_fill(3, window.w_view_width, schar_from_ascii(b' '), at_attr);
+        grid_line_fill(3, window.w_view_width(), schar_from_ascii(b' '), at_attr);
         grid_line_flush();
     } else if DY_FLAGS.get() & OPT_DY_FLAG_LASTLINE != 0 {
         // "@@@" at the end of the last screen line, over the text. Four
         // cells when three would split a double-width character in half.
-        grid_line_start(window.w_grid, window.w_view_height - 1);
-        let width = if grid_line_getchar((window.w_view_width - 3).max(0)).0 == 0 {
+        grid_line_start(window.w_grid(), window.w_view_height() - 1);
+        let width = if grid_line_getchar((window.w_view_width() - 3).max(0)).0 == 0 {
             4
         } else {
             3
         };
         grid_line_fill(
-            (window.w_view_width - width).max(0),
-            window.w_view_width,
-            window.w_p_fcs_chars.lastline,
+            (window.w_view_width() - width).max(0),
+            window.w_view_width(),
+            window.fcs_lastline(),
             at_attr,
         );
         grid_line_flush();
@@ -685,15 +699,15 @@ fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
         // A column of "@" down the rows the line would have taken.
         win_draw_end(
             window,
-            window.w_p_fcs_chars.lastline,
+            window.fcs_lastline(),
             true,
             w.srow,
-            window.w_view_height,
+            window.w_view_height(),
             HLF_AT,
         );
     }
     set_empty_rows(window, w.srow);
-    window.w_botline = w.lnum;
+    window.set_w_botline(w.lnum);
 }
 
 /// Fill the rows below the last buffer line with `'fillchars'` "eob".
@@ -714,10 +728,10 @@ fn draw_end_of_buffer(window: Win, buffer: Buf, rg: &Regions, w: &Walk) {
 
     win_draw_end(
         window,
-        window.w_p_fcs_chars.eob,
+        window.fcs_eob(),
         false,
         lastline.max(w.row),
-        window.w_view_height,
+        window.w_view_height(),
         HLF_EOB,
     );
     set_empty_rows(window, w.row);
@@ -735,13 +749,13 @@ pub fn win_scroll_lines(window: Win, row: c_int, line_count: c_int) {
 
     let mut col = 0;
     let mut row_off = 0;
-    let grid = grid_adjust(window.w_grid, &mut row_off, &mut col);
+    let grid = grid_adjust(window.w_grid(), &mut row_off, &mut col);
 
     // The bounds are the grid's rather than the window's because
     // `curs_columns` reaches here from outside `update_screen`, when the
     // two may disagree.
-    let checked_width = (grid.cols - col).min(window.w_view_width);
-    let checked_height = (grid.rows - row_off).min(window.w_view_height);
+    let checked_width = (grid.cols - col).min(window.w_view_width());
+    let checked_height = (grid.rows - row_off).min(window.w_view_height());
 
     // Nothing would be moved; the caller draws over the whole area.
     if row + line_count.abs() >= checked_height {
@@ -782,15 +796,15 @@ pub fn win_draw_end(
     hl: Hlf,
 ) {
     debug_assert!((0..HLF_COUNT).contains(&hl), "hl >= 0 && hl < HLF_COUNT");
-    let view_width = window.w_view_width;
+    let view_width = window.w_view_width();
     let fdc = compute_foldcolumn(window, 0);
-    let scwidth = window.w_scwidth;
+    let scwidth = window.w_scwidth();
 
     // The `win_hl_attr` lookups deliberately stay inside the loop, in
     // upstream's order: it hands out attribute ids in call order, so
     // hoisting `hl` above the three margin groups would renumber them.
     for row in startrow..endrow {
-        grid_line_start(window.w_grid, row);
+        grid_line_start(window.w_grid(), row);
 
         let mut n = 0;
         if draw_margin {
@@ -810,9 +824,7 @@ pub fn win_draw_end(
                     win_hl_attr(window, HLF_SC),
                 );
             }
-            if (window.w_onebuf_opt.wo_nu != 0 || window.w_onebuf_opt.wo_rnu != 0)
-                && !cpo_has(CpoFlag::NUMCOL)
-            {
+            if (window.wo_nu() != 0 || window.wo_rnu() != 0) && !cpo_has(CpoFlag::NUMCOL) {
                 let width = number_width(window) + 1;
                 n = grid_line_fill(
                     n,
@@ -830,7 +842,7 @@ pub fn win_draw_end(
         }
         grid_line_clear_end(n, view_width, win_bg_attr(window), attr);
 
-        if window.w_onebuf_opt.wo_rl != 0 {
+        if window.wo_rl() != 0 {
             grid_line_mirror(view_width);
         }
         grid_line_flush();

@@ -87,13 +87,13 @@ pub fn set_ref_in_quickfix(copy_id: c_int) -> bool {
     // Every window may own a location list, and a location list window
     // may be the last thing referring to one.
     let aborting = |win: Win| {
-        if let Some(own) = win.w_llist
+        if let Some(own) = win.w_llist()
             && mark_stack(&own.stack(), copy_id)
         {
             return true;
         }
         if win.is_location_list_window()
-            && let Some(shown) = win.w_llist_ref
+            && let Some(shown) = win.w_llist_ref()
         {
             let shown = shown.stack();
             if shown.refcount == Refcount::one() {

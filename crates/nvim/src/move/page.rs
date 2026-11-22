@@ -64,8 +64,8 @@ pub fn pagescroll(dir: Direction, count: c_int, half: bool) -> bool {
     let win = Win::current();
     let saved = Saved {
         buflen: win.buffer().line_count(),
-        cursor: win.w_cursor,
-        curswant: win.w_curswant,
+        cursor: win.w_cursor(),
+        curswant: win.w_curswant(),
     };
     // One operator and one command, shared by both arms as upstream shares
     // them: `nv_screengo()` fills in the operator that `nv_g_home_m_cmd()`
@@ -95,13 +95,14 @@ fn pagescroll_with(
     // Move the cursor to the first line of a closed fold.
     win.fold_adjust_cursor();
 
-    did_move =
-        did_move || saved.cursor.col != win.w_cursor.col || saved.cursor.lnum != win.w_cursor.lnum;
+    did_move = did_move
+        || saved.cursor.col != win.cursor().col()
+        || saved.cursor.lnum != win.cursor().lnum();
 
     // An error when neither the viewport nor the cursor changed.
     if !did_move {
         beep_flush();
-    } else if win.w_onebuf_opt.wo_sms == 0 {
+    } else if win.wo_sms() == 0 {
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     } else if p_sol() {
         nv_g_home_m_cmd(cmd_arg);
@@ -111,27 +112,29 @@ fn pagescroll_with(
 
 /// CTRL-D/CTRL-U: scroll 'scroll' screen lines without revealing lines past
 /// the end of the buffer, and move the cursor by as many screen lines.
-fn half_page(mut win: Win, dir: Direction, count: c_int, saved: Saved, op: Op) -> bool {
+fn half_page(win: Win, dir: Direction, count: c_int, saved: Saved, op: Op) -> bool {
     // Scroll [count], 'scroll', or the window height in lines.
     let mut count = count;
     if count != 0 {
-        win.w_onebuf_opt.wo_scr = OptInt::from(win.w_view_height.min(count));
+        win.set_wo_scr(OptInt::from(win.w_view_height().min(count)));
     }
-    count = win
-        .w_view_height
-        .min(number_as_int(win.w_onebuf_opt.wo_scr));
+    count = win.w_view_height().min(number_as_int(win.wo_scr()));
 
     let mut curscount = count;
     // Adjust the count so as not to reveal lines past the end of the buffer.
     if dir == FORWARD
-        && (win.w_topline + win.w_view_height + count > saved.buflen || win.lines_concealed())
+        && (win.w_topline() + win.w_view_height() + count > saved.buflen || win.lines_concealed())
     {
-        let mut n = win.corrected_plines(win.w_topline, false).0;
-        if n - count < win.w_view_height && win.w_topline < saved.buflen {
-            n += win.plines_range(win.w_topline + 1, saved.buflen, win.w_view_height + count);
+        let mut n = win.corrected_plines(win.w_topline(), false).0;
+        if n - count < win.w_view_height() && win.w_topline() < saved.buflen {
+            n += win.plines_range(
+                win.w_topline() + 1,
+                saved.buflen,
+                win.w_view_height() + count,
+            );
         }
-        if n < win.w_view_height + count {
-            count = n - win.w_view_height;
+        if n < win.w_view_height() + count {
+            count = n - win.w_view_height();
         }
     }
 
@@ -139,14 +142,14 @@ fn half_page(mut win: Win, dir: Direction, count: c_int, saved: Saved, op: Op) -
     let mut did_move = false;
     if count > 0 {
         did_move = scroll_with_sms(win, dir, count, &mut curscount);
-        win.w_cursor.lnum = saved.cursor.lnum;
-        win.w_cursor.col = saved.cursor.col;
-        win.w_curswant = saved.curswant;
+        win.cursor().set_lnum(saved.cursor.lnum);
+        win.cursor().set_col(saved.cursor.col);
+        win.set_w_curswant(saved.curswant);
     }
 
     // Move the cursor by the same number of screen lines, skipping over
     // concealed lines as those were not counted in `curscount` either.
-    if win.w_onebuf_opt.wo_wrap != 0 {
+    if win.wo_wrap() != 0 {
         nv_screengo(op, dir, curscount, true);
     } else if dir == FORWARD {
         cursor_down_inner(win, curscount, true);
@@ -158,7 +161,7 @@ fn half_page(mut win: Win, dir: Direction, count: c_int, saved: Saved, op: Op) -
 
 /// CTRL-F/CTRL-B: scroll `count` times 'window' or the window height in
 /// lines, and put the cursor at the top or bottom of the new view.
-fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
+fn whole_page(win: Win, dir: Direction, count: c_int) -> bool {
     // With a single window and a 'window' smaller than the screen, that is
     // the page; otherwise a page is the window less its overlap.
     let page = if FIRSTWIN.get() == LASTWIN.get()
@@ -179,13 +182,13 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
         // Place the cursor at the top or bottom of the window.
         win.validate_botline();
         let lnum = if dir == FORWARD {
-            win.w_topline
+            win.w_topline()
         } else {
-            win.w_botline - 1
+            win.w_botline() - 1
         };
         // In silent Ex mode `w_botline - 1` may be 0, but the cursor's line
         // number has to be at least 1.
-        win.w_cursor.lnum = lnum.max(LineNr::ONE);
+        win.cursor().set_lnum(lnum.max(LineNr::ONE));
     }
     did_move
 }
@@ -202,16 +205,16 @@ pub fn do_check_cursorbind() {
 
     let old_curwin = Win::current();
     if PREV_CURWIN.get() == Some(old_curwin.id())
-        && equalpos(old_curwin.w_cursor, PREV_CURSOR.get())
+        && equalpos(old_curwin.w_cursor(), PREV_CURSOR.get())
     {
         return;
     }
     PREV_CURWIN.set(Some(old_curwin.id()));
-    PREV_CURSOR.set(old_curwin.w_cursor);
+    PREV_CURSOR.set(old_curwin.w_cursor());
 
-    let cursor = old_curwin.w_cursor;
-    let curswant = old_curwin.w_curswant;
-    let set_curswant = old_curwin.w_set_curswant;
+    let cursor = old_curwin.w_cursor();
+    let curswant = old_curwin.w_curswant();
+    let set_curswant = old_curwin.w_set_curswant();
     let old_curbuf = Buf::current();
     let old_visual_select = visual_select();
     let old_visual_active = visual_active();
@@ -222,20 +225,20 @@ pub fn do_check_cursorbind() {
     // Upstream asks the tab page for its window list, but the *current* tab
     // page's windows always hang off `FIRSTWIN` -- `tp_firstwin` is only
     // filled in when a tab page is left.
-    for mut win in windows() {
+    for win in windows() {
         win.make_current();
         win.buffer().make_current();
         // Skip the original window, and the ones with 'nocursorbind'.
-        if win != old_curwin && win.w_onebuf_opt.wo_crb != 0 {
-            win.w_cursor.lnum = if win.w_onebuf_opt.wo_diff != 0 {
+        if win != old_curwin && win.wo_crb() != 0 {
+            win.cursor().set_lnum(if win.wo_diff() != 0 {
                 diff_get_corresponding_line(old_curbuf, cursor.lnum)
             } else {
                 cursor.lnum
-            };
-            win.w_cursor.col = cursor.col;
-            win.w_cursor.coladd = cursor.coladd;
-            win.w_curswant = curswant;
-            win.w_set_curswant = set_curswant;
+            });
+            win.cursor().set_col(cursor.col);
+            win.cursor().set_coladd(cursor.coladd);
+            win.set_w_curswant(curswant);
+            win.set_w_set_curswant(set_curswant);
 
             // Make sure the cursor is in a valid position. `RESTART_EDIT` is
             // set for the duration so that it may sit beyond the end of line.
@@ -244,7 +247,7 @@ pub fn do_check_cursorbind() {
             check_cursor(win);
             // Avoid a scroll here for the cursor position: 'scrollbind' is
             // more important.
-            if win.w_onebuf_opt.wo_scb == 0 {
+            if win.wo_scb() == 0 {
                 win.validate_cursor();
             }
             RESTART_EDIT.set(restart_edit_save);
@@ -254,10 +257,10 @@ pub fn do_check_cursorbind() {
             win.redraw_later(UPD_VALID);
 
             // Only scroll when 'scrollbind' has not done it already.
-            if win.w_onebuf_opt.wo_scb == 0 {
+            if win.wo_scb() == 0 {
                 win.update_topline();
             }
-            win.w_redr_status = true;
+            win.set_w_redr_status(true);
         }
     }
 

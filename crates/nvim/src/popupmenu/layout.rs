@@ -93,7 +93,7 @@ pub(crate) fn pum_compute_vertical_placement(
         PUM_ABOVE.set(true);
         let context_lines = match target_win.filter(|_| !cmdline_pum) {
             None => 0,
-            Some(target) => 2.min(target.w_wrow - target.w_cline_row),
+            Some(target) => 2.min(target.w_wrow() - target.w_cline_row()),
         };
 
         if pum_win_row >= size + context_lines {
@@ -124,7 +124,7 @@ pub(crate) fn pum_compute_vertical_placement(
             Some(target) => {
                 validate_cheight(target);
                 let cline_visible_offset =
-                    target.w_cline_row + target.w_cline_height - target.w_wrow;
+                    target.w_cline_row() + target.w_cline_height() - target.w_wrow();
                 3.min(cline_visible_offset)
             }
         };
@@ -179,7 +179,7 @@ pub(crate) fn pum_compute_horizontal_placement(
     cursor_col: c_int,
     border_width: c_int,
 ) {
-    let win_end_col = target_win.map_or(0, |t| t.w_wincol + t.w_view_width);
+    let win_end_col = target_win.map_or(0, |t| t.w_wincol() + t.w_view_width());
     let max_col = COLUMNS.get().max(win_end_col);
     let desired_width = PUM_BASE_WIDTH.get() + PUM_KIND_WIDTH.get() + PUM_EXTRA_WIDTH.get();
 
@@ -244,17 +244,17 @@ pub(crate) fn pum_position_at_mouse(min_width: c_int) {
     if grid > 1
         && let Some(wp) = get_win_by_grid_handle(Handle::new(grid))
     {
-        row += wp.w_winrow;
-        col += wp.w_wincol;
-        PUM_WIN_ROW_OFFSET.set(wp.w_winrow);
-        PUM_WIN_COL_OFFSET.set(wp.w_wincol);
+        row += wp.w_winrow();
+        col += wp.w_wincol();
+        PUM_WIN_ROW_OFFSET.set(wp.w_winrow());
+        PUM_WIN_COL_OFFSET.set(wp.w_wincol());
 
-        if wp.w_view_height > 0 || wp.w_view_width > 0 {
+        if wp.w_view_height() > 0 || wp.w_view_width() > 0 {
             // The user asked for a different grid size; let the menu
             // extend to it.
-            let (winrow, wincol) = (wp.w_winrow, wp.w_wincol);
-            max_row = (ROWS.get() - winrow).max(winrow + wp.w_view_height);
-            max_col = (COLUMNS.get() - wincol).max(wincol + wp.w_view_width);
+            let (winrow, wincol) = (wp.w_winrow(), wp.w_wincol());
+            max_row = (ROWS.get() - winrow).max(winrow + wp.w_view_height());
+            max_col = (COLUMNS.get() - wincol).max(wincol + wp.w_view_width());
         }
     }
     if pum_handle != Handle::NONE && grid == pum_handle.get() {

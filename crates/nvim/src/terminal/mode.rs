@@ -150,34 +150,35 @@ fn set_terminal_winopts(s: &mut TerminalState) {
         s.save_curwin.is_none(),
         "terminal window options saved twice"
     );
-    let mut wp = current_win();
+    let wp = current_win();
     s.save_curwin = Some(wp.id());
-    s.save_w_p_cul = wp.w_onebuf_opt.wo_cul != 0;
+    s.save_w_p_cul = wp.wo_cul() != 0;
     s.save_w_p_culopt = None;
-    s.save_w_p_culopt_flags = wp.w_p_culopt_flags;
-    s.save_w_p_cuc = wp.w_onebuf_opt.wo_cuc;
-    s.save_w_p_so = wp.w_onebuf_opt.wo_so;
-    s.save_w_p_siso = wp.w_onebuf_opt.wo_siso;
+    s.save_w_p_culopt_flags = wp.w_p_culopt_flags();
+    s.save_w_p_cuc = wp.wo_cuc();
+    s.save_w_p_so = wp.wo_so();
+    s.save_w_p_siso = wp.wo_siso();
 
-    if wp.w_onebuf_opt.wo_cul != 0 && u32::from(wp.w_p_culopt_flags) & OPT_CULOPT_FLAG_NUMBER != 0 {
-        if wp.w_onebuf_opt.wo_culopt.bytes() != b"number" {
+    if wp.wo_cul() != 0 && u32::from(wp.w_p_culopt_flags()) & OPT_CULOPT_FLAG_NUMBER != 0 {
+        if wp.read().w_onebuf_opt.wo_culopt.bytes() != b"number" {
             s.save_w_p_culopt = wp
+                .edit()
                 .w_onebuf_opt
                 .wo_culopt
                 .replace(XString::from_cstr(c"number"));
         }
-        wp.w_p_culopt_flags = OPT_CULOPT_FLAG_NUMBER.to_le_bytes()[0];
+        wp.set_w_p_culopt_flags(OPT_CULOPT_FLAG_NUMBER.to_le_bytes()[0]);
     } else {
-        wp.w_onebuf_opt.wo_cul = 0;
+        wp.set_wo_cul(0);
     }
-    wp.w_onebuf_opt.wo_cuc = 0;
-    wp.w_onebuf_opt.wo_so = 0 as OptInt;
-    wp.w_onebuf_opt.wo_siso = 0 as OptInt;
+    wp.set_wo_cuc(0);
+    wp.set_wo_so(0 as OptInt);
+    wp.set_wo_siso(0 as OptInt);
 
-    if wp.w_onebuf_opt.wo_cuc != s.save_w_p_cuc {
+    if wp.wo_cuc() != s.save_w_p_cuc {
         wp.redraw_later(UPD_SOME_VALID);
-    } else if wp.w_onebuf_opt.wo_cul != c_int::from(s.save_w_p_cul)
-        || (wp.w_onebuf_opt.wo_cul != 0 && wp.w_p_culopt_flags != s.save_w_p_culopt_flags)
+    } else if wp.wo_cul() != c_int::from(s.save_w_p_cul)
+        || (wp.wo_cul() != 0 && wp.w_p_culopt_flags() != s.save_w_p_culopt_flags)
     {
         wp.redraw_later(UPD_VALID);
     }
@@ -216,7 +217,7 @@ fn put_back_winopts(s: &mut TerminalState, winopts: &mut WinOpt) {
 /// the terminal's buffer kept of them if the window moved on. Does nothing
 /// if neither can be found.
 fn restore_saved_winopts(s: &mut TerminalState) {
-    let Some(mut wp) = s.save_curwin.and_then(WinId::get) else {
+    let Some(wp) = s.save_curwin.and_then(WinId::get) else {
         return;
     };
     if wp.buffer().handle() != s.term.buf_handle.get() {
@@ -239,16 +240,16 @@ fn restore_saved_winopts(s: &mut TerminalState) {
     // question — is it still on this tab page's window list — which stays a
     // list walk.
     if win_valid(wp.id()) {
-        if s.save_w_p_cuc != wp.w_onebuf_opt.wo_cuc {
+        if s.save_w_p_cuc != wp.wo_cuc() {
             wp.redraw_later(UPD_SOME_VALID);
-        } else if c_int::from(s.save_w_p_cul) != wp.w_onebuf_opt.wo_cul
-            || (s.save_w_p_cul && s.save_w_p_culopt_flags != wp.w_p_culopt_flags)
+        } else if c_int::from(s.save_w_p_cul) != wp.wo_cul()
+            || (s.save_w_p_cul && s.save_w_p_culopt_flags != wp.w_p_culopt_flags())
         {
             wp.redraw_later(UPD_VALID);
         }
     }
-    wp.w_p_culopt_flags = s.save_w_p_culopt_flags;
-    put_back_winopts(s, &mut wp.w_onebuf_opt);
+    wp.set_w_p_culopt_flags(s.save_w_p_culopt_flags);
+    put_back_winopts(s, &mut wp.edit().w_onebuf_opt);
 }
 
 /// Run terminal mode for the current buffer's terminal until the user
@@ -345,29 +346,29 @@ pub(crate) fn terminal_enter() -> bool {
 /// normal mode it has to sit *on* a character rather than after one, so it
 /// steps back — forward in a right-to-left window.
 pub(super) fn terminal_check_cursor(term: Term) {
-    let mut win = current_win();
+    let win = current_win();
     let buf = current_buf();
     let cursor_line = LineNr::new(row_to_linenr(term, term.cursor.row.get()));
-    win.w_cursor.lnum = buf.line_count().min(cursor_line);
+    win.cursor().set_lnum(buf.line_count().min(cursor_line));
 
     // Terminal windows always show the bottom of the buffer.
-    let topline = (buf.line_count() - win.w_view_height + 1).max(LineNr::ONE);
-    if topline != win.w_topline {
+    let topline = (buf.line_count() - win.w_view_height() + 1).max(LineNr::ONE);
+    if topline != win.w_topline() {
         // SAFETY: a live window.
         set_topline(win, topline);
     }
 
     if term.suspended.get() && STATE.get() & MODE_TERMINAL != 0 {
-        win.w_cursor = Pos {
+        win.set_w_cursor(Pos {
             lnum: buf.line_count(),
             col: ColNr::ZERO,
             coladd: 0,
-        };
+        });
         return;
     }
     let off = if STATE.get() & MODE_TERMINAL != 0 {
         0
-    } else if win.w_onebuf_opt.wo_rl != 0 {
+    } else if win.wo_rl() != 0 {
         1
     } else {
         -1

@@ -111,7 +111,7 @@ pub(crate) fn draw_virt_text(
     wlv: &WinLineVars,
 ) -> ::core::ffi::c_int {
     let win_row = wlv.row;
-    let max_col = window.w_view_width;
+    let max_col = window.w_view_width();
     let lists = decor_lists();
     let (row, end) = (lists.row, lists.current_end);
     // Where the next end-of-line text goes; drawing one moves it.
@@ -191,7 +191,7 @@ pub(crate) fn draw_virt_text(
             };
             if let Some(col) = placed {
                 // Out of the window: do not draw it at all.
-                item.draw_col = if col < 0 || col >= window.w_view_width {
+                item.draw_col = if col < 0 || col >= window.w_view_width() {
                     DRAW_COL_NEVER
                 } else {
                     col

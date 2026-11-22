@@ -291,14 +291,14 @@ pub(crate) fn terminal_open(term: Term, buffer: Buf, attached: &dyn Fn() -> bool
     }
     // Both would tie the terminal window's scroll position to another
     // window's, which fights the emulator for the topline.
-    let mut win = Win::current();
-    win.w_onebuf_opt.wo_scb = 0;
-    win.w_onebuf_opt.wo_crb = 0;
-    win.w_cursor = Pos {
+    let win = Win::current();
+    win.set_wo_scb(0);
+    win.set_wo_crb(0);
+    win.set_w_cursor(Pos {
         lnum: LineNr::ONE,
         col: ColNr::ZERO,
         coladd: 0,
-    };
+    });
     // SAFETY: TermOpen against a live buffer. It may wipe the buffer or
     // close the terminal, which is what the re-check below is for, and
     // nothing of either is borrowed across it.
@@ -390,9 +390,9 @@ pub(crate) fn terminal_close(term: Term, status: c_int) {
         }
     } else if !only_destroy {
         // The status line says "running"; it no longer is.
-        for mut wp in windows() {
-            if Some(wp.w_buffer) == buf {
-                wp.w_redr_status = true;
+        for wp in windows() {
+            if Some(wp.w_buffer()) == buf {
+                wp.set_w_redr_status(true);
             }
         }
         pos = pos.min(row_to_linenr(term, term.cursor.row.get()));
@@ -504,9 +504,9 @@ pub(crate) fn terminal_check_size(term: Term) {
         {
             continue;
         }
-        let text_width = wp.w_view_width - wp.col_off();
+        let text_width = wp.w_view_width() - wp.col_off();
         width = width.max(text_width.max(0));
-        height = height.max(wp.w_view_height);
+        height = height.max(wp.w_view_height());
     }
 
     // Zero means no window is showing it; keep whatever size it had.

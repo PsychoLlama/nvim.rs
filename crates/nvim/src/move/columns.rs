@@ -62,21 +62,21 @@ impl Win {
     }
 }
 
-fn curs_columns_win(mut win: Win, may_scroll: bool) {
+fn curs_columns_win(win: Win, may_scroll: bool) {
     // First make sure `w_topline` is valid (the cursor may have moved).
     win.update_topline();
     // Then that `w_cline_row` is.
-    if !win.w_valid.has(WinValid::CROW) {
+    if !win.w_valid().has(WinValid::CROW) {
         curs_rows(win);
     }
 
-    let (startcol, mut endcol) = if win.w_cline_folded {
+    let (startcol, mut endcol) = if win.w_cline_folded() {
         // In a folded line the cursor is always in the first column.
-        win.w_virtcol = win.w_leftcol;
-        (win.w_leftcol, win.w_leftcol)
+        win.set_w_virtcol(win.w_leftcol());
+        (win.w_leftcol(), win.w_leftcol())
     } else {
         let (start, cursor, end) = win.virtual_vcol_triple(win.cursor());
-        win.w_virtcol = cursor;
+        win.set_w_virtcol(cursor);
         (start, end)
     };
 
@@ -86,131 +86,131 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
     }
 
     let extra = win.col_off();
-    win.w_wcol = (win.w_virtcol + extra).get();
+    win.set_w_wcol((win.w_virtcol() + extra).get());
     endcol += extra;
 
     // Now `w_wrow`, counting screen lines from `w_cline_row`.
-    win.w_wrow = win.w_cline_row;
+    win.set_w_wrow(win.w_cline_row());
 
-    let width1 = win.w_view_width - extra;
+    let width1 = win.w_view_width() - extra;
     let mut width2 = 0;
     let mut did_sub_skipcol = false;
     if width1 <= 0 {
         // No room for text: put the cursor in the last column of the window,
         // and without 'wrap' on the last non-empty line.
-        win.w_wcol = win.w_view_width - 1;
-        win.w_wrow = if win.w_onebuf_opt.wo_wrap != 0 {
-            win.w_view_height - 1
+        win.set_w_wcol(win.w_view_width() - 1);
+        win.set_w_wrow(if win.wo_wrap() != 0 {
+            win.w_view_height() - 1
         } else {
-            win.w_view_height - 1 - win.w_empty_rows
-        };
-    } else if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
+            win.w_view_height() - 1 - win.w_empty_rows()
+        });
+    } else if win.wo_wrap() != 0 && win.w_view_width() != 0 {
         width2 = width1 + win.col_off2();
         let (wcol, wrow, subbed) = arith::wrap_cursor_cell(
-            win.w_wcol,
-            win.w_wrow,
-            win.w_skipcol,
-            win.w_cursor.lnum == win.w_topline,
+            win.w_wcol(),
+            win.w_wrow(),
+            win.w_skipcol(),
+            win.cursor().lnum() == win.w_topline(),
             width1,
             width2,
-            win.w_view_width,
+            win.w_view_width(),
         );
-        win.w_wcol = wcol;
-        win.w_wrow = wrow;
+        win.set_w_wcol(wcol);
+        win.set_w_wrow(wrow);
         did_sub_skipcol = subbed;
-    } else if may_scroll && !win.w_cline_folded {
+    } else if may_scroll && !win.w_cline_folded() {
         // No line wrapping: compute `w_leftcol` if scrolling is on and the
         // line is not folded. With scrolling off `w_leftcol` is assumed 0.
         let scrolled = arith::sidescroll_leftcol(
             startcol,
             endcol,
-            win.w_leftcol,
-            win.w_wcol,
+            win.w_leftcol(),
+            win.w_wcol(),
             extra,
-            win.w_view_width,
+            win.w_view_width(),
             width1,
             win.sidescrolloff(),
             p_ss(),
         );
         if let Some(new_leftcol) = scrolled
-            && new_leftcol != win.w_leftcol.get()
+            && new_leftcol != win.w_leftcol().get()
         {
-            win.w_leftcol = ColNr::new(new_leftcol);
+            win.set_w_leftcol(ColNr::new(new_leftcol));
             win.check_anchored_floats();
             // The screen has to be redrawn with the new `w_leftcol`.
             win.redraw_later(UPD_NOT_VALID);
         }
-        let leftcol = win.w_leftcol.get();
-        win.w_wcol -= leftcol;
-    } else if win.w_wcol > win.w_leftcol.get() {
-        let leftcol = win.w_leftcol.get();
-        win.w_wcol -= leftcol;
+        let leftcol = win.w_leftcol().get();
+        win.set_w_wcol(win.w_wcol() - leftcol);
+    } else if win.w_wcol() > win.w_leftcol().get() {
+        let leftcol = win.w_leftcol().get();
+        win.set_w_wcol(win.w_wcol() - leftcol);
     } else {
-        win.w_wcol = 0;
+        win.set_w_wcol(0);
     }
 
     // Skip over filler lines. At the top `w_topfill` counts the ones drawn
     // above the window's first line.
-    let fill = if win.w_cursor.lnum == win.w_topline {
-        win.w_topfill
+    let fill = if win.cursor().lnum() == win.w_topline() {
+        win.w_topfill()
     } else {
-        win.fill_above(win.w_cursor.lnum)
+        win.fill_above(win.cursor().lnum())
     };
-    win.w_wrow += fill;
+    win.set_w_wrow(win.w_wrow() + fill);
 
     let mut plines = 0;
     let so = win.scrolloff();
-    let prev_skipcol = win.w_skipcol;
+    let prev_skipcol = win.w_skipcol();
     // A single line that does not fit on the screen: find a `w_skipcol` that
     // shows the text around the cursor, without scrolling all the time.
-    let too_tall = win.w_wrow >= win.w_view_height
+    let too_tall = win.w_wrow() >= win.w_view_height()
         || (prev_skipcol > ColNr::ZERO
-            || int64_t::from(win.w_wrow) + so >= int64_t::from(win.w_view_height))
+            || int64_t::from(win.w_wrow()) + so >= int64_t::from(win.w_view_height()))
             && {
-                plines = win.plines_nofill(win.w_cursor.lnum, false);
+                plines = win.plines_nofill(win.cursor().lnum(), false);
                 // The C spells this `plines - 1 >= w_view_height`; `plines` is a
                 // screen-line count, so the two never differ.
-                plines > win.w_view_height
+                plines > win.w_view_height()
             };
     if too_tall
-        && win.w_view_height != 0
-        && win.w_cursor.lnum == win.w_topline
+        && win.w_view_height() != 0
+        && win.cursor().lnum() == win.w_topline()
         && width2 > 0
-        && win.w_view_width != 0
+        && win.w_view_width() != 0
     {
         if plines == 0 {
-            plines = win.plines(win.w_cursor.lnum, false);
+            plines = win.plines(win.cursor().lnum(), false);
         }
-        win.w_skipcol = arith::skipcol_for_tall_line(
-            win.w_skipcol,
-            win.w_virtcol,
+        win.set_w_skipcol(arith::skipcol_for_tall_line(
+            win.w_skipcol(),
+            win.w_virtcol(),
             so,
             width1,
             width2,
-            win.w_view_height,
-            win.w_wrow,
+            win.w_view_height(),
+            win.w_wrow(),
             plines,
-        );
+        ));
         let (skipcol, wrow, scrolled) = arith::fit_skipcol_to_window(
-            win.w_skipcol,
+            win.w_skipcol(),
             prev_skipcol,
-            win.w_wrow,
+            win.w_wrow(),
             did_sub_skipcol,
             width2,
-            win.w_view_height,
+            win.w_view_height(),
         );
-        win.w_skipcol = skipcol;
-        win.w_wrow = wrow;
+        win.set_w_skipcol(skipcol);
+        win.set_w_wrow(wrow);
         // TODO(bfredl): this is very suspicious when not called by
         // `win_update()`. We should not randomly alter screen state outside
         // of `update_screen()` :(
-        if !win.w_grid.target.is_null() {
+        if !win.w_grid().target.is_null() {
             win.scroll_grid_lines(scrolled);
         }
-    } else if win.w_onebuf_opt.wo_sms == 0 {
-        win.w_skipcol = ColNr::ZERO;
+    } else if win.wo_sms() == 0 {
+        win.set_w_skipcol(ColNr::ZERO);
     }
-    if prev_skipcol != win.w_skipcol {
+    if prev_skipcol != win.w_skipcol() {
         win.redraw_later(UPD_SOME_VALID);
     }
 
@@ -218,9 +218,9 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
 
     // `w_leftcol` and `w_skipcol` are valid now; keep `check_cursor_moved()`
     // from thinking otherwise.
-    win.w_valid_leftcol = win.w_leftcol;
-    win.w_valid_skipcol = win.w_skipcol;
-    win.w_valid |= WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL;
+    win.set_w_valid_leftcol(win.w_leftcol());
+    win.set_w_valid_skipcol(win.w_skipcol());
+    win.set_w_valid(win.w_valid() | (WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL));
 }
 
 /// The screen position of the character at `pos` in window `win`, as
@@ -237,26 +237,26 @@ pub fn textpos2screenpos(win: Win, pos: &mut Pos, local: bool) -> (c_int, c_int,
     let mut is_folded = false;
 
     let mut lnum = pos.lnum;
-    let mut row = if lnum >= win.w_topline && lnum <= win.w_botline {
+    let mut row = if lnum >= win.w_topline() && lnum <= win.w_botline() {
         let fold_start = win.fold_first(lnum);
         is_folded = fold_start.is_some();
         lnum = fold_start.unwrap_or(lnum);
         // The screen line line `lnum` begins on, which can be negative when
         // it is the top line and `w_skipcol` is set.
-        let mut row = win.plines_range(win.w_topline, lnum - 1, c_int::MAX);
+        let mut row = win.plines_range(win.w_topline(), lnum - 1, c_int::MAX);
         row -= adjust_plines_for_skipcol(win);
         // Filler lines drawn above this buffer line.
-        row += if lnum == win.w_topline {
-            win.w_topfill
+        row += if lnum == win.w_topline() {
+            win.w_topfill()
         } else {
             win.fill_above(lnum)
         };
         visible_row = true;
         row
-    } else if !local || lnum < win.w_topline {
+    } else if !local || lnum < win.w_topline() {
         0
     } else {
-        win.w_view_height - 1
+        win.w_view_height() - 1
     };
 
     let existing_row = lnum > LineNr::ZERO && lnum <= win.buffer().line_count();
@@ -266,12 +266,12 @@ pub fn textpos2screenpos(win: Win, pos: &mut Pos, local: bool) -> (c_int, c_int,
             row += if local {
                 0
             } else {
-                win.w_winrow + win.w_winrow_off
+                win.w_winrow() + win.w_winrow_off()
             } + 1;
             coloff = if local {
                 0
             } else {
-                win.w_wincol + win.w_wincol_off
+                win.w_wincol() + win.w_wincol_off()
             } + 1
                 + off;
         } else {
@@ -280,35 +280,35 @@ pub fn textpos2screenpos(win: Win, pos: &mut Pos, local: bool) -> (c_int, c_int,
 
             // As in `validate_cursor_col()`.
             let mut col = scol + off;
-            let width = win.w_view_width - off + win.col_off2();
+            let width = win.w_view_width() - off + win.col_off2();
             // Long line wrapping, adjusting the row.
-            if win.w_onebuf_opt.wo_wrap != 0 && col >= ColNr::new(win.w_view_width) && width > 0 {
+            if win.wo_wrap() != 0 && col >= ColNr::new(win.w_view_width()) && width > 0 {
                 let rowoff = if visible_row {
-                    arith::wrap_rowoff(col, win.w_view_width, width)
+                    arith::wrap_rowoff(col, win.w_view_width(), width)
                 } else {
                     0
                 };
                 col -= rowoff * width;
                 row += rowoff;
             }
-            col -= win.w_leftcol.get();
+            col -= win.w_leftcol().get();
 
             if col >= ColNr::ZERO
-                && col < ColNr::new(win.w_view_width)
+                && col < ColNr::new(win.w_view_width())
                 && row >= 0
-                && row < win.w_view_height
+                && row < win.w_view_height()
             {
                 coloff = col - scol
                     + if local {
                         0
                     } else {
-                        win.w_wincol + win.w_wincol_off
+                        win.w_wincol() + win.w_wincol_off()
                     }
                     + 1;
                 row += if local {
                     0
                 } else {
-                    win.w_winrow + win.w_winrow_off
+                    win.w_winrow() + win.w_winrow_off()
                 } + 1;
             } else {
                 // The character is left of, right of or below the window.
@@ -319,7 +319,7 @@ pub fn textpos2screenpos(win: Win, pos: &mut Pos, local: bool) -> (c_int, c_int,
                     coloff = if col < ColNr::ZERO {
                         -1
                     } else {
-                        win.w_view_width + 1
+                        win.w_view_width() + 1
                     };
                 } else {
                     row = 0;

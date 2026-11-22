@@ -95,15 +95,15 @@ fn equal_rec(
 impl FrameRef {
     /// A leaf: move and resize the one window, and redraw if either changed.
     fn equalize_leaf(self, col: c_int, row: c_int, width: c_int, height: c_int) {
-        let mut win = self.win().expect("a leaf frame holds a window");
+        let win = self.win().expect("a leaf frame holds a window");
         if self.fr_height() != height
-            || win.w_winrow != row
+            || win.w_winrow() != row
             || self.fr_width() != width
-            || win.w_wincol != col
+            || win.w_wincol() != col
         {
-            win.w_winrow = row;
+            win.set_w_winrow(row);
             new_height(self, height, false, false, false);
-            win.w_wincol = col;
+            win.set_w_wincol(col);
             new_width(self, width, false, false);
             redraw_all(UPD_NOT_VALID);
         }

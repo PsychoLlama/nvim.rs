@@ -102,22 +102,22 @@ pub fn win_init_empty(window: Win) {
 
 /// Point `window` at the top of an empty buffer.
 pub(crate) fn init_empty(window: Win) {
-    let mut window = window;
+    let window = window;
     window.redraw_later(UPD_NOT_VALID);
-    window.w_lines_valid = 0;
-    window.w_cursor.lnum = LineNr::ONE;
-    window.w_cursor.col = ColNr::ZERO;
-    window.w_curswant = window.w_cursor.col;
-    window.w_cursor.coladd = 0;
-    window.w_pcmark.lnum = LineNr::ONE; // pcmark not cleared but set to line 1
-    window.w_pcmark.col = ColNr::ZERO;
-    window.w_prev_pcmark.lnum = LineNr::ZERO;
-    window.w_prev_pcmark.col = ColNr::ZERO;
-    window.w_topline = LineNr::ONE;
-    window.w_topfill = 0;
-    window.w_botline = LineNr::new(2);
-    window.w_valid = WinValid::NONE;
-    window.w_s = window.buffer().syntax_block();
+    window.set_w_lines_valid(0);
+    window.cursor().set_lnum(LineNr::ONE);
+    window.cursor().set_col(ColNr::ZERO);
+    window.set_w_curswant(window.cursor().col());
+    window.cursor().set_coladd(0);
+    window.edit().w_pcmark.lnum = LineNr::ONE; // pcmark not cleared but set to line 1
+    window.edit().w_pcmark.col = ColNr::ZERO;
+    window.edit().w_prev_pcmark.lnum = LineNr::ZERO;
+    window.edit().w_prev_pcmark.col = ColNr::ZERO;
+    window.set_w_topline(LineNr::ONE);
+    window.set_w_topfill(0);
+    window.set_w_botline(LineNr::new(2));
+    window.set_w_valid(WinValid::NONE);
+    window.set_w_s(window.buffer().syntax_block());
 }
 
 /// Init the current window. Called when a new file is being edited.
@@ -149,7 +149,7 @@ fn close_all_here(buffer: Buf, keep_curwin: bool) -> ControlFlow<()> {
         if !is_autocmd_window(Some(last_win())) && only_window(wp, None) {
             break;
         }
-        if wp.w_buffer == buffer && (!keep_curwin || !wp.is_current()) && !locked(wp) {
+        if wp.w_buffer() == buffer && (!keep_curwin || !wp.is_current()) && !locked(wp) {
             if layout_locked(CmdIdx::SIZE) {
                 return ControlFlow::Break(()); // Only give one error message.
             }
@@ -175,7 +175,7 @@ fn close_all_elsewhere(buffer: Buf) {
             // Start from `tp_lastwin` to close floating windows first.
             let mut cur = tp.tp_lastwin().and_then(WinId::get);
             while let Some(wp) = cur {
-                if wp.w_buffer == buffer && !locked(wp) {
+                if wp.w_buffer() == buffer && !locked(wp) {
                     if layout_locked(CmdIdx::SIZE) {
                         return; // Only give one error message.
                     }
@@ -199,7 +199,7 @@ fn close_all_elsewhere(buffer: Buf) {
 
 /// Whether `window` or the buffer it shows is pinned against closing.
 fn locked(window: Win) -> bool {
-    window.w_locked || window.buffer().b_locked() > 0
+    window.w_locked() || window.buffer().b_locked() > 0
 }
 
 pub fn last_window(win: Win) -> bool {
@@ -227,10 +227,10 @@ pub(crate) fn only_window(win: Win, tabpage: Option<TabPage>) -> bool {
     }
     .expect("a window list has a head");
     debug_assert!(
-        tabpage.is_none_or(|tp| !tp.is_current()) && !first.w_floating,
+        tabpage.is_none_or(|tp| !tp.is_current()) && !first.w_floating(),
         "(!tp || tp != curtab) && !first->w_floating"
     );
-    first == win && win.next().is_none_or(|next| next.w_floating)
+    first == win && win.next().is_none_or(|next| next.w_floating())
 }
 
 /// Whether the floating windows of `tabpage` -- `None` for the current tab page --
@@ -246,7 +246,7 @@ pub(crate) fn can_close_floats(tabpage: Option<TabPage>) -> bool {
         None => crate::winlayer::last_window(),
     }
     .expect("a window list has a tail");
-    while wp.w_floating {
+    while wp.w_floating() {
         let buf = wp.buffer();
         let need_hide = is_changed(buf) && buf.b_nwindows() <= 1;
         if need_hide && !hides(buf) {
@@ -326,7 +326,7 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
 ///
 /// Answers whether `close_buffer()` decremented `b_nwindows`.
 pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> bool {
-    let mut win = win;
+    let win = win;
     let Some(buf) = win.buffer_or_none() else {
         return false;
     };
@@ -339,10 +339,10 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
     }
     // Close the link to the buffer.
     let bufref = BufRef::of(Buf::current());
-    win.w_locked = true;
+    win.set_w_locked(true);
     let retval = close_buffer(Some(win), buf, action, abort_if_last, true);
     if valid_win_any_tab(win.id()) {
-        win.w_locked = false;
+        win.set_w_locked(false);
     }
     // Make sure `CURBUF` is valid: it can become invalid if 'bufhidden' is
     // "wipe".
@@ -361,11 +361,11 @@ pub(crate) fn close_win_buffer(win: Win, action: c_int, abort_if_last: bool) -> 
 /// `bufref` names `win->w_buffer` from before that call, and `did_decrement`
 /// says whether it decremented `b_nwindows`.
 pub(crate) fn unclose_win_buffer(win: Win, bufref: BufRef, did_decrement: bool) {
-    let mut win = win;
+    let win = win;
     let Some(buf) = win.buffer_or_none() else {
         // The buffer was removed from the window: it has to be given one.
         let first = first_buffer().expect("a window means a buffer list");
-        win.w_buffer = first;
+        win.set_w_buffer(first);
         first.set_b_nwindows(first.b_nwindows() + 1);
         if win.is_current() {
             first.make_current();
@@ -389,13 +389,13 @@ pub fn close_others(message: c_int, forceit: c_int) {
 fn close_all_others(message: bool, forceit: bool) {
     let old_curwin = Win::current();
     let announce = message && !AUTOCMD_BUSY.get();
-    if old_curwin.w_floating {
+    if old_curwin.w_floating() {
         if announce {
             err_raw(E_FLOATONLY);
         }
         return;
     }
-    if only_window(first_win(), None) && !last_win().w_floating {
+    if only_window(first_win(), None) && !last_win().w_floating() {
         if announce {
             only_one_message();
         }
@@ -429,7 +429,7 @@ enum Walk {
 /// One step of [`close_all_others`]: close `window` unless it is the current
 /// window or its changed buffer may not be abandoned.
 fn close_other(window: Win, old_curwin: Win, message: bool, forceit: bool) -> Walk {
-    let mut wp = window;
+    let wp = window;
     // autocommands messed this one up
     if !old_curwin.is_current() && valid_win(old_curwin.id()).is_some() {
         old_curwin.make_current();
@@ -440,7 +440,7 @@ fn close_other(window: Win, old_curwin: Win, message: bool, forceit: bool) -> Wa
     }
     // autocommands messed this one up
     if wp.surviving_buffer().is_none() && valid_win(wp.id()).is_some() {
-        wp.w_buffer = Buf::NULL;
+        wp.set_w_buffer(Buf::NULL);
         let _ = close(wp, false, false);
         return Walk::Next;
     }

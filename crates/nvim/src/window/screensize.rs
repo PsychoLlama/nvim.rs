@@ -132,12 +132,12 @@ pub fn snapshot_windows_scroll_size() {
 /// Remember one window's view and size, so the next check can tell whether
 /// either moved.
 fn snapshot_window(window: &mut Win) {
-    window.w_last_topline = window.w_topline;
-    window.w_last_topfill = window.w_topfill;
-    window.w_last_leftcol = window.w_leftcol;
-    window.w_last_skipcol = window.w_skipcol;
-    window.w_last_width = window.w_width;
-    window.w_last_height = window.w_height;
+    window.set_w_last_topline(window.w_topline());
+    window.set_w_last_topfill(window.w_topfill());
+    window.set_w_last_leftcol(window.w_leftcol());
+    window.set_w_last_skipcol(window.w_skipcol());
+    window.set_w_last_width(window.w_width());
+    window.set_w_last_height(window.w_height());
 }
 
 pub fn may_make_initial_scroll_size_snapshot() {
@@ -197,20 +197,25 @@ enum Scan<'a> {
 fn scan_windows(what: &mut Scan) {
     let mut tot = [0 as c_int; 6];
     for mut wp in windows() {
-        if wp.w_floating && wp.w_last_topline == LineNr::ZERO {
+        if wp.w_floating() && wp.w_last_topline() == LineNr::ZERO {
             // A just-created float has no previous size to compare with.
             snapshot_window(&mut wp);
             continue;
         }
-        let eiw = wp.w_onebuf_opt.wo_eiw.bytes();
-        let ignore_scroll = event_ignored(AutoEvent::WinScrolled, eiw, true);
-        let ignore_resize = event_ignored(AutoEvent::WinResized, eiw, true);
-        let size_changed =
-            !ignore_resize && (wp.w_last_width != wp.w_width || wp.w_last_height != wp.w_height);
+        let (ignore_scroll, ignore_resize) = {
+            let held = wp.read();
+            let eiw = held.w_onebuf_opt.wo_eiw.bytes();
+            (
+                event_ignored(AutoEvent::WinScrolled, eiw, true),
+                event_ignored(AutoEvent::WinResized, eiw, true),
+            )
+        };
+        let size_changed = !ignore_resize
+            && (wp.w_last_width() != wp.w_width() || wp.w_last_height() != wp.w_height());
         if size_changed {
             match what {
                 Scan::Winlist(list) => {
-                    let tv = TypVal::Number(VarNumber::from(wp.handle));
+                    let tv = TypVal::Number(VarNumber::from(wp.handle()));
                     list.edit().push(tv);
                 }
                 Scan::Counts {
@@ -228,10 +233,10 @@ fn scan_windows(what: &mut Scan) {
             }
         }
         let scroll_changed = !ignore_scroll
-            && (wp.w_last_topline != wp.w_topline
-                || wp.w_last_topfill != wp.w_topfill
-                || wp.w_last_leftcol != wp.w_leftcol
-                || wp.w_last_skipcol != wp.w_skipcol);
+            && (wp.w_last_topline() != wp.w_topline()
+                || wp.w_last_topfill() != wp.w_topfill()
+                || wp.w_last_leftcol() != wp.w_leftcol()
+                || wp.w_last_skipcol() != wp.w_skipcol());
         if scroll_changed && let Scan::Counts { first_scroll, .. } = what {
             first_scroll.get_or_insert(wp);
         }
@@ -242,15 +247,15 @@ fn scan_windows(what: &mut Scan) {
             continue;
         }
         let deltas = [
-            wp.w_width - wp.w_last_width,
-            wp.w_height - wp.w_last_height,
-            wp.w_topline.get() - wp.w_last_topline.get(),
-            wp.w_topfill - wp.w_last_topfill,
-            wp.w_leftcol.get() - wp.w_last_leftcol.get(),
-            wp.w_skipcol.get() - wp.w_last_skipcol.get(),
+            wp.w_width() - wp.w_last_width(),
+            wp.w_height() - wp.w_last_height(),
+            wp.w_topline().get() - wp.w_last_topline().get(),
+            wp.w_topfill() - wp.w_last_topfill(),
+            wp.w_leftcol().get() - wp.w_last_leftcol().get(),
+            wp.w_skipcol().get() - wp.w_last_skipcol().get(),
         ];
         let d = win_info_dict(deltas);
-        let winid = wp.handle.to_string();
+        let winid = wp.handle().to_string();
         if v_event.edit().add_dict(winid.as_bytes(), Some(d)).is_err() {
             break;
         }
@@ -275,7 +280,8 @@ struct Subject {
 impl Subject {
     fn of(win: Win) -> Self {
         Subject {
-            winid: CString::new(win.handle.to_string()).expect("a decimal window id holds no NUL"),
+            winid: CString::new(win.handle().to_string())
+                .expect("a decimal window id holds no NUL"),
             bufref: BufRef::of_opt(win.buffer_or_none()),
         }
     }
@@ -390,8 +396,8 @@ pub fn win_size_save() -> Vec<c_int> {
     // change size in between.
     sizes.push(frame_rows() + global_stl_rows() - last_stl_rows(false));
     for wp in windows() {
-        sizes.push(wp.w_width + wp.w_vsep_width);
-        sizes.push(wp.w_height);
+        sizes.push(wp.w_width() + wp.w_vsep_width());
+        sizes.push(wp.w_height());
     }
     sizes
 }
@@ -409,7 +415,7 @@ pub fn win_size_restore(sizes: &[c_int]) {
         for wp in windows() {
             let (width, height) = (sizes[i], sizes[i + 1]);
             i += 2;
-            if !wp.w_floating {
+            if !wp.w_floating() {
                 wp.frame().set_width(width);
                 setheight_win(height, wp);
             }

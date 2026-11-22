@@ -297,13 +297,13 @@ mod tests {
         assert_eq!(PUM_GRID.grid().attr_at(1), -1);
         cell.free();
 
-        let mut win = bare_window();
+        let win = bare_window();
         let own = win.grid_alloc();
         own.alloc(2, 2, false, true);
-        assert_eq!(win.w_grid_alloc.rows, 2);
+        assert_eq!(win.grid_alloc().rows, 2);
         // A write to the window around the handle leaves the handle good.
-        win.w_grid_alloc.zindex = 3;
-        win.w_wrow = 1;
+        win.edit().w_grid_alloc.zindex = 3;
+        win.set_w_wrow(1);
         assert_eq!(own.zindex, 3);
         assert!(win.grid_alloc().same(own));
         // The window's block is freed without dropping its fields.

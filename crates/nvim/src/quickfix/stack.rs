@@ -248,42 +248,42 @@ impl Win {
     /// Whether the window *is* a location list window: one showing another
     /// window's location list rather than owning one.
     pub(crate) fn is_location_list_window(self) -> bool {
-        self.shows_quickfix_buffer() && self.w_llist_ref.is_some()
+        self.shows_quickfix_buffer() && self.w_llist_ref().is_some()
     }
 
     /// Whether the window is the quickfix window.
     pub(crate) fn is_quickfix_window(self) -> bool {
-        self.shows_quickfix_buffer() && self.w_llist_ref.is_none()
+        self.shows_quickfix_buffer() && self.w_llist_ref().is_none()
     }
 
     /// The location list stack the window works on: the one it shows when
     /// it is a location list window, otherwise its own.
     pub(crate) fn location_list(self) -> Option<QfId> {
         if self.is_location_list_window() {
-            self.w_llist_ref
+            self.w_llist_ref()
         } else {
-            self.w_llist
+            self.w_llist()
         }
     }
 
     /// [`location_list`](Win::location_list), making the window one if it
     /// has none.
-    pub(crate) fn location_list_or_new(mut self) -> Qi {
+    pub(crate) fn location_list_or_new(self) -> Qi {
         if self.is_location_list_window() {
             return self
-                .w_llist_ref
+                .w_llist_ref()
                 .expect("a location list window shows a stack")
                 .stack();
         }
         // A window that is not a location list window has no business
         // referencing someone else's list.
-        let shown = self.w_llist_ref.take();
+        let shown = self.edit().w_llist_ref.take();
         drop_stack_ref(shown);
-        let own = match self.w_llist {
+        let own = match self.w_llist() {
             Some(id) => id,
             None => {
-                let id = new_location_stack(QFLT_LOCATION, self.w_onebuf_opt.wo_lhi);
-                self.w_llist = Some(id);
+                let id = new_location_stack(QFLT_LOCATION, self.wo_lhi());
+                self.set_w_llist(Some(id));
                 id
             }
         };
@@ -291,32 +291,32 @@ impl Win {
     }
 
     /// Give the window `qi` as its location list, taking a reference.
-    pub(crate) fn set_location_list(mut self, qi: Qi) {
-        debug_assert!(self.w_llist.is_none(), "the window already holds a list");
-        self.w_llist = Some(qi.id());
+    pub(crate) fn set_location_list(self, qi: Qi) {
+        debug_assert!(self.w_llist().is_none(), "the window already holds a list");
+        self.set_w_llist(Some(qi.id()));
         qi.refcount.retain();
     }
 
     /// Drop the window's references to its own location list stack and the
     /// one it shows.
-    pub(crate) fn free_location_lists(mut self) {
-        let own = self.w_llist.take();
+    pub(crate) fn free_location_lists(self) {
+        let own = self.edit().w_llist.take();
         drop_stack_ref(own);
-        let shown = self.w_llist_ref.take();
+        let shown = self.edit().w_llist_ref.take();
         drop_stack_ref(shown);
     }
 
     /// Give `to` a copy of this window's location list stack, list by list.
     /// `to` must have no location list yet.
-    pub(crate) fn copy_location_lists_to(self, mut to: Win) {
+    pub(crate) fn copy_location_lists_to(self, to: Win) {
         let Some(from) = self.location_list() else {
             return;
         };
         let qi = from.stack();
-        let id = new_location_stack(QFLT_LOCATION, self.w_onebuf_opt.wo_lhi);
-        to.w_llist = Some(id);
+        let id = new_location_stack(QFLT_LOCATION, self.wo_lhi());
+        to.set_w_llist(Some(id));
         let mut copy = id.stack();
-        to.w_onebuf_opt.wo_lhi = OptInt::from(copy.max_count());
+        to.set_wo_lhi(OptInt::from(copy.max_count()));
         copy.list_count = qi.list_count;
         for idx in 0..qi.list_count {
             // Two stacks, so the borrows are of two different objects; and
@@ -395,26 +395,26 @@ pub(crate) fn stack_of(window: Option<Win>) -> Option<Qi> {
 
 /// A window that is not a quickfix window and owns this location list.
 pub(crate) fn qf_find_win_with_loclist(ll: QfId) -> Option<Win> {
-    windows().find(|wp| wp.w_llist == Some(ll) && !wp.shows_quickfix_buffer())
+    windows().find(|wp| wp.w_llist() == Some(ll) && !wp.shows_quickfix_buffer())
 }
 
 /// Copy a location list window's `'lhistory'` to the window it belongs to.
 fn sync_lhistory_to_owner(llw: Win) {
-    let owner = llw.w_llist_ref.and_then(qf_find_win_with_loclist);
-    if let Some(mut wp) = owner {
-        wp.w_onebuf_opt.wo_lhi = llw.w_onebuf_opt.wo_lhi;
+    let owner = llw.w_llist_ref().and_then(qf_find_win_with_loclist);
+    if let Some(wp) = owner {
+        wp.set_wo_lhi(llw.wo_lhi());
     }
 }
 
 /// Copy a window's `'lhistory'` to its location list window, if it has one.
 fn sync_lhistory_to_window(owner: Win) {
-    let Some(ll) = owner.w_llist else {
+    let Some(ll) = owner.w_llist() else {
         return;
     };
-    if let Some(mut wp) =
-        windows().find(|wp| wp.w_llist_ref == Some(ll) && wp.shows_quickfix_buffer())
+    if let Some(wp) =
+        windows().find(|wp| wp.w_llist_ref() == Some(ll) && wp.shows_quickfix_buffer())
     {
-        wp.w_onebuf_opt.wo_lhi = owner.w_onebuf_opt.wo_lhi;
+        wp.set_wo_lhi(owner.wo_lhi());
     }
 }
 
@@ -512,14 +512,14 @@ fn wipe_qf_buffer(mut qi: Qi) {
     // `close_buffer` insists that `curwin->w_buffer == CURBUF`, and it
     // may not: this is reachable from `win_free_mem` after `win_close`
     // already released the current window's buffer.
-    let buf_was_null = Win::current().w_buffer.is_null();
+    let buf_was_null = Win::current().w_buffer().is_null();
     if buf_was_null {
-        Win::current().w_buffer = Buf::current_or_none().unwrap_or(Buf::NULL);
+        Win::current().set_w_buffer(Buf::current_or_none().unwrap_or(Buf::NULL));
     }
     close_buffer(None, qfbuf, DOBUF_WIPE, false, false);
     qi.bufnr = None;
     if buf_was_null {
-        Win::current().w_buffer = Buf::NULL;
+        Win::current().set_w_buffer(Buf::NULL);
     }
 }
 
@@ -597,12 +597,12 @@ pub(crate) fn qf_free_stack(window: Option<Win>, mut qi: Qi) {
         return;
     };
     wp.free_location_lists();
-    if let Some(mut qfwin) = qfwin {
-        let fresh = new_location_stack(QFLT_LOCATION, wp.w_onebuf_opt.wo_lhi);
+    if let Some(qfwin) = qfwin {
+        let fresh = new_location_stack(QFLT_LOCATION, wp.wo_lhi());
         fresh.stack().bufnr = Some(qfwin.buffer().handle());
-        let shown = qfwin.w_llist_ref.take();
+        let shown = qfwin.edit().w_llist_ref.take();
         drop_stack_ref(shown);
-        qfwin.w_llist_ref = Some(fresh);
+        qfwin.set_w_llist_ref(Some(fresh));
         if wp != qfwin {
             wp.set_location_list(fresh.stack());
         }

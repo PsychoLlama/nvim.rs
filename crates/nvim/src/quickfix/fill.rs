@@ -80,7 +80,7 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
     // window the list belongs to, not the one showing it.
     let mut qf_winid = Handle::NONE;
     if qi.kind == QFLT_LOCATION {
-        let win = if Win::current().w_llist == Some(qi.id()) {
+        let win = if Win::current().w_llist() == Some(qi.id()) {
             Win::current()
         } else {
             // The file window, or failing that the location list window.
@@ -90,7 +90,7 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
             };
             win
         };
-        qf_winid = win.handle;
+        qf_winid = win.handle();
     }
 
     // Autocommands may cause trouble.
@@ -142,7 +142,7 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
     }
 
     // Only redraw when the added lines are visible, to avoid flicker.
-    if qf_find_win(qi).is_some_and(|win| old_line_count < win.w_botline) {
+    if qf_find_win(qi).is_some_and(|win| old_line_count < win.w_botline()) {
         redraw_buf_later(buf, UPD_NOT_VALID);
     }
 
@@ -287,9 +287,9 @@ fn clear_qf_buffer() -> Result<(), Failed> {
             return Err(Failed);
         }
     }
-    find_tab_win(|mut wp| {
-        if wp.w_buffer.is_current() {
-            wp.w_skipcol = ColNr::ZERO;
+    find_tab_win(|wp| {
+        if wp.w_buffer().is_current() {
+            wp.set_w_skipcol(ColNr::ZERO);
         }
         false
     });

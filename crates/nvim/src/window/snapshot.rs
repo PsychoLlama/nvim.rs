@@ -50,27 +50,27 @@ use crate::winlayer::{
 fn check_lnums_both(do_curwin: bool, nested: bool) {
     let buf = Buf::current();
     let line_count = buf.line_count();
-    for mut wp in tab_windows() {
-        if (!do_curwin && wp.is_current()) || wp.w_buffer != buf {
+    for wp in tab_windows() {
+        if (!do_curwin && wp.is_current()) || wp.w_buffer() != buf {
             continue;
         }
         if !nested {
-            wp.w_save_cursor.w_cursor_save = wp.w_cursor;
-            wp.w_save_cursor.w_topline_save = wp.w_topline.get();
+            wp.set_w_cursor_save(wp.w_cursor());
+            wp.set_w_topline_save(wp.w_topline().get());
         }
-        let mut need_adjust = wp.w_cursor.lnum > line_count;
+        let mut need_adjust = wp.cursor().lnum() > line_count;
         if need_adjust {
-            wp.w_cursor.lnum = line_count;
+            wp.cursor().set_lnum(line_count);
         }
         if need_adjust || !nested {
-            wp.w_save_cursor.w_cursor_corr = wp.w_cursor;
+            wp.set_w_cursor_corr(wp.w_cursor());
         }
-        need_adjust = wp.w_topline > line_count;
+        need_adjust = wp.w_topline() > line_count;
         if need_adjust {
-            wp.w_topline = line_count;
+            wp.set_w_topline(line_count);
         }
         if need_adjust || !nested {
-            wp.w_save_cursor.w_topline_corr = wp.w_topline.get();
+            wp.set_w_topline_corr(wp.w_topline().get());
         }
     }
 }
@@ -84,24 +84,24 @@ pub fn check_lnums_nested(do_curwin: bool) {
 }
 
 pub fn reset_lnums() {
-    for mut wp in tab_windows() {
-        if !wp.w_buffer.is_current() {
+    for wp in tab_windows() {
+        if !wp.w_buffer().is_current() {
             continue;
         }
         // Restore the value if it was changed by `check_lnums` and has not been
         // changed since.
-        if equalpos(wp.w_save_cursor.w_cursor_corr, wp.w_cursor)
-            && wp.w_save_cursor.w_cursor_save.lnum != LineNr::ZERO
+        if equalpos(wp.w_cursor_corr(), wp.w_cursor())
+            && wp.read().w_save_cursor.w_cursor_save.lnum != LineNr::ZERO
         {
-            wp.w_cursor = wp.w_save_cursor.w_cursor_save;
+            wp.set_w_cursor(wp.w_cursor_save());
         }
-        if LineNr::new(wp.w_save_cursor.w_topline_corr) == wp.w_topline
-            && wp.w_save_cursor.w_topline_save != 0
+        if LineNr::new(wp.w_topline_corr()) == wp.w_topline()
+            && wp.read().w_save_cursor.w_topline_save != 0
         {
-            wp.w_topline = LineNr::new(wp.w_save_cursor.w_topline_save);
+            wp.set_w_topline(LineNr::new(wp.w_topline_save()));
         }
-        if LineNr::new(wp.w_save_cursor.w_topline_save) > wp.buffer().line_count() {
-            wp.w_valid -= WinValid::TOPLINE;
+        if LineNr::new(wp.w_topline_save()) > wp.buffer().line_count() {
+            wp.set_w_valid(wp.w_valid().without(WinValid::TOPLINE));
         }
     }
 }
@@ -282,21 +282,23 @@ pub(crate) fn check_window_colorcolumn(window: Win) -> Result<(), OptError> {
 ///
 /// The value is parsed whole before the window is written.
 pub fn check_colorcolumn(cc: Option<&CStr>, window: Option<Win>) -> Result<(), OptError> {
-    if window.is_some_and(|w| w.w_buffer.is_null()) {
+    if window.is_some_and(|w| w.w_buffer().is_null()) {
         return Ok(()); // buffer was closed
     }
-    let text: &[u8] = match (cc, &window) {
+    let held = window.map(Win::read);
+    let text: &[u8] = match (cc, &held) {
         (Some(cc), _) => cc.to_bytes(),
         (None, Some(w)) => w.w_onebuf_opt.wo_cc.bytes(),
         (None, None) => b"",
     };
     let tw = window.map_or(0 as OptInt, |w| w.buffer().b_p_tw());
     let cols = parse_colorcolumn(text, tw)?;
+    drop(held);
 
-    let Some(mut win) = window else {
+    let Some(win) = window else {
         return Ok(()); // only parse the value, do not store it
     };
-    win.w_p_cc_cols = cols;
+    win.edit().w_p_cc_cols = cols;
     Ok(())
 }
 
@@ -366,7 +368,7 @@ pub fn get_last_winid() -> c_int {
 }
 
 pub fn win_locked(window: Win) -> c_int {
-    c_int::from(window.w_locked)
+    c_int::from(window.w_locked())
 }
 
 /// The tab page and window number of the window with handle `id`, both
@@ -384,7 +386,7 @@ fn tab_and_win_number(id: Handle) -> Option<(c_int, c_int)> {
         let mut wnum = 1;
         for wp in windows_in_tab(tp) {
             let numbered = wp.has_winnr(tp);
-            if wp.handle == id {
+            if wp.handle() == id {
                 return Some(if numbered { (tnum, wnum) } else { (0, 0) });
             }
             wnum += c_int::from(numbered);
@@ -395,17 +397,17 @@ fn tab_and_win_number(id: Handle) -> Option<(c_int, c_int)> {
 
 pub fn win_ui_flush(validate: bool) {
     for tp in tabs() {
-        for mut wp in windows_in_tab(tp) {
-            let moved = wp.w_pos_changed || wp.w_grid_alloc.pending_comp_index_update;
-            if moved && wp.w_grid_alloc.is_allocated() {
+        for wp in windows_in_tab(tp) {
+            let moved = wp.w_pos_changed() || wp.grid_alloc().pending_comp_index_update;
+            if moved && wp.read().w_grid_alloc.is_allocated() {
                 if tp.is_current() {
                     ui_ext_win_position(wp, validate);
                 } else {
                     // A window of another tab page is not on the screen.
-                    ui_call_win_hide(Integer::from(wp.w_grid_alloc.handle));
-                    wp.w_pos_changed = false;
+                    ui_call_win_hide(Integer::from(wp.grid_alloc().handle));
+                    wp.set_w_pos_changed(false);
                 }
-                wp.w_grid_alloc.pending_comp_index_update = false;
+                wp.edit().w_grid_alloc.pending_comp_index_update = false;
             }
             if tp.is_current() {
                 ui_ext_win_viewport(wp);
@@ -427,7 +429,7 @@ pub(crate) fn lastwin_nofloating(tabpage: Option<TabPage>) -> Win {
         None => last_window(),
     }
     .expect("a window list has a tail");
-    while res.w_floating {
+    while res.w_floating() {
         res = res.prev().expect("a float is never the first window");
     }
     res

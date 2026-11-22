@@ -659,8 +659,8 @@ pub fn ui_flush() {
     // is inside it, so there is nowhere to draw it: look busy instead.
     static WAS_BUSY: GlobalCell<bool> = GlobalCell::new(false);
     let cursor_nowhere = STATE.get() & MODE_CMDLINE == 0
-        && Win::current().w_floating
-        && Win::current().w_config.hide;
+        && Win::current().w_floating()
+        && Win::current().read().w_config.hide;
     if cursor_nowhere {
         if !WAS_BUSY.get() {
             ui_call_busy_start();
@@ -756,13 +756,13 @@ fn ui_cursor_is_behind_floatwin() -> bool {
         return false;
     }
     let win = Win::current();
-    let crow = win.w_winrow + win.w_winrow_off + win.w_wrow;
-    let wcol = if win.w_onebuf_opt.wo_rl != 0 {
-        win.w_view_width - win.w_wcol - 1
+    let crow = win.w_winrow() + win.w_winrow_off() + win.w_wrow();
+    let wcol = if win.wo_rl() != 0 {
+        win.w_view_width() - win.w_wcol() - 1
     } else {
-        win.w_wcol
+        win.w_wcol()
     };
-    let ccol = win.w_wincol + win.w_wincol_off + wcol;
+    let ccol = win.w_wincol() + win.w_wincol_off() + wcol;
     let top_grid = ui_comp_get_grid_at_coord(crow, ccol);
     !top_grid.same(win.grid_alloc()) && !top_grid.same(default_grid_ref())
 }
@@ -820,19 +820,19 @@ pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int) -> Resul
         screen_resize(width, height);
         return Ok(());
     }
-    let Some(mut wp) = get_win_by_grid_handle(grid_handle) else {
+    let Some(wp) = get_win_by_grid_handle(grid_handle) else {
         return Err(err_bad_number(c"window handle", Integer::from(grid_handle)));
     };
-    if wp.w_floating {
-        if width != wp.w_width || height != wp.w_height {
-            wp.w_config.width = width.max(1);
-            wp.w_config.height = height.max(1);
-            win_config_float(wp, wp.w_config.clone());
+    if wp.w_floating() {
+        if width != wp.w_width() || height != wp.w_height() {
+            wp.set_config_width(width.max(1));
+            wp.set_config_height(height.max(1));
+            win_config_float(wp, wp.config());
         }
     } else {
         // A split's size is a request: the layout decides what it gets.
-        wp.w_height_request = height.max(0);
-        wp.w_width_request = width.max(0);
+        wp.set_w_height_request(height.max(0));
+        wp.set_w_width_request(width.max(0));
         win_set_inner_size(wp, true);
     }
     Ok(())

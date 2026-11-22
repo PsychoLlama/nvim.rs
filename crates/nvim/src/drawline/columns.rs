@@ -76,13 +76,13 @@ impl WinLineVars {
     ) {
         let mut fold_vcol = fold_vcol.map(<[ColNr]>::iter);
         let mut at = 0;
-        while at < len && self.off < window.w_view_width {
+        while at < len && self.off < window.w_view_width() {
             let (cells, taken) = with_linebuf(|line| {
                 line_putchar(
                     window.buffer(),
                     text.get(at..).unwrap_or_default(),
                     &mut line.chars_mut()[as_index(self.off)..],
-                    window.w_view_width - self.off,
+                    window.w_view_width() - self.off,
                     self.off,
                 )
             });
@@ -141,9 +141,9 @@ impl WinLineVars {
 
 /// Whether the `CursorLineSign`/`CursorLineFold` highlights apply to `lnum`.
 pub fn use_cursor_line_highlight(window: Win, lnum: LineNr) -> bool {
-    window.w_onebuf_opt.wo_cul != 0
-        && lnum == window.w_cursorline
-        && u32::from(window.w_p_culopt_flags) & OPT_CULOPT_FLAG_NUMBER != 0
+    window.wo_cul() != 0
+        && lnum == window.w_cursorline()
+        && u32::from(window.w_p_culopt_flags()) & OPT_CULOPT_FLAG_NUMBER != 0
 }
 
 /// The glyph for a fold-column cell that is inside a fold but is neither the
@@ -160,9 +160,9 @@ fn foldcolumn_sep_char(
     window: Win,
 ) -> ScreenChar {
     if first_level == 1 {
-        window.w_p_fcs_chars.foldsep
-    } else if window.w_p_fcs_chars.foldinner != 0 {
-        window.w_p_fcs_chars.foldinner
+        window.fcs_foldsep()
+    } else if window.fcs_foldinner() != 0 {
+        window.fcs_foldinner()
     } else if first_level + i <= 9 {
         schar_from_ascii(b"0123456789"[as_index(first_level + i)])
     } else {
@@ -206,9 +206,9 @@ fn fold_column_cells(
         let mut symbol = if i >= level {
             schar_from_ascii(b' ')
         } else if i == closedcol - 1 && closed {
-            window.w_p_fcs_chars.foldclosed
+            window.fcs_foldclosed()
         } else if foldinfo.fi_lnum == lnum && first_level + i >= foldinfo.fi_low_level {
-            window.w_p_fcs_chars.foldopen
+            window.fcs_foldopen()
         } else {
             foldcolumn_sep_char(first_level, i, window)
         };
@@ -353,11 +353,11 @@ impl WinLineVars {
 /// from the relative numbers around it.
 #[inline]
 fn line_number_str(window: Win, lnum: LineNr, buf: &mut [u8; 32]) {
-    let (num, left) = if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu == 0 {
+    let (num, left) = if window.wo_nu() != 0 && window.wo_rnu() == 0 {
         (lnum.get(), false)
     } else {
         let rel = get_cursor_rel_lnum(window, lnum).abs();
-        if rel == 0 && window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0 {
+        if rel == 0 && window.wo_nu() != 0 && window.wo_rnu() != 0 {
             (lnum.get(), true)
         } else {
             (rel, false)
@@ -382,9 +382,9 @@ impl WinLineVars {
     /// continuation rows only when `'cursorlineopt'` also contains "line" —
     /// otherwise the highlight follows the number itself, not the column.
     fn use_cursor_line_nr(&self, window: Win) -> bool {
-        let culopt = u32::from(window.w_p_culopt_flags);
-        window.w_onebuf_opt.wo_cul != 0
-            && self.lnum == window.w_cursorline
+        let culopt = u32::from(window.w_p_culopt_flags());
+        window.wo_cul() != 0
+            && self.lnum == window.w_cursorline()
             && culopt & OPT_CULOPT_FLAG_NUMBER != 0
             && (self.row == self.startrow + self.filler_lines
                 || (self.row > self.startrow + self.filler_lines
@@ -428,9 +428,9 @@ impl WinLineVars {
         let hlf = if self.use_cursor_line_nr(window) {
             // TODO(vim): can CursorLine stand in when CursorLineNr is unset?
             HLF_CLN
-        } else if window.w_onebuf_opt.wo_rnu != 0 && self.lnum < window.w_cursor.lnum {
+        } else if window.wo_rnu() != 0 && self.lnum < window.cursor().lnum() {
             HLF_LNA
-        } else if window.w_onebuf_opt.wo_rnu != 0 && self.lnum > window.w_cursor.lnum {
+        } else if window.wo_rnu() != 0 && self.lnum > window.cursor().lnum() {
             HLF_LNB
         } else {
             HLF_N
@@ -443,7 +443,7 @@ impl WinLineVars {
     /// `'cpoptions'` contains "n".
     pub(crate) fn draw_lnum_col(&mut self, window: Win) {
         let has_cpo_n = cpo_has(CpoFlag::NUMCOL);
-        if window.w_onebuf_opt.wo_nu == 0 && window.w_onebuf_opt.wo_rnu == 0 {
+        if window.wo_nu() == 0 && window.wo_rnu() == 0 {
             return;
         }
         if self.row != self.startrow + self.filler_lines && has_cpo_n {
@@ -452,16 +452,16 @@ impl WinLineVars {
         // With "n" in 'cpoptions' there is no number column on a wrapped
         // line — but 'breakindent' assumes there is one anyway.
         if has_cpo_n
-            && window.w_onebuf_opt.wo_bri == 0
-            && window.w_skipcol > ColNr::ZERO
-            && self.lnum == window.w_topline
+            && window.wo_bri() == 0
+            && window.w_skipcol() > ColNr::ZERO
+            && self.lnum == window.w_topline()
         {
             return;
         }
 
         let first_row = self.row == self.startrow + self.filler_lines;
         // 'signcolumn'=number: a sign on this line replaces the number.
-        if window.w_minscwidth == SCL_NUM
+        if window.w_minscwidth() == SCL_NUM
             && self.sign_attrs[0].text[0] != 0
             && first_row
             && self.filler_todo <= 0
@@ -472,8 +472,8 @@ impl WinLineVars {
 
         let width = number_width(window) + 1;
         let attr = self.line_number_attr(window);
-        let both = window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0;
-        if !(first_row && (window.w_skipcol == ColNr::ZERO || self.row > 0 || both)) {
+        let both = window.wo_nu() != 0 && window.wo_rnu() != 0;
+        if !(first_row && (window.w_skipcol() == ColNr::ZERO || self.row > 0 || both)) {
             // A continuation row, or the first row of a line whose top is
             // scrolled off with 'smoothscroll': blank.
             self.draw_col_fill(schar_from_ascii(b' '), width, attr);
@@ -482,7 +482,7 @@ impl WinLineVars {
 
         let mut buf = [0u8; 32];
         line_number_str(window, self.lnum, &mut buf);
-        if window.w_skipcol > ColNr::ZERO && self.startrow == 0 {
+        if window.w_skipcol() > ColNr::ZERO && self.startrow == 0 {
             // Part of this line is scrolled off above: say so by filling
             // the number's padding with dashes.
             for c in buf.iter_mut() {
@@ -492,7 +492,7 @@ impl WinLineVars {
                 *c = b'-';
             }
         }
-        if window.w_onebuf_opt.wo_rl != 0 {
+        if window.wo_rl() != 0 {
             // Mirror the number itself, between its padding and the space
             // after it.
             let is_white = |c: &u8| *c == b' ' || *c == b'\t';
@@ -532,7 +532,7 @@ impl WinLineVars {
     /// `stc` is the line's request, which `build_statuscol_str` fills in.
     pub(crate) fn draw_statuscol(
         &mut self,
-        mut window: Win,
+        window: Win,
         virtnum: ::core::ffi::c_int,
         col_rows: ::core::ffi::c_int,
         stc: &mut StatusCol,
@@ -553,32 +553,32 @@ impl WinLineVars {
             -1
         };
 
-        if window.w_statuscol_line_count != window.w_nrwidth_line_count {
+        if window.w_statuscol_line_count() != window.w_nrwidth_line_count() {
             // The line count changed. Estimate the full width by building
             // with the largest line number there can be, and widen before
             // anything is drawn.
-            window.w_statuscol_line_count = window.w_nrwidth_line_count;
+            window.set_w_statuscol_line_count(window.w_nrwidth_line_count());
             set_vim_var_nr(Vv::Virtnum, 0);
             let width = build_statuscol_str(
                 window,
-                window.w_nrwidth_line_count,
-                window.w_nrwidth_line_count,
+                window.w_nrwidth_line_count(),
+                window.w_nrwidth_line_count(),
                 stc,
                 &self.sign_attrs,
             )
             .width;
             if width > stc.width {
                 let addwidth = (width - stc.width).min(MAX_STCWIDTH - stc.width);
-                window.w_nrwidth += addwidth;
-                window.w_nrwidth_width = window.w_nrwidth;
+                window.set_w_nrwidth(window.w_nrwidth() + addwidth);
+                window.set_w_nrwidth_width(window.w_nrwidth());
                 if col_rows > 0 {
                     // Only the columns were being redrawn; the text has to
                     // move too now.
-                    window.w_redr_statuscol = true;
+                    window.set_w_redr_statuscol(true);
                     return;
                 }
                 stc.width += addwidth;
-                window.w_valid -= WinValid::WCOL;
+                window.set_w_valid(window.w_valid().without(WinValid::WCOL));
             }
         }
 
@@ -591,19 +591,22 @@ impl WinLineVars {
             &self.sign_attrs,
         );
         let width = built.width;
-        let was_reset = window.w_onebuf_opt.wo_stc.first_byte() == 0;
+        let was_reset = window.read().w_onebuf_opt.wo_stc.first_byte() == 0;
         if was_reset || (width > stc.width && stc.width < MAX_STCWIDTH) {
             if was_reset {
                 // 'statuscolumn' was reset because the expression failed.
-                window.w_nrwidth_line_count = LineNr::ZERO;
-                window.w_nrwidth = ::core::ffi::c_int::from(
-                    window.w_onebuf_opt.wo_nu != 0 || window.w_onebuf_opt.wo_rnu != 0,
-                ) * number_width(window);
+                window.set_w_nrwidth_line_count(LineNr::ZERO);
+                window.set_w_nrwidth(
+                    ::core::ffi::c_int::from(window.wo_nu() != 0 || window.wo_rnu() != 0)
+                        * number_width(window),
+                );
             } else {
-                window.w_nrwidth += (width - stc.width).min(MAX_STCWIDTH - stc.width);
-                window.w_nrwidth_width = window.w_nrwidth;
+                window.set_w_nrwidth(
+                    window.w_nrwidth() + (width - stc.width).min(MAX_STCWIDTH - stc.width),
+                );
+                window.set_w_nrwidth_width(window.w_nrwidth());
             }
-            window.w_redr_statuscol = true;
+            window.set_w_redr_statuscol(true);
             return;
         }
 
@@ -666,7 +669,7 @@ impl WinLineVars {
     /// Indent a wrapped line's continuation row to match its first row.
     /// `gap_attr` is the highlight still active where the row wrapped.
     pub(crate) fn handle_breakindent(&mut self, window: Win, gap_attr: ::core::ffi::c_int) {
-        if window.w_onebuf_opt.wo_bri != 0
+        if window.wo_bri() != 0
             && (self.row > self.startrow + self.filler_lines || self.need_showbreak)
         {
             let attr = if self.diff_hlf != HLF_NONE {
@@ -700,10 +703,10 @@ impl WinLineVars {
             self.inverted.skip_padding(vcol_before, self.vcol);
         }
 
-        if window.w_skipcol > ColNr::ZERO
+        if window.w_skipcol() > ColNr::ZERO
             && self.startrow == 0
-            && window.w_onebuf_opt.wo_wrap != 0
-            && window.w_briopt_sbr
+            && window.wo_wrap() != 0
+            && window.w_briopt_sbr()
         {
             self.need_showbreak = false;
         }
@@ -717,7 +720,7 @@ impl WinLineVars {
         window: Win,
         gap_attr: ::core::ffi::c_int,
     ) {
-        let remaining = window.w_view_width - self.off;
+        let remaining = window.w_view_width() - self.off;
         if self.filler_todo > self.filler_lines - self.n_virt_lines {
             // A virtual line: its text is drawn by the decoration code, so
             // all this owes is the background.
@@ -726,11 +729,7 @@ impl WinLineVars {
             self.draw_col_fill(schar_from_ascii(b' '), remaining, 0);
         } else if self.filler_todo > 0 {
             // A "deleted" diff line.
-            self.draw_col_fill(
-                window.w_p_fcs_chars.diff,
-                remaining,
-                win_hl_attr(window, HLF_DED),
-            );
+            self.draw_col_fill(window.fcs_diff(), remaining, win_hl_attr(window, HLF_DED));
         }
 
         if window.has_showbreak() && self.need_showbreak {
@@ -748,10 +747,10 @@ impl WinLineVars {
             self.inverted.skip_padding(vcol_before, self.vcol);
         }
 
-        if window.w_skipcol == ColNr::ZERO
+        if window.w_skipcol() == ColNr::ZERO
             || self.startrow > 0
-            || window.w_onebuf_opt.wo_wrap == 0
-            || !window.w_briopt_sbr
+            || window.wo_wrap() == 0
+            || !window.w_briopt_sbr()
         {
             self.need_showbreak = false;
         }

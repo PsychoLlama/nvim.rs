@@ -180,7 +180,7 @@ impl Cells {
             let len = transchar_hex_into(&mut hex, Codepoint::new(self.char_code));
             let mut text = hex.map(|c| c.to_ne_bytes()[0]);
             let text = &mut text[..len];
-            if window.w_onebuf_opt.wo_rl != 0 {
+            if window.wo_rl() != 0 {
                 mirror_ascii(text);
             }
             // The first character is this cell; the rest is the run.
@@ -297,7 +297,7 @@ impl Cells {
             wlv.char_attr = hl_combine_attr(self.attr_base, self.attr_pri);
         }
 
-        if !window.w_buffer.terminal().is_null() {
+        if !window.w_buffer().terminal().is_null() {
             let term_attr = usize::try_from(wlv.vcol)
                 .ok()
                 .and_then(|vcol| f.term_attrs.get(vcol))
@@ -407,9 +407,9 @@ impl Cells {
         // In Insert mode do not highlight a word the cursor is touching.
         if spell_hlf != HLF_COUNT
             && STATE.get() & MODE_INSERT != 0
-            && window.w_cursor.lnum == wlv.lnum
-            && window.w_cursor.col >= ColNr::new(prev_col)
-            && window.w_cursor.col < ColNr::new(self.word_end)
+            && window.cursor().lnum() == wlv.lnum
+            && window.cursor().col() >= ColNr::new(prev_col)
+            && window.cursor().col() < ColNr::new(self.word_end)
         {
             spell_hlf = HLF_COUNT;
             SPELL_REDRAW_LNUM.set(wlv.lnum);
@@ -448,7 +448,7 @@ impl Cells {
     /// will not fit, pad out to the end of the row so the word starts on the
     /// next one.
     pub(super) fn linebreak(&mut self, wlv: &mut WinLineVars, window: Win, c0: ::core::ffi::c_int) {
-        if window.w_onebuf_opt.wo_lbr == 0 {
+        if window.wo_lbr() == 0 {
             return;
         }
         // Do not break a line that starts with blanks followed by a long
@@ -499,7 +499,7 @@ impl Cells {
         if self.char_code == ::core::ffi::c_int::from(TAB)
             && wlv.extra_todo + wlv.col > self.view_width
         {
-            wlv.extra_todo = window.w_buffer.tab_padding(wlv.vcol) - 1;
+            wlv.extra_todo = window.w_buffer().tab_padding(wlv.vcol) - 1;
         }
         wlv.extra_fill = schar_from_ascii(if mb_off > 0 { MB_FILLER_CHAR } else { b' ' });
         wlv.extra_last = 0;
@@ -508,7 +508,7 @@ impl Cells {
                 // See "Tab alignment" in `unprintable`.
                 wlv.fix_for_boguscols();
             }
-            if window.w_onebuf_opt.wo_list == 0 {
+            if window.wo_list() == 0 {
                 self.char_code = ::core::ffi::c_int::from(b' ');
                 self.cell_char = schar_from_ascii(b' ');
             }
@@ -519,7 +519,7 @@ impl Cells {
     /// the `'listchars'` character that stands for it. `prev_at` is where the
     /// character starts.
     pub(super) fn listchars(&mut self, wlv: &mut WinLineVars, window: Win, prev_at: usize) {
-        if window.w_onebuf_opt.wo_list != 0 {
+        if window.wo_list() != 0 {
             self.in_multispace = self.char_code == ::core::ffi::c_int::from(b' ')
                 && (self.byte() == b' ' || (prev_at > 0 && self.line.byte(prev_at - 1) == b' '));
             if !self.in_multispace {
@@ -527,12 +527,12 @@ impl Cells {
             }
         }
 
-        let lcs = &window.w_p_lcs_chars;
+        let lcs = &window.read().w_p_lcs_chars;
         let at = isize::try_from(self.pos).unwrap_or(isize::MAX);
 
         // 'list': change 160 to "nbsp" and a space to "space" — but not
         // when a composing character follows, which `char_len` reveals.
-        if window.w_onebuf_opt.wo_list != 0
+        if window.wo_list() != 0
             && ((((self.char_code == 160 && self.char_len == 2)
                 || (self.char_code == 0x202f && self.char_len == 3))
                 && lcs.nbsp != 0)

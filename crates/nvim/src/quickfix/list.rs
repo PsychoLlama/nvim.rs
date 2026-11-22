@@ -344,7 +344,7 @@ fn adjust_entries(
 ) -> bool {
     let mut qi = match window {
         None => Qi::global(),
-        Some(wp) => match wp.w_llist {
+        Some(wp) => match wp.w_llist() {
             Some(id) => id.stack(),
             None => return false,
         },

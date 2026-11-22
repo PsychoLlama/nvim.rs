@@ -371,8 +371,8 @@ fn scroll_window(mouse_win: Win, key: Key, direction: c_int) {
     // Whatever the scroll left as the current window, which need not be the
     // one it started in.
     //
-    let mut scrolled = Win::current();
-    scrolled.w_redr_status = true;
+    let scrolled = Win::current();
+    scrolled.set_w_redr_status(true);
     saved.restore();
 }
 
@@ -393,9 +393,9 @@ pub(super) fn send_mouse_event(term: Term, c: Key) -> bool {
         //
         let offset = mouse_win.col_off();
         let inside = row >= 0
-            && (grid > 1 || row + mouse_win.w_winbar_height < mouse_win.w_height)
+            && (grid > 1 || row + mouse_win.w_winbar_height() < mouse_win.w_height())
             && col >= offset
-            && (grid > 1 || col < mouse_win.w_width);
+            && (grid > 1 || col < mouse_win.w_width());
         let showing_term = mouse_win.buffer().terminal() == term.raw();
         let forwarding =
             !term.suspended.get() && !term.closed.get() && term.forward_mouse.get() && showing_term;

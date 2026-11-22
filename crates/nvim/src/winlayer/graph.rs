@@ -530,9 +530,9 @@ mod tests {
     #[test]
     fn a_switch_stands_in_a_window_and_puts_the_old_one_back() {
         let _held = editor_state_lock();
-        let mut win = bare_window();
+        let win = bare_window();
         let buffer = bare_buffer();
-        win.w_buffer = buffer;
+        win.set_w_buffer(buffer);
         leave_curwin();
         leave_curbuf();
 
@@ -540,8 +540,8 @@ mod tests {
         assert!(win.is_current() && buffer.is_current());
         assert_eq!(Win::current(), win);
         assert_eq!(Buf::current(), buffer);
-        Win::current().w_cursor.lnum = LineNr::new(5);
-        assert_eq!(win.w_cursor.lnum, LineNr::new(5));
+        Win::current().cursor().set_lnum(LineNr::new(5));
+        assert_eq!(win.cursor().lnum(), LineNr::new(5));
         Buf::current().set_b_changed(1);
         assert_eq!(win.buffer().b_changed(), 1);
         saved.restore();
@@ -563,15 +563,15 @@ mod tests {
     fn a_forgotten_window_is_found_no_more() {
         let _held = editor_state_lock();
         let gone = bare_window();
-        let mut stays = bare_window();
+        let stays = bare_window();
         let id = gone.id();
         assert_eq!(id.get(), Some(gone));
         free_bare_window(gone);
         assert_eq!(id.get(), None);
         assert!(forget_window(gone).is_none(), "freed once");
-        stays.w_cursor.col = ColNr::new(3);
+        stays.cursor().set_col(ColNr::new(3));
         assert_eq!(
-            stays.id().get().map(|win| win.w_cursor.col),
+            stays.id().get().map(|win| win.cursor().col()),
             Some(ColNr::new(3))
         );
         free_bare_window(stays);

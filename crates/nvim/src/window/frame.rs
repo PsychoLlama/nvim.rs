@@ -49,7 +49,7 @@ pub(crate) struct AltWin {
 /// room and along which axis.
 pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, u8) {
     let win_tp = tabpage.unwrap_or_else(TabPage::current);
-    let (wp, dir) = if win.w_floating {
+    let (wp, dir) = if win.w_floating() {
         (win_float_find_altwin(win, tabpage), b'h')
     } else {
         let frp = win.frame();
@@ -104,11 +104,11 @@ pub(crate) fn winframe_remove(win: Win, tabpage: Option<TabPage>, keep_unflat: b
     // altframe) before we remove anything, to recompute window positions later.
     let parent = frp_close.parent().expect("a window that is not alone");
     let topleft = parent.first_window();
-    let mut row = topleft.w_winrow;
-    let mut col = topleft.w_wincol;
+    let mut row = topleft.w_winrow();
+    let mut col = topleft.w_wincol();
 
     // If `win` is the last window in a row, its separator column goes with it.
-    if win.w_vsep_width == 0
+    if win.w_vsep_width() == 0
         && c_int::from(parent.fr_layout()) == FR_ROW
         && let Some(prev) = frp_close.prev()
     {
@@ -165,9 +165,9 @@ pub(crate) fn find_altwin(win: Win, tabpage: Option<TabPage>) -> Option<AltWin> 
     let pinned = |fr: FrameRef| {
         fr.win().is_some_and(|w| {
             if vertical {
-                w.w_onebuf_opt.wo_wfh != 0
+                w.wo_wfh() != 0
             } else {
-                w.w_onebuf_opt.wo_wfw != 0
+                w.wo_wfw() != 0
             }
         })
     };
@@ -233,8 +233,8 @@ impl FrameRef {
             child.set_fr_parent(Some(parent.id()));
         }
         parent.set_fr_win(self.fr_win());
-        if let Some(mut win) = self.win() {
-            win.w_frame = Some(parent.id());
+        if let Some(win) = self.win() {
+            win.set_w_frame(Some(parent.id()));
         }
         let top = current_topframe();
         if top.fr_child() == Some(self.id()) {
@@ -313,7 +313,7 @@ pub(crate) fn winframe_restore(window: Win, dir: u8, unflat_altfr: FrameRef) {
     }
     let parent = frp.parent().expect("a restored frame has a parent");
     // Restore the separator or status line the window gave up on the way out.
-    if window.w_vsep_width == 0
+    if window.w_vsep_width() == 0
         && c_int::from(parent.fr_layout()) == FR_ROW
         && let Some(prev) = frp.prev()
     {
@@ -322,9 +322,9 @@ pub(crate) fn winframe_restore(window: Win, dir: u8, unflat_altfr: FrameRef) {
     if c_int::from(parent.fr_layout()) == FR_COL
         && let Some(prev) = frp.prev()
     {
-        if global_stl_rows() == 0 && window.w_status_height == 0 {
+        if global_stl_rows() == 0 && window.w_status_height() == 0 {
             prev.add_statusline();
-        } else if global_stl_rows() > 0 && window.w_hsep_height == 0 {
+        } else if global_stl_rows() > 0 && window.w_hsep_height() == 0 {
             prev.add_hsep();
         }
     }
@@ -339,8 +339,8 @@ pub(crate) fn winframe_restore(window: Win, dir: u8, unflat_altfr: FrameRef) {
     }
     if Some(unflat_altfr) != frp.prev() {
         let topleft = parent.first_window();
-        let mut row = topleft.w_winrow;
-        let mut col = topleft.w_wincol;
+        let mut row = topleft.w_winrow();
+        let mut col = topleft.w_wincol();
         parent.compute_position(&mut row, &mut col);
     }
 }

@@ -445,7 +445,7 @@ pub fn qf_view_result(split: bool) {
     let in_ll_window = window.is_location_list_window();
     let qi = if in_ll_window {
         window
-            .w_llist_ref
+            .w_llist_ref()
             .expect("a location list window shows a stack")
             .stack()
     } else {
@@ -456,7 +456,7 @@ pub fn qf_view_result(split: bool) {
         return;
     }
     if split {
-        let lnum = Win::current().w_cursor.lnum.get();
+        let lnum = Win::current().cursor().lnum().get();
         qf_jump_newwin(qi, 0, lnum, false, true);
         let _ = do_cmdline_cmd(c"clearjumps");
         return;

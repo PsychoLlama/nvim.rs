@@ -183,7 +183,7 @@ fn draw_default_tabline() {
         let mut modified = false;
         let mut wincount = 0;
         for win in windows_in_tab(tp) {
-            if !win.w_config.focusable || win.w_config.hide {
+            if !win.config_focusable() || win.config_hide() {
                 wincount -= 1;
             } else if buf_is_changed(win.buffer()) {
                 modified = true;

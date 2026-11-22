@@ -58,10 +58,10 @@ impl Win {
     /// Recompute `w_topline` to put the cursor at the top of the window,
     /// scrolling at least `min_scroll` lines. `always` sets `w_topline` even
     /// when that scrolls the other way, which is what `zt` wants.
-    pub(super) fn scroll_cursor_top(mut self, min_scroll: c_int, always: bool) {
-        let old_topline = self.w_topline;
-        let old_skipcol = self.w_skipcol;
-        let old_topfill = self.w_topfill;
+    pub(super) fn scroll_cursor_top(self, min_scroll: c_int, always: bool) {
+        let old_topline = self.w_topline();
+        let old_skipcol = self.w_skipcol();
+        let old_topfill = self.w_topfill();
         let off = scrolloff_or_drag(self);
 
         // Decrease `w_topline` until it has become 1, or (part of) the cursor
@@ -70,35 +70,35 @@ impl Win {
         self.validate_cheight();
         let mut scrolled = 0;
         // Includes the filler lines above.
-        let mut used = self.w_cline_height;
-        if self.w_cursor.lnum < self.w_topline {
+        let mut used = self.w_cline_height();
+        if self.cursor().lnum() < self.w_topline() {
             scrolled = used;
         }
 
         // Just above and just below the displayed lines.
-        let (folded, first, last) = self.fold_span(self.w_cursor.lnum);
+        let (folded, first, last) = self.fold_span(self.cursor().lnum());
         let (mut top, mut bot) = if folded {
             (first - 1, last + 1)
         } else {
-            (self.w_cursor.lnum - 1, self.w_cursor.lnum + 1)
+            (self.cursor().lnum() - 1, self.cursor().lnum() + 1)
         };
         let mut new_topline = top + 1;
 
         // `used` already counts the filler lines above, so hide them from it
         // by adding them to `extra` instead.
-        let mut extra = self.fill_above(self.w_cursor.lnum);
+        let mut extra = self.fill_above(self.cursor().lnum());
 
         // Do the lines from `top` to `bot` fit in the window? If they do, set
         // `new_topline` and take in more lines.
         while top > LineNr::ZERO {
             let i = self.plines_nofill(top, true);
             top = self.fold_first(top).unwrap_or(top);
-            if top < self.w_topline {
+            if top < self.w_topline() {
                 scrolled += i;
             }
 
             // If scrolling is needed, scroll at least 'scrolljump' lines.
-            if (new_topline >= self.w_topline || scrolled > min_scroll)
+            if (new_topline >= self.w_topline() || scrolled > min_scroll)
                 && int64_t::from(extra) >= off
             {
                 break;
@@ -110,7 +110,7 @@ impl Win {
                 bot = next;
                 used += height;
             }
-            if used > self.w_view_height {
+            if used > self.w_view_height() {
                 break;
             }
 
@@ -122,43 +122,44 @@ impl Win {
 
         // Without enough space, put the cursor in the middle instead; that way
         // "k" and "j" land in the same place in a small window.
-        if used > self.w_view_height {
+        if used > self.w_view_height() {
             self.scroll_cursor_halfway(false, false);
             return;
         }
 
         // Unless `always`, only lower `w_topline`: a higher value can happen
         // with wrapping lines.
-        if new_topline < self.w_topline || always {
-            self.w_topline = new_topline;
+        if new_topline < self.w_topline() || always {
+            self.set_w_topline(new_topline);
         }
-        let cursor_lnum = self.w_cursor.lnum;
-        self.w_topline = self.w_topline.min(cursor_lnum);
-        self.w_topfill = self.fill_above(self.w_topline);
-        if self.w_topfill > 0 && int64_t::from(extra) > off {
-            self.w_topfill -= extra - number_as_int(off);
-            self.w_topfill = self.w_topfill.max(0);
+        let cursor_lnum = self.cursor().lnum();
+        self.set_w_topline(self.w_topline().min(cursor_lnum));
+        self.set_w_topfill(self.fill_above(self.w_topline()));
+        if self.w_topfill() > 0 && int64_t::from(extra) > off {
+            self.set_w_topfill(self.w_topfill() - (extra - number_as_int(off)));
+            self.set_w_topfill(self.w_topfill().max(0));
         }
         self.check_topfill(false);
-        if self.w_topline != old_topline {
+        if self.w_topline() != old_topline {
             self.reset_skipcol();
-        } else if self.w_topline == self.w_cursor.lnum {
+        } else if self.w_topline() == self.cursor().lnum() {
             self.validate_virtcol();
-            if self.w_skipcol >= self.w_virtcol {
+            if self.w_skipcol() >= self.w_virtcol() {
                 // TODO(vim): when the line doesn't fit, optimise `w_skipcol`
                 // rather than zeroing it.
                 self.reset_skipcol();
             }
         }
-        if self.w_topline != old_topline
-            || self.w_skipcol != old_skipcol
-            || self.w_topfill != old_topfill
+        if self.w_topline() != old_topline
+            || self.w_skipcol() != old_skipcol
+            || self.w_topfill() != old_topfill
         {
-            self.w_valid -=
-                WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP;
+            self.set_w_valid(self.w_valid().without(
+                WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP,
+            ));
         }
-        self.w_valid |= WinValid::TOPLINE;
-        self.w_viewport_invalid = true;
+        self.set_w_valid(self.w_valid() | WinValid::TOPLINE);
+        self.set_w_viewport_invalid(true);
     }
 }
 
@@ -171,21 +172,21 @@ impl Win {
     /// Record how much of the window is left over once `used` screen lines of
     /// text have been drawn: `w_empty_rows` below the last line, and
     /// `w_filler_rows` of them claimed by 'diff' filler.
-    pub(super) fn set_empty_rows(mut self, used: c_int) {
-        self.w_filler_rows = 0;
+    pub(super) fn set_empty_rows(self, used: c_int) {
+        self.set_w_filler_rows(0);
         if used == 0 {
             // A single line that does not fit.
-            self.w_empty_rows = 0;
+            self.set_w_empty_rows(0);
             return;
         }
-        self.w_empty_rows = self.w_view_height - used;
-        if self.w_botline <= self.buffer().line_count() {
-            self.w_filler_rows = self.fill_above(self.w_botline);
-            if self.w_empty_rows > self.w_filler_rows {
-                self.w_empty_rows -= self.w_filler_rows;
+        self.set_w_empty_rows(self.w_view_height() - used);
+        if self.w_botline() <= self.buffer().line_count() {
+            self.set_w_filler_rows(self.fill_above(self.w_botline()));
+            if self.w_empty_rows() > self.w_filler_rows() {
+                self.set_w_empty_rows(self.w_empty_rows() - self.w_filler_rows());
             } else {
-                self.w_filler_rows = self.w_empty_rows;
-                self.w_empty_rows = 0;
+                self.set_w_filler_rows(self.w_empty_rows());
+                self.set_w_empty_rows(0);
             }
         }
     }
@@ -200,25 +201,25 @@ impl Win {
     /// Recompute `w_topline` to put the cursor at the bottom of the window,
     /// scrolling at least `min_scroll` lines. `set_topbot` sets `w_topline`
     /// and `w_botline` from the cursor line first, which is what `zb` wants.
-    pub(super) fn scroll_cursor_bot(mut self, min_scroll: c_int, set_topbot: bool) {
-        let old_topline = self.w_topline;
-        let old_skipcol = self.w_skipcol;
-        let old_topfill = self.w_topfill;
-        let old_botline = self.w_botline;
-        let old_valid = self.w_valid;
-        let old_empty_rows = self.w_empty_rows;
-        let cursor_lnum = self.w_cursor.lnum;
-        let do_sms = self.w_onebuf_opt.wo_wrap != 0 && self.w_onebuf_opt.wo_sms != 0;
+    pub(super) fn scroll_cursor_bot(self, min_scroll: c_int, set_topbot: bool) {
+        let old_topline = self.w_topline();
+        let old_skipcol = self.w_skipcol();
+        let old_topfill = self.w_topfill();
+        let old_botline = self.w_botline();
+        let old_valid = self.w_valid();
+        let old_empty_rows = self.w_empty_rows();
+        let cursor_lnum = self.cursor().lnum();
+        let do_sms = self.wo_wrap() != 0 && self.wo_sms() != 0;
 
         if set_topbot {
             self.fill_from_bottom(cursor_lnum, do_sms);
-            if self.w_topline != old_topline
-                || self.w_topfill != old_topfill
-                || self.w_skipcol != old_skipcol
-                || self.w_skipcol != ColNr::ZERO
+            if self.w_topline() != old_topline
+                || self.w_topfill() != old_topfill
+                || self.w_skipcol() != old_skipcol
+                || self.w_skipcol() != ColNr::ZERO
             {
-                self.w_valid -= WinValid::WROW | WinValid::CROW;
-                if self.w_skipcol != old_skipcol {
+                self.set_w_valid(self.w_valid().without(WinValid::WROW | WinValid::CROW));
+                if self.w_skipcol() != old_skipcol {
                     self.redraw_later(UPD_NOT_VALID);
                 } else {
                     self.reset_skipcol();
@@ -233,7 +234,7 @@ impl Win {
 
         // Scroll up when the cursor is a little off the bottom of the screen;
         // otherwise put it at half the screen.
-        if line_count >= self.w_view_height && line_count > min_scroll {
+        if line_count >= self.w_view_height() && line_count > min_scroll {
             self.scroll_cursor_halfway(false, true);
         } else if line_count > 0 {
             if do_sms {
@@ -246,13 +247,13 @@ impl Win {
 
         // When `w_topline` did not change, restore the `w_botline` and
         // `w_empty_rows` we changed; when it did, `update_screen()` sets them.
-        if self.w_topline == old_topline && self.w_skipcol == old_skipcol && set_topbot {
-            self.w_botline = old_botline;
-            self.w_empty_rows = old_empty_rows;
-            self.w_valid = old_valid;
+        if self.w_topline() == old_topline && self.w_skipcol() == old_skipcol && set_topbot {
+            self.set_w_botline(old_botline);
+            self.set_w_empty_rows(old_empty_rows);
+            self.set_w_valid(old_valid);
         }
-        self.w_valid |= WinValid::TOPLINE;
-        self.w_viewport_invalid = true;
+        self.set_w_valid(self.w_valid() | WinValid::TOPLINE);
+        self.set_w_viewport_invalid(true);
 
         // Make sure the cursor is still visible after `zb` adjusted `w_skipcol`.
         if set_topbot {
@@ -262,35 +263,35 @@ impl Win {
 
     /// `zb`'s first half: fill the window upwards from the cursor line, so
     /// that it is the last one shown.
-    fn fill_from_bottom(mut self, cursor_lnum: LineNr, do_sms: bool) {
+    fn fill_from_bottom(self, cursor_lnum: LineNr, do_sms: bool) {
         let mut used = 0;
         let last = self.fold_last(cursor_lnum);
-        self.w_botline = last + 1;
+        self.set_w_botline(last + 1);
         let mut loff = lineoff_at(last + 1);
         loop {
             topline_back_winheight(self, &mut loff, false);
             if loff.height == c_int::MAX {
                 break;
             }
-            if used + loff.height > self.w_view_height {
+            if used + loff.height > self.w_view_height() {
                 // With 'smoothscroll' and 'wrap' the line above is too long to
                 // show whole, so show just a part of it.
-                if do_sms && used < self.w_view_height {
-                    let plines_offset = used + loff.height - self.w_view_height;
-                    used = self.w_view_height;
-                    self.w_topfill = loff.fill;
-                    self.w_topline = loff.lnum;
-                    self.w_skipcol = self.skipcol_from_plines(plines_offset);
+                if do_sms && used < self.w_view_height() {
+                    let plines_offset = used + loff.height - self.w_view_height();
+                    used = self.w_view_height();
+                    self.set_w_topfill(loff.fill);
+                    self.set_w_topline(loff.lnum);
+                    self.set_w_skipcol(self.skipcol_from_plines(plines_offset));
                 }
                 break;
             }
-            self.w_topfill = loff.fill;
-            self.w_topline = loff.lnum;
+            self.set_w_topfill(loff.fill);
+            self.set_w_topline(loff.lnum);
             used += loff.height;
         }
 
         self.set_empty_rows(used);
-        self.w_valid |= WinValid::BOTLINE | WinValid::BOTLINE_AP;
+        self.set_w_valid(self.w_valid() | (WinValid::BOTLINE | WinValid::BOTLINE_AP));
     }
 
     /// Walk outwards from the cursor line until enough context is found, and
@@ -308,21 +309,21 @@ impl Win {
         // On or below `w_botline` we scroll by at least the cursor line's
         // height. Correct for the empty rows, which really belong to it.
         let mut scrolled = 0;
-        if cursor_lnum >= self.w_botline {
+        if cursor_lnum >= self.w_botline() {
             scrolled = used;
-            if cursor_lnum == self.w_botline {
-                scrolled -= self.w_empty_rows;
+            if cursor_lnum == self.w_botline() {
+                scrolled -= self.w_empty_rows();
             }
             if do_sms {
                 // Screen lines the top line occupies. When that is more than
                 // the whole window, the clipped ones have to be scrolled past
                 // before any other line can be.
-                let mut top_plines = self.plines_nofill(self.w_topline, false);
+                let mut top_plines = self.plines_nofill(self.w_topline(), false);
                 let (width1, width2) = sms_widths(self);
                 if width1 > 0 {
-                    top_plines -= arith::top_skipped_plines(self.w_skipcol, width1, width2);
-                    if top_plines > self.w_view_height {
-                        scrolled += top_plines - self.w_view_height;
+                    top_plines -= arith::top_skipped_plines(self.w_skipcol(), width1, width2);
+                    if top_plines > self.w_view_height() {
+                        scrolled += top_plines - self.w_view_height();
                     }
                 }
             }
@@ -338,15 +339,15 @@ impl Win {
         } else {
             (lineoff_at(cursor_lnum), lineoff_at(cursor_lnum))
         };
-        let fill_below_window = self.fill_above(self.w_botline) - self.w_filler_rows;
+        let fill_below_window = self.fill_above(self.w_botline()) - self.w_filler_rows();
 
         let mut extra = 0;
         let so = scrolloff_or_drag(self);
         while loff.lnum > LineNr::ONE {
             if ((scrolled <= 0 || scrolled >= min_scroll) && int64_t::from(extra) >= so
                 || boff.lnum + 1 > self.buffer().line_count())
-                && loff.lnum <= self.w_botline
-                && (loff.lnum < self.w_botline || loff.fill >= fill_below_window)
+                && loff.lnum <= self.w_botline()
+                && (loff.lnum < self.w_botline() || loff.fill >= fill_below_window)
             {
                 break;
             }
@@ -359,19 +360,19 @@ impl Win {
             } else {
                 used += loff.height;
             }
-            if used > self.w_view_height {
+            if used > self.w_view_height() {
                 break;
             }
-            if loff.lnum >= self.w_botline
-                && (loff.lnum > self.w_botline || loff.fill <= fill_below_window)
+            if loff.lnum >= self.w_botline()
+                && (loff.lnum > self.w_botline() || loff.fill <= fill_below_window)
             {
                 // Count the screen lines that are below the window.
                 scrolled += loff.height;
                 // The empty rows belong to `w_botline`: subtract them once,
                 // on the step that reaches it from below (its filler rows
                 // are later steps on the same line).
-                if loff.lnum == self.w_botline && loff_lnum_before > self.w_botline {
-                    scrolled -= self.w_empty_rows;
+                if loff.lnum == self.w_botline() && loff_lnum_before > self.w_botline() {
+                    scrolled -= self.w_empty_rows();
                 }
             }
 
@@ -383,20 +384,20 @@ impl Win {
             botline_forw(self, &mut boff);
             debug_assert!(boff.height != c_int::MAX, "boff.height != MAXCOL");
             used += boff.height;
-            if used > self.w_view_height {
+            if used > self.w_view_height() {
                 break;
             }
             if int64_t::from(extra) < so || scrolled < min_scroll {
                 extra += boff.height;
-                if boff.lnum >= self.w_botline
-                    || boff.lnum + 1 == self.w_botline && boff.fill > self.w_filler_rows
+                if boff.lnum >= self.w_botline()
+                    || boff.lnum + 1 == self.w_botline() && boff.fill > self.w_filler_rows()
                 {
                     // Count the screen lines that are below the window.
                     scrolled += boff.height;
                     // Once, when this step reaches or crosses `w_botline` —
                     // a closed fold may carry it past.
-                    if boff.lnum >= self.w_botline && boff_lnum_before < self.w_botline {
-                        scrolled -= self.w_empty_rows;
+                    if boff.lnum >= self.w_botline() && boff_lnum_before < self.w_botline() {
+                        scrolled -= self.w_empty_rows();
                     }
                 }
             }
@@ -411,19 +412,19 @@ impl Win {
             // `w_empty_rows` is larger: no need to scroll.
             return 0;
         }
-        if used > self.w_view_height {
+        if used > self.w_view_height() {
             // More than a screenful: don't scroll, redraw.
             return used;
         }
         // Scroll the minimal number of lines.
         let mut line_count = 0;
         let mut boff = LineOff {
-            lnum: self.w_topline - 1,
-            fill: self.w_topfill,
+            lnum: self.w_topline() - 1,
+            fill: self.w_topfill(),
             height: 0,
         };
         let mut i = 0;
-        while i < scrolled && boff.lnum < self.w_botline {
+        while i < scrolled && boff.lnum < self.w_botline() {
             botline_forw(self, &mut boff);
             i += boff.height;
             line_count += 1;
@@ -439,30 +440,30 @@ impl Win {
 impl Win {
     /// Recompute `w_topline` to put the cursor halfway across the window.
     /// `atend` also puts it halfway to the end of the file.
-    pub(crate) fn scroll_cursor_halfway(mut self, atend: bool, prefer_above: bool) {
-        let old_topline = self.w_topline;
-        let (folded, first, last) = self.fold_span(self.w_cursor.lnum);
+    pub(crate) fn scroll_cursor_halfway(self, atend: bool, prefer_above: bool) {
+        let old_topline = self.w_topline();
+        let (folded, first, last) = self.fold_span(self.cursor().lnum());
         let (mut loff, mut boff) = if folded {
             (lineoff_at(first), lineoff_at(last))
         } else {
             (
-                lineoff_at(self.w_cursor.lnum),
-                lineoff_at(self.w_cursor.lnum),
+                lineoff_at(self.cursor().lnum()),
+                lineoff_at(self.cursor().lnum()),
             )
         };
         let mut used = self.plines_nofill(loff.lnum, true);
         let mut topline = loff.lnum;
         let mut skipcol: ColNr = ColNr::ZERO;
 
-        let do_sms = self.w_onebuf_opt.wo_wrap != 0 && self.w_onebuf_opt.wo_sms != 0;
+        let do_sms = self.wo_wrap() != 0 && self.wo_sms() != 0;
         // Only read under `do_sms`, which is also the only arm that sets it.
         let mut want_height = 0;
         if do_sms {
             if atend {
-                want_height = (self.w_view_height - used) / 2;
+                want_height = (self.w_view_height() - used) / 2;
                 used = 0;
             } else {
-                want_height = self.w_view_height;
+                want_height = self.w_view_height();
             }
         }
 
@@ -512,7 +513,7 @@ impl Win {
                     if boff.lnum < self.buffer().line_count() {
                         botline_forw(self, &mut boff);
                         used += boff.height;
-                        if used > self.w_view_height {
+                        if used > self.w_view_height() {
                             done = true;
                             break;
                         }
@@ -541,7 +542,7 @@ impl Win {
                     } else {
                         used += loff.height;
                     }
-                    if used > self.w_view_height {
+                    if used > self.w_view_height() {
                         done = true;
                         break;
                     }
@@ -558,28 +559,30 @@ impl Win {
         // A folded top line writes `w_topline` itself; only an unfolded one
         // goes through the `skipcol` bookkeeping below.
         if let Some(first) = self.fold_first(topline) {
-            self.w_topline = first;
-        } else if self.w_topline != topline
+            self.set_w_topline(first);
+        } else if self.w_topline() != topline
             || skipcol != ColNr::ZERO
-            || self.w_skipcol != ColNr::ZERO
+            || self.w_skipcol() != ColNr::ZERO
         {
-            self.w_topline = topline;
+            self.set_w_topline(topline);
             if skipcol != ColNr::ZERO {
-                self.w_skipcol = skipcol;
+                self.set_w_skipcol(skipcol);
                 self.redraw_later(UPD_NOT_VALID);
             } else if do_sms {
                 self.reset_skipcol();
             }
         }
-        self.w_topfill = topfill;
-        if old_topline > self.w_topline + self.w_view_height {
-            self.w_botfill = false;
+        self.set_w_topfill(topfill);
+        if old_topline > self.w_topline() + self.w_view_height() {
+            self.set_w_botfill(false);
         }
         self.check_topfill(false);
-        self.w_valid = self
-            .w_valid
-            .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP);
-        self.w_valid |= WinValid::TOPLINE;
+        self.set_w_valid(
+            self.w_valid().without(
+                WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP,
+            ),
+        );
+        self.set_w_valid(self.w_valid() | WinValid::TOPLINE);
     }
 }
 
@@ -593,25 +596,25 @@ impl Win {
     /// and bottom of the window where possible, and where not, where
     /// [`Win::scroll_cursor_halfway`] would have put it. `w_topline` must be
     /// valid.
-    pub(super) fn cursor_correct(mut self) {
+    pub(super) fn cursor_correct(self) {
         // How much context we would like above and below the cursor depends on
         // whether the first and last line of the file are on screen.
         let mut above_wanted = scrolloff_or_drag(self);
         let mut below_wanted = above_wanted;
-        if self.w_topline == LineNr::ONE {
+        if self.w_topline() == LineNr::ONE {
             above_wanted = 0;
-            below_wanted = below_wanted.min(int64_t::from(self.w_view_height / 2));
+            below_wanted = below_wanted.min(int64_t::from(self.w_view_height() / 2));
         }
         self.validate_botline();
-        if self.w_botline == self.buffer().line_count() + 1 && MOUSE_DRAGGING.get() == 0 {
+        if self.w_botline() == self.buffer().line_count() + 1 && MOUSE_DRAGGING.get() == 0 {
             below_wanted = 0;
-            above_wanted = above_wanted.min(int64_t::from((self.w_view_height - 1) / 2));
+            above_wanted = above_wanted.min(int64_t::from((self.w_view_height() - 1) / 2));
         }
 
         // Enough file lines above and below the cursor: nothing to do.
-        let cursor_lnum = self.w_cursor.lnum;
-        if i64::from(cursor_lnum) >= i64::from(self.w_topline) + above_wanted
-            && i64::from(cursor_lnum) < i64::from(self.w_botline) - below_wanted
+        let cursor_lnum = self.cursor().lnum();
+        if i64::from(cursor_lnum) >= i64::from(self.w_topline()) + above_wanted
+            && i64::from(cursor_lnum) < i64::from(self.w_botline()) - below_wanted
             && !self.lines_concealed()
         {
             return;
@@ -619,9 +622,9 @@ impl Win {
 
         // 'smoothscroll' is active. TODO(vim): when the cursor line does not
         // fit in the window, adjust `w_skipcol` instead.
-        if self.w_onebuf_opt.wo_sms != 0
-            && self.w_onebuf_opt.wo_wrap == 0
-            && self.w_cline_height == self.w_view_height
+        if self.wo_sms() != 0
+            && self.wo_wrap() == 0
+            && self.w_cline_height() == self.w_view_height()
         {
             // The cursor line just fits in the window: don't scroll.
             self.reset_skipcol();
@@ -631,11 +634,11 @@ impl Win {
         // Narrow down the area the cursor may be put in by taking lines off
         // the top and the bottom until the wanted context is found, or the
         // lines from the top have passed the lines from the bottom.
-        let mut topline = self.w_topline;
-        let mut botline = self.w_botline - 1;
+        let mut topline = self.w_topline();
+        let mut botline = self.w_botline() - 1;
         // Filler lines count as context.
-        let mut above = self.w_topfill;
-        let mut below = self.w_filler_rows;
+        let mut above = self.w_topfill();
+        let mut below = self.w_filler_rows();
         while (int64_t::from(above) < above_wanted || int64_t::from(below) < below_wanted)
             && topline < botline
         {
@@ -659,26 +662,30 @@ impl Win {
             }
         }
         if topline == botline || botline == LineNr::ZERO {
-            self.w_cursor.lnum = topline;
+            self.cursor().set_lnum(topline);
         } else if topline > botline {
-            self.w_cursor.lnum = botline;
+            self.cursor().set_lnum(botline);
         } else {
-            if cursor_lnum < topline && self.w_topline > LineNr::ONE {
-                self.w_cursor.lnum = topline;
-                self.w_valid = self
-                    .w_valid
-                    .without(WinValid::WROW | WinValid::WCOL | WinValid::CHEIGHT | WinValid::CROW);
+            if cursor_lnum < topline && self.w_topline() > LineNr::ONE {
+                self.cursor().set_lnum(topline);
+                self.set_w_valid(
+                    self.w_valid().without(
+                        WinValid::WROW | WinValid::WCOL | WinValid::CHEIGHT | WinValid::CROW,
+                    ),
+                );
             }
-            if cursor_lnum > botline && self.w_botline <= self.buffer().line_count() {
-                self.w_cursor.lnum = botline;
-                self.w_valid = self
-                    .w_valid
-                    .without(WinValid::WROW | WinValid::WCOL | WinValid::CHEIGHT | WinValid::CROW);
+            if cursor_lnum > botline && self.w_botline() <= self.buffer().line_count() {
+                self.cursor().set_lnum(botline);
+                self.set_w_valid(
+                    self.w_valid().without(
+                        WinValid::WROW | WinValid::WCOL | WinValid::CHEIGHT | WinValid::CROW,
+                    ),
+                );
             }
         }
         self.check_cursor_moved();
-        self.w_valid |= WinValid::TOPLINE;
-        self.w_viewport_invalid = true;
+        self.set_w_valid(self.w_valid() | WinValid::TOPLINE);
+        self.set_w_viewport_invalid(true);
     }
 }
 
@@ -696,22 +703,22 @@ impl Win {
 ///  l3                            etc.
 /// ```
 pub(super) fn get_scroll_overlap(win: Win, dir: Direction) -> c_int {
-    let min_height = win.w_view_height - 2;
+    let min_height = win.w_view_height() - 2;
     let forward = dir == FORWARD;
     let backward = dir == BACKWARD;
 
     win.validate_botline();
-    if backward && win.w_topline == LineNr::ONE
-        || forward && win.w_botline > win.buffer().line_count()
+    if backward && win.w_topline() == LineNr::ONE
+        || forward && win.w_botline() > win.buffer().line_count()
     {
         // No overlap; still handle 'smoothscroll'.
         return min_height + 2;
     }
 
     let lnum = if forward {
-        win.w_botline
+        win.w_botline()
     } else {
-        win.w_topline - 1
+        win.w_topline() - 1
     };
     let mut loff = LineOff {
         lnum,
@@ -719,9 +726,9 @@ pub(super) fn get_scroll_overlap(win: Win, dir: Direction) -> c_int {
         // the line *below* this one.
         fill: win.fill_above(lnum + i32::from(backward))
             - if forward {
-                win.w_filler_rows
+                win.w_filler_rows()
             } else {
-                win.w_topfill
+                win.w_topfill()
             },
         height: 0,
     };
@@ -774,26 +781,26 @@ pub(super) fn get_scroll_overlap(win: Win, dir: Direction) -> c_int {
 /// `win` must be the current window: the scroll itself goes through
 /// [`scroll_redraw_cur`].
 pub(super) fn scroll_with_sms(
-    mut win: Win,
+    win: Win,
     dir: Direction,
     count: c_int,
     curscount: &mut c_int,
 ) -> bool {
-    let prev_sms = win.w_onebuf_opt.wo_sms;
-    let prev_skipcol = win.w_skipcol;
-    let prev_topline = win.w_topline;
-    let prev_topfill = win.w_topfill;
+    let prev_sms = win.wo_sms();
+    let prev_skipcol = win.w_skipcol();
+    let prev_topline = win.w_topline();
+    let prev_topfill = win.w_topfill();
 
-    win.w_onebuf_opt.wo_sms = 1;
+    win.set_wo_sms(1);
     scroll_redraw_cur(win, dir == FORWARD, count);
 
     // Not actually smoothscrolling, but we ended up with a partly visible
     // line. Keep scrolling until `w_skipcol` is zero again.
-    if prev_sms == 0 && win.w_skipcol > ColNr::ZERO {
+    if prev_sms == 0 && win.w_skipcol() > ColNr::ZERO {
         // Reverse the scroll direction when `w_topline` already changed. One
         // line extra scrolling backward, so that consuming `w_skipcol` is
         // symmetric.
-        let fixdir = if (win.w_topline - prev_topline).abs() > i32::from(dir == BACKWARD) {
+        let fixdir = if (win.w_topline() - prev_topline).abs() > i32::from(dir == BACKWARD) {
             -dir
         } else {
             dir
@@ -801,16 +808,18 @@ pub(super) fn scroll_with_sms(
 
         let (width1, width2) = sms_widths(win);
         let count = if fixdir == FORWARD {
-            let size = win.line_display_width(win.w_topline);
-            arith::sms_fixup_count_forw(win.w_skipcol, size, width1, width2)
+            let size = win.line_display_width(win.w_topline());
+            arith::sms_fixup_count_forw(win.w_skipcol(), size, width1, width2)
         } else {
-            arith::sms_fixup_count_back(win.w_skipcol, width1, width2)
+            arith::sms_fixup_count_back(win.w_skipcol(), width1, width2)
         };
 
         scroll_redraw_cur(win, fixdir == FORWARD, count);
         *curscount += count * if fixdir == dir { 1 } else { -1 };
     }
-    win.w_onebuf_opt.wo_sms = prev_sms;
+    win.set_wo_sms(prev_sms);
 
-    win.w_topline != prev_topline || win.w_topfill != prev_topfill || win.w_skipcol != prev_skipcol
+    win.w_topline() != prev_topline
+        || win.w_topfill() != prev_topfill
+        || win.w_skipcol() != prev_skipcol
 }

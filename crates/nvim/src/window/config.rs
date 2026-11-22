@@ -109,7 +109,8 @@ pub fn win_fdccol_count(window: Win) -> c_int {
 /// The columns `'foldcolumn'` asks for in `window`, `auto[:N]` resolved against how
 /// deeply its folds are nested.
 fn fdccol_count(window: Win) -> c_int {
-    let fdc = window.w_onebuf_opt.wo_fdc.bytes();
+    let held = window.read();
+    let fdc = held.w_onebuf_opt.wo_fdc.bytes();
     // `'foldcolumn'` is vetted by its own `did_set_*`, so the first four
     // bytes and -- once they read `auto` -- the two after them are there.
     let digit = |n: usize| c_int::from(fdc.get(n).copied().unwrap_or(0)) - c_int::from(b'0');
@@ -121,6 +122,7 @@ fn fdccol_count(window: Win) -> c_int {
     } else {
         1
     };
+    drop(held);
     fdccol.min(deepest_fold_nesting(window))
 }
 
@@ -154,31 +156,31 @@ pub fn ui_ext_win_position(window: Win, validate: bool) {
 /// Tell the UI where `wp` is: its position on the screen for an ordinary
 /// window, and where its own grid is anchored for a float.
 fn ext_win_position(window: Win, validate: bool) {
-    let mut wp = window;
-    wp.w_pos_changed = false;
-    if !wp.w_floating {
+    let wp = window;
+    wp.set_w_pos_changed(false);
+    if !wp.w_floating() {
         if ui_has(UI_MULTIGRID) {
-            wp.w_grid_alloc.comp_col = wp.w_wincol;
-            wp.w_grid_alloc.comp_row = wp.w_winrow;
+            wp.edit().w_grid_alloc.comp_col = wp.w_wincol();
+            wp.edit().w_grid_alloc.comp_row = wp.w_winrow();
         }
         // Tell the UI where the window is.
         {
             ui_call_win_pos(
-                Integer::from(wp.w_grid_alloc.handle),
-                wp.handle as WindowHandle,
-                Integer::from(wp.w_winrow),
-                Integer::from(wp.w_wincol),
-                Integer::from(wp.w_width),
-                Integer::from(wp.w_height),
+                Integer::from(wp.grid_alloc().handle),
+                wp.handle() as WindowHandle,
+                Integer::from(wp.w_winrow()),
+                Integer::from(wp.w_wincol()),
+                Integer::from(wp.w_width()),
+                Integer::from(wp.w_height()),
             );
         }
         return;
     }
-    let c = wp.w_config.clone();
+    let c = wp.config();
     if c.external {
         ui_call_win_external_pos(
-            Integer::from(wp.w_grid_alloc.handle),
-            wp.handle as WindowHandle,
+            Integer::from(wp.grid_alloc().handle),
+            wp.handle() as WindowHandle,
         );
         return;
     }
@@ -198,26 +200,26 @@ fn ext_win_position(window: Win, validate: bool) {
 
     // A changed 'zindex' means the float has to move within the compositor's
     // stack of layers.
-    let resort =
-        wp.w_grid_alloc.comp_index != 0 as size_t && wp.w_grid_alloc.zindex != wp.w_config.zindex;
-    let raise = resort && wp.w_grid_alloc.zindex < wp.w_config.zindex;
-    wp.w_grid_alloc.zindex = wp.w_config.zindex;
+    let resort = wp.grid_alloc().comp_index != 0 as size_t
+        && wp.read().w_grid_alloc.zindex != wp.config_zindex();
+    let raise = resort && wp.read().w_grid_alloc.zindex < wp.config_zindex();
+    wp.edit().w_grid_alloc.zindex = wp.config_zindex();
     if resort {
-        ui_comp_layers_adjust(wp.w_grid_alloc.comp_index, raise);
+        ui_comp_layers_adjust(wp.grid_alloc().comp_index, raise);
     }
 
-    let valid = wp.w_redr_type == 0 || ui_has(UI_MULTIGRID);
+    let valid = wp.w_redr_type() == 0 || ui_has(UI_MULTIGRID);
     if !valid && !validate {
-        wp.w_pos_changed = true;
+        wp.set_w_pos_changed(true);
         return;
     }
 
     let east = c.anchor as c_int & FLOAT_ANCHOR_EAST as c_int != 0;
     let south = c.anchor as c_int & FLOAT_ANCHOR_SOUTH as c_int != 0;
-    let mut comp_row = float_as_int(row) - if south { wp.w_height_outer } else { 0 };
-    let mut comp_col = float_as_int(col) - if east { wp.w_width_outer } else { 0 };
+    let mut comp_row = float_as_int(row) - if south { wp.w_height_outer() } else { 0 };
+    let mut comp_col = float_as_int(col) - if east { wp.w_width_outer() } else { 0 };
     // Don't cover the command line unless the float sits above the messages.
-    let above_ch = if wp.w_config.zindex < Z_INDEX_MESSAGES {
+    let above_ch = if wp.config_zindex() < Z_INDEX_MESSAGES {
         number_as_int(p_ch())
     } else {
         0
@@ -225,44 +227,44 @@ fn ext_win_position(window: Win, validate: bool) {
     comp_row += grid.comp_row;
     comp_col += grid.comp_col;
     comp_row = comp_row
-        .min(ROWS.get() - wp.w_height_outer - above_ch)
+        .min(ROWS.get() - wp.w_height_outer() - above_ch)
         .max(0);
     if !c.fixed || east {
-        comp_col = comp_col.min(COLUMNS.get() - wp.w_width_outer).max(0);
+        comp_col = comp_col.min(COLUMNS.get() - wp.w_width_outer()).max(0);
     }
-    wp.w_winrow = comp_row;
-    wp.w_wincol = comp_col;
+    wp.set_w_winrow(comp_row);
+    wp.set_w_wincol(comp_col);
 
     if c.hide {
         if ui_has(UI_MULTIGRID) {
-            ui_call_win_hide(Integer::from(wp.w_grid_alloc.handle));
+            ui_call_win_hide(Integer::from(wp.grid_alloc().handle));
         }
         ui_comp_remove_grid(wp.grid_alloc());
         return;
     }
-    let (h, w) = (wp.w_height_outer, wp.w_width_outer);
+    let (h, w) = (wp.w_height_outer(), wp.w_width_outer());
     ui_comp_put_grid(wp.grid_alloc(), comp_row, comp_col, h, w, valid, false);
     if ui_has(UI_MULTIGRID) {
         let anchor = ApiString::from_cstr(FLOAT_ANCHOR_STR[as_index(c.anchor)]);
         let anchor_grid = grid.handle;
         ui_call_win_float_pos(
-            Integer::from(wp.w_grid_alloc.handle),
-            wp.handle as WindowHandle,
+            Integer::from(wp.grid_alloc().handle),
+            wp.handle() as WindowHandle,
             anchor,
             Integer::from(anchor_grid),
             row,
             col,
             c.mouse as Boolean,
-            Integer::from(wp.w_grid_alloc.zindex),
-            Integer::from(len_as_int(wp.w_grid_alloc.comp_index)),
-            Integer::from(wp.w_winrow),
-            Integer::from(wp.w_wincol),
+            Integer::from(wp.grid_alloc().zindex),
+            Integer::from(len_as_int(wp.grid_alloc().comp_index)),
+            Integer::from(wp.w_winrow()),
+            Integer::from(wp.w_wincol()),
         );
     }
-    ui_check_cursor_grid(wp.w_grid_alloc.handle);
-    wp.w_grid_alloc.mouse_enabled = wp.w_config.mouse;
+    ui_check_cursor_grid(wp.grid_alloc().handle);
+    wp.edit().w_grid_alloc.mouse_enabled = wp.config_mouse();
     if !valid {
-        wp.w_grid_alloc.valid = false;
+        wp.edit().w_grid_alloc.valid = false;
         wp.redraw_later(UPD_NOT_VALID);
     }
 }
@@ -283,12 +285,13 @@ fn anchor_to_window(
     row: &mut Float,
     col: &mut Float,
 ) {
-    if parent.w_pos_changed && parent.w_grid_alloc.is_allocated() && win_valid(parent.id()) {
+    if parent.w_pos_changed() && parent.read().w_grid_alloc.is_allocated() && win_valid(parent.id())
+    {
         ext_win_position(parent, validate);
     }
     let (mut row_off, mut col_off) = (0, 0);
     win_grid_alloc(parent);
-    let own = parent.w_grid;
+    let own = parent.w_grid();
     *grid = grid_adjust(own, &mut row_off, &mut col_off);
     *row += Float::from(row_off);
     *col += Float::from(col_off);
@@ -315,21 +318,21 @@ pub fn ui_ext_win_viewport(window: Win) {
 /// Tell the UI which part of its buffer `window` shows, and how far the text
 /// scrolled since the last time it was told.
 fn ext_win_viewport(window: Win) {
-    let mut window = window;
+    let window = window;
     if !((window.is_current() || ui_has(UI_MULTIGRID))
-        && window.w_viewport_invalid
-        && window.w_redr_type == 0)
+        && window.w_viewport_invalid()
+        && window.w_redr_type() == 0)
     {
         return;
     }
     let line_count = window.buffer().line_count();
-    let cur_topline = window.w_topline.min(line_count);
-    let cur_botline = window.w_botline.min(line_count);
+    let cur_topline = window.w_topline().min(line_count);
+    let cur_botline = window.w_botline().min(line_count);
     let mut delta = 0 as int64_t;
-    let mut last_topline = window.w_viewport_last_topline;
-    let mut last_botline = window.w_viewport_last_botline;
-    let mut last_topfill = window.w_viewport_last_topfill as c_int;
-    let mut last_skipcol = i64::from(window.w_viewport_last_skipcol);
+    let mut last_topline = window.w_viewport_last_topline();
+    let mut last_botline = window.w_viewport_last_botline();
+    let mut last_topfill = window.w_viewport_last_topfill() as c_int;
+    let mut last_skipcol = i64::from(window.w_viewport_last_skipcol());
     // Lines were removed below the last known top line.
     if last_topline > line_count {
         delta -= int64_t::from(last_topline - line_count);
@@ -340,7 +343,7 @@ fn ext_win_viewport(window: Win) {
     last_botline = last_botline.min(line_count);
 
     if cur_topline < last_topline
-        || (cur_topline == last_topline && i64::from(window.w_skipcol) < last_skipcol)
+        || (cur_topline == last_topline && i64::from(window.w_skipcol()) < last_skipcol)
     {
         // Scrolled up: measure the text between the two positions.
         let mut vcole = last_skipcol;
@@ -353,15 +356,15 @@ fn ext_win_viewport(window: Win) {
         delta -= text_height(
             window,
             cur_topline,
-            i64::from(window.w_skipcol),
+            i64::from(window.w_skipcol()),
             &mut lnume,
             &mut vcole,
         );
     } else if cur_topline > last_topline
-        || (cur_topline == last_topline && i64::from(window.w_skipcol) > last_skipcol)
+        || (cur_topline == last_topline && i64::from(window.w_skipcol()) > last_skipcol)
     {
         // Scrolled down.
-        let mut vcole = i64::from(window.w_skipcol);
+        let mut vcole = i64::from(window.w_skipcol());
         let mut lnume = cur_topline;
         if last_botline > LineNr::ZERO && cur_topline > last_botline {
             delta += int64_t::from(cur_topline - last_botline);
@@ -371,31 +374,31 @@ fn ext_win_viewport(window: Win) {
         delta += text_height(window, last_topline, last_skipcol, &mut lnume, &mut vcole);
     }
     delta += int64_t::from(last_topfill);
-    delta -= int64_t::from(window.w_topfill);
+    delta -= int64_t::from(window.w_topfill());
 
     // `w_botline` is one past the last line, except when the last line is not
     // fully visible.
-    let mut ev_botline = window.w_botline;
-    if ev_botline == line_count + 1 && window.w_empty_rows == 0 {
+    let mut ev_botline = window.w_botline();
+    if ev_botline == line_count + 1 && window.w_empty_rows() == 0 {
         ev_botline = line_count;
     }
     {
         ui_call_win_viewport(
-            Integer::from(window.w_grid_alloc.handle),
-            window.handle as WindowHandle,
-            i64::from(window.w_topline - 1),
+            Integer::from(window.grid_alloc().handle),
+            window.handle() as WindowHandle,
+            i64::from(window.w_topline() - 1),
             i64::from(ev_botline),
-            i64::from(window.w_cursor.lnum - 1),
-            i64::from(window.w_cursor.col),
+            i64::from(window.cursor().lnum() - 1),
+            i64::from(window.cursor().col()),
             i64::from(line_count),
             delta as Integer,
         );
     }
-    window.w_viewport_invalid = false;
-    window.w_viewport_last_topline = window.w_topline;
-    window.w_viewport_last_botline = window.w_botline;
-    window.w_viewport_last_topfill = window.w_topfill;
-    window.w_viewport_last_skipcol = window.w_skipcol;
+    window.set_w_viewport_invalid(false);
+    window.set_w_viewport_last_topline(window.w_topline());
+    window.set_w_viewport_last_botline(window.w_botline());
+    window.set_w_viewport_last_topfill(window.w_topfill());
+    window.set_w_viewport_last_skipcol(window.w_skipcol());
 }
 
 /// The screen lines between two buffer positions, `win_text_height()` with its

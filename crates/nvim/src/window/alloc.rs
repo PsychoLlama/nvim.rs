@@ -295,9 +295,9 @@ pub(crate) fn bare_window() -> Win {
 /// Give back what [`bare_window`] made, with the option values a case gave
 /// it: the window is freed as a block, which drops none of its fields.
 #[cfg(test)]
-pub(crate) fn free_bare_window(mut win: Win) {
-    clear_winopt(&mut win.w_onebuf_opt);
-    clear_winopt(&mut win.w_allbuf_opt);
+pub(crate) fn free_bare_window(win: Win) {
+    clear_winopt(&mut win.edit().w_onebuf_opt);
+    clear_winopt(&mut win.edit().w_allbuf_opt);
     drop(forget_window(win).expect("a bare window is registered"));
 }
 
@@ -323,18 +323,18 @@ pub fn win_alloc_aucmd_win(idx: c_int) {
         ..WIN_CONFIG_INIT
     };
     // A hidden float over a fresh scratch buffer; it always answers a window.
-    let mut win = win_new_float(None, true, fconfig)
+    let win = win_new_float(None, true, fconfig)
         .ok()
         .flatten()
         .expect("the autocommand window");
     set_aucmd_window(usize::try_from(idx).expect("a slot index"), win);
     win.buffer().set_b_nwindows(win.buffer().b_nwindows() - 1);
-    win.w_onebuf_opt.wo_scb = 0;
-    win.w_onebuf_opt.wo_crb = 0;
+    win.set_wo_scb(0);
+    win.set_wo_crb(0);
 }
 
 pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
-    let mut win = win_alloc(None, false);
+    let win = win_alloc(None, false);
     win.make_current();
     match oldwin {
         None => {
@@ -345,17 +345,17 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
                 return Err(Failed);
             };
             buf.make_current();
-            win.w_buffer = buf;
-            win.w_s = buf.syntax_block();
+            win.set_w_buffer(buf);
+            win.set_w_s(buf.syntax_block());
             buf.set_b_nwindows(1);
-            win.w_alist = ArgListId::GLOBAL;
+            win.set_w_alist(ArgListId::GLOBAL);
             curwin_init();
         }
         Some(oldwin) => {
             // Make the new window a copy of the old one.
             win_init(win, oldwin, 0);
-            win.w_onebuf_opt.wo_scb = 0;
-            win.w_onebuf_opt.wo_crb = 0;
+            win.set_wo_scb(0);
+            win.set_wo_crb(0);
         }
     }
     let frame = attach_frame(win);
@@ -369,31 +369,31 @@ pub(crate) fn win_alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
 
 /// Give `window` a fresh leaf frame of its own.
 pub(crate) fn attach_frame(window: Win) -> FrameRef {
-    let mut window = window;
+    let window = window;
     let frp = new_frame();
-    window.w_frame = Some(frp.id());
+    window.set_w_frame(Some(frp.id()));
     frp.set_fr_layout(c_char::try_from(FR_LEAF).unwrap_or(0));
     frp.set_fr_win(Some(window.id()));
     frp
 }
 
 pub fn win_init_size() {
-    let mut win = first_win();
+    let win = first_win();
     let top = current_topframe();
     let rows = OptInt::from(ROWS.get())
         - p_ch()
         - OptInt::from(tabline_rows())
         - OptInt::from(global_stl_rows());
     let rows = c_int::try_from(rows).unwrap_or(c_int::MIN);
-    win.w_height = rows;
-    win.w_prev_height = rows;
-    win.w_view_height = win.w_height - win.w_winbar_height;
-    win.w_height_outer = win.w_height;
-    win.w_winrow_off = win.w_winbar_height;
+    win.set_w_height(rows);
+    win.set_w_prev_height(rows);
+    win.set_w_view_height(win.w_height() - win.w_winbar_height());
+    win.set_w_height_outer(win.w_height());
+    win.set_w_winrow_off(win.w_winbar_height());
     top.set_fr_height(rows);
-    win.w_width = COLUMNS.get();
-    win.w_view_width = win.w_width;
-    win.w_width_outer = win.w_width;
+    win.set_w_width(COLUMNS.get());
+    win.set_w_view_width(win.w_width());
+    win.set_w_width_outer(win.w_width());
     top.set_fr_width(COLUMNS.get());
 }
 
@@ -411,37 +411,37 @@ pub(crate) fn win_alloc(after: Option<Win>, hidden: bool) -> Win {
     LAST_WIN_ID.set(LAST_WIN_ID.get() + 1);
     new_wp.set_handle(Handle::new(LAST_WIN_ID.get()));
     register_window(new_wp);
-    new_wp.w_grid_alloc.mouse_enabled = true;
+    new_wp.edit().w_grid_alloc.mouse_enabled = true;
     grid_assign_handle(new_wp.grid_alloc());
     // The window's `w:` scope.
-    new_wp.w_winvar = new_var_scope(VAR_SCOPE);
+    new_wp.edit().w_winvar = new_var_scope(VAR_SCOPE);
     block_autocmds();
     if !hidden {
         // A window in another tab page goes on that tab page's list.
         let tp = after.and_then(win_tabpage).and_then(TabPage::into_other);
         win_append(after, new_wp, tp);
     }
-    new_wp.w_wincol = 0;
-    new_wp.w_width = COLUMNS.get();
-    new_wp.w_topline = LineNr::ONE;
-    new_wp.w_topfill = 0;
-    new_wp.w_botline = LineNr::new(2);
-    new_wp.w_cursor.lnum = LineNr::ONE;
-    new_wp.w_scbind_pos = 1;
-    new_wp.w_floating = false;
-    new_wp.w_config = WIN_CONFIG_INIT;
-    new_wp.w_viewport_invalid = true;
-    new_wp.w_viewport_last_topline = LineNr::ONE;
-    new_wp.w_ns_hl = Handle::new(-1);
-    new_wp.w_onebuf_opt.wo_so = -1 as OptInt;
-    new_wp.w_allbuf_opt.wo_so = new_wp.w_onebuf_opt.wo_so;
-    new_wp.w_onebuf_opt.wo_siso = -1 as OptInt;
-    new_wp.w_allbuf_opt.wo_siso = new_wp.w_onebuf_opt.wo_siso;
-    new_wp.w_fraction = 0;
-    new_wp.w_prev_fraction_row = -1;
+    new_wp.set_w_wincol(0);
+    new_wp.set_w_width(COLUMNS.get());
+    new_wp.set_w_topline(LineNr::ONE);
+    new_wp.set_w_topfill(0);
+    new_wp.set_w_botline(LineNr::new(2));
+    new_wp.cursor().set_lnum(LineNr::ONE);
+    new_wp.set_w_scbind_pos(1);
+    new_wp.set_w_floating(false);
+    new_wp.edit().w_config = WIN_CONFIG_INIT;
+    new_wp.set_w_viewport_invalid(true);
+    new_wp.set_w_viewport_last_topline(LineNr::ONE);
+    new_wp.set_w_ns_hl(Handle::new(-1));
+    new_wp.set_wo_so(-1 as OptInt);
+    new_wp.edit().w_allbuf_opt.wo_so = new_wp.wo_so();
+    new_wp.set_wo_siso(-1 as OptInt);
+    new_wp.edit().w_allbuf_opt.wo_siso = new_wp.wo_siso();
+    new_wp.set_w_fraction(0);
+    new_wp.set_w_prev_fraction_row(-1);
     unblock_autocmds();
     // Up to 1000 can be picked by the user.
-    new_wp.w_next_match_id = 1000;
+    new_wp.set_w_next_match_id(1000);
     new_wp
 }
 
@@ -460,25 +460,26 @@ pub fn free_wininfo(entry: &mut WinInfo) {
 }
 
 pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
-    let mut window = window;
+    let window = window;
     clear_folding(window);
-    alist_unlink(window.w_alist);
+    alist_unlink(window.w_alist());
     // Don't execute autocommands while the window is halfway deleted.
     block_autocmds();
     // The window's memory goes back with `free` below, which runs no
     // destructor, so the set's own allocation is released here. `take`
     // rather than `drop_in_place`: what is left is a valid empty set, which
     // the deferred-free path may still be handed.
-    drop(core::mem::take(&mut window.w_ns_set));
-    clear_winopt(&mut window.w_onebuf_opt);
-    clear_winopt(&mut window.w_allbuf_opt);
+    drop(core::mem::take(&mut window.edit().w_ns_set));
+    clear_winopt(&mut window.edit().w_onebuf_opt);
+    clear_winopt(&mut window.edit().w_allbuf_opt);
     // Like the set above: the block is freed without its destructors.
-    window.w_p_lcs_chars.multispace = None;
-    window.w_p_lcs_chars.leadmultispace = None;
-    if let Some(vars) = window.w_winvar.di_tv.dict_handle() {
+    window.edit().w_p_lcs_chars.multispace = None;
+    window.edit().w_p_lcs_chars.leadmultispace = None;
+    let vars = window.read().w_winvar.di_tv.dict_handle();
+    if let Some(vars) = vars {
         vars_clear(&vars);
     }
-    release_var_scope(&mut window.w_winvar);
+    release_var_scope(&mut window.edit().w_winvar);
     if PREVWIN.get() == Some(window.id()) {
         PREVWIN.set(None);
     }
@@ -487,13 +488,15 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
             ttp.set_tp_prevwin(None);
         }
     }
-    window.w_lines = Vec::new();
-    for i in 0..window.w_tagstacklen {
-        tagstack_clear_entry(&mut window.w_tagstack[usize::try_from(i).unwrap_or(usize::MAX)]);
+    window.edit().w_lines = Vec::new();
+    for i in 0..window.w_tagstacklen() {
+        tagstack_clear_entry(
+            &mut window.edit().w_tagstack[usize::try_from(i).unwrap_or(usize::MAX)],
+        );
     }
-    window.w_localdir = None;
-    window.w_prevdir = None;
-    window.w_click_defs = WinClickDefs::default();
+    window.edit().w_localdir = None;
+    window.edit().w_prevdir = None;
+    window.edit().w_click_defs = WinClickDefs::default();
 
     for buf in buffers() {
         forget_wininfo(buf, window);
@@ -501,12 +504,12 @@ pub(crate) fn win_free(window: Win, tabpage: Option<TabPage>) {
 
     // Free the border text: the window's block is freed without dropping
     // its fields.
-    window.w_config.title_chunks = VirtText::new();
-    window.w_config.footer_chunks = VirtText::new();
+    window.edit().w_config.title_chunks = VirtText::new();
+    window.edit().w_config.footer_chunks = VirtText::new();
     clear_matches(window);
     free_jumplist(window);
     window.free_location_lists();
-    window.w_p_cc_cols = Vec::new();
+    window.edit().w_p_cc_cols = Vec::new();
     free_grid(window, false);
     if win_valid_any_tab(window.id()) {
         win_remove(window, tabpage);
@@ -553,7 +556,7 @@ fn forget_wininfo(buffer: Buf, window: Win) {
     let entry = &mut infos[pos_wip];
     entry.wi_win = None;
     // Discard saved options if the style is minimal.
-    if window.w_config.style == WIN_STYLE_MINIMAL && entry.wi_optset {
+    if window.config_style() == WIN_STYLE_MINIMAL && entry.wi_optset {
         clear_winopt(&mut entry.wi_opt);
         entry.wi_folds = Vec::new();
         entry.wi_optset = false;
@@ -570,13 +573,13 @@ pub fn win_free_grid(window: Win, reinit: bool) {
 
 /// Give up the window's own grid, optionally leaving it zeroed for reuse.
 pub(crate) fn free_grid(window: Win, reinit: bool) {
-    let mut window = window;
-    if window.w_grid_alloc.handle != Handle::NONE && ui_has(UI_MULTIGRID) {
-        ui_call_grid_destroy(Integer::from(window.w_grid_alloc.handle));
+    let window = window;
+    if window.grid_alloc().handle != Handle::NONE && ui_has(UI_MULTIGRID) {
+        ui_call_grid_destroy(Integer::from(window.grid_alloc().handle));
     }
-    window.w_grid_alloc.free();
+    window.edit().w_grid_alloc.free();
     if reinit {
-        window.w_grid_alloc = ScreenGrid::empty();
+        window.edit().w_grid_alloc = ScreenGrid::empty();
     }
 }
 
@@ -586,7 +589,7 @@ pub(crate) fn free_grid(window: Win, reinit: bool) {
 /// Put `window` in the window list of `tabpage` (or of the current tab page) after
 /// `after`, or at the front when there is no `after`.
 pub(crate) fn win_append(after: Option<Win>, window: Win, tabpage: Option<TabPage>) {
-    let mut window = window;
+    let window = window;
     debug_assert!(
         tabpage.is_none_or(|tp| !tp.is_current()),
         "tp == NULL || tp != curtab"
@@ -597,14 +600,14 @@ pub(crate) fn win_append(after: Option<Win>, window: Win, tabpage: Option<TabPag
         None => list_first(tabpage),
     };
     let id = Some(window.id());
-    window.w_next = before.map(Win::id);
-    window.w_prev = after.map(Win::id);
+    window.set_w_next(before.map(Win::id));
+    window.set_w_prev(after.map(Win::id));
     match after {
-        Some(mut after) => after.w_next = id,
+        Some(after) => after.set_w_next(id),
         None => set_first(tabpage, id),
     }
     match before {
-        Some(mut before) => before.w_prev = id,
+        Some(before) => before.set_w_prev(id),
         None => set_last(tabpage, id),
     }
 }
@@ -617,19 +620,19 @@ pub(crate) fn win_remove(window: Win, tabpage: Option<TabPage>) {
     );
     let (prev, next) = (window.prev(), window.next());
     match prev {
-        Some(mut prev) => prev.w_next = window.w_next,
+        Some(prev) => prev.set_w_next(window.w_next()),
         None => {
-            set_first(tabpage, window.w_next);
+            set_first(tabpage, window.w_next());
             // Unlike `win_append`, upstream keeps the current tab page's own
             // copy of the head in step here as well.
-            sync_tab_first(tabpage, window.w_next);
+            sync_tab_first(tabpage, window.w_next());
         }
     }
     match next {
-        Some(mut next) => next.w_prev = window.w_prev,
+        Some(next) => next.set_w_prev(window.w_prev()),
         None => {
-            set_last(tabpage, window.w_prev);
-            sync_tab_last(tabpage, window.w_prev);
+            set_last(tabpage, window.w_prev());
+            sync_tab_last(tabpage, window.w_prev());
         }
     }
 }

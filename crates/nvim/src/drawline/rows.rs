@@ -77,7 +77,7 @@ impl Cells {
                 f.col_rows,
                 &mut f.statuscol,
             );
-            if window.w_redr_statuscol {
+            if window.w_redr_statuscol() {
                 return Step::Done;
             }
             if self.draw_text {
@@ -87,7 +87,7 @@ impl Cells {
         } else {
             wlv.draw_foldcolumn(window);
             // `w_scwidth` is zero when 'signcolumn' is "number".
-            for sign_idx in 0..window.w_scwidth {
+            for sign_idx in 0..window.w_scwidth() {
                 wlv.draw_sign(false, window, sign_idx);
             }
             wlv.draw_lnum_col(window);
@@ -108,11 +108,11 @@ impl Cells {
         } else {
             self.gap_decor_attr
         };
-        if !window.w_briopt_sbr {
+        if !window.w_briopt_sbr() {
             wlv.handle_breakindent(window, gap_attr);
         }
         wlv.handle_showbreak_and_filler(window, gap_attr);
-        if window.w_briopt_sbr {
+        if window.w_briopt_sbr() {
             wlv.handle_breakindent(window, gap_attr);
         }
 
@@ -171,7 +171,7 @@ impl Cells {
         }
         wlv.filler_todo -= 1;
         self.virt_line_index = None;
-        if wlv.filler_todo == 0 && (window.w_botfill || !self.draw_text) {
+        if wlv.filler_todo == 0 && (window.w_botfill() || !self.draw_text) {
             return Step::Done;
         }
         // Deliberately not `start_line`: the line buffer already holds
@@ -188,8 +188,8 @@ impl Cells {
             && (wlv.col <= self.left_columns_width
                 || self.byte() != b'\0'
                 || wlv.filler_todo > 0
-                || (window.w_onebuf_opt.wo_list != 0
-                    && window.w_p_lcs_chars.eol != 0
+                || (window.wo_list() != 0
+                    && window.read().w_p_lcs_chars.eol != 0
                     && self.lcs_eol_todo)
                 || (wlv.extra_todo != 0 && (wlv.extra_fill != 0 || wlv.extra.byte() != b'\0'))
                 || (self.may_have_inline_virt && wlv.has_more_inline_virt(self.byte_col())))
@@ -204,13 +204,13 @@ impl Cells {
         f: &mut LineFrame<'_>,
         grid: GridView,
     ) -> Step {
-        let grid_width = grid_of_view(window.w_grid).cols;
+        let grid_width = grid_of_view(window.w_grid()).cols;
         let wrap = self.is_wrapped                        // wrapping, not a folded line
             && wlv.filler_todo <= 0                       // not drawing filler
             && self.lcs_eol_todo                          // the "eol" is still to come
             && wlv.row != f.endrow - 1                    // not the last row shown
             && self.view_width == grid_width              // the window spans its grid
-            && window.w_onebuf_opt.wo_rl == 0; // not right-to-left
+            && window.wo_rl() == 0; // not right-to-left
 
         let mut draw_col = wlv.col - wlv.boguscols;
         let span = as_index(wlv.off)..as_index(wlv.off + self.view_width - draw_col);
@@ -244,7 +244,7 @@ impl Cells {
                 self.view_width,
                 0,
                 if self.virt_line_flags & VL_SCROLL as ::core::ffi::c_int != 0 {
-                    window.w_leftcol.get()
+                    window.w_leftcol().get()
                 } else {
                     0
                 },
@@ -289,7 +289,7 @@ impl Cells {
                 schar_from_ascii(b'@'),
                 true,
                 wlv.row,
-                window.w_view_height,
+                window.w_view_height(),
                 HLF_AT,
             );
             set_empty_rows(window, wlv.row);
@@ -303,7 +303,7 @@ impl Cells {
 
         wlv.start_line(window);
         self.columns_todo = true;
-        self.lcs_prec_todo = window.w_p_lcs_chars.prec;
+        self.lcs_prec_todo = window.lcs_prec();
         if wlv.filler_todo <= 0 {
             wlv.need_showbreak = true;
         }
@@ -318,7 +318,7 @@ impl Cells {
         self.virt_line_flags = 0;
         // The filler lines are below the last line of the file, or there
         // is no text to draw for this line.
-        if wlv.filler_todo == 0 && (window.w_botfill || !self.draw_text) {
+        if wlv.filler_todo == 0 && (window.w_botfill() || !self.draw_text) {
             return Step::Done;
         }
         Step::Go
@@ -358,17 +358,17 @@ impl Cells {
             }
         });
 
-        if (window.w_onebuf_opt.wo_cuc != 0
-            && window.w_virtcol >= ColNr::new(wlv.hl_vcol() - self.eol_extra_cell)
-            && (window.w_virtcol.get() as isize)
+        if (window.wo_cuc() != 0
+            && window.w_virtcol() >= ColNr::new(wlv.hl_vcol() - self.eol_extra_cell)
+            && (window.w_virtcol().get() as isize)
                 < self.view_width as ptrdiff_t * (wlv.row - wlv.startrow + 1) as ptrdiff_t
                     + self.start_vcol as ptrdiff_t
-            && wlv.lnum != window.w_cursor.lnum)
+            && wlv.lnum != window.cursor().lnum())
             || wlv.color_col != NO_COLOR_COL
             || wlv.line_attr_lowprio != 0
             || wlv.line_attr != 0
             || wlv.diff_hlf != HLF_NONE
-            || !window.w_buffer.terminal().is_null()
+            || !window.w_buffer().terminal().is_null()
         {
             self.fill_past_eol(wlv, window, f);
         }
@@ -400,10 +400,11 @@ impl Cells {
         // Record the cursor line's height while it is known, which saves a
         // `plines_win` later.
         if self.in_curline {
-            Win::current().w_cline_row = wlv.startrow;
-            Win::current().w_cline_height = wlv.row - wlv.startrow;
-            Win::current().w_cline_folded = self.has_fold;
-            Win::current().w_valid |= WinValid::CHEIGHT | WinValid::CROW;
+            Win::current().set_w_cline_row(wlv.startrow);
+            Win::current().set_w_cline_height(wlv.row - wlv.startrow);
+            Win::current().set_w_cline_folded(self.has_fold);
+            Win::current()
+                .set_w_valid(Win::current().w_valid() | (WinValid::CHEIGHT | WinValid::CROW));
         }
     }
 
@@ -428,7 +429,7 @@ impl Cells {
             0
         };
         let base_attr = hl_combine_attr(wlv.line_attr_lowprio, diff_attr);
-        if base_attr != 0 || wlv.line_attr != 0 || !window.w_buffer.terminal().is_null() {
+        if base_attr != 0 || wlv.line_attr != 0 || !window.w_buffer().terminal().is_null() {
             // Something applies to the whole row, so there is no column to
             // stop at.
             rightmost_vcol = ::core::ffi::c_int::MAX;
@@ -439,15 +440,15 @@ impl Cells {
             wlv.advance_color_col(window, wlv.hl_vcol());
 
             let mut col_attr = base_attr;
-            if window.w_onebuf_opt.wo_cuc != 0
-                && wlv.hl_vcol() == window.w_virtcol.get()
-                && wlv.lnum != window.w_cursor.lnum
+            if window.wo_cuc() != 0
+                && wlv.hl_vcol() == window.w_virtcol().get()
+                && wlv.lnum != window.cursor().lnum()
             {
                 col_attr = hl_combine_attr(col_attr, cuc_attr);
             } else if wlv.is_color_col(window, wlv.hl_vcol()) {
                 col_attr = hl_combine_attr(col_attr, mc_attr);
             }
-            if !window.w_buffer.terminal().is_null()
+            if !window.w_buffer().terminal().is_null()
                 && let Some(&term_attr) = usize::try_from(wlv.vcol)
                     .ok()
                     .and_then(|vcol| f.term_attrs.get(vcol))

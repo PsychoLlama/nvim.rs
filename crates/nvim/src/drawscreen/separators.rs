@@ -59,14 +59,14 @@ impl WindowCorner {
 /// columns shift. `'statuscolumn'` is the second reason to answer true — the
 /// expression can read the sign count, so a change to it invalidates the cached
 /// width estimate even when the column itself did not move.
-pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
+pub(crate) fn win_redraw_signcols(window: Win) -> bool {
     let buf = window.buffer();
 
     // 'signcolumn' with a range, or a 'statuscolumn' that may ask for the
     // count, needs the per-line counts kept up to date from now on.
     if !buf.read().b_signcols.autom
-        && (window.w_onebuf_opt.wo_stc.first_byte() != 0
-            || (window.w_maxscwidth > 1 && window.w_minscwidth != window.w_maxscwidth))
+        && (window.read().w_onebuf_opt.wo_stc.first_byte() != 0
+            || (window.w_maxscwidth() > 1 && window.w_minscwidth() != window.w_maxscwidth()))
     {
         buf.edit().b_signcols.autom = true;
         let last = buf.line_count() - 1;
@@ -84,22 +84,22 @@ pub(crate) fn win_redraw_signcols(mut window: Win) -> bool {
         buf.edit().b_signcols.max -= 1;
     }
 
-    let mut width = window.w_maxscwidth.min(buf.read().b_signcols.max);
+    let mut width = window.w_maxscwidth().min(buf.read().b_signcols.max);
     let rebuild_stc = buf.read().b_signcols.max != buf.read().b_signcols.last_max
-        && window.w_onebuf_opt.wo_stc.first_byte() != 0;
+        && window.read().w_onebuf_opt.wo_stc.first_byte() != 0;
 
     if rebuild_stc {
         // Make `number_width` re-estimate the 'statuscolumn' width.
-        window.w_nrwidth_line_count = LineNr::ZERO;
-    } else if window.w_minscwidth == 0 && window.w_maxscwidth == 1 {
+        window.set_w_nrwidth_line_count(LineNr::ZERO);
+    } else if window.w_minscwidth() == 0 && window.w_maxscwidth() == 1 {
         // Plain `'signcolumn'` "auto": one column iff the buffer has any
         // sign text at all, which is cheaper than the per-line counts.
         width = c_int::from(buf_meta_total(buf, MT_META_SIGN_TEXT) > 0);
     }
 
-    let was = window.w_scwidth;
-    window.w_scwidth = window.w_minscwidth.max(0).max(width);
-    window.w_scwidth != was || rebuild_stc
+    let was = window.w_scwidth();
+    window.set_w_scwidth(window.w_minscwidth().max(0).max(width));
+    window.w_scwidth() != was || rebuild_stc
 }
 
 /// Walk from `window`'s frame to the neighbouring frame across the given corner.
@@ -133,7 +133,7 @@ fn neighbour_frame(window: Win, layout: c_int, before: bool) -> Option<FrameRef>
 pub(crate) fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
     let before = corner.is_left();
     let sep_row = if corner.is_top() {
-        window.w_winrow - 1
+        window.w_winrow() - 1
     } else {
         win_endrow(window)
     };
@@ -152,7 +152,7 @@ pub(crate) fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
             .parent()
             .is_some_and(|parent| c_int::from(parent.fr_layout()) == FR_ROW);
         while let Some(next) = fr.next() {
-            if !(rowwise && before) && fr.first_window().w_winrow + fr.fr_height() >= sep_row {
+            if !(rowwise && before) && fr.first_window().w_winrow() + fr.fr_height() >= sep_row {
                 break;
             }
             fr = next;
@@ -160,7 +160,7 @@ pub(crate) fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
     }
 
     let other = fr.win().expect("a leaf frame holds a window");
-    sep_row == other.w_winrow - 1 || sep_row == win_endrow(other)
+    sep_row == other.w_winrow() - 1 || sep_row == win_endrow(other)
 }
 
 /// Whether window `window`'s vertical separator at `corner` is continued by the
@@ -168,7 +168,7 @@ pub(crate) fn hsep_connected(window: Win, corner: WindowCorner) -> bool {
 pub(crate) fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
     let before = corner.is_top();
     let sep_col = if corner.is_left() {
-        window.w_wincol - 1
+        window.w_wincol() - 1
     } else {
         win_endcol(window)
     };
@@ -183,7 +183,7 @@ pub(crate) fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
             .parent()
             .is_some_and(|parent| c_int::from(parent.fr_layout()) == FR_COL);
         while let Some(next) = fr.next() {
-            if !(colwise && before) && fr.first_window().w_wincol + fr.fr_width() >= sep_col {
+            if !(colwise && before) && fr.first_window().w_wincol() + fr.fr_width() >= sep_col {
                 break;
             }
             fr = next;
@@ -191,34 +191,34 @@ pub(crate) fn vsep_connected(window: Win, corner: WindowCorner) -> bool {
     }
 
     let other = fr.win().expect("a leaf frame holds a window");
-    sep_col == other.w_wincol - 1 || sep_col == win_endcol(other)
+    sep_col == other.w_wincol() - 1 || sep_col == win_endcol(other)
 }
 
 /// Draw the vertical separator right of window `window`.
 pub(crate) fn draw_vsep_win(window: Win) {
-    if window.w_vsep_width == 0 {
+    if window.w_vsep_width() == 0 {
         return;
     }
     let attr = win_hl_attr(window, HLF_C);
     let col = win_endcol(window);
     let end_row = win_endrow(window);
-    for row in (window.w_winrow)..end_row {
+    for row in (window.w_winrow())..end_row {
         grid_line_start(default_gridview(), row);
-        grid_line_put_schar(col, window.w_p_fcs_chars.vert, attr);
+        grid_line_put_schar(col, window.fcs_vert(), attr);
         grid_line_flush();
     }
 }
 
 /// Draw the horizontal separator below window `window`.
 pub(crate) fn draw_hsep_win(window: Win) {
-    if window.w_hsep_height == 0 {
+    if window.w_hsep_height() == 0 {
         return;
     }
     grid_line_start(default_gridview(), win_endrow(window));
     grid_line_fill(
-        window.w_wincol,
+        window.w_wincol(),
         win_endcol(window),
-        window.w_p_fcs_chars.horiz,
+        window.fcs_horiz(),
         win_hl_attr(window, HLF_C),
     );
     grid_line_flush();
@@ -230,7 +230,7 @@ pub(crate) fn draw_hsep_win(window: Win) {
 /// vertical separator does not continue through the corner the horizontal one
 /// must — which is why the second half needs no test of its own.
 fn get_corner_sep_connector(window: Win, corner: WindowCorner) -> ScreenChar {
-    let fcs = &window.w_p_fcs_chars;
+    let fcs = &window.read().w_p_fcs_chars;
     if vsep_connected(window, corner) {
         if hsep_connected(window, corner) {
             fcs.verthoriz
@@ -255,7 +255,7 @@ fn get_corner_sep_connector(window: Win, corner: WindowCorner) -> ScreenChar {
 /// `update_screen` runs this for every window *after* all the window updates, so
 /// that a connector is never overwritten by a neighbour's separator.
 pub(crate) fn draw_sep_connectors_win(window: Win) {
-    if global_stl_height() == 0 || !(window.w_hsep_height == 1 || window.w_vsep_width == 1) {
+    if global_stl_height() == 0 || !(window.w_hsep_height() == 1 || window.w_vsep_width() == 1) {
         return;
     }
 
@@ -264,14 +264,14 @@ pub(crate) fn draw_sep_connectors_win(window: Win) {
     // Which edges of the screen the window is on. Left and top are decided
     // by walking out to the root without finding a preceding sibling in the
     // relevant direction; right and bottom are simply "no separator there".
-    let at_bottom = window.w_hsep_height == 0;
-    let at_right = window.w_vsep_width == 0;
+    let at_bottom = window.w_hsep_height() == 0;
+    let at_right = window.w_vsep_width() == 0;
     let at_top = neighbour_frame(window, FR_COL, true).is_none();
     let at_left = neighbour_frame(window, FR_ROW, true).is_none();
 
-    let top = window.w_winrow - 1;
+    let top = window.w_winrow() - 1;
     let bottom = win_endrow(window);
-    let left = window.w_wincol - 1;
+    let left = window.w_wincol() - 1;
     let right = win_endcol(window);
 
     for (draw, row, col, corner) in [

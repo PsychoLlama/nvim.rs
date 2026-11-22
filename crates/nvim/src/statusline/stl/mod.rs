@@ -167,7 +167,7 @@ impl Env<'_> {
         // about to be swapped out from under the expression.
         let (real_buf, real_win) = (Buf::current(), Win::current());
         set_str_var(c"g:actual_curbuf", real_buf.handle().get());
-        set_str_var(c"g:actual_curwin", real_win.handle.get());
+        set_str_var(c"g:actual_curwin", real_win.handle().get());
 
         let save_visual = visual_active();
         // Asked before the switch, because after it the answer is always yes.
@@ -224,13 +224,13 @@ impl Env<'_> {
     /// The byte offset of the cursor line, for `%o`/`%O`.
     pub(super) fn line_offset(&self) -> Option<c_int> {
         self.buf
-            .find_line_or_offset(self.win.w_cursor.lnum, None, false)
+            .find_line_or_offset(self.win.cursor().lnum(), None, false)
     }
 
     /// `%p`: how far through the buffer the cursor is, as a percentage.
     pub(super) fn percentage(&self) -> c_int {
         calc_percentage(
-            i64::from(self.win.w_cursor.lnum),
+            i64::from(self.win.cursor().lnum()),
             i64::from(self.buf.line_count()),
         )
     }
@@ -265,7 +265,7 @@ impl Env<'_> {
         if !buf_is_quickfix(Some(self.buf)) {
             return;
         }
-        let msg = if self.win.w_llist_ref.is_none() {
+        let msg = if self.win.w_llist_ref().is_none() {
             MSG_QFLIST
         } else {
             MSG_LOCLIST
@@ -669,7 +669,7 @@ impl Win {
         // the format actually used. Evaluating it can fail, in which case the
         // literal text is what gets rendered.
         let usefmt = if fmt_bytes.starts_with(b"%!") {
-            let mut winid = TypVal::Number(VarNumber::from(win.handle.get()));
+            let mut winid = TypVal::Number(VarNumber::from(win.handle().get()));
             let name = c"g:statusline_winid";
             set_var(name.to_bytes(), &mut winid, false);
             let expanded = eval_to_string_safe(&fmt_bytes[2..], sandbox, false);
@@ -683,24 +683,24 @@ impl Win {
 
         // The cursor in windows other than the current one is not always
         // up to date, because of autocommands and timers.
-        let mut win = win;
+        let win = win;
         let buf = win.buffer();
-        let lnum = win.w_cursor.lnum.min(buf.line_count());
-        win.w_cursor.lnum = lnum;
+        let lnum = win.cursor().lnum().min(buf.line_count());
+        win.cursor().set_lnum(lnum);
 
         // Read the byte under the cursor now, in case an item needs it.
         let mut lines = buf.lines();
         let line = lines.line(lnum);
         let empty_line = line.is_empty();
         let len = ColNr::from_index(line.len());
-        let byteval = if win.w_cursor.col > len {
+        let byteval = if win.cursor().col() > len {
             // The line may have changed since the cursor column was checked, or
             // the line number was adjusted above.
-            win.w_cursor.col = len;
-            win.w_cursor.coladd = 0;
+            win.cursor().set_col(len);
+            win.cursor().set_coladd(0);
             0
         } else {
-            char_at(&line[win.w_cursor.col.as_usize()..]).get()
+            char_at(&line[win.cursor().col().as_usize()..]).get()
         };
 
         let env = Env {

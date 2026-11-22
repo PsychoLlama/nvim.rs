@@ -566,15 +566,15 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
         // and `v:relnum` -- and with a sign, when 'signcolumn' is "number".
         StlOpt::Line => {
             if env.is_statuscol()
-                && (env.win.w_onebuf_opt.wo_nu != 0 || env.win.w_onebuf_opt.wo_rnu != 0)
+                && (env.win.wo_nu() != 0 || env.win.wo_rnu() != 0)
                 && vim_var(Vv::Virtnum) == 0
             {
-                if env.win.w_maxscwidth == SCL_NUM && env.number_column_has_sign() {
+                if env.win.w_maxscwidth() == SCL_NUM && env.number_column_has_sign() {
                     return statuscol_sign(env, s, opt, pos, text, v);
                 }
                 let relnum = c_int::try_from(vim_var(Vv::Relnum)).unwrap_or(c_int::MAX);
-                let nu = env.win.w_onebuf_opt.wo_nu != 0;
-                let rnu = env.win.w_onebuf_opt.wo_rnu != 0;
+                let nu = env.win.wo_nu() != 0;
+                let rnu = env.win.wo_rnu() != 0;
                 v.num = if !rnu || (nu && relnum == 0) {
                     c_int::try_from(vim_var(Vv::Lnum)).unwrap_or(c_int::MAX)
                 } else {
@@ -591,7 +591,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
                 v.num = if env.buf.ml_flags().has(MlFlags::EMPTY) {
                     0
                 } else {
-                    env.win.w_cursor.lnum.get()
+                    env.win.cursor().lnum().get()
                 };
             }
         }
@@ -600,15 +600,15 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
             v.num = if !in_insert_mode() && env.empty_line {
                 0
             } else {
-                (env.win.w_cursor.col + 1).get()
+                (env.win.cursor().col() + 1).get()
             };
         }
         StlOpt::VirtCol | StlOpt::VirtColAlt => {
-            let virtcol = env.win.w_virtcol + 1;
+            let virtcol = env.win.w_virtcol() + 1;
             let col = if !in_insert_mode() && env.empty_line {
                 0
             } else {
-                (env.win.w_cursor.col + 1).get()
+                (env.win.cursor().col() + 1).get()
             };
             // `%V` is not shown when it says the same as `%c`.
             if !(opt == StlOpt::VirtColAlt && virtcol == ColNr::new(col)) {
@@ -641,7 +641,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
                         + if !in_insert_mode() && env.empty_line {
                             0
                         } else {
-                            env.win.w_cursor.col.get()
+                            env.win.cursor().col().get()
                         }
                 }
                 _ => 0,
@@ -699,7 +699,7 @@ fn value_of(env: &Env, s: &mut StlScratch, opt: StlOpt, pos: usize, text: &mut V
         }
         StlOpt::PreviewFlag | StlOpt::PreviewFlagAlt => {
             v.itemisflag = true;
-            if env.win.w_onebuf_opt.wo_pvw != 0 {
+            if env.win.wo_pvw() != 0 {
                 if opt == StlOpt::PreviewFlagAlt {
                     text.extend_from_slice(b",PRV");
                 } else {
@@ -757,7 +757,7 @@ fn statuscol_sign(
     let width = if opt == StlOpt::FoldCol {
         c_int::from(fdc > 0)
     } else if opt == StlOpt::SignCol {
-        env.win.w_scwidth
+        env.win.w_scwidth()
     } else {
         1
     };

@@ -197,7 +197,7 @@ pub(crate) fn do_mouse(
 
     // JUMP!
     let old_active = visual_active();
-    let save_cursor = old_curwin.w_cursor;
+    let save_cursor = old_curwin.w_cursor();
 
     // Even though we gate *_VIS flags above, we want to make sure the cursor
     // doesn't move in visual mode unless it is set as a mouse option.
@@ -316,16 +316,16 @@ fn popup_translation(which_button: &mut c_int, is_click: bool) -> ControlFlow<bo
 /// Open or close the fold the click landed on, keeping the cursor where it
 /// was when the click stayed in the same window.
 fn fold_click(win: Win, jump_flags: c_int, old_curwin: Win, save_cursor: Pos) {
-    let mut win = win;
+    let win = win;
     let fold: fn(Pos, c_int) = if jump_flags & MOUSE_FOLD_OPEN != 0 {
         open_fold
     } else {
         close_fold
     };
-    fold(win.w_cursor, 1);
+    fold(win.w_cursor(), 1);
     // Don't move the cursor if still in the same window.
     if win == old_curwin {
-        win.w_cursor = save_cursor;
+        win.set_w_cursor(save_cursor);
     }
 }
 
@@ -629,8 +629,8 @@ fn click_definition(
         click_col = MOUSE_COL.get();
     }
 
-    if landed.statuscol && win.w_onebuf_opt.wo_rl != 0 {
-        click_col = win.w_view_width - click_col - 1;
+    if landed.statuscol && win.wo_rl() != 0 {
+        click_col = win.w_view_width() - click_col - 1;
     }
 
     if (landed.statuscol || landed.status_line) && click_col >= limit {
@@ -739,7 +739,7 @@ fn dispatch_action(a: Action, win: Win) {
         // Remember where the paste started, so in edit() Insstart can be set
         // to this position.
         if !RESTART_EDIT.get().is_nul() {
-            WHERE_PASTE_STARTED.set(win.w_cursor);
+            WHERE_PASTE_STARTED.set(win.w_cursor());
         }
         let flags = if fixindent { PUT_FIXINDENT } else { 0 } | PUT_CURSEND;
         do_put(regname, reg.as_ref(), dir, count, flags);
@@ -753,7 +753,7 @@ fn dispatch_action(a: Action, win: Win) {
         // Ctrl-Mouse click or double click in a quickfix window jumps to the
         // error under the mouse pointer.  A null location list means it is a
         // quickfix window rather than a location list one.
-        let cmd = if win.w_llist_ref.is_none() {
+        let cmd = if win.w_llist_ref().is_none() {
             c".cc"
         } else {
             c".ll"
@@ -814,12 +814,12 @@ fn dispatch_action(a: Action, win: Win) {
 impl Win {
     /// A double, triple or quadruple click starts or widens a Visual selection: a
     /// word, a line, or -- for a double click on a bracket -- the block it opens.
-    fn multi_click(mut self, op: Option<Op>, is_click: bool, is_drag: bool, mods: ModMask) {
+    fn multi_click(self, op: Option<Op>, is_click: bool, is_drag: bool, mods: ModMask) {
         if is_click || !visual_active() {
             if visual_active() {
                 ORIG_CURSOR.set(visual_anchor());
             } else {
-                set_visual_anchor(self.w_cursor);
+                set_visual_anchor(self.w_cursor());
                 ORIG_CURSOR.set(visual_anchor());
                 set_visual_active(true);
                 V_ISUAL_RESELECT.set(1);
@@ -843,7 +843,7 @@ impl Win {
             if !matched && (is_click || is_drag) {
                 // When not found a match or when dragging: extend to include a
                 // word.
-                if lt(self.w_cursor, ORIG_CURSOR.get()) {
+                if lt(self.w_cursor(), ORIG_CURSOR.get()) {
                     self.with_cursor_copy(find_start_of_word);
                     with_visual(find_end_of_word);
                 } else {
@@ -855,12 +855,12 @@ impl Win {
                             .then(|| c_int::try_from(cluster_len(rest)).unwrap_or(c_int::MAX))
                     });
                     if let Some(bytes) = under.filter(|_| sel_exclusive()) {
-                        self.w_cursor.col += bytes;
+                        self.cursor().set_col(self.cursor().col() + bytes);
                     }
                     self.with_cursor_copy(find_end_of_word);
                 }
             }
-            self.w_set_curswant = true;
+            self.set_w_set_curswant(true);
         }
 
         if is_click {
@@ -871,8 +871,8 @@ impl Win {
     /// If the character under the cursor (skipping white space) is not a word
     /// character, try finding a match and select a (), {}, [], #if/#endif, etc.
     /// block.  Answers whether one was found.
-    fn select_matching_block(mut self, op: Option<Op>) -> bool {
-        let mut probe = self.w_cursor;
+    fn select_matching_block(self, op: Option<Op>) -> bool {
+        let mut probe = self.w_cursor();
         while ascii_iswhite(gchar_pos(&probe)) {
             inc(&mut probe);
         }
@@ -888,31 +888,31 @@ impl Win {
         if vim_iswordc(gchar_pos(&probe)) {
             return false;
         }
-        if !equalpos(self.w_cursor, visual_anchor()) {
+        if !equalpos(self.w_cursor(), visual_anchor()) {
             return false;
         }
         let Some(pos) = findmatch(Some(&mut op), Codepoint::NUL) else {
             return false;
         };
 
-        self.w_cursor = pos;
+        self.set_w_cursor(pos);
         if op.motion_type == MotionType::LineWise {
             set_visual_mode(VisualMode::LINE);
         } else if sel_exclusive() {
-            if lt(self.w_cursor, visual_anchor()) {
+            if lt(self.w_cursor(), visual_anchor()) {
                 with_visual_anchor(|visual| visual.col += 1);
             } else {
-                self.w_cursor.col += 1;
+                self.cursor().set_col(self.cursor().col() + 1);
             }
         }
         true
     }
 
     /// Run `f` over `self`'s cursor through a copy, put back afterwards.
-    fn with_cursor_copy(mut self, f: fn(&mut Pos)) {
-        let mut cursor = self.w_cursor;
+    fn with_cursor_copy(self, f: fn(&mut Pos)) {
+        let mut cursor = self.w_cursor();
         f(&mut cursor);
-        self.w_cursor = cursor;
+        self.set_w_cursor(cursor);
     }
 }
 

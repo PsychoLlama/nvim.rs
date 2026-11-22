@@ -223,7 +223,7 @@ pub(crate) fn check_can_set_curbuf_forceit(forceit: bool) -> Result<(), WinError
 /// Whether the current window's `'winfixbuf'` lets another buffer in, saying
 /// so if it does not.
 fn winfixbuf_allows() -> Result<(), WinError> {
-    if Win::current().w_onebuf_opt.wo_wfb != 0 {
+    if Win::current().wo_wfb() != 0 {
         return Err(err(WinError::WinFixBuf));
     }
     Ok(())
@@ -291,7 +291,7 @@ fn valid_win_in_tab(tabpage: TabPage, win: WinId) -> bool {
 }
 
 pub fn win_find_by_handle(handle: Handle) -> Option<Win> {
-    windows().find(|wp| wp.handle == handle)
+    windows().find(|wp| wp.handle() == handle)
 }
 
 pub(crate) fn win_valid_any_tab(win: WinId) -> bool {

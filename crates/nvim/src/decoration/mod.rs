@@ -221,7 +221,7 @@ pub fn ns_in_win(ns_id: uint32_t, window: Win) -> bool {
     if !ns_is_local(ns_id) {
         return true;
     }
-    window.w_ns_set.contains(&ns_id)
+    window.read().w_ns_set.contains(&ns_id)
 }
 
 // ---------------------------------------------------------------------------
@@ -520,7 +520,7 @@ pub(crate) fn decor_redraw_sh(buffer: Buf, row1: c_int, row2: c_int, sh: ShRedra
         // TODO(luukvbaal): redraw only unconcealed lines, and scroll
         // lines below it up or down. Also when opening/closing a fold.
         for wp in winlayer::windows() {
-            if wp.w_buffer == buffer {
+            if wp.w_buffer() == buffer {
                 changed_window_setting(wp);
             }
         }

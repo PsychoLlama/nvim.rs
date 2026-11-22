@@ -136,29 +136,6 @@ checked_handles! {
     TabPage => Tabpage, 3;
 }
 
-macro_rules! plain_deref {
-    ($($ty:ident => $target:ty;)+) => { $(
-        impl Deref for $ty {
-            type Target = $target;
-
-            #[inline(always)]
-            #[track_caller]
-            fn deref(&self) -> &$target {
-                self.check_live();
-                // SAFETY: the generation matched, and a slot's generation is
-                // the one it was handed out under exactly while that value
-                // is initialised in it. The borrow lasts as long as the field
-                // access that asked for it.
-                unsafe { &*self.ptr }
-            }
-        }
-    )+ };
-}
-
-plain_deref! {
-    Win => Window;
-}
-
 /// `edit()` and `read()` for a handle whose object lends through guards
 /// only. The same two serve `Win` once it gives up `DerefMut`.
 macro_rules! guarded_handles {
@@ -205,6 +182,7 @@ macro_rules! guarded_handles {
 guarded_handles! {
     TabPage => Tabpage;
     Buf => Buffer;
+    Win => Window;
 }
 
 /// A getter and (where named) a setter per `Copy` field. The getter checks
@@ -256,6 +234,7 @@ macro_rules! slot_fields {
 }
 
 mod buf_fields;
+mod win_fields;
 
 slot_fields! {
     FrameRef => Frame {
@@ -596,22 +575,27 @@ impl PosRef {
     }
 }
 
-// Spelled out rather than generated: `just ratchet` finds the types that
-// write through a by-value accessor by their `impl DerefMut for` lines.
-macro_rules! checked_deref_mut {
-    ($target:ty) => {
-        #[inline(always)]
-        #[track_caller]
-        fn deref_mut(&mut self) -> &mut $target {
-            self.check_live();
-            // SAFETY: as `deref`.
-            unsafe { &mut *self.ptr }
-        }
-    };
+// Kept while the sites move to getters and guards; removed after.
+impl Deref for Win {
+    type Target = Window;
+
+    #[inline(always)]
+    #[track_caller]
+    fn deref(&self) -> &Window {
+        self.check_live();
+        // SAFETY: the generation matched (`check_live`).
+        unsafe { &*self.ptr }
+    }
 }
 
 impl DerefMut for Win {
-    checked_deref_mut!(Window);
+    #[inline(always)]
+    #[track_caller]
+    fn deref_mut(&mut self) -> &mut Window {
+        self.check_live();
+        // SAFETY: as `deref`.
+        unsafe { &mut *self.ptr }
+    }
 }
 
 #[cfg(test)]
@@ -628,14 +612,14 @@ mod tests {
     #[test]
     fn a_freed_window_stops_its_handles() {
         let _held = editor_state_lock();
-        let mut win = bare_window();
+        let win = bare_window();
         let copy = win;
-        win.w_topline = crate::types::LineNr::new(3);
-        assert_eq!(copy.w_topline, crate::types::LineNr::new(3));
+        win.set_w_topline(crate::types::LineNr::new(3));
+        assert_eq!(copy.w_topline(), crate::types::LineNr::new(3));
         assert!(copy.is_live());
         free_bare_window(win);
         assert!(!copy.is_live());
-        let caught = catch_unwind(AssertUnwindSafe(|| copy.w_topline));
+        let caught = catch_unwind(AssertUnwindSafe(|| copy.w_topline()));
         assert!(caught.is_err(), "a stale window handle dereferenced");
         let tenant = bare_window();
         if tenant.raw() == copy.raw() {

@@ -351,7 +351,7 @@ pub fn hl_check_ns() -> bool {
 /// [`hl_check_ns`] for the window about to be drawn, or for the global
 /// elements when there is none.
 pub fn win_check_ns_hl(window: Option<Win>) -> bool {
-    NS_HL_WIN.set(window.map_or(Handle::new(-1), |window| window.w_ns_hl));
+    NS_HL_WIN.set(window.map_or(Handle::new(-1), |window| window.w_ns_hl()));
     hl_check_ns()
 }
 
@@ -416,54 +416,56 @@ pub fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional: bool)
 /// reads through, its `Normal`/`NormalNC` attributes, and its border.
 ///
 /// `invalid` forces the work even when the window has not asked for it.
-pub fn update_window_hl(mut window: Win, invalid: bool) {
-    let ns_id = window.w_ns_hl;
+pub fn update_window_hl(window: Win, invalid: bool) {
+    let ns_id = window.w_ns_hl();
     update_ns_hl(ns_id.get());
-    let hl_def = match window.w_ns_hl_attr {
-        Some(table) if ns_id == window.w_ns_hl_active => table,
+    let hl_def = match window.w_ns_hl_attr() {
+        Some(table) if ns_id == window.w_ns_hl_active() => table,
         _ => {
-            window.w_ns_hl_active = ns_id;
+            window.set_w_ns_hl_active(ns_id);
             let table = NS_HL_ATTR.with(|tables| tables.get(&ns_id).map(|table| table.0));
             // No namespace table: read the global one.
             let table = table.unwrap_or(&HIGHLIGHT_ATTR);
-            window.w_ns_hl_attr = Some(table);
+            window.set_w_ns_hl_attr(Some(table));
             table
         }
     };
     let hl_def = |hlf: c_int| table_attr(hl_def, hlf);
 
-    if !window.w_hl_needs_update && !invalid {
+    if !window.w_hl_needs_update() && !invalid {
         return;
     }
-    window.w_hl_needs_update = false;
+    window.set_w_hl_needs_update(false);
 
     // A blending float always has a *named* normal group, because
     // `NormalFloat` always is one.
-    let float_win = window.w_floating && !window.w_config.external;
-    window.w_hl_attr_normal = if float_win && hl_def(HLF_NFLOAT) != 0 && ns_id > Handle::NONE {
-        hl_def(HLF_NFLOAT)
-    } else if hl_def(HLF_NONE) > 0 {
-        hl_def(HLF_NONE)
-    } else if float_win {
-        let active = hl_attr(HLF_NFLOAT);
-        if active > 0 {
-            active
+    let float_win = window.w_floating() && !window.config_external();
+    window.set_w_hl_attr_normal(
+        if float_win && hl_def(HLF_NFLOAT) != 0 && ns_id > Handle::NONE {
+            hl_def(HLF_NFLOAT)
+        } else if hl_def(HLF_NONE) > 0 {
+            hl_def(HLF_NONE)
+        } else if float_win {
+            let active = hl_attr(HLF_NFLOAT);
+            if active > 0 {
+                active
+            } else {
+                default_hl_attr(HLF_NFLOAT as usize)
+            }
         } else {
-            default_hl_attr(HLF_NFLOAT as usize)
-        }
-    } else {
-        0
-    };
-    if window.w_floating {
-        let winbl = c_int::try_from(window.w_onebuf_opt.wo_winbl).unwrap_or(c_int::MAX);
-        window.w_hl_attr_normal = hl_apply_winblend(winbl, window.w_hl_attr_normal);
+            0
+        },
+    );
+    if window.w_floating() {
+        let winbl = c_int::try_from(window.wo_winbl()).unwrap_or(c_int::MAX);
+        window.set_w_hl_attr_normal(hl_apply_winblend(winbl, window.w_hl_attr_normal()));
     }
 
-    window.w_config.shadow = false;
-    if window.w_floating && window.w_config.border {
-        let winbl = c_int::try_from(window.w_onebuf_opt.wo_winbl).unwrap_or(c_int::MAX);
+    window.set_config_shadow(false);
+    if window.w_floating() && window.read().w_config.border {
+        let winbl = c_int::try_from(window.wo_winbl()).unwrap_or(c_int::MAX);
         for i in 0..8 {
-            let id = window.w_config.border_hl_ids[i];
+            let id = window.read().w_config.border_hl_ids[i];
             let mut attr = if id != 0 {
                 hl_get_ui_attr(ns_id.get(), HLF_BORDER, id, false)
             } else {
@@ -471,9 +473,9 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
             };
             attr = hl_apply_winblend(winbl, attr);
             if syn_attr2entry(attr).hl_blend > 0 {
-                window.w_config.shadow = true;
+                window.set_config_shadow(true);
             }
-            window.w_config.border_attr[i] = attr;
+            window.edit().w_config.border_attr[i] = attr;
         }
     }
 
@@ -483,14 +485,14 @@ pub fn update_window_hl(mut window: Win, invalid: bool) {
     // TODO(bfredl): this a bit ad-hoc. move it from highlight ns logic
     // to 'winhl' implementation?
     let inactive = hl_def(HLF_INACTIVE);
-    window.w_hl_attr_normalnc = if inactive == 0 {
-        hl_combine_attr(hl_attr(HLF_INACTIVE), window.w_hl_attr_normal)
+    window.set_w_hl_attr_normalnc(if inactive == 0 {
+        hl_combine_attr(hl_attr(HLF_INACTIVE), window.w_hl_attr_normal())
     } else {
         inactive
-    };
-    if window.w_floating {
-        let winbl = c_int::try_from(window.w_onebuf_opt.wo_winbl).unwrap_or(c_int::MAX);
-        window.w_hl_attr_normalnc = hl_apply_winblend(winbl, window.w_hl_attr_normalnc);
+    });
+    if window.w_floating() {
+        let winbl = c_int::try_from(window.wo_winbl()).unwrap_or(c_int::MAX);
+        window.set_w_hl_attr_normalnc(hl_apply_winblend(winbl, window.w_hl_attr_normalnc()));
     }
 }
 
@@ -533,9 +535,9 @@ pub fn win_bg_attr(window: Win) -> c_int {
     // A fast callback's namespace overrides the window's own cache.
     if NS_HL_FAST.get() < Handle::NONE {
         let local = if window.raw() == Win::current_raw() {
-            window.w_hl_attr_normal
+            window.w_hl_attr_normal()
         } else {
-            window.w_hl_attr_normalnc
+            window.w_hl_attr_normalnc()
         };
         if local != 0 {
             return local;
@@ -555,7 +557,7 @@ pub fn win_bg_attr(window: Win) -> c_int {
 pub(crate) fn win_hl_attr(window: Win, hlf: c_int) -> c_int {
     // `w_ns_hl_attr` is still `None` if highlights are checked before the
     // first redraw.
-    let table = match window.w_ns_hl_attr {
+    let table = match window.w_ns_hl_attr() {
         Some(table) if NS_HL_FAST.get() < Handle::NONE => table,
         _ => HL_ATTR_ACTIVE.get(),
     };

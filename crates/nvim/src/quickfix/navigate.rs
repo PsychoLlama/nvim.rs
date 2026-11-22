@@ -331,7 +331,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
         CmdIdx::cbelow | CmdIdx::lbelow | CmdIdx::cabove | CmdIdx::labove
     );
 
-    let mut pos = Win::current().w_cursor;
+    let mut pos = Win::current().w_cursor();
     // An entry's column is 1 based where the cursor's is 0 based.
     pos.col += 1;
     let n = if excmd.addr_count > 0 {

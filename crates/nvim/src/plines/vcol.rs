@@ -102,7 +102,7 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
     let end = vcol + incr - 1;
     let cursor_at_tab_end = chr.value == c_int::from(TAB)
         && STATE.get() & MODE_NORMAL != 0
-        && window.w_onebuf_opt.wo_list == 0
+        && window.wo_list() == 0
         && !virtual_active(window)
         && !(visual_active() && (P_SEL.first_byte() == b'e' || ltoreq(*pos, visual_anchor())));
     let cursor = if cursor_at_tab_end {
@@ -115,16 +115,16 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
 
 /// Virtual cursor column in the current window, pretending 'list' is off.
 pub(crate) fn getvcol_nolist(pos: &mut Pos) -> ColNr {
-    let mut win = Win::current();
-    let list_save = win.w_onebuf_opt.wo_list;
+    let win = Win::current();
+    let list_save = win.wo_list();
 
-    win.w_onebuf_opt.wo_list = 0;
+    win.set_wo_list(0);
     let vcol = if pos.coladd != 0 {
         getvvcol(win, pos).1
     } else {
         getvcol(win, pos).1
     };
-    win.w_onebuf_opt.wo_list = list_save;
+    win.set_wo_list(list_save);
     vcol
 }
 

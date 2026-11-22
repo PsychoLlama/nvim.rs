@@ -71,7 +71,7 @@ impl Win {
     /// Whether a tab is expanded to a tabstop rather than shown as a
     /// 'listchars' character.
     fn expands_tab(self) -> bool {
-        self.w_onebuf_opt.wo_list == 0 || self.w_p_lcs_chars.tab1 != 0
+        self.wo_list() == 0 || self.lcs_tab1() != 0
     }
 }
 
@@ -190,7 +190,7 @@ pub(crate) fn win_line_prefix_cells(window: Win, lnum: LineNr, len: ColNr) -> Co
 
 /// Like [`linetabsize`], but counts the 'listchars' "eol".
 pub(crate) fn linetabsize_eol(window: Win, lnum: LineNr) -> c_int {
-    let eol = window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.eol != 0;
+    let eol = window.wo_list() != 0 && window.read().w_p_lcs_chars.eol != 0;
     linetabsize(window, lnum) + c_int::from(eol)
 }
 
@@ -231,10 +231,8 @@ impl<'a> CharsizeArg<'a> {
         };
 
         let needs_regular = csarg.virt_row >= 0
-            || (window.w_onebuf_opt.wo_wrap != 0
-                && (window.w_onebuf_opt.wo_lbr != 0
-                    || window.w_onebuf_opt.wo_bri != 0
-                    || window.has_showbreak()));
+            || (window.wo_wrap() != 0
+                && (window.wo_lbr() != 0 || window.wo_bri() != 0 || window.has_showbreak()));
         let kind = if needs_regular {
             CharsizeKind::Regular
         } else {
@@ -275,7 +273,7 @@ fn wrapped_indent_width(csarg: &mut CharsizeArg<'_>) -> c_int {
     }
     let wp = csarg.win;
     let mut width = wp.showbreak_cells();
-    if wp.w_onebuf_opt.wo_bri != 0 {
+    if wp.wo_bri() != 0 {
         width += get_breakindent_win(wp, csarg.line);
     }
     csarg.indent_width = width;
@@ -301,7 +299,7 @@ fn showbreak_head(
     mb_added: c_int,
 ) -> BreakHead {
     let wp = csarg.win;
-    let view_width = wp.w_view_width;
+    let view_width = wp.w_view_width();
     let mut col_off_prev = wp.col_off();
     let width2 = view_width - col_off_prev + wp.col_off2();
     let mut wcol = vcol.get() + col_off_prev;
@@ -435,7 +433,7 @@ fn add_inline_virt_text(
 /// line: a blank followed by a non-blank, outside the leading whitespace.
 fn breaks_here(csarg: &CharsizeArg<'_>, at: usize) -> bool {
     let wp = csarg.win;
-    if wp.w_onebuf_opt.wo_lbr == 0 || wp.w_onebuf_opt.wo_wrap == 0 || wp.w_view_width == 0 {
+    if wp.wo_lbr() == 0 || wp.wo_wrap() == 0 || wp.w_view_width() == 0 {
         return false;
     }
     let line = csarg.line;
@@ -465,7 +463,7 @@ fn linebreak_size(win: Win, line: &[u8], at: usize, vcol: ColNr, size: c_int) ->
     // next non-blank after a blank.
     let numberextra = win.col_off();
     let col_adj = size - 1;
-    let mut colmax = win.w_view_width - numberextra - col_adj;
+    let mut colmax = win.w_view_width() - numberextra - col_adj;
     if vcol >= ColNr::new(colmax) {
         colmax += col_adj;
         let n = colmax + win.col_off2();
@@ -517,7 +515,7 @@ pub(crate) fn charsize_regular(
     let wp = csarg.win;
     let buf = wp.buffer();
     let expand_tab = cur_char == c_int::from(TAB) && csarg.use_tabstop;
-    let has_lcs_eol = wp.w_onebuf_opt.wo_list != 0 && wp.w_p_lcs_chars.eol != 0;
+    let has_lcs_eol = wp.wo_list() != 0 && wp.read().w_p_lcs_chars.eol != 0;
     let at_nul = byte_at(csarg.line, at) == b'\0';
 
     // First the plain size, without 'linebreak' or inline virtual text.
@@ -539,7 +537,7 @@ pub(crate) fn charsize_regular(
     }
 
     let mut mb_added = 0;
-    if is_doublewidth && wp.w_onebuf_opt.wo_wrap != 0 && in_win_border(wp, vcol + size - 2) {
+    if is_doublewidth && wp.wo_wrap() != 0 && in_win_border(wp, vcol + size - 2) {
         // Count the ">" in the last column.
         size += 1;
         mb_added = 1;
@@ -547,10 +545,7 @@ pub(crate) fn charsize_regular(
 
     let mut head = mb_added;
     // When "size" is 0 no new screen line is started, so nothing to add.
-    if size > 0
-        && wp.w_onebuf_opt.wo_wrap != 0
-        && (wp.has_showbreak() || wp.w_onebuf_opt.wo_bri != 0)
-    {
+    if size > 0 && wp.wo_wrap() != 0 && (wp.has_showbreak() || wp.wo_bri() != 0) {
         let extra = showbreak_head(csarg, at, vcol, size, mb_added);
         head += extra.head;
         size += extra.added;
@@ -588,11 +583,7 @@ fn charsize_fast_impl(
 
     // A double-width char that does not fit at the end of a screen line
     // wraps to the next one, and the last column shows a '>'.
-    if width == 2
-        && cur_char >= 0x80
-        && window.w_onebuf_opt.wo_wrap != 0
-        && in_win_border(window, vcol)
-    {
+    if width == 2 && cur_char >= 0x80 && window.wo_wrap() != 0 && in_win_border(window, vcol) {
         CharSize { width: 3, head: 1 }
     } else {
         CharSize { width, head: 0 }
@@ -655,7 +646,7 @@ pub(crate) fn charsize_nowrap(
 /// Whether `vcol` lands in the rightmost column of `window`.
 #[inline]
 fn in_win_border(window: Win, vcol: ColNr) -> bool {
-    let view_width = window.w_view_width;
+    let view_width = window.w_view_width();
     if view_width == 0 {
         // There is no border.
         return false;

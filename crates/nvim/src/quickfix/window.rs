@@ -50,8 +50,8 @@ pub(crate) fn find_tab_win(mut wanted: impl FnMut(Win) -> bool) -> Option<Win> {
 fn is_qf_win(win: Win, qi: Qi) -> bool {
     win.surviving_buffer().is_some()
         && win.shows_quickfix_buffer()
-        && (qi.is_quickfix() && win.w_llist_ref.is_none()
-            || qi.kind == QFLT_LOCATION && win.w_llist_ref == Some(qi.id()))
+        && (qi.is_quickfix() && win.w_llist_ref().is_none()
+            || qi.kind == QFLT_LOCATION && win.w_llist_ref() == Some(qi.id()))
 }
 
 /// The window showing `qi` in the current tab page, if there is one.
@@ -87,11 +87,11 @@ fn goto_cwindow(qi: Qi, resize: bool, sz: c_int, vertsplit: bool) -> bool {
     goto_win(win);
     if resize {
         if vertsplit {
-            if sz != win.w_width {
+            if sz != win.w_width() {
                 setwidth_win(sz, Win::current());
             }
-        } else if sz != win.w_height
-            && win.w_height + win.w_hsep_height + win.w_status_height + tabline_rows()
+        } else if sz != win.w_height()
+            && win.w_height() + win.w_hsep_height() + win.w_status_height() + tabline_rows()
                 < CMDLINE_ROW.get()
         {
             setheight_win(sz, Win::current());
@@ -110,10 +110,10 @@ fn set_cwindow_options() {
     set_option_value_give_err(OPT_BUFTYPE, OptVal::static_string(c"quickfix"), local);
     set_option_value_give_err(OPT_BUFHIDDEN, OptVal::static_string(c"hide"), local);
     // RESET_BINDING: no 'scrollbind'/'cursorbind', and never a diff.
-    let mut win = Win::current();
-    win.w_onebuf_opt.wo_scb = c_int::from(false);
-    win.w_onebuf_opt.wo_crb = c_int::from(false);
-    win.w_onebuf_opt.wo_diff = c_int::from(false);
+    let win = Win::current();
+    win.set_wo_scb(c_int::from(false));
+    win.set_wo_crb(c_int::from(false));
+    win.set_wo_diff(c_int::from(false));
     set_option_value_give_err(OPT_FOLDMETHOD, OptVal::static_string(c"manual"), local);
 }
 
@@ -133,13 +133,13 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
         return false; // not enough room for the window
     }
     // RESET_BINDING.
-    let mut new = Win::current();
-    new.w_onebuf_opt.wo_scb = c_int::from(false);
-    new.w_onebuf_opt.wo_crb = c_int::from(false);
+    let new = Win::current();
+    new.set_wo_scb(c_int::from(false));
+    new.set_wo_crb(c_int::from(false));
 
     if qi.kind == QFLT_LOCATION {
         // The location list window references the stack it shows.
-        new.w_llist_ref = Some(qi.id());
+        new.set_w_llist_ref(Some(qi.id()));
         qi.refcount.retain();
     }
 
@@ -177,10 +177,10 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
 
     // Only set the height when still in the same tab page and there is
     // no window to the side.
-    if TabPage::current_raw() == prevtab && Win::current().w_width == COLUMNS.get() {
+    if TabPage::current_raw() == prevtab && Win::current().w_width() == COLUMNS.get() {
         setheight_win(height, Win::current());
     }
-    Win::current().w_onebuf_opt.wo_wfh = c_int::from(true); // 'winfixheight'
+    Win::current().set_wo_wfh(c_int::from(true)); // 'winfixheight'
     if let Some(win) = valid_win(win) {
         PREVWIN.set(Some(win.id()));
     }
@@ -267,14 +267,14 @@ pub fn ex_copen(excmd: &mut ExArg) {
         qi.current_slot(),
         Buf::current(),
         None,
-        Win::current().handle.get(),
+        Win::current().handle().get(),
     );
 
     drop(busy);
 
-    let mut win = Win::current();
-    win.w_cursor.lnum = LineNr::new(lnum);
-    win.w_cursor.col = ColNr::ZERO;
+    let win = Win::current();
+    win.cursor().set_lnum(LineNr::new(lnum));
+    win.cursor().set_col(ColNr::ZERO);
     check_cursor(win);
     win.update_topline(); // scroll to show the line
 }
@@ -314,15 +314,15 @@ pub fn ex_cclose(excmd: &mut ExArg) {
 
 /// The window is made current for the cursor move only; nothing in between
 /// can leave it current.
-fn win_goto_line(mut win: Win, lnum: LineNr) {
+fn win_goto_line(win: Win, lnum: LineNr) {
     let saved = switch_to(win);
-    win.w_cursor.lnum = lnum;
-    win.w_cursor.col = ColNr::ZERO;
-    win.w_cursor.coladd = 0;
-    win.w_curswant = ColNr::ZERO;
+    win.cursor().set_lnum(lnum);
+    win.cursor().set_col(ColNr::ZERO);
+    win.cursor().set_coladd(0);
+    win.set_w_curswant(ColNr::ZERO);
     win.update_topline(); // scroll to show the line
     win.redraw_later(UPD_VALID);
-    win.w_redr_status = true; // update ruler
+    win.set_w_redr_status(true); // update ruler
     saved.restore();
 }
 
@@ -333,7 +333,7 @@ pub fn ex_cbottom(excmd: &mut ExArg) {
     };
     if let Some(win) = qf_find_win(qi) {
         let last = win.buffer().line_count();
-        if win.w_cursor.lnum != last {
+        if win.cursor().lnum() != last {
             win_goto_line(win, last);
         }
     }
@@ -344,7 +344,7 @@ impl Win {
     /// what the display code highlights. The window must be showing a
     /// quickfix buffer.
     pub(crate) fn quickfix_current_line(self) -> LineNr {
-        let qi = match self.w_llist_ref {
+        let qi = match self.w_llist_ref() {
             // In a location list window, the referenced list is the one.
             Some(shown) if self.is_location_list_window() => shown.stack(),
             _ => Qi::global(),
@@ -357,13 +357,13 @@ impl Win {
 /// whether there is such a window.
 pub(crate) fn qf_win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
     let qf_index = qi.current_list().index;
-    let Some(mut win) = qf_find_win(qi) else {
+    let Some(win) = qf_find_win(qi) else {
         return false;
     };
     if LineNr::new(qf_index) <= win.buffer().line_count() && old_qf_index != qf_index {
         // Both the old and the new line need redrawing.
-        win.w_redraw_top = LineNr::new(old_qf_index.min(qf_index));
-        win.w_redraw_bot = LineNr::new(old_qf_index.max(qf_index));
+        win.set_w_redraw_top(LineNr::new(old_qf_index.min(qf_index)));
+        win.set_w_redraw_bot(LineNr::new(old_qf_index.max(qf_index)));
         win_goto_line(win, LineNr::new(qf_index));
     }
     true

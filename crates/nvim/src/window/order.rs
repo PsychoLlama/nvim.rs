@@ -40,11 +40,11 @@ use crate::winlayer::{FrameId, FrameRef, Win, frames};
 /// live `&mut Window` to one window if `a == b`, which is undefined
 /// behaviour. This stays sound (a no-op) when they are the same window.
 macro_rules! swap_field {
-    ($a:expr, $b:expr, $field:ident) => {{
-        let (mut a, mut b): (Win, Win) = ($a, $b);
-        let from_a = a.$field;
-        let from_b = core::mem::replace(&mut b.$field, from_a);
-        a.$field = from_b;
+    ($a:expr, $b:expr, $get:ident, $set:ident) => {{
+        let (a, b): (Win, Win) = ($a, $b);
+        let (from_a, from_b) = (a.$get(), b.$get());
+        a.$set(from_b);
+        b.$set(from_a);
     }};
 }
 
@@ -53,11 +53,11 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
     // Each window needs at least 'winminheight' lines and a status line, and
     // the current window wants 'winheight'.
     let maxcount = if vertical {
-        number_as_int(OptInt::from(cur.w_width + cur.w_vsep_width) - (p_wiw() - p_wmw()))
+        number_as_int(OptInt::from(cur.w_width() + cur.w_vsep_width()) - (p_wiw() - p_wmw()))
             / (number_as_int(p_wmw()) + 1)
     } else {
         number_as_int(
-            OptInt::from(cur.w_height + cur.w_hsep_height + cur.w_status_height)
+            OptInt::from(cur.w_height() + cur.w_hsep_height() + cur.w_status_height())
                 - (p_wh() - p_wmh()),
         ) / (number_as_int(p_wmh()) + STATUS_HEIGHT + global_winbar_rows())
     }
@@ -76,13 +76,13 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
     while todo > 0 {
         let cur = Win::current();
         let (size, flags) = if vertical {
-            let width = cur.w_width;
+            let width = cur.w_width();
             (
                 width - (width - todo) / (todo + 1) - 1,
                 WSP_VERT | WSP_ABOVE,
             )
         } else {
-            let height = cur.w_height;
+            let height = cur.w_height();
             let status = STATUS_HEIGHT;
             (
                 height - (height - todo * status) / (todo + 1) - status,
@@ -103,7 +103,7 @@ pub fn make_windows(count: c_int, vertical: bool) -> c_int {
 /// column, or with the next one when `prenum` is zero.
 pub(crate) fn exchange(prenum: c_int) {
     let cur = Win::current();
-    if cur.w_floating {
+    if cur.w_floating() {
         emsg(E_FLOATEXCHANGE);
         return;
     }
@@ -126,7 +126,7 @@ pub(crate) fn exchange(prenum: c_int) {
     let Some(frp) = frp else {
         return;
     };
-    let Some(mut wp) = frp.win().filter(|w| *w != cur) else {
+    let Some(wp) = frp.win().filter(|w| *w != cur) else {
         return;
     };
 
@@ -134,7 +134,7 @@ pub(crate) fn exchange(prenum: c_int) {
     // same the other way round.
     let wp2 = cur.prev();
     let frp2 = frame.prev();
-    if wp.w_prev != Some(cur.id()) {
+    if wp.w_prev() != Some(cur.id()) {
         win_remove(cur, None);
         frame.unlink();
         win_append(wp.prev(), cur, None);
@@ -159,19 +159,19 @@ pub(crate) fn exchange(prenum: c_int) {
 
     // Exchange the chrome, which belongs to the position and not to the
     // window.
-    swap_field!(cur, wp, w_status_height);
-    swap_field!(cur, wp, w_vsep_width);
-    swap_field!(cur, wp, w_hsep_height);
+    swap_field!(cur, wp, w_status_height, set_w_status_height);
+    swap_field!(cur, wp, w_vsep_width, set_w_vsep_width);
+    swap_field!(cur, wp, w_hsep_height, set_w_hsep_height);
     frame_fix_height(cur);
     frame_fix_height(wp);
     frame_fix_width(cur);
     frame_fix_width(wp);
     comp_positions();
 
-    if !wp.w_buffer.is_current() {
+    if !wp.w_buffer().is_current() {
         reset_visual_and_resel();
     } else if visual_active() {
-        wp.w_cursor = cur.w_cursor;
+        wp.set_w_cursor(cur.w_cursor());
     }
     // `wp` is current now, unless autocommands moved on — and then they
     // may have closed it, so it is not touched again.
@@ -182,7 +182,7 @@ pub(crate) fn exchange(prenum: c_int) {
 /// Rotate the windows in the current row or column `count` places, upwards or
 /// downwards.
 pub(crate) fn rotate(upwards: bool, count: c_int) {
-    if Win::current().w_floating {
+    if Win::current().w_floating() {
         emsg(E_FLOATEXCHANGE);
         return;
     }
@@ -237,20 +237,20 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
             continue;
         };
         // Exchange the chrome, which belongs to the position.
-        swap_field!(w2, w1, w_status_height);
-        swap_field!(w2, w1, w_hsep_height);
+        swap_field!(w2, w1, w_status_height, set_w_status_height);
+        swap_field!(w2, w1, w_hsep_height, set_w_hsep_height);
         frame_fix_height(w1);
         frame_fix_height(w2);
-        swap_field!(w2, w1, w_vsep_width);
+        swap_field!(w2, w1, w_vsep_width, set_w_vsep_width);
         frame_fix_width(w1);
         frame_fix_width(w2);
         comp_positions();
     }
-    if let Some(mut w1) = wp1 {
-        w1.w_pos_changed = true;
+    if let Some(w1) = wp1 {
+        w1.set_w_pos_changed(true);
     }
-    if let Some(mut w2) = wp2 {
-        w2.w_pos_changed = true;
+    if let Some(w2) = wp2 {
+        w2.set_w_pos_changed(true);
     }
     redraw_all(UPD_NOT_VALID);
 }
@@ -267,7 +267,7 @@ pub(crate) enum NotMoved {
 /// Take `window` out of the layout and put it back in as a split given by `flags`,
 /// for `win_splitmove()` and CTRL-W H/J/K/L. Restores the old layout on failure.
 pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), NotMoved> {
-    let height = window.w_height;
+    let height = window.w_height();
     if is_only_window(window, None) {
         return Ok(());
     }
@@ -278,7 +278,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), No
 
     let mut dir = 0;
     let mut unflat_altfr = None;
-    if window.w_floating {
+    if window.w_floating() {
         win_remove(window, None);
     } else {
         // Remove the window and frame from the tree of frames, but leave the
@@ -297,7 +297,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), No
     let unflat = unflat_altfr.and_then(FrameId::get);
     if let Err(refusal) = win_split_ins(size, flags, Some(window), dir, unflat) {
         // Restore the window to its original position.
-        if !window.w_floating
+        if !window.w_floating()
             && let Some(unflat) = unflat_altfr.and_then(FrameId::get)
         {
             winframe_restore(window, dir, unflat);
@@ -311,7 +311,7 @@ pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), No
 
     // Keep the window's height when it was moved horizontally. The identity
     // was taken before `win_split_ins` fired its autocommands.
-    if size == 0 && flags & WSP_VERT == 0 && win_valid(window.id()) && !window.w_floating {
+    if size == 0 && flags & WSP_VERT == 0 && win_valid(window.id()) && !window.w_floating() {
         setheight_win(height, window);
         if p_ea() {
             let cur = Win::current();
@@ -327,12 +327,12 @@ pub fn win_move_after(win1: Win, win2: Win) {
 
 /// Move window `win1` to just after window `win2`, both in the same frame.
 fn move_after(win1: Win, win2: Win) {
-    let (mut win1, mut win2) = (win1, win2);
+    let (win1, win2) = (win1, win2);
     // Can't move the first window.
     if win1 == win2 {
         return;
     }
-    if win2.w_next != Some(win1.id()) {
+    if win2.w_next() != Some(win1.id()) {
         if win1.frame().fr_parent() != win2.frame().fr_parent() {
             iemsg(c"INTERNAL: trying to move a window into another frame");
             return;
@@ -340,23 +340,23 @@ fn move_after(win1: Win, win2: Win) {
         // The last window has no separator or status line: exchange the chrome
         // with whichever window is about to become last.
         if LASTWIN.get() == Some(win1.id()) {
-            let mut prev = win1.prev().expect("`win1` is not the first window");
-            swap_field!(prev, win1, w_status_height);
-            swap_field!(prev, win1, w_hsep_height);
-            if prev.w_vsep_width == 1 {
+            let prev = win1.prev().expect("`win1` is not the first window");
+            swap_field!(prev, win1, w_status_height, set_w_status_height);
+            swap_field!(prev, win1, w_hsep_height, set_w_hsep_height);
+            if prev.w_vsep_width() == 1 {
                 // The last window has no separator: give it to `win1`.
-                prev.w_vsep_width = 0;
+                prev.set_w_vsep_width(0);
                 prev.frame().set_fr_width(prev.frame().fr_width() - 1);
-                win1.w_vsep_width = 1;
+                win1.set_w_vsep_width(1);
                 win1.frame().set_fr_width(win1.frame().fr_width() + 1);
             }
         } else if LASTWIN.get() == Some(win2.id()) {
-            swap_field!(win1, win2, w_status_height);
-            swap_field!(win1, win2, w_hsep_height);
-            if win1.w_vsep_width == 1 {
-                win2.w_vsep_width = 1;
+            swap_field!(win1, win2, w_status_height, set_w_status_height);
+            swap_field!(win1, win2, w_hsep_height, set_w_hsep_height);
+            if win1.w_vsep_width() == 1 {
+                win2.set_w_vsep_width(1);
                 win2.frame().set_fr_width(win2.frame().fr_width() + 1);
-                win1.w_vsep_width = 0;
+                win1.set_w_vsep_width(0);
                 win1.frame().set_fr_width(win1.frame().fr_width() - 1);
             }
         }
@@ -367,8 +367,8 @@ fn move_after(win1: Win, win2: Win) {
         comp_positions(); // recompute window positions
         Win::current().redraw_later(UPD_NOT_VALID);
     }
-    win1.w_pos_changed = true;
-    win2.w_pos_changed = true;
+    win1.set_w_pos_changed(true);
+    win2.set_w_pos_changed(true);
     win_enter(win1, false);
 }
 
@@ -379,7 +379,7 @@ impl FrameRef {
     pub(crate) fn max_win_count(self, height: c_int) -> c_int {
         let per_win = number_as_int(p_wmh()) + STATUS_HEIGHT;
         if c_int::from(self.fr_layout()) != FR_COL {
-            return height / (per_win + self.first_window().w_winbar_height);
+            return height / (per_win + self.first_window().w_winbar_height());
         }
         if global_winbar_rows() != 0 {
             // If a window bar is globally enabled, no need to check each window.
@@ -390,7 +390,7 @@ impl FrameRef {
         let mut height = height;
         let mut total = 0;
         for frp in self.children() {
-            let cost = per_win + frp.first_window().w_winbar_height;
+            let cost = per_win + frp.first_window().w_winbar_height();
             if OptInt::from(height) < OptInt::from(cost) {
                 break;
             }

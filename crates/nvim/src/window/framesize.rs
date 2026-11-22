@@ -105,7 +105,7 @@ impl FrameRef {
     /// `'winfixheight'`, a row with any such frame in it, or a column of them.
     pub(crate) fn fixed_height(self) -> bool {
         if let Some(win) = self.win() {
-            return win.w_onebuf_opt.wo_wfh != 0;
+            return win.wo_wfh() != 0;
         }
         if ::core::ffi::c_int::from(self.fr_layout()) == FR_ROW {
             // The row is fixed if one of the frames in it is fixed.
@@ -119,7 +119,7 @@ impl FrameRef {
     /// *column* that is fixed as soon as one child is.
     pub(crate) fn fixed_width(self) -> bool {
         if let Some(win) = self.win() {
-            return win.w_onebuf_opt.wo_wfw != 0;
+            return win.wo_wfw() != 0;
         }
         if ::core::ffi::c_int::from(self.fr_layout()) == FR_COL {
             return self.children().any(FrameRef::fixed_width);
@@ -130,8 +130,8 @@ impl FrameRef {
     /// Give the windows along the bottom of `self` a status line, without changing
     /// any height: the caller has already made room.
     pub(crate) fn add_statusline(self) {
-        if let Some(mut win) = self.win() {
-            win.w_status_height = STATUS_HEIGHT;
+        if let Some(win) = self.win() {
+            win.set_w_status_height(STATUS_HEIGHT);
         } else if ::core::ffi::c_int::from(self.fr_layout()) == FR_ROW {
             // Handle all the frames in the row.
             self.children().for_each(FrameRef::add_statusline);
@@ -184,8 +184,8 @@ impl FrameRef {
     /// [`FrameRef::add_statusline`] for the horizontal separator `'laststatus'` = 3 draws in
     /// a status line's place.
     pub(crate) fn add_hsep(self) {
-        if let Some(mut win) = self.win() {
-            win.w_hsep_height = 1 as ::core::ffi::c_int;
+        if let Some(win) = self.win() {
+            win.set_w_hsep_height(1 as ::core::ffi::c_int);
         } else if ::core::ffi::c_int::from(self.fr_layout()) == FR_ROW {
             self.children().for_each(FrameRef::add_hsep);
         } else {
@@ -202,15 +202,15 @@ impl FrameRef {
     /// Add or remove the separator column along the right edge of `self`, taking
     /// the column it needs out of the windows' text.
     pub(crate) fn set_vsep(self, add: bool) {
-        if let Some(mut win) = self.win() {
-            if add && win.w_vsep_width == 0 {
-                if win.w_width > 0 {
-                    new_win_width(win, win.w_width - 1);
+        if let Some(win) = self.win() {
+            if add && win.w_vsep_width() == 0 {
+                if win.w_width() > 0 {
+                    new_win_width(win, win.w_width() - 1);
                 }
-                win.w_vsep_width = 1 as ::core::ffi::c_int;
-            } else if !add && win.w_vsep_width == 1 {
-                new_win_width(win, win.w_width + 1);
-                win.w_vsep_width = 0 as ::core::ffi::c_int;
+                win.set_w_vsep_width(1 as ::core::ffi::c_int);
+            } else if !add && win.w_vsep_width() == 1 {
+                new_win_width(win, win.w_width() + 1);
+                win.set_w_vsep_width(0 as ::core::ffi::c_int);
             }
         } else if ::core::ffi::c_int::from(self.fr_layout()) == FR_COL {
             // Handle all the frames in the column.
@@ -260,11 +260,11 @@ pub(crate) fn new_height(
         let room = room.clamp(OptInt::from(::core::ffi::c_int::MIN), OptInt::from(height));
         height = ::core::ffi::c_int::try_from(room).expect("room was just clamped into c_int");
     }
-    if let Some(mut wp) = topfrp.win() {
+    if let Some(wp) = topfrp.win() {
         if is_bottom_window(wp) {
-            wp.w_hsep_height = 0 as ::core::ffi::c_int;
+            wp.set_w_hsep_height(0 as ::core::ffi::c_int);
         }
-        new_win_height(wp, height - wp.w_hsep_height - wp.w_status_height);
+        new_win_height(wp, height - wp.w_hsep_height() - wp.w_status_height());
     } else if ::core::ffi::c_int::from(topfrp.fr_layout()) == FR_ROW {
         // All frames in this row get the same new height. If one of them could
         // not fit its windows in it, take its height for the whole row and go
@@ -328,7 +328,7 @@ pub(crate) fn new_width(
     wfw: bool,
 ) {
     if ::core::ffi::c_int::from(topfrp.fr_layout()) == FR_LEAF {
-        let mut wp = topfrp.win().expect("a leaf frame holds a window");
+        let wp = topfrp.win().expect("a leaf frame holds a window");
         // Find out if there are any windows right of this one.
         let mut frp = topfrp;
         while let Some(parent) = frp.parent() {
@@ -338,9 +338,9 @@ pub(crate) fn new_width(
             frp = parent;
         }
         if frp.parent().is_none() {
-            wp.w_vsep_width = 0 as ::core::ffi::c_int;
+            wp.set_w_vsep_width(0 as ::core::ffi::c_int);
         }
-        new_win_width(wp, width - wp.w_vsep_width);
+        new_win_width(wp, width - wp.w_vsep_width());
     } else if ::core::ffi::c_int::from(topfrp.fr_layout()) == FR_COL {
         loop {
             let mut grew = false;
@@ -386,11 +386,11 @@ pub(crate) fn new_width(
 /// Set a leaf frame's width from the window it contains.
 pub(crate) fn frame_fix_width(window: Win) {
     let frame = window.frame();
-    frame.set_fr_width(window.w_width + window.w_vsep_width);
+    frame.set_fr_width(window.w_width() + window.w_vsep_width());
 }
 
 /// Set a leaf frame's height from the window it contains.
 pub(crate) fn frame_fix_height(window: Win) {
     let frame = window.frame();
-    frame.set_fr_height(window.w_height + window.w_hsep_height + window.w_status_height);
+    frame.set_fr_height(window.w_height() + window.w_hsep_height() + window.w_status_height());
 }

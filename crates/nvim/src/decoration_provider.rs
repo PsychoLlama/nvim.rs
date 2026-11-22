@@ -199,8 +199,8 @@ pub(crate) fn decor_providers_invoke_spell(
         let p = provider(idx);
         if p.state != DECOR_PROVIDER_DISABLED && p.spell_nav != LUA_NOREF {
             let mut args = ArrayBuf::<6>::new();
-            args.push(Object::integer(window.handle.into()));
-            args.push(Object::integer(window.w_buffer.handle().into()));
+            args.push(Object::integer(window.handle().into()));
+            args.push(Object::integer(window.w_buffer().handle().into()));
             args.push(Object::integer(start_row.into()));
             args.push(Object::integer(start_col.into()));
             args.push(Object::integer(end_row.into()));
@@ -221,8 +221,8 @@ pub(crate) fn decor_providers_invoke_conceal_line(window: Win, row: c_int) -> bo
         let p = provider(idx);
         if p.state != DECOR_PROVIDER_DISABLED && p.conceal_line != LUA_NOREF {
             let mut args = ArrayBuf::<4>::new();
-            args.push(Object::integer(window.handle.into()));
-            args.push(Object::integer(window.w_buffer.handle().into()));
+            args.push(Object::integer(window.handle().into()));
+            args.push(Object::integer(window.w_buffer().handle().into()));
             args.push(Object::integer(row.into()));
             let (name, cb, args) = (c"conceal_line", p.conceal_line, args.array());
             // The provider is named by index, so the vector may move under
@@ -302,7 +302,7 @@ pub(crate) fn decor_providers_invoke_win(window: Win) {
     if provider_count() > 0 {
         validate_botline_win(window);
     }
-    let botline: LineNr = window.w_botline.min(window.w_buffer.line_count());
+    let botline: LineNr = window.w_botline().min(window.w_buffer().line_count());
 
     for idx in 0..provider_count() {
         let p = with_provider(idx, |p| {
@@ -316,10 +316,10 @@ pub(crate) fn decor_providers_invoke_win(window: Win) {
 
         if p.state == DECOR_PROVIDER_ACTIVE && p.redraw_win != LUA_NOREF {
             let mut args = ArrayBuf::<4>::new();
-            args.push(Object::window(window.handle));
-            args.push(Object::buffer(window.w_buffer.handle()));
+            args.push(Object::window(window.handle()));
+            args.push(Object::buffer(window.w_buffer().handle()));
             // TODO(bfredl): we are not using this, but should be first drawn line?
-            args.push(Object::integer((window.w_topline - 1).into()));
+            args.push(Object::integer((window.w_topline() - 1).into()));
             args.push(Object::integer((botline - 1).into()));
             // TODO(bfredl): could skip a call if retval was interpreted like range?
             if !decor_provider_invoke(idx, c"win", p.redraw_win, args.array(), true, None) {
@@ -343,8 +343,8 @@ pub(crate) fn decor_providers_invoke_line(window: Win, row: c_int) {
         let p = provider(idx);
         if p.state == DECOR_PROVIDER_ACTIVE && p.redraw_line != LUA_NOREF {
             let mut args = ArrayBuf::<3>::new();
-            args.push(Object::window(window.handle));
-            args.push(Object::buffer(window.w_buffer.handle()));
+            args.push(Object::window(window.handle()));
+            args.push(Object::buffer(window.w_buffer().handle()));
             args.push(Object::integer(row.into()));
             let (name, cb, args) = (c"line", p.redraw_line, args.array());
             // as above.
@@ -381,8 +381,8 @@ pub(crate) fn decor_providers_invoke_range(
         }
 
         let mut args = ArrayBuf::<6>::new();
-        args.push(Object::window(window.handle));
-        args.push(Object::buffer(window.w_buffer.handle()));
+        args.push(Object::window(window.handle()));
+        args.push(Object::buffer(window.w_buffer().handle()));
         args.push(Object::integer(start_row.into()));
         args.push(Object::integer(start_col.into()));
         args.push(Object::integer(end_row.into()));

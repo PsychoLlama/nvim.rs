@@ -133,10 +133,10 @@ pub fn decor_find_virttext(buffer: Buf, row: c_int, ns_id: uint64_t) -> Option<u
 /// [`decor_providers_invoke_conceal_line`] reports.
 pub fn decor_conceal_line(window: Win, row: c_int, check_cursor: bool) -> bool {
     if row < 0
-        || window.w_onebuf_opt.wo_cole < 2 as OptInt
+        || window.wo_cole() < 2 as OptInt
         || (!check_cursor
             && window.is_current()
-            && LineNr::new(row) + 1 == window.w_cursor.lnum
+            && LineNr::new(row) + 1 == window.cursor().lnum()
             && !window.conceals_cursor_line())
     {
         return false;
@@ -176,7 +176,7 @@ pub fn decor_conceal_line(window: Win, row: c_int, check_cursor: bool) -> bool {
 /// Whether `window` may have folded or concealed lines at all — the cheap test
 /// that lets the layout code skip the per-row questions above.
 pub fn win_lines_concealed(window: Win) -> bool {
-    window.has_any_folding() || window.w_onebuf_opt.wo_cole >= 2 as OptInt
+    window.has_any_folding() || window.wo_cole() >= 2 as OptInt
 }
 
 impl Win {

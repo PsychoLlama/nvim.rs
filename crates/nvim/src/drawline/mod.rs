@@ -231,39 +231,39 @@ fn wlv_put_linebuf(
     bg_attr: ::core::ffi::c_int,
     mut flags: ::core::ffi::c_int,
 ) {
-    let grid: GridView = window.w_grid;
+    let grid: GridView = window.w_grid();
     let mut startcol = 0;
     let mut clear_width = if clear_end {
-        window.w_view_width
+        window.w_view_width()
     } else {
         endcol
     };
 
     debug_assert!(flags & SLF_RIGHTLEFT as ::core::ffi::c_int == 0);
-    if window.w_onebuf_opt.wo_rl != 0 {
+    if window.wo_rl() != 0 {
         linebuf_mirror(
             &mut startcol,
             &mut endcol,
             &mut clear_width,
-            window.w_view_width,
+            window.w_view_width(),
         );
         flags |= SLF_RIGHTLEFT as ::core::ffi::c_int;
     }
 
     if wlv.row == 0
-        && window.w_skipcol > ColNr::ZERO
+        && window.w_skipcol() > ColNr::ZERO
         // Do not overwrite the 'showbreak' text with "<<<" ...
         && !window.has_showbreak()
         // ... nor the 'listchars' "precedes" text.
-        && !(window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.prec != 0)
+        && !(window.wo_list() != 0 && window.read().w_p_lcs_chars.prec != 0)
     {
         let at_attr = hl_attr(HLF_AT) as ScreenAttr;
         with_linebuf(|line| {
             let mut off = 0;
-            if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0 {
+            if window.wo_nu() != 0 && window.wo_rnu() != 0 {
                 // Do not overwrite the line number either: "123 text"
                 // becomes "123<<<xt".
-                while off < window.w_view_width
+                while off < window.w_view_width()
                     && ascii_isdigit(::core::ffi::c_int::from(schar_get_ascii(
                         line.chars()[as_index(off)],
                     )))
@@ -272,10 +272,10 @@ fn wlv_put_linebuf(
                 }
             }
             for _ in 0..3 {
-                if off >= window.w_view_width {
+                if off >= window.w_view_width() {
                     break;
                 }
-                if off + 1 < window.w_view_width && line.chars()[as_index(off) + 1] == 0 {
+                if off + 1 < window.w_view_width() && line.chars()[as_index(off) + 1] == 0 {
                     // The first half of a double-width character is being
                     // overwritten; blank its second half.
                     line.chars_mut()[as_index(off) + 1] = schar_from_ascii(b' ');
@@ -322,13 +322,13 @@ fn decor_providers_setup(
     col: ColNr,
     window: Win,
 ) -> ::core::ffi::c_int {
-    let rem_vcols = if window.w_onebuf_opt.wo_wrap != 0 {
-        let width = window.w_view_width - window.col_off();
+    let rem_vcols = if window.wo_wrap() != 0 {
+        let width = window.w_view_width() - window.col_off();
         let width2 = width + win_col_off2(window);
         let first_row_width = if draw_from_line_start { width } else { width2 };
         first_row_width + (rows_to_draw - 1) * width2
     } else {
-        window.w_view_width - window.col_off()
+        window.w_view_width() - window.col_off()
     };
 
     // Called here because the line pointer has to be invalidated anyway.

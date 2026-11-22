@@ -321,7 +321,10 @@ impl<'a, T> SlotEdit<'a, T> {
     /// Narrow the guard to one part of the value -- a field, an element --
     /// still holding the whole value lent: the part's borrow is the guard's.
     #[inline(always)]
-    pub(crate) fn map<U>(mut self, part: impl FnOnce(&mut T) -> &mut U) -> EditPart<'a, T, U> {
+    pub(crate) fn map<U: ?Sized>(
+        mut self,
+        part: impl FnOnce(&mut T) -> &mut U,
+    ) -> EditPart<'a, T, U> {
         let part = NonNull::from(part(&mut self));
         EditPart { _edit: self, part }
     }
@@ -331,7 +334,7 @@ impl<'a, T> SlotEdit<'a, T> {
     /// [`SlotEdit::map`] for a part that may be missing: `None` lets the
     /// edit go.
     #[inline(always)]
-    pub(crate) fn try_map<U>(
+    pub(crate) fn try_map<U: ?Sized>(
         mut self,
         part: impl FnOnce(&mut T) -> Option<&mut U>,
     ) -> Option<EditPart<'a, T, U>> {
@@ -344,7 +347,7 @@ impl<'a, T> SlotRead<'a, T> {
     /// Narrow the read to one part of the value, when it has one: the part
     /// stays counted as the whole; `None` lets the read go.
     #[inline(always)]
-    pub(crate) fn try_map<U>(
+    pub(crate) fn try_map<U: ?Sized>(
         self,
         part: impl FnOnce(&T) -> Option<&U>,
     ) -> Option<ReadPart<'a, T, U>> {
@@ -357,12 +360,12 @@ impl<'a, T> SlotRead<'a, T> {
 /// held until the part is dropped. The part is kept as an address taken from
 /// the guard's own borrow, which nothing else can reach while the edit bit is
 /// set.
-pub(crate) struct EditPart<'a, T, U> {
+pub(crate) struct EditPart<'a, T, U: ?Sized> {
     _edit: SlotEdit<'a, T>,
     part: NonNull<U>,
 }
 
-impl<T, U> Deref for EditPart<'_, T, U> {
+impl<T, U: ?Sized> Deref for EditPart<'_, T, U> {
     type Target = U;
 
     #[inline(always)]
@@ -372,7 +375,7 @@ impl<T, U> Deref for EditPart<'_, T, U> {
     }
 }
 
-impl<T, U> DerefMut for EditPart<'_, T, U> {
+impl<T, U: ?Sized> DerefMut for EditPart<'_, T, U> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut U {
         // SAFETY: as `deref`; `&mut self` is the one way in.
@@ -382,12 +385,12 @@ impl<T, U> DerefMut for EditPart<'_, T, U> {
 
 /// A part of a value borrowed by [`read_at`] ([`SlotRead::try_map`]): counted
 /// until dropped.
-pub(crate) struct ReadPart<'a, T, U> {
+pub(crate) struct ReadPart<'a, T, U: ?Sized> {
     _read: SlotRead<'a, T>,
     part: NonNull<U>,
 }
 
-impl<T, U> Deref for ReadPart<'_, T, U> {
+impl<T, U: ?Sized> Deref for ReadPart<'_, T, U> {
     type Target = U;
 
     #[inline(always)]

@@ -179,33 +179,33 @@ pub fn grid_alloc(grid: GridRef, rows: c_int, columns: c_int, copy: bool, valid:
 
 /// (Re)allocate a window's own grid if its size changed while in
 /// `ext_multigrid` mode, and update its size, offsets and handle regardless.
-pub fn win_grid_alloc(mut window: Win) {
-    let total_rows = window.w_height_outer;
-    let total_cols = window.w_width_outer;
+pub fn win_grid_alloc(window: Win) {
+    let total_rows = window.w_height_outer();
+    let total_cols = window.w_width_outer();
 
     // A window only gets a grid of its own when the UI asked for
     // multigrid, or when it is a float (which needs one to be composed).
-    let want_allocation = ui_has(UI_MULTIGRID) || window.w_floating;
-    let has_allocation = window.w_grid_alloc.is_allocated();
+    let want_allocation = ui_has(UI_MULTIGRID) || window.w_floating();
+    let has_allocation = window.read().w_grid_alloc.is_allocated();
 
-    let rows = usize::try_from(window.w_view_height).unwrap_or(0) + 1;
-    if rows > window.w_lines.len() {
-        window.w_lines_valid = 0;
-        window.w_lines = vec![WLine::default(); rows];
+    let rows = usize::try_from(window.w_view_height()).unwrap_or(0) + 1;
+    if rows > window.read().w_lines.len() {
+        window.set_w_lines_valid(0);
+        window.edit().w_lines = vec![WLine::default(); rows];
     }
 
     let mut was_resized = false;
     if want_allocation
         && (!has_allocation
-            || window.w_grid_alloc.rows != total_rows
-            || window.w_grid_alloc.cols != total_cols)
+            || window.grid_alloc().rows != total_rows
+            || window.grid_alloc().cols != total_cols)
     {
         let grid = window.grid_alloc();
         let copy = grid.valid;
         grid_alloc(grid, total_rows, total_cols, copy, false);
         grid.set_valid(true);
-        if window.w_floating && window.w_config.border {
-            window.w_redr_border = true;
+        if window.w_floating() && window.read().w_config.border {
+            window.set_w_redr_border(true);
         }
         was_resized = true;
     } else if !want_allocation && has_allocation {
@@ -214,30 +214,32 @@ pub fn win_grid_alloc(mut window: Win) {
         window.grid_alloc().free();
         window.grid_alloc().set_valid(false);
         was_resized = true;
-    } else if want_allocation && has_allocation && !window.w_grid_alloc.valid {
+    } else if want_allocation && has_allocation && !window.grid_alloc().valid {
         window.grid_alloc().revalidate();
     }
 
     if want_allocation {
-        window.w_grid.target = &raw mut window.w_grid_alloc;
-        window.w_grid.row_offset = window.w_winrow_off;
-        window.w_grid.col_offset = window.w_wincol_off;
+        let mut edit = window.edit();
+        edit.w_grid.target = &raw mut edit.w_grid_alloc;
+        drop(edit);
+        window.edit().w_grid.row_offset = window.w_winrow_off();
+        window.edit().w_grid.col_offset = window.w_wincol_off();
     } else {
-        window.w_grid.target = default_grid_ref().raw();
-        window.w_grid.row_offset = window.w_winrow + window.w_winrow_off;
-        window.w_grid.col_offset = window.w_wincol + window.w_wincol_off;
+        window.edit().w_grid.target = default_grid_ref().raw();
+        window.edit().w_grid.row_offset = window.w_winrow() + window.w_winrow_off();
+        window.edit().w_grid.col_offset = window.w_wincol() + window.w_wincol_off();
     }
 
     // Send a grid resize event when a grid was just resized, or when
     // screen_resize asked for every size to be re-sent.
     if (RESIZING_SCREEN.get() || was_resized) && want_allocation {
-        let grid = &window.w_grid_alloc;
+        let grid = &window.read().w_grid_alloc;
         ui_call_grid_resize(
             Integer::from(grid.handle),
             Integer::from(grid.cols),
             Integer::from(grid.rows),
         );
-        ui_check_cursor_grid(window.w_grid_alloc.handle);
+        ui_check_cursor_grid(window.grid_alloc().handle);
     }
 }
 
@@ -379,5 +381,5 @@ pub fn grid_del_lines(
 
 /// The window in the current tab whose own grid has `handle`, if any.
 pub fn get_win_by_grid_handle(handle: Handle) -> Option<Win> {
-    windows().find(|wp| wp.w_grid_alloc.handle == handle)
+    windows().find(|wp| wp.grid_alloc().handle == handle)
 }

@@ -508,16 +508,16 @@ pub(crate) fn put_cell(
 /// The `'listchars'` "extends" character for `window`, or NUL if it should not be
 /// used.
 pub(crate) fn get_lcs_ext(window: Win) -> ScreenChar {
-    if window.w_onebuf_opt.wo_wrap != 0 {
+    if window.wo_wrap() != 0 {
         // With 'wrap' a line never continues past the right of the screen.
         return 0;
     }
-    if window.w_onebuf_opt.wo_wrap_flags & OPT_FLAG_INSECURE != 0 {
+    if window.wo_wrap_flags() & OPT_FLAG_INSECURE != 0 {
         // 'nowrap' set from a modeline: forcibly use '>'.
         return schar_from_ascii(b'>');
     }
-    if window.w_onebuf_opt.wo_list != 0 {
-        window.w_p_lcs_chars.ext
+    if window.wo_list() != 0 {
+        window.lcs_ext()
     } else {
         0
     }
@@ -529,12 +529,12 @@ pub(crate) fn get_lcs_ext(window: Win) -> ScreenChar {
 /// `color_col` is [`WinLineVars::color_col`]: the `'colorcolumn'` entries
 /// from it on count, none when it is [`NO_COLOR_COL`].
 pub(crate) fn get_rightmost_vcol(window: Win, color_col: usize) -> ::core::ffi::c_int {
-    let mut ret = if window.w_onebuf_opt.wo_cuc != 0 {
-        window.w_virtcol
+    let mut ret = if window.wo_cuc() != 0 {
+        window.w_virtcol()
     } else {
         ColNr::ZERO
     };
-    if let Some(cols) = window.w_p_cc_cols.get(color_col..) {
+    if let Some(cols) = window.read().w_p_cc_cols.get(color_col..) {
         for &col in cols.iter().take_while(|&&col| col >= 0) {
             ret = ret.max(ColNr::new(col));
         }
@@ -559,9 +559,9 @@ impl Win {
         static PREV_LEFT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
         static PREV_RIGHT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
-        let width1 = self.w_view_width - self.col_off();
+        let width1 = self.w_view_width() - self.col_off();
         let width2 = width1 + win_col_off2(self);
-        if SAVED_W_VIRTCOL.get() == self.w_virtcol.get()
+        if SAVED_W_VIRTCOL.get() == self.w_virtcol().get()
             && PREV_WIN.get() == Some(self.id())
             && PREV_WIDTH1.get() == width1
             && PREV_WIDTH2.get() == width2
@@ -569,8 +569,8 @@ impl Win {
             return (PREV_LEFT_COL.get(), PREV_RIGHT_COL.get());
         }
 
-        let (left_col, right_col) = if self.w_virtcol >= ColNr::new(width1) && width2 > 0 {
-            let past = self.w_virtcol - width1;
+        let (left_col, right_col) = if self.w_virtcol() >= ColNr::new(width1) && width2 > 0 {
+            let past = self.w_virtcol() - width1;
             (
                 past.get() / width2 * width2 + width1,
                 width1 + (past.get() / width2 + 1) * width2,
@@ -584,7 +584,7 @@ impl Win {
         PREV_WIN.set(Some(self.id()));
         PREV_WIDTH1.set(width1);
         PREV_WIDTH2.set(width2);
-        SAVED_W_VIRTCOL.set(self.w_virtcol.get());
+        SAVED_W_VIRTCOL.set(self.w_virtcol().get());
         (left_col, right_col)
     }
 }
@@ -794,7 +794,7 @@ impl WinLineVars {
         self.col = 0;
         self.off = 0;
         self.linebreak_armed = false;
-        for i in 0..window.w_view_width {
+        for i in 0..window.w_view_width() {
             put_cell(i, schar_from_ascii(b' '), 0, ColNr::NONE);
         }
     }
@@ -833,7 +833,7 @@ impl WinLineVars {
         if self.color_col == NO_COLOR_COL {
             return;
         }
-        self.advance_color_col_in(&window.w_p_cc_cols, vcol);
+        self.advance_color_col_in(&window.read().w_p_cc_cols, vcol);
     }
 
     /// [`WinLineVars::advance_color_col`] over the window's list.
@@ -856,7 +856,8 @@ impl WinLineVars {
     /// Whether `vcol` is the `'colorcolumn'` [`WinLineVars::color_col`] is at.
     #[inline]
     pub(crate) fn is_color_col(&self, window: Win, vcol: ::core::ffi::c_int) -> bool {
-        self.color_col != NO_COLOR_COL && window.w_p_cc_cols.get(self.color_col) == Some(&vcol)
+        self.color_col != NO_COLOR_COL
+            && window.read().w_p_cc_cols.get(self.color_col) == Some(&vcol)
     }
 
     /// `attr` with `ColorColumn` combined in if the current

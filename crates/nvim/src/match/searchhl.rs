@@ -41,30 +41,30 @@ enum Which {
 impl Win {
     /// Run `f` on the highlight state `which` names.
     #[inline(always)]
-    fn with_search_hl<R>(mut self, which: Which, f: impl FnOnce(&mut MatchState) -> R) -> R {
+    fn with_search_hl<R>(self, which: Which, f: impl FnOnce(&mut MatchState) -> R) -> R {
         match which {
             Which::Search => SCREEN_SEARCH_HL.with_mut(f),
-            Which::Item(i) => f(&mut self.w_matches[i].mit_hl),
+            Which::Item(i) => f(&mut self.edit().w_matches[i].mit_hl),
         }
     }
 
     /// Run `f` on the window's match at index `i`.
     #[inline(always)]
-    fn with_match_item<R>(mut self, i: usize, f: impl FnOnce(&mut MatchItem) -> R) -> R {
-        f(&mut self.w_matches[i])
+    fn with_match_item<R>(self, i: usize, f: impl FnOnce(&mut MatchItem) -> R) -> R {
+        f(&mut self.edit().w_matches[i])
     }
 
     /// Resets every pattern's search state for a fresh window redraw: each
     /// match gets its attribute, a fresh `'redrawtime'` budget, and its
     /// program back if the last redraw suspended it.
     pub(crate) fn init_search_hl(self) {
-        let mut window = self;
-        let conceal = if window.w_matches.is_empty() {
+        let window = self;
+        let conceal = if window.read().w_matches.is_empty() {
             0
         } else {
             syn_name2id(c"Conceal")
         };
-        for item in &mut window.w_matches {
+        for item in &mut window.edit().w_matches {
             let shl = &mut item.mit_hl;
             shl.rm.rmm_ic = item.mit_match.rmm_ic;
             shl.rm.rmm_maxcol = item.mit_match.rmm_maxcol;
@@ -163,7 +163,7 @@ impl Win {
                     match which {
                         Which::Item(i) if peek.conceals => {
                             *has_match_conc = if col == startcol { 2 } else { 1 };
-                            *match_conc = self.w_matches[i].mit_conceal_char;
+                            *match_conc = self.read().w_matches[i].mit_conceal_char;
                         }
                         _ => *has_match_conc = 0,
                     }
@@ -214,7 +214,7 @@ impl Win {
 
         // Under `'list'` the eol character is drawn from `'listchars'`, so
         // the match must not colour past the last real character.
-        if self.w_onebuf_opt.wo_list != 0 && !lcs_eol_todo && char_len_here() == 0 {
+        if self.wo_list() != 0 && !lcs_eol_todo && char_len_here() == 0 {
             search_attr = 0;
         }
         search_attr
@@ -229,7 +229,7 @@ impl Win {
 fn has_prog(window: Win, which: Which) -> bool {
     match which {
         Which::Search => SCREEN_SEARCH_HL.with(|shl| shl.rm.regprog.is_some()),
-        Which::Item(i) => window.w_matches[i].active(),
+        Which::Item(i) => window.read().w_matches[i].active(),
     }
 }
 
@@ -238,7 +238,8 @@ fn is_multiline(window: Win, which: Which) -> bool {
     match which {
         Which::Search => SCREEN_SEARCH_HL.with(|shl| shl.rm.is_multiline()),
         Which::Item(i) => {
-            window.w_matches[i].active() && window.w_matches[i].mit_match.is_multiline()
+            window.read().w_matches[i].active()
+                && window.read().w_matches[i].mit_match.is_multiline()
         }
     }
 }
@@ -290,14 +291,14 @@ impl ShlWalk {
     /// The next pattern to visit.
     #[inline(always)]
     fn next(&mut self, window: Win) -> Option<Which> {
-        let more = self.next < window.w_matches.len();
+        let more = self.next < window.read().w_matches.len();
         if !more && self.taken {
             return None;
         }
         let take_search = !self.taken
             && (!more
                 || self.order == Order::SearchFirst
-                || window.w_matches[self.next].mit_priority > SEARCH_HL_PRIORITY);
+                || window.read().w_matches[self.next].mit_priority > SEARCH_HL_PRIORITY);
         if take_search {
             self.taken = true;
             Some(Which::Search)
@@ -524,7 +525,7 @@ fn reset_pos_cur(window: Win, which: Which) {
 fn pos_in_progress(window: Win, which: Which) -> bool {
     match which {
         Which::Search => false,
-        Which::Item(i) => window.w_matches[i].mit_pos_cur != 0,
+        Which::Item(i) => window.read().w_matches[i].mit_pos_cur != 0,
     }
 }
 
@@ -544,7 +545,7 @@ pub(crate) fn prepare_search_hl(window: Win, lnum: LineNr) {
 
         if window.with_search_hl(which, |shl| shl.first_lnum) == LineNr::ZERO {
             let mut first = lnum;
-            while first > window.w_topline {
+            while first > window.w_topline() {
                 if window.has_folding(first - 1, None, None) {
                     break;
                 }
@@ -583,7 +584,7 @@ pub(crate) fn prepare_search_hl(window: Win, lnum: LineNr) {
 /// Records whether the cursor is inside the `'hlsearch'` match, which is
 /// what makes `CurSearch` apply to one match and not the others.
 fn check_cur_search_hl(window: Win) {
-    let cursor = window.w_cursor;
+    let cursor = window.w_cursor();
     SCREEN_SEARCH_HL.with_mut(|shl| {
         let linecount = shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
         shl.has_cursor = cursor.lnum >= shl.lnum
@@ -746,10 +747,10 @@ fn peek(window: Win, which: Which, reset: bool, in_progress: bool) -> Peek {
 /// are excluded: they name real positions and never the break.
 pub(crate) fn get_prevcol_hl_flag(window: Win, curcol: ColNr) -> bool {
     // Not really at that column when text to the left is being skipped.
-    let skip = if window.w_onebuf_opt.wo_wrap != 0 {
-        window.w_skipcol
+    let skip = if window.wo_wrap() != 0 {
+        window.w_skipcol()
     } else {
-        window.w_leftcol
+        window.w_leftcol()
     };
     let prevcol = if skip > curcol { curcol + 1 } else { curcol };
 
@@ -757,7 +758,12 @@ pub(crate) fn get_prevcol_hl_flag(window: Win, curcol: ColNr) -> bool {
         !m.is_addpos && (prevcol == m.startcol || (prevcol > m.startcol && m.endcol == ColNr::MAX))
     };
 
-    SCREEN_SEARCH_HL.with(covers) || window.w_matches.iter().any(|item| covers(&item.mit_hl))
+    SCREEN_SEARCH_HL.with(covers)
+        || window
+            .read()
+            .w_matches
+            .iter()
+            .any(|item| covers(&item.mit_hl))
 }
 
 /// The attribute for the character after the text, when a match starts

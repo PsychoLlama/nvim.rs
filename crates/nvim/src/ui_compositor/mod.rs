@@ -375,7 +375,7 @@ pub(crate) fn ui_comp_mouse_focus(row: c_int, col: c_int) -> Option<GridRef> {
         // `comp_row`/`comp_col`; the window's own position stands in.
         for wp in windows_in_curtab() {
             let grid = wp.grid_alloc();
-            let (winrow, wincol) = (wp.w_winrow, wp.w_wincol);
+            let (winrow, wincol) = (wp.w_winrow(), wp.w_wincol());
             if grid.mouse_enabled
                 && row >= winrow
                 && row < winrow + grid.rows
@@ -396,7 +396,7 @@ pub fn ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> GridRef {
     }
     for wp in windows_in_curtab() {
         let grid = wp.grid_alloc();
-        let hidden = wp.w_config.hide;
+        let hidden = wp.config_hide();
         if grid.covers(row, col) && !hidden {
             return grid;
         }

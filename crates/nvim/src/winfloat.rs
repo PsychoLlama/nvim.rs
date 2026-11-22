@@ -134,7 +134,7 @@ fn current_win() -> Win {
 /// the end of the window list, so walking back from `lastwin` while
 /// `w_floating` holds visits exactly them. Lazy, as the C's is.
 fn floats() -> impl Iterator<Item = Win> {
-    windows_back().take_while(|win| win.w_floating)
+    windows_back().take_while(|win| win.w_floating())
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +189,7 @@ fn remove_from_frame(win: Win, tabpage: Option<TabPage>) {
 /// `XFREE_CLEAR(wp->w_frame)`.
 fn release_frame(win: &mut Win) {
     win.frame().free();
-    win.w_frame = None;
+    win.set_w_frame(None);
 }
 fn remove_window(win: Win, tabpage: Option<TabPage>) {
     win_remove(win, tabpage);
@@ -213,7 +213,7 @@ fn set_inner_size(win: Win) {
     win_set_inner_size(win, true);
 }
 fn merge_config(win: &mut Win, fconfig: WinConfig) {
-    merge_win_config(&mut win.w_config, fconfig);
+    merge_win_config(&mut win.edit().w_config, fconfig);
 }
 
 /// Whether `win` is still a window of the current tab page.
@@ -259,8 +259,8 @@ fn parse_winhl(win: Win) {
 /// may not be resolved to a grid yet (a float anchored to a window that has
 /// none).
 fn adjust_for_grid(win: &mut Win, row: &mut c_int, col: &mut c_int) {
-    *row += win.w_grid.row_offset;
-    *col += win.w_grid.col_offset;
+    *row += win.w_grid().row_offset;
+    *col += win.w_grid().col_offset;
 }
 fn screen_pos_of(win: Win, pos: &mut Pos) -> (c_int, c_int) {
     let (row, scol, _, _) = textpos2screenpos(win, pos, true);
@@ -284,26 +284,27 @@ fn set_bufhidden_wipe(buffer: Buf) {
 /// in the list, which only the autocommand window asks for. `fconfig` must
 /// already have been validated.
 fn new_float(win: Option<Win>, last: bool, fconfig: WinConfig) -> Result<Option<Win>, Error> {
-    let mut win = match win {
+    let win = match win {
         None => match alloc_new_float(last, &fconfig)? {
             Some(win) => win,
             None => return Ok(None),
         },
         Some(win) => {
             debug_assert!(!last, "!last");
-            debug_assert!(!win.w_floating, "!wp->w_floating");
+            debug_assert!(!win.w_floating(), "!wp->w_floating");
             unfloat_to_float(win)?
         }
     };
-    win.w_floating = true;
-    win.w_status_height = if !win.w_onebuf_opt.wo_stl.bytes().is_empty() && show_statusline() {
+    win.set_w_floating(true);
+    let has_stl = !win.read().w_onebuf_opt.wo_stl.bytes().is_empty();
+    win.set_w_status_height(if has_stl && show_statusline() {
         STATUS_HEIGHT
     } else {
         0
-    };
-    win.w_winbar_height = 0;
-    win.w_hsep_height = 0;
-    win.w_vsep_width = 0;
+    });
+    win.set_w_winbar_height(0);
+    win.set_w_hsep_height(0);
+    win.set_w_vsep_width(0);
 
     win_config_float(win, fconfig);
     win.redraw_later(UPD_VALID);
@@ -328,14 +329,14 @@ fn alloc_new_float(last: bool, fconfig: &WinConfig) -> Result<Option<Win>, Error
         };
         tp_last = last_nofloat(parent_tp.into_other());
     }
-    let mut win = alloc_window(tp_last);
+    let win = alloc_window(tp_last);
     init_window(win);
     // A one-line float has no room for a window bar, and a float never draws
     // the global 'statusline'.
     if fconfig.height == 1 {
-        win.w_onebuf_opt.wo_wbr = None;
+        win.edit().w_onebuf_opt.wo_wbr = None;
     }
-    win.w_onebuf_opt.wo_stl = None;
+    win.edit().w_onebuf_opt.wo_stl = None;
     Ok(Some(win))
 }
 
@@ -356,7 +357,7 @@ fn unfloat_to_float(win: Win) -> Result<Win, Error> {
         // others.
         let mut other_nonfloat = false;
         for wp2 in windows_in_tab(win_tp) {
-            if wp2.w_floating {
+            if wp2.w_floating() {
                 break;
             }
             if wp2 != win && CMDWIN_WIN.get() != Some(wp2.id()) {
@@ -383,7 +384,7 @@ fn unfloat_to_float(win: Win) -> Result<Win, Error> {
 
 /// Whether the command-line window is itself a float.
 fn cmdwin_is_float() -> bool {
-    cmdwin_window().is_some_and(|w| w.w_floating)
+    cmdwin_window().is_some_and(|w| w.w_floating())
 }
 
 /// The two 'laststatus' values under which a float draws its own 'statusline'.
@@ -404,60 +405,68 @@ pub(crate) fn win_new_float(
 
 /// Strip a float of everything that decorates a normal window.
 pub(crate) fn win_set_minimal_style(win: Win) {
-    let mut win = win;
-    win.w_onebuf_opt.wo_nu = 0;
-    win.w_onebuf_opt.wo_rnu = 0;
-    win.w_onebuf_opt.wo_cul = 0;
-    win.w_onebuf_opt.wo_cuc = 0;
-    win.w_onebuf_opt.wo_spell = 0;
-    win.w_onebuf_opt.wo_list = 0;
+    let win = win;
+    win.set_wo_nu(0);
+    win.set_wo_rnu(0);
+    win.set_wo_cul(0);
+    win.set_wo_cuc(0);
+    win.set_wo_spell(0);
+    win.set_wo_list(0);
 
     // Hide EOB region: use " " fillchar and cleared highlighting
-    if win.w_p_fcs_chars.eob != ' ' as ScreenChar {
-        let fcs = &win.w_onebuf_opt.wo_fcs;
+    if win.fcs_eob() != ' ' as ScreenChar {
+        let mut edit = win.edit();
+        let fcs = &edit.w_onebuf_opt.wo_fcs;
         let new = if fcs.bytes().is_empty() {
             XString::from_cstr(c"eob: ")
         } else {
             with_tail(fcs, c",eob: ")
         };
-        win.w_onebuf_opt.wo_fcs = Some(new);
+        edit.w_onebuf_opt.wo_fcs = Some(new);
     }
 
     // TODO(bfredl): this could use a highlight namespace directly,
     // and avoid peculiarities around window options
-    let winhl = &win.w_onebuf_opt.wo_winhl;
-    let new = if winhl.bytes().is_empty() {
-        XString::from_cstr(c"EndOfBuffer:")
-    } else {
-        with_tail(winhl, c",EndOfBuffer:")
-    };
-    win.w_onebuf_opt.wo_winhl = Some(new);
+    {
+        let mut edit = win.edit();
+        let winhl = &edit.w_onebuf_opt.wo_winhl;
+        let new = if winhl.bytes().is_empty() {
+            XString::from_cstr(c"EndOfBuffer:")
+        } else {
+            with_tail(winhl, c",EndOfBuffer:")
+        };
+        edit.w_onebuf_opt.wo_winhl = Some(new);
+    }
     parse_winhl(win);
 
     // signcolumn: use 'auto'
-    let scl = win.w_onebuf_opt.wo_scl.bytes();
-    if scl.first() != Some(&b'a') || scl.len() >= 8 {
-        win.w_onebuf_opt.wo_scl = Some(XString::from_cstr(c"auto"));
+    let scl_auto = {
+        let held = win.read();
+        let scl = held.w_onebuf_opt.wo_scl.bytes();
+        scl.first() == Some(&b'a') && scl.len() < 8
+    };
+    if !scl_auto {
+        win.edit().w_onebuf_opt.wo_scl = Some(XString::from_cstr(c"auto"));
     }
 
     // foldcolumn: use '0'
-    if win.w_onebuf_opt.wo_fdc.bytes().first() != Some(&b'0') {
-        win.w_onebuf_opt.wo_fdc = Some(XString::from_cstr(c"0"));
+    if win.read().w_onebuf_opt.wo_fdc.bytes().first() != Some(&b'0') {
+        win.edit().w_onebuf_opt.wo_fdc = Some(XString::from_cstr(c"0"));
     }
 
     // colorcolumn: cleared
-    if !win.w_onebuf_opt.wo_cc.bytes().is_empty() {
-        win.w_onebuf_opt.wo_cc = Some(XString::new());
+    if !win.read().w_onebuf_opt.wo_cc.bytes().is_empty() {
+        win.edit().w_onebuf_opt.wo_cc = Some(XString::new());
     }
 
     // statuscolumn: cleared
-    win.w_onebuf_opt.wo_stc = None;
+    win.edit().w_onebuf_opt.wo_stc = None;
 
     // statusline: cleared (for floating windows)
-    if win.w_floating && !win.w_onebuf_opt.wo_stl.bytes().is_empty() {
-        win.w_onebuf_opt.wo_stl = None;
-        if win.w_status_height > 0 {
-            win_config_float(win, win.w_config.clone());
+    if win.w_floating() && !win.read().w_onebuf_opt.wo_stl.bytes().is_empty() {
+        win.edit().w_onebuf_opt.wo_stl = None;
+        if win.w_status_height() > 0 {
+            win_config_float(win, win.config());
         }
     }
 }
@@ -467,10 +476,10 @@ pub(crate) fn win_set_minimal_style(win: Win) {
 
 /// Rows and columns the border adds around the text area.
 pub(crate) fn win_border_height(win: Win) -> c_int {
-    win.w_border_adj[0] + win.w_border_adj[2]
+    win.w_border_adj()[0] + win.w_border_adj()[2]
 }
 pub(crate) fn win_border_width(win: Win) -> c_int {
-    win.w_border_adj[1] + win.w_border_adj[3]
+    win.w_border_adj()[1] + win.w_border_adj()[3]
 }
 
 /// Apply `fconfig` to `win`: its size, its screen position and everything
@@ -478,15 +487,15 @@ pub(crate) fn win_border_width(win: Win) -> c_int {
 pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
     let mut win = win;
     // Process statusline changes before applying new height from config
-    let show_stl = !win.w_onebuf_opt.wo_stl.bytes().is_empty() && show_statusline();
-    if win.w_status_height != 0 && !show_stl {
+    let show_stl = !win.read().w_onebuf_opt.wo_stl.bytes().is_empty() && show_statusline();
+    if win.w_status_height() != 0 && !show_stl {
         remove_status_line(win);
-    } else if win.w_status_height == 0 && show_stl {
-        win.w_status_height = STATUS_HEIGHT;
+    } else if win.w_status_height() == 0 && show_stl {
+        win.set_w_status_height(STATUS_HEIGHT);
     }
 
-    win.w_width = fconfig.width.max(1);
-    win.w_height = fconfig.height.max(1);
+    win.set_w_width(fconfig.width.max(1));
+    win.set_w_height(fconfig.height.max(1));
 
     if fconfig.relative == FLOAT_RELATIVE_CURSOR {
         let cur = current_win();
@@ -494,68 +503,70 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
         // are only current once validated.
         validate_cursor(cur);
         fconfig.relative = FLOAT_RELATIVE_WINDOW;
-        fconfig.row += f64::from(cur.w_wrow);
-        fconfig.col += f64::from(cur.w_wcol);
-        fconfig.window = cur.handle as WindowHandle;
+        fconfig.row += f64::from(cur.w_wrow());
+        fconfig.col += f64::from(cur.w_wcol());
+        fconfig.window = cur.handle() as WindowHandle;
     } else if fconfig.relative == FLOAT_RELATIVE_MOUSE {
         let mut pos = MousePos::current();
         if let Some(mouse_win) = find_win_inner(&mut pos) {
             fconfig.relative = FLOAT_RELATIVE_WINDOW;
             fconfig.row += f64::from(pos.row);
             fconfig.col += f64::from(pos.col);
-            fconfig.window = mouse_win.handle as WindowHandle;
+            fconfig.window = mouse_win.handle() as WindowHandle;
         }
     }
 
-    let change_external = fconfig.external != win.w_config.external;
-    let mut change_border = fconfig.border != win.w_config.border
-        || fconfig.border_hl_ids != win.w_config.border_hl_ids;
+    let change_external = fconfig.external != win.config_external();
+    let mut change_border = fconfig.border != win.config_border()
+        || fconfig.border_hl_ids != win.read().w_config.border_hl_ids;
 
     merge_config(&mut win, fconfig.clone());
 
-    let has_border = win.w_floating && win.w_config.border;
+    let has_border = win.w_floating() && win.read().w_config.border;
     for i in 0..4 {
-        let new_adj = c_int::from(has_border && win.w_config.border_chars[2 * i + 1][0] != 0);
-        if new_adj != win.w_border_adj[i] {
+        let new_adj =
+            c_int::from(has_border && win.read().w_config.border_chars[2 * i + 1][0] != 0);
+        if new_adj != win.w_border_adj()[i] {
             change_border = true;
-            win.w_border_adj[i] = new_adj;
+            win.edit().w_border_adj[i] = new_adj;
         }
     }
 
     if !ui_has(UI_MULTIGRID) {
-        let above_ch = if win.w_config.zindex < Z_INDEX_MESSAGES {
+        let above_ch = if win.config_zindex() < Z_INDEX_MESSAGES {
             number_as_int(p_ch())
         } else {
             0
         };
-        win.w_height = win
-            .w_height
-            .min(ROWS.get() - win_border_height(win) - above_ch);
-        win.w_width = win.w_width.min(COLUMNS.get() - win_border_width(win));
+        win.set_w_height(
+            win.w_height()
+                .min(ROWS.get() - win_border_height(win) - above_ch),
+        );
+        win.set_w_width(win.w_width().min(COLUMNS.get() - win_border_width(win)));
     }
 
     set_inner_size(win);
     set_must_redraw(UPD_VALID);
-    win.w_redr_status = win.w_status_height != 0;
-    win.w_pos_changed = true;
+    win.set_w_redr_status(win.w_status_height() != 0);
+    win.set_w_pos_changed(true);
     if change_external || change_border {
-        win.w_hl_needs_update = true;
+        win.set_w_hl_needs_update(true);
         win.redraw_later(UPD_NOT_VALID);
     }
 
     // compute initial position
-    if win.w_config.relative == FLOAT_RELATIVE_WINDOW {
+    if win.config_relative() == FLOAT_RELATIVE_WINDOW {
         let (row, col) = anchored_position(win);
-        win.w_winrow = row;
-        win.w_wincol = col;
+        win.set_w_winrow(row);
+        win.set_w_wincol(col);
     } else {
-        win.w_winrow = float_as_int(fconfig.row);
-        win.w_wincol = float_as_int(fconfig.col);
+        win.set_w_winrow(float_as_int(fconfig.row));
+        win.set_w_wincol(float_as_int(fconfig.col));
     }
 
     // changing border style while keeping border only requires redrawing border
     if fconfig.border {
-        win.w_redr_border = true;
+        win.set_w_redr_border(true);
         win.redraw_later(UPD_VALID);
     }
 }
@@ -565,22 +576,22 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
 /// gone away leaves the config's own row and column, which is why the
 /// lookup's refusal is thrown away.
 fn anchored_position(win: Win) -> (c_int, c_int) {
-    let mut row = float_as_int(win.w_config.row);
-    let mut col = float_as_int(win.w_config.col);
-    let parent = find_window_by_handle(win.w_config.window).unwrap_or_default();
+    let mut row = float_as_int(win.config_row());
+    let mut col = float_as_int(win.config_col());
+    let parent = find_window_by_handle(win.config_window()).unwrap_or_default();
     if let Some(parent) = parent {
         let mut parent = parent;
-        row += parent.w_winrow;
-        col += parent.w_wincol;
+        row += parent.w_winrow();
+        col += parent.w_wincol();
         adjust_for_grid(&mut parent, &mut row, &mut col);
-        if win.w_config.bufpos.lnum >= LineNr::ZERO {
+        if win.read().w_config.bufpos.lnum >= LineNr::ZERO {
             // Widened: `bufpos={2147483647, ...}` reaches here and the C's
             // `lnum + 1` overflows before the clamp can catch it.
-            let lnum = (i64::from(win.w_config.bufpos.lnum) + 1)
+            let lnum = (i64::from(win.read().w_config.bufpos.lnum) + 1)
                 .min(i64::from(parent.buffer().line_count()));
             let mut pos = Pos {
                 lnum: number_as_lnum(lnum),
-                col: win.w_config.bufpos.col,
+                col: win.read().w_config.bufpos.col,
                 coladd: 0,
             };
             let (trow, tcol) = screen_pos_of(parent, &mut pos);
@@ -602,7 +613,7 @@ pub(crate) fn win_float_remove(bang: bool, mut count: c_int) {
     // topmost float first. Stable, as glibc's `qsort` is for an array this
     // size (a merge sort), so floats of equal z-index keep the list's order.
     let mut floats: Vec<Win> = floats().collect();
-    floats.sort_by_key(|win| core::cmp::Reverse(win.w_config.zindex));
+    floats.sort_by_key(|win| core::cmp::Reverse(win.config_zindex()));
     // Identities, held across the closes: `win_close` may free a later one.
     let ids: Vec<WinId> = floats.iter().map(|win| win.id()).collect();
     for id in ids {
@@ -624,41 +635,41 @@ pub(crate) fn win_float_remove(bang: bool, mut count: c_int) {
 // Keeping floats in step with what they hang off, and finding one
 
 pub(crate) fn win_check_anchored_floats(win: Win) {
-    let handle = win.handle;
-    for mut wp in floats() {
+    let handle = win.handle();
+    for wp in floats() {
         // float might be anchored to moved window
-        if wp.w_config.relative == FLOAT_RELATIVE_WINDOW && wp.w_config.window == handle {
-            wp.w_pos_changed = true;
+        if wp.config_relative() == FLOAT_RELATIVE_WINDOW && wp.read().w_config.window == handle {
+            wp.set_w_pos_changed(true);
         }
     }
 }
 
 pub(crate) fn win_float_update_statusline() {
     for wp in floats() {
-        let has_status = wp.w_status_height > 0;
-        let should_show = !wp.w_onebuf_opt.wo_stl.bytes().is_empty() && show_statusline();
+        let has_status = wp.w_status_height() > 0;
+        let should_show = !wp.read().w_onebuf_opt.wo_stl.bytes().is_empty() && show_statusline();
         if should_show != has_status {
-            win_config_float(wp, wp.w_config.clone());
+            win_config_float(wp, wp.config());
         }
     }
 }
 
 pub(crate) fn win_float_anchor_laststatus() {
-    for mut win in windows_in_tab(current_tab()) {
-        if win.w_config.relative == FLOAT_RELATIVE_LASTSTATUS {
-            win.w_pos_changed = true;
+    for win in windows_in_tab(current_tab()) {
+        if win.config_relative() == FLOAT_RELATIVE_LASTSTATUS {
+            win.set_w_pos_changed(true);
         }
     }
 }
 
 pub(crate) fn win_reconfig_floats() {
     for wp in floats() {
-        win_config_float(wp, wp.w_config.clone());
+        win_config_float(wp, wp.config());
     }
 }
 
 pub(crate) fn win_float_find_preview() -> Option<Win> {
-    floats().find(|wp| wp.w_float_is_info)
+    floats().find(|wp| wp.w_float_is_info())
 }
 
 /// Select an alternative window to `win` (assumed floating) in tabpage `tabpage`,
@@ -670,7 +681,7 @@ pub(crate) fn win_float_find_altwin(win: Win, tabpage: Option<TabPage>) -> Optio
         return prev_window()
             .and_then(|w| valid_window(w.id()))
             .filter(|wp| *wp != win)
-            .filter(|wp| wp.w_config.focusable && !wp.w_config.hide)
+            .filter(|wp| wp.config_focusable() && !wp.config_hide())
             .or_else(first_window);
     };
 
@@ -683,7 +694,7 @@ pub(crate) fn win_float_find_altwin(win: Win, tabpage: Option<TabPage>) -> Optio
     let wp = wp.unwrap_or(first);
     // Not the window being closed itself: it may be the other tab's
     // `tp_prevwin`.
-    if wp != win && wp.w_config.focusable && !wp.w_config.hide {
+    if wp != win && wp.read().w_config.focusable && !wp.config_hide() {
         Some(wp)
     } else {
         Some(first)
@@ -712,8 +723,8 @@ fn handle_error_and_cleanup(win: Option<Win>, err: Option<Error>) -> Option<Win>
 pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> Option<Win> {
     let mut config = WIN_CONFIG_INIT;
     let cur = current_win();
-    config.col = f64::from(cur.w_wcol);
-    config.row = f64::from(cur.w_wrow);
+    config.col = f64::from(cur.w_wcol());
+    config.row = f64::from(cur.w_wrow());
     config.relative = FLOAT_RELATIVE_EDITOR;
     config.focusable = false;
     config.mouse = true;
@@ -722,7 +733,7 @@ pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> Option<Win
     config.hide = true;
     config.style = WIN_STYLE_MINIMAL;
     suppress_autocmds();
-    let mut win = match new_float(None, false, config) {
+    let win = match new_float(None, false, config) {
         Ok(Some(win)) => win,
         Ok(None) => return handle_error_and_cleanup(None, None),
         Err(e) => return handle_error_and_cleanup(None, Some(e)),
@@ -747,10 +758,10 @@ pub(crate) fn win_float_create_preview(enter: bool, new_buf: bool) -> Option<Win
         }
     }
     resume_autocmds();
-    win.w_onebuf_opt.wo_diff = 0;
-    win.w_float_is_info = true;
-    win.w_onebuf_opt.wo_wrap = 1; // 'wrap' is default on
-    win.w_onebuf_opt.wo_so = 0 as OptInt; // 'scrolloff' zero
+    win.set_wo_diff(0);
+    win.set_w_float_is_info(true);
+    win.set_wo_wrap(1); // 'wrap' is default on
+    win.set_wo_so(0 as OptInt); // 'scrolloff' zero
     if enter {
         enter_window(win);
     }

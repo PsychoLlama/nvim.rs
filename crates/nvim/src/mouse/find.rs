@@ -39,7 +39,7 @@ use crate::winlayer::{current_topframe, first_window, windows};
 
 /// The screen row the first window starts at: the tab page line's height.
 pub(crate) fn first_window_row() -> c_int {
-    first_window().map_or(0, |wp| wp.w_winrow)
+    first_window().map_or(0, |wp| wp.w_winrow())
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ pub(crate) fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
     // When using a timer that closes a window the window might not actually
     // exist.
     let win = windows().find(|wp| Some(wp.id()) == fp.fr_win())?;
-    pos.row -= win.w_winbar_height;
+    pos.row -= win.w_winbar_height();
     Some(win)
 }
 
@@ -94,8 +94,8 @@ pub(crate) fn find_win_inner(pos: &mut MousePos) -> Option<Win> {
 /// window rather than of its inner area.
 pub(crate) fn find_win_outer(pos: &mut MousePos) -> Option<Win> {
     let win = find_win_inner(pos)?;
-    pos.row += win.w_winrow_off;
-    pos.col += win.w_wincol_off;
+    pos.row += win.w_winrow_off();
+    pos.col += win.w_wincol_off();
     Some(win)
 }
 
@@ -107,9 +107,9 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
         pos.grid = DEFAULT_GRID_HANDLE.get();
     } else if pos.grid > 1 {
         let wp = get_win_by_grid_handle(Handle::new(pos.grid))?;
-        if wp.w_grid_alloc.is_allocated() && !(wp.w_floating && !wp.w_config.mouse) {
-            pos.row = (pos.row - wp.w_grid.row_offset).min(wp.w_view_height - 1);
-            pos.col = (pos.col - wp.w_grid.col_offset).min(wp.w_view_width - 1);
+        if wp.read().w_grid_alloc.is_allocated() && !(wp.w_floating() && !wp.config_mouse()) {
+            pos.row = (pos.row - wp.w_grid().row_offset).min(wp.w_view_height() - 1);
+            pos.col = (pos.col - wp.w_grid().col_offset).min(wp.w_view_width() - 1);
             return Some(wp);
         }
     } else if pos.grid == 0 {
@@ -125,8 +125,8 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
                 continue;
             };
             pos.grid = grid.handle.get();
-            pos.row -= wp.w_winrow + wp.w_grid.row_offset;
-            pos.col -= wp.w_wincol + wp.w_grid.col_offset;
+            pos.row -= wp.w_winrow() + wp.w_grid().row_offset;
+            pos.col -= wp.w_wincol() + wp.w_grid().col_offset;
             return Some(wp);
         }
 
@@ -145,21 +145,21 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
 ///
 /// Answers the line, and whether the position is below the last one.
 pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, bool) {
-    let mut screen_col = if win.w_onebuf_opt.wo_rl != 0 {
-        win.w_view_width - 1 - *col
+    let mut screen_col = if win.wo_rl() != 0 {
+        win.w_view_width() - 1 - *col
     } else {
         *col
     };
     let mut screen_row = *row;
     let mut below_last = false;
     let last_line = win.buffer().line_count();
-    let mut lnum = win.w_topline;
+    let mut lnum = win.w_topline();
 
     while screen_row > 0 {
         // Don't include filler lines in "count".
         let mut count = if win.may_fill() {
-            screen_row -= if lnum == win.w_topline {
-                win.w_topfill
+            screen_row -= if lnum == win.w_topline() {
+                win.w_topfill()
             } else {
                 win.fill_above(lnum)
             };
@@ -168,11 +168,11 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, b
             win.plines(lnum, false)
         };
 
-        if win.w_skipcol > ColNr::ZERO && lnum == win.w_topline {
+        if win.w_skipcol() > ColNr::ZERO && lnum == win.w_topline() {
             let (width1, width2) = win.text_widths();
             if width1 > 0 {
                 // Adjust for 'smoothscroll' clipping the top screen lines.
-                count -= skipped_top_lines(win.w_skipcol, width1, width2);
+                count -= skipped_top_lines(win.w_skipcol(), width1, width2);
             }
         }
 
@@ -197,15 +197,15 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, b
     if !below_last {
         // Compute the column without wrapping.
         let off = win.col_off() - win.col_off2();
-        screen_col = screen_col.max(off) + screen_row * (win.w_view_width - off);
+        screen_col = screen_col.max(off) + screen_row * (win.w_view_width() - off);
         // Add skip column for the topline.
-        if lnum == win.w_topline {
-            screen_col += win.w_skipcol.get();
+        if lnum == win.w_topline() {
+            screen_col += win.w_skipcol().get();
         }
     }
 
-    if win.w_onebuf_opt.wo_wrap == 0 {
-        screen_col += win.w_leftcol.get();
+    if win.wo_wrap() == 0 {
+        screen_col += win.w_leftcol().get();
     }
 
     // Skip the line number and fold column in front of the line.

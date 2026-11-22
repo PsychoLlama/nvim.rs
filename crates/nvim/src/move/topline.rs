@@ -47,7 +47,7 @@ impl Win {
     }
 }
 
-fn update_topline_win(mut win: Win) {
+fn update_topline_win(win: Win) {
     let mut check_botline = false;
     let so = ScrollOff::of(win, ScrollMargin::Lines);
     let save_so = so.get();
@@ -58,17 +58,17 @@ fn update_topline_win(mut win: Win) {
     }
 
     // No screen yet, or a window with no room: just show the cursor line.
-    if !default_grid_ref().is_allocated() || win.w_view_height == 0 {
+    if !default_grid_ref().is_allocated() || win.w_view_height() == 0 {
         win.check_cursor_lnum();
-        win.w_topline = win.w_cursor.lnum;
-        win.w_botline = win.w_topline;
-        win.w_viewport_invalid = true;
-        win.w_scbind_pos = 1;
+        win.set_w_topline(win.cursor().lnum());
+        win.set_w_botline(win.w_topline());
+        win.set_w_viewport_invalid(true);
+        win.set_w_scbind_pos(1);
         return;
     }
 
     win.check_cursor_moved();
-    if win.w_valid.has(WinValid::TOPLINE) {
+    if win.w_valid().has(WinValid::TOPLINE) {
         return;
     }
 
@@ -79,40 +79,40 @@ fn update_topline_win(mut win: Win) {
         so.set(OptInt::from(MOUSE_DRAGGING.get() - 1));
     }
 
-    let old_topline = win.w_topline;
-    let old_topfill = win.w_topfill;
+    let old_topline = win.w_topline();
+    let old_topfill = win.w_topfill();
 
     if buf_is_empty(win.buffer()) {
         // Special case: an empty file always starts at line 1.
-        if win.w_topline != LineNr::ONE {
+        if win.w_topline() != LineNr::ONE {
             win.redraw_later(UPD_NOT_VALID);
         }
-        win.w_topline = LineNr::ONE;
-        win.w_botline = LineNr::new(2);
-        win.w_skipcol = ColNr::ZERO;
-        win.w_valid |= WinValid::BOTLINE | WinValid::BOTLINE_AP;
-        win.w_viewport_invalid = true;
-        win.w_scbind_pos = 1;
+        win.set_w_topline(LineNr::ONE);
+        win.set_w_botline(LineNr::new(2));
+        win.set_w_skipcol(ColNr::ZERO);
+        win.set_w_valid(win.w_valid() | (WinValid::BOTLINE | WinValid::BOTLINE_AP));
+        win.set_w_viewport_invalid(true);
+        win.set_w_scbind_pos(1);
     } else if check_topline(win) {
-        let halfheight = arith::recentre_threshold(win.w_view_height);
+        let halfheight = arith::recentre_threshold(win.w_view_height());
         // How far the cursor is above the top of the window, give or take:
         // an approximation of how much would have to be scrolled.
         let n = if win.lines_concealed() {
             unconcealed_above(win, halfheight, so.get())
         } else {
-            (i64::from(win.w_topline) + so.get() - i64::from(win.w_cursor.lnum)) as int64_t
+            (i64::from(win.w_topline()) + so.get() - i64::from(win.cursor().lnum())) as int64_t
         };
         // Far out to begin with: put the cursor in the middle of the window.
         // Close: put it near the top.
         if n >= int64_t::from(halfheight) {
             win.scroll_cursor_halfway(false, false);
         } else {
-            scroll_cursor_top(win, arith::scrolljump_lines(p_sj(), win.w_view_height), 0);
+            scroll_cursor_top(win, arith::scrolljump_lines(p_sj(), win.w_view_height()), 0);
             check_botline = true;
         }
     } else {
         // Make sure the top line is the first line of a fold.
-        win.w_topline = win.fold_first(win.w_topline).unwrap_or(win.w_topline);
+        win.set_w_topline(win.fold_first(win.w_topline()).unwrap_or(win.w_topline()));
         check_botline = true;
     }
 
@@ -121,23 +121,23 @@ fn update_topline_win(mut win: Win) {
     // redraw; when it was only approximated a redraw may still be needed in
     // a few cases, but recomputing it for every small change costs more.
     if check_botline {
-        if !win.w_valid.has(WinValid::BOTLINE_AP) {
+        if !win.w_valid().has(WinValid::BOTLINE_AP) {
             win.validate_botline();
         }
-        if win.w_botline <= win.buffer().line_count() {
-            if win.w_cursor.lnum < win.w_botline {
+        if win.w_botline() <= win.buffer().line_count() {
+            if win.cursor().lnum() < win.w_botline() {
                 check_botline = !enough_below(win, so.get());
             }
             if check_botline {
                 let n = if win.lines_concealed() {
                     unconcealed_below(win, so.get())
                 } else {
-                    (OptInt::from(win.w_cursor.lnum - win.w_botline + 1) + so.get()) as int64_t
+                    (OptInt::from(win.cursor().lnum() - win.w_botline() + 1) + so.get()) as int64_t
                 };
-                if n <= int64_t::from(win.w_view_height + 1) {
+                if n <= int64_t::from(win.w_view_height() + 1) {
                     scroll_cursor_bot(
                         win,
-                        arith::scrolljump_lines(p_sj(), win.w_view_height),
+                        arith::scrolljump_lines(p_sj(), win.w_view_height()),
                         false,
                     );
                 } else {
@@ -147,24 +147,24 @@ fn update_topline_win(mut win: Win) {
         }
     }
 
-    win.w_valid |= WinValid::TOPLINE;
-    win.w_viewport_invalid = true;
+    win.set_w_valid(win.w_valid() | WinValid::TOPLINE);
+    win.set_w_viewport_invalid(true);
     win.check_anchored_floats();
 
     // The top line moved, so the window has to be redrawn.
-    if win.w_topline != old_topline || win.w_topfill != old_topfill {
+    if win.w_topline() != old_topline || win.w_topfill() != old_topfill {
         DOLLAR_VCOL.set(ColNr::NONE);
         win.redraw_later(UPD_VALID);
 
         // Without 'smoothscroll' there is nothing for `w_skipcol` to mean.
-        if win.w_onebuf_opt.wo_sms == 0 {
+        if win.wo_sms() == 0 {
             win.reset_skipcol();
-        } else if win.w_skipcol != ColNr::ZERO {
+        } else if win.w_skipcol() != ColNr::ZERO {
             win.redraw_later(UPD_SOME_VALID);
         }
 
         // `w_skipcol` may have to be set when the cursor is on the top line.
-        if win.w_cursor.lnum == win.w_topline {
+        if win.cursor().lnum() == win.w_topline() {
             win.validate_cursor();
         }
     }
@@ -175,27 +175,27 @@ fn update_topline_win(mut win: Win) {
 /// Whether the cursor is above the window, or too close to its top for
 /// 'scrolloff', or the window shows more filler lines than there is room for.
 fn check_topline(win: Win) -> bool {
-    if win.w_topline > LineNr::ONE || win.w_skipcol > ColNr::ZERO {
+    if win.w_topline() > LineNr::ONE || win.w_skipcol() > ColNr::ZERO {
         // Above the top line: scrolling is always needed. Far below it and
         // with no folding: scrolling down never is.
-        if win.w_cursor.lnum < win.w_topline {
+        if win.cursor().lnum() < win.w_topline() {
             return true;
         }
         if check_top_offset(win) {
             return true;
         }
-        if win.w_skipcol > ColNr::ZERO && win.w_cursor.lnum == win.w_topline {
+        if win.w_skipcol() > ColNr::ZERO && win.cursor().lnum() == win.w_topline() {
             // Is the cursor's own column visible? Add the columns the
             // top-left marker covers.
             let vcol = win.virtual_vcol(win.cursor());
             let overlap = sms_marker_overlap(win, -1);
-            if win.w_skipcol + overlap > vcol {
+            if win.w_skipcol() + overlap > vcol {
                 return true;
             }
         }
     }
     // More filler lines than there is room for.
-    win.w_topfill > win.fill_above(win.w_topline)
+    win.w_topfill() > win.fill_above(win.w_topline())
 }
 
 /// Logical lines between the cursor and `w_topline + 'scrolloff'`, counting
@@ -203,8 +203,8 @@ fn check_topline(win: Win) -> bool {
 /// longer matter.
 fn unconcealed_above(win: Win, halfheight: c_int, so: OptInt) -> int64_t {
     let mut n: int64_t = 0;
-    let mut lnum = win.w_cursor.lnum;
-    while i64::from(lnum) < i64::from(win.w_topline) + so {
+    let mut lnum = win.cursor().lnum();
+    while i64::from(lnum) < i64::from(win.w_topline()) + so {
         // Stop at the end of the file, or once we know we are far off.
         if lnum >= win.buffer().line_count() || {
             n += int64_t::from(!win.conceals_line(lnum.get(), false));
@@ -223,11 +223,11 @@ fn unconcealed_above(win: Win, halfheight: c_int, so: OptInt) -> int64_t {
 /// symmetric; kept.
 fn unconcealed_below(win: Win, so: OptInt) -> int64_t {
     let mut n: int64_t = 0;
-    let mut lnum = win.w_cursor.lnum;
-    while i64::from(lnum) >= i64::from(win.w_botline) - so {
+    let mut lnum = win.cursor().lnum();
+    while i64::from(lnum) >= i64::from(win.w_botline()) - so {
         if lnum <= LineNr::ZERO || {
             n += int64_t::from(!win.conceals_line((lnum - 1).get(), false));
-            n > int64_t::from(win.w_view_height + 1)
+            n > int64_t::from(win.w_view_height() + 1)
         } {
             break;
         }
@@ -239,17 +239,17 @@ fn unconcealed_below(win: Win, so: OptInt) -> int64_t {
 /// Whether there are already 'scrolloff' window lines below the cursor, so
 /// that nothing has to be scrolled.
 fn enough_below(win: Win, so: OptInt) -> bool {
-    if i64::from(win.w_cursor.lnum) < i64::from(win.w_botline) - so && !win.lines_concealed() {
+    if i64::from(win.cursor().lnum()) < i64::from(win.w_botline()) - so && !win.lines_concealed() {
         return true;
     }
     let mut loff = LineOff {
         // In a fold, count from its last line.
-        lnum: win.fold_last(win.w_cursor.lnum),
+        lnum: win.fold_last(win.cursor().lnum()),
         fill: 0,
         height: 0,
     };
-    let mut n = win.w_empty_rows + win.w_filler_rows;
-    while loff.lnum < win.w_botline && (loff.lnum + 1 < win.w_botline || loff.fill == 0) {
+    let mut n = win.w_empty_rows() + win.w_filler_rows();
+    while loff.lnum < win.w_botline() && (loff.lnum + 1 < win.w_botline() || loff.fill == 0) {
         n += loff.height;
         if OptInt::from(n) >= so {
             break;
@@ -268,18 +268,18 @@ fn enough_below(win: Win, so: OptInt) -> bool {
 /// slowed-down one. That is upstream's shape, kept.
 fn check_top_offset(win: Win) -> bool {
     let so = win.scrolloff();
-    if i64::from(win.w_cursor.lnum) < i64::from(win.w_topline) + so || win.lines_concealed() {
+    if i64::from(win.cursor().lnum()) < i64::from(win.w_topline()) + so || win.lines_concealed() {
         let mut loff = LineOff {
-            lnum: win.w_cursor.lnum,
+            lnum: win.cursor().lnum(),
             fill: 0,
             height: 0,
         };
         // The filler lines above the top line are always context.
-        let mut n = win.w_topfill;
+        let mut n = win.w_topfill();
         while int64_t::from(n) < so {
             topline_back(win, &mut loff);
             // Stop once a line above the window has been counted.
-            if loff.lnum < win.w_topline || (loff.lnum == win.w_topline && loff.fill > 0) {
+            if loff.lnum < win.w_topline() || (loff.lnum == win.w_topline() && loff.fill > 0) {
                 break;
             }
             n += loff.height;
@@ -293,15 +293,15 @@ fn check_top_offset(win: Win) -> bool {
 
 /// Recompute `w_curswant` from the cursor's virtual column.
 pub fn update_curswant_force() {
-    let mut win = Win::current();
+    let win = Win::current();
     win.validate_virtcol();
-    win.w_curswant = win.w_virtcol;
-    win.w_set_curswant = false;
+    win.set_w_curswant(win.w_virtcol());
+    win.set_w_set_curswant(false);
 }
 
 /// [`update_curswant_force`], but only when something asked for it.
 pub fn update_curswant() {
-    if Win::current().w_set_curswant {
+    if Win::current().w_set_curswant() {
         update_curswant_force();
     }
 }
@@ -321,60 +321,66 @@ impl Win {
     /// A window setting changed in a way that needs the cursor position,
     /// `w_botline` and `w_topline` recomputed and the window redrawn --
     /// 'wrap' or folding, for instance.
-    pub(super) fn changed_window_setting(mut self) {
-        self.w_lines_valid = 0;
+    pub(super) fn changed_window_setting(self) {
+        self.set_w_lines_valid(0);
         self.invalidate_above_cursor();
-        self.w_valid = self
-            .w_valid
-            .without(WinValid::BOTLINE | WinValid::BOTLINE_AP | WinValid::TOPLINE);
+        self.set_w_valid(
+            self.w_valid()
+                .without(WinValid::BOTLINE | WinValid::BOTLINE_AP | WinValid::TOPLINE),
+        );
         self.redraw_later(UPD_NOT_VALID);
     }
 }
 
-fn check_cursor_moved_win(mut win: Win) {
-    if win.w_cursor.lnum != win.w_valid_cursor.lnum {
-        win.w_valid -= WinValid::WROW
-            | WinValid::WCOL
-            | WinValid::VIRTCOL
-            | WinValid::CHEIGHT
-            | WinValid::CROW
-            | WinValid::TOPLINE;
+fn check_cursor_moved_win(win: Win) {
+    if win.cursor().lnum() != win.w_valid_cursor().lnum {
+        win.set_w_valid(win.w_valid().without(
+            WinValid::WROW
+                | WinValid::WCOL
+                | WinValid::VIRTCOL
+                | WinValid::CHEIGHT
+                | WinValid::CROW
+                | WinValid::TOPLINE,
+        ));
         // Concealed-line visibility toggled.
         if win.is_current()
-            && win.w_valid_cursor.lnum > LineNr::ZERO
-            && win.w_onebuf_opt.wo_cole >= 2
+            && win.w_valid_cursor().lnum > LineNr::ZERO
+            && win.wo_cole() >= 2
             && !win.conceal_cursor_line()
-            && (win.conceals_line((win.w_cursor.lnum - 1).get(), true)
-                || win.conceals_line((win.w_valid_cursor.lnum - 1).get(), true))
+            && (win.conceals_line((win.cursor().lnum() - 1).get(), true)
+                || win.conceals_line((win.w_valid_cursor().lnum - 1).get(), true))
         {
             win.changed_window_setting();
         }
-        win.w_valid_cursor = win.w_cursor;
-        win.w_valid_leftcol = win.w_leftcol;
-        win.w_valid_skipcol = win.w_skipcol;
-        win.w_viewport_invalid = true;
-    } else if win.w_skipcol != win.w_valid_skipcol {
-        win.w_valid -= WinValid::WROW
-            | WinValid::WCOL
-            | WinValid::VIRTCOL
-            | WinValid::CHEIGHT
-            | WinValid::CROW
-            | WinValid::BOTLINE
-            | WinValid::BOTLINE_AP;
-        win.w_valid_cursor = win.w_cursor;
-        win.w_valid_leftcol = win.w_leftcol;
-        win.w_valid_skipcol = win.w_skipcol;
-    } else if win.w_cursor.col != win.w_valid_cursor.col
-        || win.w_leftcol != win.w_valid_leftcol
-        || win.w_cursor.coladd != win.w_valid_cursor.coladd
+        win.set_w_valid_cursor(win.w_cursor());
+        win.set_w_valid_leftcol(win.w_leftcol());
+        win.set_w_valid_skipcol(win.w_skipcol());
+        win.set_w_viewport_invalid(true);
+    } else if win.w_skipcol() != win.w_valid_skipcol() {
+        win.set_w_valid(win.w_valid().without(
+            WinValid::WROW
+                | WinValid::WCOL
+                | WinValid::VIRTCOL
+                | WinValid::CHEIGHT
+                | WinValid::CROW
+                | WinValid::BOTLINE
+                | WinValid::BOTLINE_AP,
+        ));
+        win.set_w_valid_cursor(win.w_cursor());
+        win.set_w_valid_leftcol(win.w_leftcol());
+        win.set_w_valid_skipcol(win.w_skipcol());
+    } else if win.cursor().col() != win.w_valid_cursor().col
+        || win.w_leftcol() != win.w_valid_leftcol()
+        || win.cursor().coladd() != win.w_valid_cursor().coladd
     {
-        win.w_valid = win
-            .w_valid
-            .without(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
-        win.w_valid_cursor.col = win.w_cursor.col;
-        win.w_valid_leftcol = win.w_leftcol;
-        win.w_valid_cursor.coladd = win.w_cursor.coladd;
-        win.w_viewport_invalid = true;
+        win.set_w_valid(
+            win.w_valid()
+                .without(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL),
+        );
+        win.edit().w_valid_cursor.col = win.cursor().col();
+        win.set_w_valid_leftcol(win.w_leftcol());
+        win.edit().w_valid_cursor.coladd = win.cursor().coladd();
+        win.set_w_viewport_invalid(true);
     }
 }
 
@@ -393,25 +399,26 @@ pub fn changed_window_setting_all() {
 
 /// Put the window's top line at `lnum`, approximating `w_botline` rather than
 /// recomputing it.
-pub fn set_topline(mut win: Win, lnum: LineNr) {
-    let prev_topline = win.w_topline;
+pub fn set_topline(win: Win, lnum: LineNr) {
+    let prev_topline = win.w_topline();
     // Go to the first line of a closed fold.
     let lnum = win.fold_first(lnum).unwrap_or(lnum);
-    let shift = lnum - win.w_topline;
-    win.w_botline += shift;
+    let shift = lnum - win.w_topline();
+    win.set_w_botline(win.w_botline() + shift);
     let last = win.buffer().line_count() + 1;
-    if win.w_botline > last {
-        win.w_botline = last;
+    if win.w_botline() > last {
+        win.set_w_botline(last);
     }
-    win.w_topline = lnum;
-    win.w_topline_was_set = true;
+    win.set_w_topline(lnum);
+    win.set_w_topline_was_set(true);
     if lnum != prev_topline {
         // The filler lines are kept when the top line did not change.
-        win.w_topfill = 0;
+        win.set_w_topfill(0);
     }
-    win.w_valid = win
-        .w_valid
-        .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::TOPLINE);
+    win.set_w_valid(
+        win.w_valid()
+            .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::TOPLINE),
+    );
     // Not WinValid::TOPLINE: 'scrolloff' still has to be checked.
     win.redraw_later(UPD_VALID);
 }

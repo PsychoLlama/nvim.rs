@@ -88,7 +88,7 @@ impl FrameRef {
     pub(crate) fn min_height_with(self, next_curwin: NextCurwin, opts: MinSize) -> c_int {
         if let Some(win) = self.win() {
             // Combined height of window bar and separator column or status line.
-            let extra_height = win.w_winbar_height + win.w_hsep_height + win.w_status_height;
+            let extra_height = win.w_winbar_height() + win.w_hsep_height() + win.w_status_height();
             if next_curwin.is(win) {
                 // Saturating: `'winheight'` is an unclamped option.
                 return opts.wanted.saturating_add(extra_height);
@@ -123,10 +123,10 @@ impl FrameRef {
         if let Some(win) = self.win() {
             if next_curwin.is(win) {
                 // Saturating: `'winwidth'` is an unclamped option.
-                return opts.wanted.saturating_add(win.w_vsep_width);
+                return opts.wanted.saturating_add(win.w_vsep_width());
             }
             // Window: minimal width of the window plus separator column.
-            let mut m = opts.minimum.saturating_add(win.w_vsep_width);
+            let mut m = opts.minimum.saturating_add(win.w_vsep_width());
             // Current window is minimal one column wide.
             if opts.minimum == 0
                 && Some(win.id()) == opts.curwin
@@ -303,12 +303,12 @@ mod tests {
         /// A leaf frame holding a window with the given chrome, `height` rows
         /// and `width` columns.
         fn leaf(&mut self, chrome: Chrome, height: c_int, width: c_int) -> FrameRef {
-            let mut win = bare_window();
+            let win = bare_window();
             self.windows.push(win);
-            win.w_winbar_height = chrome.winbar;
-            win.w_hsep_height = chrome.hsep;
-            win.w_status_height = chrome.status;
-            win.w_vsep_width = chrome.vsep;
+            win.set_w_winbar_height(chrome.winbar);
+            win.set_w_hsep_height(chrome.hsep);
+            win.set_w_status_height(chrome.status);
+            win.set_w_vsep_width(chrome.vsep);
 
             let fr = self.frame();
             fr.set_fr_layout(layout_byte(FR_LEAF));

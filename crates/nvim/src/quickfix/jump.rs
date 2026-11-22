@@ -101,7 +101,7 @@ fn qf_jump_edit_buffer(
             no_write_message();
             return Jumped::Restore;
         }
-        let oldwin = (prev_winid == Win::current().handle.get()).then(|| Win::current().id());
+        let oldwin = (prev_winid == Win::current().handle().get()).then(|| Win::current().id());
         edit_buffer_number(
             fnum,
             LineNr::ONE,
@@ -126,7 +126,7 @@ fn qf_jump_edit_buffer(
     // For a location list, the window it belongs to may be gone.
     if kind == QFLT_LOCATION
         && win_by_id(prev_winid).is_none()
-        && Win::current().w_llist != Some(qi.id())
+        && Win::current().w_llist() != Some(qi.id())
     {
         emsg(gettext(c"E924: Current window was closed"));
         *opened_window = false;
@@ -160,7 +160,7 @@ fn escape_winfixbuf(
     forceit: bool,
     opened_window: &mut bool,
 ) -> Option<bool> {
-    if forceit || Win::current().w_onebuf_opt.wo_wfb == 0 || Some(Buf::current().handle()) == fnum {
+    if forceit || Win::current().wo_wfb() == 0 || Some(Buf::current().handle()) == fnum {
         return Some(true);
     }
     if qi.kind == QFLT_LOCATION {
@@ -169,20 +169,19 @@ fn escape_winfixbuf(
         return None;
     }
     // Try the previously used window, if it can take another buffer.
-    let usable = prev_window().filter(|p| {
-        win_valid(p.id()) && p.w_onebuf_opt.wo_wfb == 0 && !buf_is_quickfix(p.buffer_or_none())
-    });
+    let usable = prev_window()
+        .filter(|p| win_valid(p.id()) && p.wo_wfb() == 0 && !buf_is_quickfix(p.buffer_or_none()));
     if let Some(prev) = usable {
         win_goto(prev);
     }
-    if Win::current().w_onebuf_opt.wo_wfb == 0 {
+    if Win::current().wo_wfb() == 0 {
         return Some(true);
     }
     // Split off a window, which is 'nowinfixbuf'.
     if win_split(0, 0).is_ok() {
         *opened_window = true;
     }
-    if Win::current().w_onebuf_opt.wo_wfb == 0 {
+    if Win::current().wo_wfb() == 0 {
         return Some(true);
     }
     // The split failed, or autocommands set 'winfixbuf' again or sent
@@ -207,29 +206,33 @@ fn qf_jump_goto_line(position: &Position) {
     if let Some(pattern) = &position.pattern {
         // Search from before the first line, and stay put if the
         // pattern is not there any more.
-        let save_cursor = Win::current().w_cursor;
-        Win::current().w_cursor.lnum = LineNr::ZERO;
+        let save_cursor = Win::current().w_cursor();
+        Win::current().cursor().set_lnum(LineNr::ZERO);
         if !search_forward_keep(pattern) {
-            Win::current().w_cursor = save_cursor;
+            Win::current().set_w_cursor(save_cursor);
         }
         return;
     }
 
     // A line number of 0 means the entry names no line.
     if position.lnum > LineNr::ZERO {
-        Win::current().w_cursor.lnum = position.lnum.min(Buf::current().line_count());
+        Win::current()
+            .cursor()
+            .set_lnum(position.lnum.min(Buf::current().line_count()));
     }
     if position.col <= 0 {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         return;
     }
-    Win::current().w_cursor.coladd = 0;
+    Win::current().cursor().set_coladd(0);
     if c_int::from(position.viscol) == 1 {
         coladvance(Win::current(), ColNr::new(position.col - 1));
     } else {
-        Win::current().w_cursor.col = ColNr::new(position.col - 1);
+        Win::current()
+            .cursor()
+            .set_col(ColNr::new(position.col - 1));
     }
-    Win::current().w_set_curswant = true;
+    Win::current().set_w_set_curswant(true);
     check_cursor(Win::current());
 }
 
@@ -276,7 +279,7 @@ fn qf_jump_print_msg(qi: Qi, qf_index: c_int, at: usize, old_curbuf: Buf, old_ln
     // Overwrite rather than scroll when 'shortmess' holds "O" — but
     // print the whole message when the jump did not actually move.
     let old_msg_scroll = MSG_SCROLL.get();
-    if Buf::current_or_none() == Some(old_curbuf) && Win::current().w_cursor.lnum == old_lnum {
+    if Buf::current_or_none() == Some(old_curbuf) && Win::current().cursor().lnum() == old_lnum {
         MSG_SCROLL.set(c_int::from(true));
     } else if (MSG_SCROLLED.get() == 0 || p_ch() == 0 && MSG_SCROLLED.get() == 1)
         && shortmess(ShmFlag::OVERALL)
@@ -334,7 +337,7 @@ fn qf_jump_to_buffer(
     // Held, not re-derived: `qf_jump_edit_buffer` below runs autocommands
     // that can wipe this buffer, and everything downstream only compares it.
     let old_curbuf = Buf::current();
-    let old_lnum = Win::current().w_cursor.lnum;
+    let old_lnum = Win::current().cursor().lnum();
 
     if qi.current_list().entries[at].fnum.is_some() {
         let edited = qf_jump_edit_buffer(qi, at, forceit, prev_winid, opened_window);
@@ -416,7 +419,7 @@ pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, 
 
         // No need to print the message when the quickfix window shows it.
         let print_message = !qf_win_pos_update(qi, old_index);
-        let prev_winid = Win::current().handle;
+        let prev_winid = Win::current().handle();
         let names_a_file = qfl.entries[at].fnum.is_some();
         let mut opened_window = false;
 

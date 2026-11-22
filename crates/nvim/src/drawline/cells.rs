@@ -461,7 +461,7 @@ impl Cells {
         buffer: Buf,
         f: &mut LineFrame<'_>,
     ) -> ::core::ffi::c_int {
-        let grid: GridView = window.w_grid;
+        let grid: GridView = window.w_grid();
         'row: loop {
             self.has_match_conc = 0;
             self.decor_conceal = 0;
@@ -518,14 +518,14 @@ impl Cells {
 
         // Still showing the '$' of a change command: stop at the
         // cursor.
-        if DOLLAR_VCOL.get() >= ColNr::ZERO && self.in_curline && wlv.vcol >= window.w_virtcol {
+        if DOLLAR_VCOL.get() >= ColNr::ZERO && self.in_curline && wlv.vcol >= window.w_virtcol() {
             wlv.col = draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv);
             // Nothing after `col` is ours to clear.
             wlv_put_linebuf(window, wlv, wlv.col, false, self.bg_attr, 0);
             // Pretend the window is finished, except that
             // 'cursorcolumn' still wants the rest of it.
-            wlv.row = if window.w_onebuf_opt.wo_cuc != 0 {
-                window.w_cline_row + window.w_cline_height
+            wlv.row = if window.wo_cuc() != 0 {
+                window.w_cline_row() + window.w_cline_height()
             } else {
                 self.view_height
             };
@@ -607,23 +607,24 @@ impl Cells {
     /// virtual column alone, so it is read off here as the loop reaches it —
     /// or, under `'virtualedit'`, at the end of the line, which the cursor may
     /// be past.
-    pub(super) fn correct_cursor_col(&mut self, wlv: &WinLineVars, mut window: Win) {
+    pub(super) fn correct_cursor_col(&mut self, wlv: &WinLineVars, window: Win) {
         if self.did_cursor_col
             || wlv.filler_todo > 0
             || !self.in_curline
             || !conceal_cursor_line(window)
-            || !(wlv.vcol + wlv.skip_cells >= window.w_virtcol || self.cell_char == 0)
+            || !(wlv.vcol + wlv.skip_cells >= window.w_virtcol() || self.cell_char == 0)
         {
             return;
         }
-        window.w_wcol = wlv.col - wlv.boguscols;
-        if wlv.vcol + wlv.skip_cells < window.w_virtcol {
+        window.set_w_wcol(wlv.col - wlv.boguscols);
+        if wlv.vcol + wlv.skip_cells < window.w_virtcol() {
             // Cursor beyond the end of the line with 'virtualedit'.
-            window.w_wcol += window.w_virtcol - wlv.vcol - wlv.skip_cells;
+            window.set_w_wcol(window.w_wcol() + (window.w_virtcol() - wlv.vcol - wlv.skip_cells));
         }
-        window.w_wrow = wlv.row;
+        window.set_w_wrow(wlv.row);
         self.did_cursor_col = true;
-        window.w_valid |= WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL;
+        window
+            .set_w_valid(window.w_valid() | (WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL));
     }
 
     /// Write the cell — or, when it is being concealed or skipped over, count
@@ -657,7 +658,7 @@ impl Cells {
             }
             wlv.off += 1;
             wlv.col += 1;
-        } else if window.w_onebuf_opt.wo_cole > 0 && self.is_concealing {
+        } else if window.wo_cole() > 0 && self.is_concealing {
             self.skip_concealed(wlv, schar_cells(self.cell_char) > 1);
         } else {
             wlv.skip_cells -= 1;

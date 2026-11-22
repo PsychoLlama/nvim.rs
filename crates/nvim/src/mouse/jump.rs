@@ -140,7 +140,7 @@ pub(crate) fn jump_to_mouse(
     }
 
     let old_curwin = Win::current();
-    let old_cursor = old_curwin.w_cursor;
+    let old_cursor = old_curwin.w_cursor();
 
     let answered = if keep_focus {
         drag_or_extend(&mut pos, flags, which_button)
@@ -190,14 +190,14 @@ fn stop_visual() {
 /// arms of a *later* drag or release read them back.
 fn classify(pos: MousePos, win: Win) -> bool {
     let below_window =
-        pos.grid == DEFAULT_GRID_HANDLE.get() && pos.row + win.w_winbar_height >= win.w_height;
-    ON_STATUS_LINE.set(below_window && pos.row + win.w_winbar_height - win.w_height + 1 == 1);
+        pos.grid == DEFAULT_GRID_HANDLE.get() && pos.row + win.w_winbar_height() >= win.w_height();
+    ON_STATUS_LINE.set(below_window && pos.row + win.w_winbar_height() - win.w_height() + 1 == 1);
     ON_SEP_LINE.set(
         pos.grid == DEFAULT_GRID_HANDLE.get()
-            && pos.col >= win.w_width
-            && pos.col - win.w_width == 0,
+            && pos.col >= win.w_width()
+            && pos.col - win.w_width() == 0,
     );
-    ON_WINBAR.set(pos.row < 0 && pos.row + win.w_winbar_height >= 0);
+    ON_WINBAR.set(pos.row < 0 && pos.row + win.w_winbar_height() >= 0);
     ON_STATUSCOL.set(
         !below_window
             && !ON_STATUS_LINE.get()
@@ -223,8 +223,8 @@ fn classify(pos: MousePos, win: Win) -> bool {
 /// Whether the column is inside the window's `'statuscolumn'`, which sits on
 /// the right in a 'rightleft' window.
 fn in_statuscolumn(pos: MousePos, win: Win) -> bool {
-    if win.w_onebuf_opt.wo_rl != 0 {
-        pos.col >= win.w_view_width - win.col_off()
+    if win.wo_rl() != 0 {
+        pos.col >= win.w_view_width() - win.col_off()
     } else {
         pos.col < win.col_off()
     }
@@ -256,15 +256,15 @@ fn enter_window(
     // winpos and height may change in win_enter()!
     if below_window {
         // In (or below) status line
-        STATUS_LINE_OFFSET.set(pos.row + win.w_winbar_height - win.w_height + 1);
+        STATUS_LINE_OFFSET.set(pos.row + win.w_winbar_height() - win.w_height() + 1);
         DRAGWIN.set(Some(win.id()));
     } else {
         STATUS_LINE_OFFSET.set(0);
     }
 
-    if pos.grid == DEFAULT_GRID_HANDLE.get() && pos.col >= win.w_width {
+    if pos.grid == DEFAULT_GRID_HANDLE.get() && pos.col >= win.w_width() {
         // In separator line
-        SEP_LINE_OFFSET.set(pos.col - win.w_width + 1);
+        SEP_LINE_OFFSET.set(pos.col - win.w_width() + 1);
         DRAGWIN.set(Some(win.id()));
     } else {
         SEP_LINE_OFFSET.set(0);
@@ -282,8 +282,8 @@ fn enter_window(
 
     // Before jumping to another buffer, or moving the cursor for a left
     // click, stop Visual mode.  `old_curwin` is still the current window here.
-    let past_columns = if win.w_onebuf_opt.wo_rl != 0 {
-        pos.col < win.w_view_width - fdc
+    let past_columns = if win.wo_rl() != 0 {
+        pos.col < win.w_view_width() - fdc
     } else {
         pos.col >= fdc + c_int::from(CMDWIN_WIN.get() == Some(win.id()))
     };
@@ -302,7 +302,7 @@ fn enter_window(
         // possible.  Allow dragging the status lines.
         SEP_LINE_OFFSET.set(0);
         pos.row = 0;
-        pos.col += win.w_wincol;
+        pos.col += win.w_wincol();
         win = cmdwin_window().expect("a command-line window while cmdwin_type is set");
     }
 
@@ -313,7 +313,7 @@ fn enter_window(
         win.enter(); // can make `win` invalid!
     }
 
-    let mut curwin_now = Win::current();
+    let curwin_now = Win::current();
     // Set topline, to be able to check for double click ourselves.
     if curwin_now != old_curwin {
         set_mouse_topline(curwin_now);
@@ -332,7 +332,7 @@ fn enter_window(
         return Some(IN_SEP_LINE | moved);
     }
 
-    curwin_now.w_cursor.lnum = curwin_now.w_topline;
+    curwin_now.cursor().set_lnum(curwin_now.w_topline());
     None
 }
 
@@ -345,7 +345,7 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
             && let Some(win) = DRAGWIN.get().and_then(WinId::get)
         {
             // Drag the status line.
-            let count = pos.row - win.w_winrow - win.w_height + 1 - STATUS_LINE_OFFSET.get();
+            let count = pos.row - win.w_winrow() - win.w_height() + 1 - STATUS_LINE_OFFSET.get();
             win.drag_status_line(count);
             DID_DRAG.set(DID_DRAG.get() | count);
         }
@@ -354,7 +354,7 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
     if SEP_LINE_OFFSET.get() != 0 && which_button == MOUSE_LEFT {
         if let Some(win) = DRAGWIN.get().and_then(WinId::get) {
             // Drag the separator column.
-            let count = pos.col - win.w_wincol - win.w_width + 1 - SEP_LINE_OFFSET.get();
+            let count = pos.col - win.w_wincol() - win.w_width() + 1 - SEP_LINE_OFFSET.get();
             win.drag_sep_line(count);
             DID_DRAG.set(DID_DRAG.get() | count);
         }
@@ -377,13 +377,13 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
         stop_visual();
     }
 
-    let mut win = Win::current();
+    let win = Win::current();
     if pos.grid == 0 {
-        pos.row -= win.w_grid_alloc.comp_row + win.w_grid.row_offset;
-        pos.col -= win.w_grid_alloc.comp_col + win.w_grid.col_offset;
+        pos.row -= win.grid_alloc().comp_row + win.w_grid().row_offset;
+        pos.col -= win.grid_alloc().comp_col + win.w_grid().col_offset;
     } else if pos.grid != DEFAULT_GRID_HANDLE.get() {
-        pos.row -= win.w_grid.row_offset;
-        pos.col -= win.w_grid.col_offset;
+        pos.row -= win.w_grid().row_offset;
+        pos.col -= win.w_grid().col_offset;
     }
 
     // When clicking beyond the end of the window, scroll the screen.
@@ -391,88 +391,90 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
     if pos.row < 0 {
         scroll_back(win, pos.row);
         pos.row = 0;
-    } else if pos.row >= win.w_view_height {
+    } else if pos.row >= win.w_view_height() {
         scroll_forward(win, pos.row);
-        pos.row = win.w_view_height - 1;
+        pos.row = win.w_view_height() - 1;
     } else if pos.row == 0
         && MOUSE_DRAGGING.get() > 0
-        && win.w_cursor.lnum == win.buffer().line_count()
-        && win.w_cursor.lnum == win.w_topline
+        && win.cursor().lnum() == win.buffer().line_count()
+        && win.cursor().lnum() == win.w_topline()
     {
         // When dragging the mouse, while the text has been scrolled up as far
         // as it goes, moving the mouse in the top line should scroll the text
         // down (done later when recomputing w_topline).
-        win.w_valid -= WinValid::TOPLINE;
+        win.set_w_valid(win.w_valid().without(WinValid::TOPLINE));
     }
 
     None
 }
 
 /// Scroll back until the row `row` screen lines above the window is on screen.
-fn scroll_back(mut win: Win, row: c_int) {
+fn scroll_back(win: Win, row: c_int) {
     let mut count = 0;
     let mut first = true;
-    while win.w_topline > LineNr::ONE {
-        if win.w_topfill < win.fill_above(win.w_topline) {
+    while win.w_topline() > LineNr::ONE {
+        if win.w_topfill() < win.fill_above(win.w_topline()) {
             count += 1;
         } else {
-            count += win.plines(win.w_topline - 1, true);
+            count += win.plines(win.w_topline() - 1, true);
         }
         if !first && count > -row {
             break;
         }
         first = false;
-        if let Some(fold_start) = win.fold_first(win.w_topline) {
-            win.w_topline = fold_start;
+        if let Some(fold_start) = win.fold_first(win.w_topline()) {
+            win.set_w_topline(fold_start);
         }
-        if win.w_topfill < win.fill_above(win.w_topline) {
-            win.w_topfill += 1;
+        if win.w_topfill() < win.fill_above(win.w_topline()) {
+            win.set_w_topfill(win.w_topfill() + 1);
         } else {
-            win.w_topline -= 1;
-            win.w_topfill = 0;
+            win.set_w_topline(win.w_topline() - 1);
+            win.set_w_topfill(0);
         }
     }
     win.check_topfill(false);
-    win.w_valid = win
-        .w_valid
-        .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP);
+    win.set_w_valid(
+        win.w_valid()
+            .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP),
+    );
     win.redraw_later(UPD_VALID);
 }
 
 /// Scroll forward until row `row` -- which is at or below the window's last
 /// text row -- is on screen.
-fn scroll_forward(mut win: Win, row: c_int) {
+fn scroll_forward(win: Win, row: c_int) {
     let last_line = win.buffer().line_count();
     let mut count = 0;
     let mut first = true;
-    while win.w_topline < last_line {
-        if win.w_topfill > 0 {
+    while win.w_topline() < last_line {
+        if win.w_topfill() > 0 {
             count += 1;
         } else {
-            count += win.plines(win.w_topline, true);
+            count += win.plines(win.w_topline(), true);
         }
-        if !first && count > row - win.w_view_height + 1 {
+        if !first && count > row - win.w_view_height() + 1 {
             break;
         }
         first = false;
 
-        if win.w_topfill > 0 {
-            win.w_topfill -= 1;
+        if win.w_topfill() > 0 {
+            win.set_w_topfill(win.w_topfill() - 1);
         } else {
-            let (folded, _, fold_end) = win.fold_span(win.w_topline);
-            win.w_topline = fold_end;
+            let (folded, _, fold_end) = win.fold_span(win.w_topline());
+            win.set_w_topline(fold_end);
             if folded && fold_end == last_line {
                 break;
             }
-            win.w_topline += 1;
-            win.w_topfill = win.fill_above(win.w_topline);
+            win.set_w_topline(win.w_topline() + 1);
+            win.set_w_topfill(win.fill_above(win.w_topline()));
         }
     }
     win.check_topfill(false);
     win.redraw_later(UPD_VALID);
-    win.w_valid = win
-        .w_valid
-        .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP);
+    win.set_w_valid(
+        win.w_valid()
+            .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP),
+    );
 }
 
 /// C's `foldclick:` tail, which both paths above fall into: read the fold
@@ -487,10 +489,10 @@ fn move_cursor_there(
 ) -> c_int {
     let (col_from_screen, mouse_fold_flags) = mouse_check_grid();
 
-    let mut win = Win::current();
+    let win = Win::current();
     // Compute the position in the buffer line from the position on the screen.
     let (lnum, below_last) = comp_pos(win, &mut pos.row, &mut pos.col);
-    win.w_cursor.lnum = lnum;
+    win.cursor().set_lnum(lnum);
     if below_last {
         MOUSE_PAST_BOTTOM.set(true);
     }
@@ -512,8 +514,8 @@ fn move_cursor_there(
     // Use the virtual column the screen recorded, which is accurate also
     // after concealed characters.
     let col = col_from_screen.unwrap_or(ColNr::new(pos.col));
-    win.w_curswant = col;
-    win.w_set_curswant = false; // May still have been true
+    win.set_w_curswant(col);
+    win.set_w_set_curswant(false); // May still have been true
     let past_eol = !win.coladvance(col);
     if let Some(inclusive) = inclusive {
         *inclusive = past_eol;
@@ -529,8 +531,8 @@ fn move_cursor_there(
         IN_BUFFER
     };
     if win != old_curwin
-        || win.w_cursor.lnum != old_cursor.lnum
-        || win.w_cursor.col != old_cursor.col
+        || win.cursor().lnum() != old_cursor.lnum
+        || win.cursor().col() != old_cursor.col
     {
         count |= CURSOR_MOVED; // Cursor has moved
     }

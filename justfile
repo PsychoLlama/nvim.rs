@@ -276,7 +276,7 @@ miri-perimeter *args:
     allocator::tests:: global_cell::tests:: slot::tests:: slot::guards::tests:: \
     memory::tests:: memory::alloc_log::tests:: memory::blocks::tests:: \
     memory::thin_cstring::tests:: memory::xstring::tests:: \
-    winlayer::tests:: winlayer::deref::tests:: winlayer::deref::buf_fields::tests:: winlayer::graph::tests:: winlayer::grid::tests:: \
+    winlayer::tests:: winlayer::deref::tests:: winlayer::deref::buf_fields::tests:: winlayer::deref::win_fields::tests:: winlayer::graph::tests:: winlayer::grid::tests:: \
     winlayer::handles::tests:: winlayer::terminal::tests:: \
     eval::typval::handle::tests:: eval::typval::access::tests:: \
     eval::typval::blob::tests:: eval::typval::dict::tests:: \

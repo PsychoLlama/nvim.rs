@@ -126,7 +126,7 @@ impl Win {
     /// `win_float_split` has already given back.
     #[inline(always)]
     pub fn frame_or_none(self) -> Option<FrameRef> {
-        self.w_frame.and_then(FrameId::get)
+        self.w_frame().and_then(FrameId::get)
     }
 
     /// The buffer this window shows, `None` once it is gone: for the
@@ -137,19 +137,19 @@ impl Win {
     /// could be fooled by a new buffer at the old address.
     #[inline]
     pub(crate) fn surviving_buffer(self) -> Option<Buf> {
-        self.w_buffer.try_id().and_then(BufId::get)
+        self.w_buffer().try_id().and_then(BufId::get)
     }
 
     /// The next window in this tab page's list, if any.
     #[inline(always)]
     pub fn next(self) -> Option<Self> {
-        self.w_next.and_then(WinId::get)
+        self.w_next().and_then(WinId::get)
     }
 
     /// The window before this one in its tab page's list, if any.
     #[inline(always)]
     pub fn prev(self) -> Option<Self> {
-        self.w_prev.and_then(WinId::get)
+        self.w_prev().and_then(WinId::get)
     }
 }
 

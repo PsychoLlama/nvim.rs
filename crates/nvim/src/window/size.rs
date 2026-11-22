@@ -48,9 +48,9 @@ pub(crate) fn comp_positions() -> c_int {
     // A float anchored to a window may have moved with it. Floats sit at the
     // end of the window list, so the walk back from `lastwin` stops at the
     // first window that is not one.
-    for mut win in windows_back().take_while(|w| w.w_floating) {
-        if win.w_config.relative == FLOAT_RELATIVE_WINDOW {
-            win.w_pos_changed = true;
+    for win in windows_back().take_while(|w| w.w_floating()) {
+        if win.config_relative() == FLOAT_RELATIVE_WINDOW {
+            win.set_w_pos_changed(true);
         }
     }
     row + global_stl_rows()
@@ -60,18 +60,18 @@ impl FrameRef {
     /// Give this frame and everything in it its screen position, advancing
     /// `row` and `col` past it, from `frame_comp_pos()`.
     pub(crate) fn compute_position(self, row: &mut c_int, col: &mut c_int) {
-        if let Some(mut wp) = self.win() {
+        if let Some(wp) = self.win() {
             // Avoid an extra redraw when the position has not changed.
-            if wp.w_winrow != *row || wp.w_wincol != *col {
-                wp.w_winrow = *row;
-                wp.w_wincol = *col;
+            if wp.w_winrow() != *row || wp.w_wincol() != *col {
+                wp.set_w_winrow(*row);
+                wp.set_w_wincol(*col);
                 wp.redraw_later(UPD_NOT_VALID);
-                wp.w_redr_status = true;
-                wp.w_pos_changed = true;
+                wp.set_w_redr_status(true);
+                wp.set_w_pos_changed(true);
             }
-            let h = wp.w_height + wp.w_hsep_height + wp.w_status_height;
+            let h = wp.w_height() + wp.w_hsep_height() + wp.w_status_height();
             *row += h.min(self.fr_height());
-            *col += wp.w_width + wp.w_vsep_width;
+            *col += wp.w_width() + wp.w_vsep_width();
         } else {
             let startrow = *row;
             let startcol = *col;
@@ -128,7 +128,7 @@ impl FrameRef {
             room = 0;
             room_reserved = 0;
             for frp in parent.children() {
-                if frp != self && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfh != 0) {
+                if frp != self && frp.win().is_some_and(|w| w.wo_wfh() != 0) {
                     room_reserved += frp.fr_height();
                 }
                 room += frp.fr_height();
@@ -140,7 +140,8 @@ impl FrameRef {
                 0
             } else {
                 let wp = lastwin_nofloating(None);
-                let below = wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height;
+                let below =
+                    wp.w_winrow() + wp.w_height() + wp.w_hsep_height() + wp.w_status_height();
                 (ROWS.get() - number_as_int(p_ch()) - global_stl_rows() - below).max(0)
             };
 
@@ -196,7 +197,7 @@ impl FrameRef {
                     break;
                 }
                 let h = frp.min_height(NextCurwin::Unset);
-                if room_reserved > 0 && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfh != 0) {
+                if room_reserved > 0 && frp.win().is_some_and(|w| w.wo_wfh() != 0) {
                     if room_reserved >= frp.fr_height() {
                         room_reserved -= frp.fr_height();
                     } else {
@@ -242,7 +243,7 @@ impl FrameRef {
             room = 0;
             room_reserved = 0;
             for frp in parent.children() {
-                if frp != self && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfw != 0) {
+                if frp != self && frp.win().is_some_and(|w| w.wo_wfw() != 0) {
                     room_reserved += frp.fr_width();
                 }
                 room += frp.fr_width();
@@ -291,7 +292,7 @@ impl FrameRef {
                     break;
                 }
                 let w = frp.min_width(NextCurwin::Unset);
-                if room_reserved > 0 && frp.win().is_some_and(|w| w.w_onebuf_opt.wo_wfw != 0) {
+                if room_reserved > 0 && frp.win().is_some_and(|w| w.wo_wfw() != 0) {
                     if room_reserved >= frp.fr_width() {
                         room_reserved -= frp.fr_width();
                     } else {
@@ -324,22 +325,22 @@ pub fn win_setheight_win(height: c_int, win: Win) {
 
 /// Give `win` height `height`, moving the other windows around it to fit.
 pub(crate) fn setheight_win(height: c_int, win: Win) {
-    let mut win = win;
+    let win = win;
     // Always keep the current window at least one line high, even when
     // 'winminheight' is zero; two when it has a window bar.
     let floor = number_as_int(if win.is_current() {
         p_wmh().max(1)
     } else {
         p_wmh()
-    }) + win.w_winbar_height;
+    }) + win.w_winbar_height();
     let height = height.max(floor);
 
-    if win.w_floating {
-        win.w_config.height = height.max(1);
-        win_config_float(win, win.w_config.clone());
+    if win.w_floating() {
+        win.set_config_height(height.max(1));
+        win_config_float(win, win.config());
         win.redraw_later(UPD_VALID);
     } else {
-        let chrome = arith::height_with_chrome(height, win.w_hsep_height, win.w_status_height);
+        let chrome = arith::height_with_chrome(height, win.w_hsep_height(), win.w_status_height());
         win.frame().set_height(chrome);
         // Recompute the window positions.
         comp_positions();
@@ -359,7 +360,7 @@ pub fn win_setwidth_win(width: c_int, window: Win) {
 
 /// Give `window` width `width`, moving the other windows around it to fit.
 pub(crate) fn setwidth_win(width: c_int, window: Win) {
-    let mut window = window;
+    let window = window;
     // Always keep the current window at least one column wide, even when
     // 'winminwidth' is zero.
     let width = if window.is_current() {
@@ -367,14 +368,14 @@ pub(crate) fn setwidth_win(width: c_int, window: Win) {
     } else {
         width.max(0)
     };
-    if window.w_floating {
-        window.w_config.width = width;
-        win_config_float(window, window.w_config.clone());
+    if window.w_floating() {
+        window.set_config_width(width);
+        win_config_float(window, window.config());
         window.redraw_later(UPD_NOT_VALID);
     } else {
         window
             .frame()
-            .set_width(arith::width_with_chrome(width, window.w_vsep_width));
+            .set_width(arith::width_with_chrome(width, window.w_vsep_width()));
         // Recompute the window positions.
         comp_positions();
         redraw_all(UPD_NOT_VALID);

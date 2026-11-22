@@ -647,7 +647,7 @@ pub fn pum_redraw() {
     if PUM_RL.get() {
         col_off = PUM_WIDTH.get() - 1;
         debug_assert!(STATE.get() & MODE_CMDLINE == 0, "!(State & MODE_CMDLINE)");
-        let win_end_col = win.w_wincol + win.w_width;
+        let win_end_col = win.w_wincol() + win.w_width();
         if PUM_COL.get() < win_end_col - 1 {
             grid_width += 1;
             extra_space = true;
@@ -730,9 +730,9 @@ pub fn pum_redraw() {
         col_off,
         extra_space,
         fcs_trunc: if PUM_RL.get() {
-            win.w_p_fcs_chars.truncrl
+            win.fcs_truncrl()
         } else {
-            win.w_p_fcs_chars.trunc
+            win.fcs_trunc()
         },
         attr_scroll: win_hl_attr(win, HLF_PSB),
         attr_thumb: win_hl_attr(win, HLF_PST),

@@ -38,7 +38,7 @@ fn find_win(mut wanted: impl FnMut(Win) -> bool) -> Option<Win> {
 
 /// A window showing a help file, that the user can reach.
 pub(crate) fn qf_find_help_win() -> Option<Win> {
-    find_win(|wp| is_help_buffer(wp) && !wp.w_config.hide && wp.w_config.focusable)
+    find_win(|wp| is_help_buffer(wp) && !wp.config_hide() && wp.read().w_config.focusable)
 }
 
 /// A window showing an ordinary file.
@@ -57,7 +57,7 @@ pub(crate) fn jump_to_help_window(
     } else {
         qf_find_help_win()
     };
-    if let Some(wp) = wp.filter(|wp| wp.w_buffer.b_nwindows() > 0) {
+    if let Some(wp) = wp.filter(|wp| wp.w_buffer().b_nwindows() > 0) {
         win_enter(wp, true);
         RESTART_EDIT.set(Key::NUL);
         return Ok(());
@@ -66,7 +66,9 @@ pub(crate) fn jump_to_help_window(
     // Put the split at the very top when no position was asked for and
     // the current window is one of a narrow vertical split.
     let mut flags = WSP_HELP;
-    if cmdmod_split() == 0 && Win::current().w_width != COLUMNS.get() && Win::current().w_width < 80
+    if cmdmod_split() == 0
+        && Win::current().w_width() != COLUMNS.get()
+        && Win::current().w_width() < 80
     {
         flags |= WSP_TOP;
     }
@@ -78,7 +80,7 @@ pub(crate) fn jump_to_help_window(
     }
     win_split(0, flags)?;
     *opened_window = true;
-    if OptInt::from(Win::current().w_height) < p_hh() {
+    if OptInt::from(Win::current().w_height()) < p_hh() {
         win_setheight(c_int::try_from(p_hh()).unwrap_or(c_int::MAX));
     }
     if share_loclist {
@@ -117,8 +119,8 @@ fn qf_open_new_file_win(ll_ref: Option<QfId>) -> Result<(), Failed> {
     // Do not split again for the next entry.
     P_SWB.clear();
     SWB_FLAGS.set(0);
-    Win::current().w_onebuf_opt.wo_scb = c_int::from(false);
-    Win::current().w_onebuf_opt.wo_crb = c_int::from(false);
+    Win::current().set_wo_scb(c_int::from(false));
+    Win::current().set_wo_crb(c_int::from(false));
     if let Some(ll_ref) = ll_ref {
         // The new window shows the location list window's list.
         Win::current().set_location_list(ll_ref.stack());
@@ -149,7 +151,7 @@ fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: Option<Handle>, ll_re
     win_goto(win);
     // A window that has no location list of its own adopts the one the
     // location list window was showing.
-    if win.w_llist.is_none()
+    if win.w_llist().is_none()
         && let Some(ll_ref) = ll_ref
     {
         win.set_location_list(ll_ref.stack());
@@ -179,7 +181,7 @@ fn qf_goto_win_with_qfl_file(qf_fnum: Option<Handle>) {
         win = prev_window(win);
         if win.is_quickfix_window() {
             let last = crate::winlayer::prev_window()
-                .filter(|p| win_valid(p.id()) && p.w_onebuf_opt.wo_wfb == 0)
+                .filter(|p| win_valid(p.id()) && p.wo_wfb() == 0)
                 .filter(|_| SWB_FLAGS.get() & OPT_SWB_FLAG_USELAST as c_uint != 0);
             win = if let Some(last) = last {
                 last
@@ -196,11 +198,7 @@ fn qf_goto_win_with_qfl_file(qf_fnum: Option<Handle>) {
             };
             break;
         }
-        if altwin.is_none()
-            && win.w_onebuf_opt.wo_pvw == 0
-            && win.w_onebuf_opt.wo_wfb == 0
-            && is_normal_buffer(win)
-        {
+        if altwin.is_none() && win.wo_pvw() == 0 && win.wo_wfb() == 0 && is_normal_buffer(win) {
             altwin = Some(win);
         }
     }
@@ -222,7 +220,7 @@ pub(crate) fn qf_jump_to_usable_window(
     let ll_ref = if newwin {
         None
     } else {
-        Win::current().w_llist_ref
+        Win::current().w_llist_ref()
     };
     let usable_wp = ll_ref.and_then(qf_find_win_with_loclist);
     // Upstream throws the window away and keeps only the answer to
@@ -239,7 +237,7 @@ pub(crate) fn qf_jump_to_usable_window(
         qf_open_new_file_win(ll_ref)?;
         // Close it again if the jump fails.
         *opened_window = true;
-    } else if Win::current().w_llist_ref.is_some() {
+    } else if Win::current().w_llist_ref().is_some() {
         qf_goto_win_with_ll_file(usable_wp, qf_fnum, ll_ref);
     } else {
         qf_goto_win_with_qfl_file(qf_fnum);

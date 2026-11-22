@@ -60,27 +60,28 @@ pub(crate) fn prepare_line(
     if col_rows == 0 && s.draw_text {
         // `extra_check` is the character loop's "nothing here needs the
         // slow path" test; every source of per-character work sets it.
-        s.extra_check = window.w_onebuf_opt.wo_lbr != 0;
+        s.extra_check = window.wo_lbr() != 0;
         s.start_syntax(window, lnum);
         s.check_decor_providers = true;
 
         // 'colorcolumn'; a terminal buffer never shows one.
-        wlv.color_col = if window.w_buffer.terminal().is_null() && !window.w_p_cc_cols.is_empty() {
-            0
-        } else {
-            NO_COLOR_COL
-        };
+        wlv.color_col =
+            if window.w_buffer().terminal().is_null() && !window.read().w_p_cc_cols.is_empty() {
+                0
+            } else {
+                NO_COLOR_COL
+            };
         wlv.advance_color_col(window, (wlv.vcol - wlv.vcol_off_co).get());
 
-        if window.w_buffer == Win::current().w_buffer
+        if window.w_buffer() == Win::current().w_buffer()
             && let Some(sel) = visual_selection()
         {
             s.visual_area(wlv, window, sel);
         } else if HIGHLIGHT_MATCH.get()
             && window.raw() == Win::current_raw()
             && !s.has_foldtext
-            && lnum >= Win::current().w_cursor.lnum
-            && lnum <= Win::current().w_cursor.lnum + SEARCH_MATCH_LINES.get()
+            && lnum >= Win::current().cursor().lnum()
+            && lnum <= Win::current().cursor().lnum() + SEARCH_MATCH_LINES.get()
         {
             s.incsearch_area(wlv, window);
         }
@@ -101,22 +102,22 @@ pub(crate) fn prepare_line(
         s.spell_line_start(window, lnum, spv, nextline);
     }
 
-    s.lcs_eol = window.w_p_lcs_chars.eol;
-    s.lcs_prec_todo = window.w_p_lcs_chars.prec;
-    if window.w_onebuf_opt.wo_list != 0 && !s.has_foldtext && s.draw_text {
+    s.lcs_eol = window.lcs_eol();
+    s.lcs_prec_todo = window.lcs_prec();
+    if window.wo_list() != 0 && !s.has_foldtext && s.draw_text {
         s.listchars_columns(window);
     }
 
     // 'nowrap', or 'wrap' with a line scrolled sideways: advance to the
     // first character that is on screen.
-    s.start_vcol = if window.w_onebuf_opt.wo_wrap != 0 {
+    s.start_vcol = if window.wo_wrap() != 0 {
         if wlv.startrow == 0 {
-            window.w_skipcol.get()
+            window.w_skipcol().get()
         } else {
             0
         }
     } else {
-        window.w_leftcol.get()
+        window.w_leftcol().get()
     };
     if s.has_foldtext {
         wlv.vcol = ColNr::new(s.start_vcol);
@@ -165,7 +166,7 @@ pub(crate) fn prepare_line(
 
     // The `:terminal` attributes themselves are filled in by the caller:
     // see [`LineSetup::has_terminal`].
-    if !window.w_buffer.terminal().is_null() {
+    if !window.w_buffer().terminal().is_null() {
         s.has_terminal = true;
         s.extra_check = true;
     }
@@ -179,21 +180,21 @@ impl LineSetup {
     /// against, plus "nothing found yet" for the rest.
     fn new(window: Win, wlv: &WinLineVars, concealed: bool) -> Self {
         let has_fold = wlv.foldinfo.fi_level != 0 && wlv.foldinfo.fi_lines > 0;
-        let has_foldtext = has_fold && window.w_onebuf_opt.wo_fdt.first_byte() != 0;
+        let has_foldtext = has_fold && window.read().w_onebuf_opt.wo_fdt.first_byte() != 0;
         LineSetup {
             // First, because `win_hl_attr` hands out attribute ids in the
             // order it is asked for them.
             conceal_attr: win_hl_attr(window, HLF_CONCEAL),
-            view_width: window.w_view_width,
-            view_height: window.w_view_height,
+            view_width: window.w_view_width(),
+            view_height: window.w_view_height(),
             in_curline: window.raw() == Win::current_raw()
-                && wlv.lnum == Win::current().w_cursor.lnum,
+                && wlv.lnum == Win::current().cursor().lnum(),
             has_fold,
             has_foldtext,
-            is_wrapped: window.w_onebuf_opt.wo_wrap != 0 && !has_fold,
+            is_wrapped: window.wo_wrap() != 0 && !has_fold,
             // The line one past the end of the buffer exists only to carry
             // the filler lines below the last one.
-            draw_text: !concealed && wlv.lnum != window.w_buffer.line_count() + 1,
+            draw_text: !concealed && wlv.lnum != window.w_buffer().line_count() + 1,
             start_vcol: 0,
             bg_attr: 0,
             may_have_inline_virt: false,
@@ -273,7 +274,7 @@ impl LineSetup {
     fn visual_area(&mut self, wlv: &mut WinLineVars, window: Win, sel: VisualSelection) {
         let lnum = wlv.lnum;
         // Both ends by value: nothing here writes through either.
-        let cursor = Win::current().w_cursor;
+        let cursor = Win::current().w_cursor();
         let (mut top, bot) = if ltoreq(cursor, sel.anchor) {
             (cursor, sel.anchor)
         } else {
@@ -284,7 +285,8 @@ impl LineSetup {
             // Blockwise: the columns were worked out for the whole
             // selection when it last moved.
             if self.lnum_in_visual_area {
-                wlv.inverted = Inversion::new(window.w_old_cursor_fcol, window.w_old_cursor_lcol);
+                wlv.inverted =
+                    Inversion::new(window.w_old_cursor_fcol(), window.w_old_cursor_lcol());
             }
         } else {
             if lnum > top.lnum && lnum <= bot.lnum {
@@ -340,13 +342,13 @@ impl LineSetup {
     /// The inverted range for `'incsearch'` and `:s///c`.
     fn incsearch_area(&mut self, wlv: &mut WinLineVars, window: Win) {
         let lnum = wlv.lnum;
-        let from = if lnum == Win::current().w_cursor.lnum {
+        let from = if lnum == Win::current().cursor().lnum() {
             let win = Win::current();
             win.vcol_triple(win.cursor()).0
         } else {
             ColNr::ZERO
         };
-        let mut to = if lnum == Win::current().w_cursor.lnum + SEARCH_MATCH_LINES.get() {
+        let mut to = if lnum == Win::current().cursor().lnum() + SEARCH_MATCH_LINES.get() {
             let mut pos = Pos {
                 lnum,
                 col: SEARCH_MATCH_ENDCOL.get(),
@@ -407,9 +409,9 @@ impl LineSetup {
             true,
         );
         wlv.filler_lines += wlv.n_virt_lines;
-        if wlv.lnum == window.w_topline {
+        if wlv.lnum == window.w_topline() {
             // The top line shows only as much filler as it is scrolled to.
-            wlv.filler_lines = window.w_topfill;
+            wlv.filler_lines = window.w_topfill();
             wlv.n_virt_lines = wlv.n_virt_lines.min(wlv.filler_lines);
         }
         wlv.filler_todo = wlv.filler_lines;
@@ -417,17 +419,17 @@ impl LineSetup {
 
     /// Apply `'cursorline'` to this line, if it is the cursor's.
     fn cursorline(&mut self, wlv: &mut WinLineVars, window: Win) {
-        if window.w_onebuf_opt.wo_cul == 0
-            || u32::from(window.w_p_culopt_flags) == OPT_CULOPT_FLAG_NUMBER
-            || wlv.lnum != window.w_cursorline
+        if window.wo_cul() == 0
+            || u32::from(window.w_p_culopt_flags()) == OPT_CULOPT_FLAG_NUMBER
+            || wlv.lnum != window.w_cursorline()
             // Not while Visual mode is active: it would stop being clear
             // what is selected.
             || (window.raw() == Win::current_raw() && visual_active())
         {
             return;
         }
-        self.cul_screenline =
-            self.is_wrapped && u32::from(window.w_p_culopt_flags) & OPT_CULOPT_FLAG_SCREENLINE != 0;
+        self.cul_screenline = self.is_wrapped
+            && u32::from(window.w_p_culopt_flags()) & OPT_CULOPT_FLAG_SCREENLINE != 0;
         if self.cul_screenline {
             // Only the cursor's own screen row is highlighted, so the loop
             // needs that row's margins.
@@ -454,7 +456,7 @@ impl LineSetup {
             Some(&mut wlv.sign_num_attr),
         );
 
-        if window.w_onebuf_opt.wo_stc.first_byte() != 0 {
+        if window.read().w_onebuf_opt.wo_stc.first_byte() != 0 {
             // 'statuscolumn' replaces the fold, sign and number columns;
             // the expression is evaluated per row by `draw_statuscol`.
             self.statuscol.draw = true;
@@ -522,7 +524,7 @@ impl LineSetup {
         // Trick: `spell_cat_line` skips a few characters for C/shell/Vim
         // comment leaders.
         nextline[SPELL_LOOKAHEAD] = 0;
-        if lnum < window.w_buffer.line_count() {
+        if lnum < window.w_buffer().line_count() {
             let mut lines = window.buffer().lines();
             let next = lines.line(lnum + 1);
             spell_cat_line(&mut nextline[SPELL_LOOKAHEAD..], next, SPELL_LOOKAHEAD);
@@ -572,16 +574,16 @@ impl LineSetup {
     /// Find the leading and trailing whitespace the `'listchars'` "lead" and
     /// "trail" marks apply to.
     fn listchars_columns(&mut self, window: Win) {
-        if window.w_p_lcs_chars.space != 0
-            || window.w_p_lcs_chars.multispace.is_some()
-            || window.w_p_lcs_chars.leadmultispace.is_some()
-            || window.w_p_lcs_chars.trail != 0
-            || window.w_p_lcs_chars.lead != 0
-            || window.w_p_lcs_chars.nbsp != 0
+        if window.lcs_space() != 0
+            || window.read().w_p_lcs_chars.multispace.is_some()
+            || window.read().w_p_lcs_chars.leadmultispace.is_some()
+            || window.lcs_trail() != 0
+            || window.lcs_lead() != 0
+            || window.lcs_nbsp() != 0
         {
             self.extra_check = true;
         }
-        if window.w_p_lcs_chars.trail != 0 {
+        if window.lcs_trail() != 0 {
             let rest = self.line.from(self.pos);
             let text = &rest[..rest.len().saturating_sub(1)];
             let trailcol = text.len()
@@ -592,9 +594,9 @@ impl LineSetup {
                     .count();
             self.trailcol = ColNr::try_from(trailcol + self.pos).unwrap_or(ColNr::MAX);
         }
-        if window.w_p_lcs_chars.lead != 0
-            || window.w_p_lcs_chars.leadmultispace.is_some()
-            || window.w_p_lcs_chars.leadtab1 != 0
+        if window.lcs_lead() != 0
+            || window.read().w_p_lcs_chars.leadmultispace.is_some()
+            || window.lcs_leadtab1() != 0
         {
             let rest = self.line.from(self.pos);
             let leadcol = rest
@@ -633,7 +635,7 @@ impl LineSetup {
                 break;
             }
             (at, ci) = c_next_cluster(line, at, ci);
-            if window.w_onebuf_opt.wo_list != 0 {
+            if window.wo_list() != 0 {
                 multispace = window.track_multispace(line, self.leadcol, multispace, prev_at, at);
             }
         }
@@ -647,10 +649,10 @@ impl LineSetup {
         // or Visual mode is active, or when a fold is being drawn — all of
         // which still have something to draw out there.
         if wlv.vcol < ColNr::new(start_vcol)
-            && (window.w_onebuf_opt.wo_cuc != 0
+            && (window.wo_cuc() != 0
                 || wlv.color_col != NO_COLOR_COL
                 || virtual_active(window)
-                || (visual_active() && window.w_buffer == Win::current().w_buffer)
+                || (visual_active() && window.w_buffer() == Win::current().w_buffer())
                 || self.has_fold)
         {
             wlv.vcol = ColNr::new(start_vcol);
@@ -671,7 +673,7 @@ impl LineSetup {
 
         // With a non-zero `w_skipcol` the first row still owes a
         // 'showbreak'.
-        if window.w_onebuf_opt.wo_wrap != 0 {
+        if window.wo_wrap() != 0 {
             wlv.need_showbreak = true;
         }
 
@@ -683,17 +685,17 @@ impl LineSetup {
     /// Work out whether the first character on screen is inside a badly
     /// spelled word, since the loop only ever starts a spell check at a word
     /// boundary.
-    fn spell_at_start_vcol(&mut self, mut window: Win, lnum: LineNr) {
+    fn spell_at_start_vcol(&mut self, window: Win, lnum: LineNr) {
         let linecol = ColNr::try_from(self.pos).unwrap_or(ColNr::MAX);
         let mut spell_hlf: Hlf = HLF_COUNT;
 
-        let saved_cursor = window.w_cursor;
-        window.w_cursor.lnum = lnum;
-        window.w_cursor.col = linecol;
+        let saved_cursor = window.w_cursor();
+        window.cursor().set_lnum(lnum);
+        window.cursor().set_col(linecol);
         // Reads lines of its own, which moves the memline's but not the copy.
         let len = window.spell_move_to(FORWARD, SMT_ALL, true, Some(&mut spell_hlf));
 
-        if len == 0 || window.w_cursor.col > linecol {
+        if len == 0 || window.cursor().col() > linecol {
             // No bad word at the line start: do not check again until the
             // end of a word.
             let end =
@@ -701,12 +703,12 @@ impl LineSetup {
             self.word_end = len_as_int(linecol.as_usize() + end + 1);
         } else {
             // Bad word found: its attribute applies to the end of it.
-            self.word_end = (window.w_cursor.col + len_as_int(len) + 1).get();
+            self.word_end = (window.cursor().col() + len_as_int(len) + 1).get();
             if spell_hlf != HLF_COUNT {
                 self.spell_attr = default_hl_attr(as_index(spell_hlf));
             }
         }
-        window.w_cursor = saved_cursor;
+        window.set_w_cursor(saved_cursor);
 
         // Syntax highlighting has to be restarted for this line.
         if self.has_syntax {
@@ -721,7 +723,7 @@ impl LineSetup {
     fn keep_cursor_visible(&mut self, wlv: &mut WinLineVars, window: Win) {
         if let Some(resume) = wlv
             .inverted
-            .keep_cursor_visible(self.noinvcur, window.w_virtcol)
+            .keep_cursor_visible(self.noinvcur, window.w_virtcol())
         {
             self.invert_resume = Some(resume);
         }
@@ -749,7 +751,7 @@ impl Win {
         if !in_multispace {
             return (false, 0);
         }
-        let lcs = &self.w_p_lcs_chars;
+        let lcs = &self.read().w_p_lcs_chars;
         let pattern = if next >= usize::try_from(leadcol).unwrap_or(0) {
             lcs.multispace.as_deref()
         } else {

@@ -49,7 +49,7 @@ fn pum_selected_info() -> Option<XString> {
 /// Answers the number of lines written and the widest of them in cells,
 /// which is what the caller sizes the window with. A trailing empty line is
 /// dropped; empty lines anywhere else are kept.
-fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
+fn pum_preview_set_text(win: Win, info: &[u8]) -> (LineNr, c_int) {
     let buf = win.buffer();
     buf.set_b_p_ma(1);
 
@@ -64,10 +64,10 @@ fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
 
         // 'wrap' off while measuring: 'showbreak'/'linebreak' would
         // inflate the answer in a narrow window.
-        let save_wrap = win.w_onebuf_opt.wo_wrap;
-        win.w_onebuf_opt.wo_wrap = 0;
+        let save_wrap = win.wo_wrap();
+        win.set_wo_wrap(0);
         max_width = max_width.max(win_linetabsize(win, LineNr::ZERO, line, ColNr::MAX));
-        win.w_onebuf_opt.wo_wrap = save_wrap;
+        win.set_wo_wrap(save_wrap);
 
         lines.push(Object::string(ApiString::from_bytes(line)));
     }
@@ -93,7 +93,7 @@ fn pum_preview_set_text(mut win: Win, info: &[u8]) -> (LineNr, c_int) {
 /// It goes to the right when the text fits there, otherwise to the left,
 /// otherwise on whichever side has more room. Answers false — with the
 /// window hidden — when neither side has enough space to be worth it.
-fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
+fn pum_adjust_info_position(window: Win, width: c_int) -> bool {
     let border_width = pum_border_width();
     let col = PUM_COL.get() + PUM_WIDTH.get() + 1 + border_width.max(PUM_SCROLLBAR.get());
     // TODO(glepnir): support config align border by using completepopup
@@ -105,33 +105,33 @@ fn pum_adjust_info_position(mut window: Win, width: c_int) -> bool {
     // 'completepopup' width/height options.
     let max_extra = right_extra.max(left_extra);
     if max_extra < 10 {
-        window.w_config.hide = true;
+        window.set_config_hide(true);
         return false;
     }
 
     if right_extra > width {
-        window.w_config.width = width;
-        window.w_config.col = f64::from(col - 1);
+        window.set_config_width(width);
+        window.set_config_col(f64::from(col - 1));
     } else if left_extra > width {
-        window.w_config.width = width;
-        window.w_config.col = f64::from(PUM_COL.get() - width - 1);
+        window.set_config_width(width);
+        window.set_config_col(f64::from(PUM_COL.get() - width - 1));
     } else {
         // Neither side fits the text; take the bigger one.
-        window.w_config.width = max_extra;
-        window.w_config.col = f64::from(if right_extra > left_extra {
+        window.set_config_width(max_extra);
+        window.set_config_col(f64::from(if right_extra > left_extra {
             col - 1
         } else {
             PUM_COL.get() - max_extra - 1
-        });
+        }));
     }
 
-    window.w_config.anchor = 0; // NW: align its top with the menu's top
-    let count = window.w_buffer.line_count();
-    window.w_view_width = window.w_config.width;
-    window.w_config.height = plines_m_win(window, window.w_topline, count, ROWS.get());
-    window.w_config.row = f64::from(PUM_ROW.get());
-    window.w_config.hide = false;
-    win_config_float(window, window.w_config.clone());
+    window.set_config_anchor(0); // NW: align its top with the menu's top
+    let count = window.w_buffer().line_count();
+    window.set_w_view_width(window.config_width());
+    window.set_config_height(plines_m_win(window, window.w_topline(), count, ROWS.get()));
+    window.set_config_row(f64::from(PUM_ROW.get()));
+    window.set_config_hide(false);
+    win_config_float(window, window.config());
     true
 }
 
@@ -153,9 +153,9 @@ pub fn pum_set_info(selected: c_int, info: &[u8]) -> Option<Win> {
         None => {
             // NOTE: a failure here leaves autocmds blocked and the two
             // counters raised, as upstream does.
-            let mut fresh = win_float_create_preview(false, true)?;
-            fresh.w_topline = LineNr::ONE;
-            fresh.w_onebuf_opt.wo_wfb = 1;
+            let fresh = win_float_create_preview(false, true)?;
+            fresh.set_w_topline(LineNr::ONE);
+            fresh.set_wo_wfb(1);
             fresh
         }
     };
@@ -264,7 +264,7 @@ fn pum_show_info(info: &[u8], repeat: c_int, use_float: bool, prev_selected: c_i
     drop(redraw_off);
     G_DO_TAGPREVIEW.set(0);
 
-    if Win::current().w_onebuf_opt.wo_pvw != 0 || Win::current().w_float_is_info {
+    if Win::current().wo_pvw() != 0 || Win::current().w_float_is_info() {
         let mut res = Ok(());
         if !resized
             && Buf::current().b_nwindows() == 1
@@ -321,7 +321,7 @@ fn pum_fill_info(
     // Grow a preview split to fit the text, up to 'previewheight'.
     if repeat == 0 && !use_float {
         let lnum = lnum.min(LineNr::try_from(p_pvh()).unwrap_or(LineNr::MAX));
-        if LineNr::new(Win::current().w_height) < lnum {
+        if LineNr::new(Win::current().w_height()) < lnum {
             win_setheight(lnum.get());
             resized = true;
         }
@@ -330,12 +330,12 @@ fn pum_fill_info(
     Buf::current().set_b_changed(0);
     Buf::current().set_b_p_ma(0);
     if PUM_SELECTED.get() != prev_selected {
-        Win::current().w_topline = LineNr::ONE;
-    } else if Win::current().w_topline > Buf::current().line_count() {
-        Win::current().w_topline = Buf::current().line_count();
+        Win::current().set_w_topline(LineNr::ONE);
+    } else if Win::current().w_topline() > Buf::current().line_count() {
+        Win::current().set_w_topline(Buf::current().line_count());
     }
-    Win::current().w_cursor.lnum = LineNr::ONE;
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_lnum(LineNr::ONE);
+    Win::current().cursor().set_col(ColNr::ZERO);
 
     if use_float
         && !pum_adjust_info_position(Win::current(), max_info_width)
@@ -366,7 +366,7 @@ fn pum_restore_window(curwin_save: WinId, curtab_save: TabId, resized: bool) -> 
     // On the first completion, with the preview window not resized, skip
     // its status line redraw.
     if ins_compl_active() && !resized {
-        Win::current().w_redr_status = false;
+        Win::current().set_w_redr_status(false);
     }
 
     validate_cursor(Win::current());
@@ -419,10 +419,10 @@ pub(crate) fn pum_set_selected(n: c_int, repeat: c_int) -> bool {
     // float rather than closing it, so the next item can reuse it.
     if use_float
         && info.is_none()
-        && let Some(mut wp) = win_float_find_preview()
+        && let Some(wp) = win_float_find_preview()
     {
-        wp.w_config.hide = true;
-        win_config_float(wp, wp.w_config.clone());
+        wp.set_config_hide(true);
+        win_config_float(wp, wp.config());
     }
 
     if PUM_SELECTED.get() < 0 || PUM_SELECTED.get() >= PUM_SIZE.get() {

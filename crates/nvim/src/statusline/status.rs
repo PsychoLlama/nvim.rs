@@ -38,7 +38,7 @@ use crate::ui::ui_has;
 
 /// Redraw the status line of window `window`.
 pub fn win_redr_status(window: Win) {
-    let mut win = window;
+    let win = window;
     let is_stl_global = stl_is_global();
 
     static BUSY: GlobalCell<bool> = GlobalCell::new(false);
@@ -50,34 +50,34 @@ pub fn win_redr_status(window: Win) {
     }
     BUSY.set(true);
 
-    win.w_redr_status = false;
-    if win.w_status_height == 0 && !(is_stl_global && win.is_current()) {
+    win.set_w_redr_status(false);
+    if win.w_status_height() == 0 && !(is_stl_global && win.is_current()) {
         // No status line: either 'laststatus' is 3 or this is the last
         // window, so the command line is what has to be refreshed.
         REDRAW_CMDLINE.set(true);
     } else if !is_redrawing() {
         // Not now -- the popup menu may be drawn over it.
-        win.w_redr_status = true;
-    } else if !win.w_onebuf_opt.wo_stl.bytes().is_empty()
-        || !win.w_floating
+        win.set_w_redr_status(true);
+    } else if !win.read().w_onebuf_opt.wo_stl.bytes().is_empty()
+        || !win.w_floating()
         || (is_stl_global && win.is_current())
     {
         redraw_custom_statusline(window);
     }
 
     // May need to draw the character below the vertical separator.
-    if win.w_vsep_width != 0 && win.w_status_height != 0 && is_redrawing() {
+    if win.w_vsep_width() != 0 && win.w_status_height() != 0 && is_redrawing() {
         let mut group = HLF_C;
         let fillchar = if stl_connected(window) {
             let (g, fillchar) = fillchar_status_of(win);
             group = g;
             fillchar
         } else {
-            win.w_p_fcs_chars.vert
+            win.fcs_vert()
         };
         let attr = win_hl(win, group as c_int);
-        view_line_start(default_gridview(), win.w_winrow + win.w_height);
-        paint_schar(win.w_wincol + win.w_width, fillchar, attr);
+        view_line_start(default_gridview(), win.w_winrow() + win.w_height());
+        paint_schar(win.w_wincol() + win.w_width(), fillchar, attr);
         paint_flush();
     }
     BUSY.set(false);

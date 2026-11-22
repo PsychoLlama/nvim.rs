@@ -111,7 +111,7 @@ pub(crate) fn f_getmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
     let Some(win) = win else {
         return;
     };
-    for item in &win.w_matches {
+    for item in &win.read().w_matches {
         l.push_dict(Some(match_dict(item)));
     }
 }
@@ -339,7 +339,7 @@ pub(crate) fn f_matcharg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncDa
         return;
     }
     let window = Win::current();
-    match get_match(&window, id) {
+    match get_match(&window.read(), id) {
         None => {
             l.push_bytes(None);
             l.push_bytes(None);

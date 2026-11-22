@@ -78,7 +78,7 @@ impl Win {
     /// pattern, or a list of `[lnum]` / `[lnum, col]` / `[lnum, col, len]`
     /// positions. `id` of `-1` allocates the next free one.
     fn add_match(
-        mut self,
+        self,
         grp: &CStr,
         pat: Option<&CStr>,
         prio: c_int,
@@ -96,10 +96,10 @@ impl Win {
             return Err(MatchError::InvalidId(id));
         }
         if id == -1 {
-            id = self.w_next_match_id;
-            self.w_next_match_id = id.saturating_add(1);
+            id = self.w_next_match_id();
+            self.set_w_next_match_id(id.saturating_add(1));
         } else {
-            if self.w_matches.iter().any(|item| item.mit_id == id) {
+            if self.read().w_matches.iter().any(|item| item.mit_id == id) {
                 return Err(MatchError::IdTaken(id));
             }
             // Keep the auto-allocated ids above every hand-picked one, with
@@ -107,9 +107,9 @@ impl Win {
             // `INT_MAX` leaves the counter where it is, as upstream's wrapped
             // sum does.
             if let Some(above) = id.checked_add(100)
-                && self.w_next_match_id < above
+                && self.w_next_match_id() < above
             {
-                self.w_next_match_id = above;
+                self.set_w_next_match_id(above);
             }
         }
 
@@ -161,11 +161,12 @@ impl Win {
         // Insert into the list, which is in ascending priority order — so a
         // new match goes *after* every existing one of equal priority.
         let at = self
+            .read()
             .w_matches
             .iter()
             .position(|item| prio < item.mit_priority)
-            .unwrap_or(self.w_matches.len());
-        self.w_matches.insert(at, item);
+            .unwrap_or(self.read().w_matches.len());
+        self.edit().w_matches.insert(at, item);
 
         redraw_later(self, rtype);
         Ok(id)
@@ -258,17 +259,22 @@ fn fill_pos_array(
 }
 
 /// Removes the match `id` from `window`'s list, or says why it cannot.
-fn match_delete(mut window: Win, id: c_int) -> Result<(), MatchError> {
+fn match_delete(window: Win, id: c_int) -> Result<(), MatchError> {
     let mut rtype = UPD_SOME_VALID;
 
     if id < 1 {
         return Err(MatchError::DeleteInvalidId(id));
     }
 
-    let Some(at) = window.w_matches.iter().position(|item| item.mit_id == id) else {
+    let Some(at) = window
+        .read()
+        .w_matches
+        .iter()
+        .position(|item| item.mit_id == id)
+    else {
         return Err(MatchError::NoSuchId(id));
     };
-    let item = window.w_matches.remove(at);
+    let item = window.edit().w_matches.remove(at);
     if item.mit_toplnum != LineNr::ZERO {
         redraw_win_range_later(window, item.mit_toplnum, item.mit_botlnum);
         rtype = UPD_VALID;
@@ -280,8 +286,8 @@ fn match_delete(mut window: Win, id: c_int) -> Result<(), MatchError> {
 
 /// Removes every match from `window`'s list, and the list's own storage
 /// with it: a window's memory is released without dropping its fields.
-pub(crate) fn clear_matches(mut window: Win) {
-    drop(core::mem::take(&mut window.w_matches));
+pub(crate) fn clear_matches(window: Win) {
+    drop(core::mem::take(&mut window.edit().w_matches));
     redraw_later(window, UPD_SOME_VALID);
 }
 

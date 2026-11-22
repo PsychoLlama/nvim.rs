@@ -181,7 +181,6 @@ pub(crate) use walk::{
 
 use core::mem::offset_of;
 use core::num::NonZero;
-use core::ops::DerefMut;
 use core::ptr;
 
 use crate::drawscreen::redraw_later;
@@ -424,7 +423,7 @@ impl Win {
     /// nothing.
     #[inline]
     pub(crate) fn set_handle(&mut self, handle: Handle) {
-        DerefMut::deref_mut(self).handle = handle;
+        self.edit().handle = handle;
         self.stamp = Stamp::new(handle, self.stamp.generation());
     }
 
@@ -450,7 +449,7 @@ impl Win {
     /// hand an `Option<Buf>`, and the two names differ so the grep is easy.
     #[inline(always)]
     pub fn buffer(self) -> Buf {
-        self.w_buffer
+        self.w_buffer()
     }
 
     /// The window's syntax block, `w_s`: its buffer's own `b_s`
@@ -464,7 +463,7 @@ impl Win {
         // or the window's own `:ownsyntax` block -- and the block outlives
         // the assignment that replaces it. The borrow is the handle's, so it
         // ends with the expression that asked, as `Deref` does.
-        unsafe { &*self.w_s }
+        unsafe { &*self.w_s() }
     }
 
     /// The window's cursor, which lives inside the window.
@@ -478,7 +477,7 @@ impl Win {
     #[inline(always)]
     pub fn buffer_or_none(self) -> Option<Buf> {
         // A live window's `w_buffer` is a live buffer or null.
-        let buf = self.w_buffer;
+        let buf = self.w_buffer();
         (!buf.is_null()).then_some(buf)
     }
 
@@ -865,19 +864,19 @@ mod tests {
     #[test]
     fn copies_of_a_window_and_its_cursor_share_one_block() {
         let _held = editor_state_lock();
-        let mut win = bare_window();
-        let mut alias = win;
+        let win = bare_window();
+        let alias = win;
         let cursor = win.cursor();
-        alias.w_cursor.lnum = LineNr::new(4);
+        alias.cursor().set_lnum(LineNr::new(4));
         assert_eq!(cursor.lnum(), LineNr::new(4));
-        win.w_topline = LineNr::new(2);
+        win.set_w_topline(LineNr::new(2));
         cursor.set_col(ColNr::new(7));
-        assert_eq!(alias.w_cursor.col, ColNr::new(7));
-        assert_eq!(alias.w_topline, LineNr::new(2));
+        assert_eq!(alias.cursor().col(), ColNr::new(7));
+        assert_eq!(alias.w_topline(), LineNr::new(2));
         let found = window(win.handle()).expect("a registered window");
         assert_eq!(found, alias);
         assert_eq!(found.cursor(), cursor);
-        assert_eq!(found.w_cursor.lnum, LineNr::new(4));
+        assert_eq!(found.cursor().lnum(), LineNr::new(4));
         free_bare_window(win);
     }
 
@@ -887,15 +886,15 @@ mod tests {
     fn a_buffer_reached_three_ways_is_one_buffer() {
         let _held = editor_state_lock();
         let buffer = bare_buffer();
-        let mut win = bare_window();
-        win.w_buffer = buffer;
+        let win = bare_window();
+        win.set_w_buffer(buffer);
         let registered = self::buffer(buffer.handle()).expect("a registered buffer");
         registered.set_b_changed(1);
         assert_eq!(win.buffer().b_changed(), 1);
         win.buffer().set_b_p_ma(1);
         assert_eq!(buffer.b_p_ma(), 1);
         assert_eq!(win.buffer_or_none(), Some(registered));
-        win.w_buffer = Buf::NULL;
+        win.set_w_buffer(Buf::NULL);
         assert_eq!(win.buffer_or_none(), None);
         free_bare_window(win);
         free_bare_buffer(buffer);
