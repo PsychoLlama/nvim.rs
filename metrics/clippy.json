@@ -10,14 +10,6 @@
     "crates/nvim/src/extmark/mod.rs": 2,
     "crates/nvim/src/extmark/set.rs": 1,
     "crates/nvim/src/extmark/undo.rs": 1,
-    "crates/nvim/src/mark/adjust.rs": 1,
-    "crates/nvim/src/syntax/attr.rs": 1,
-    "crates/nvim/src/syntax/clear.rs": 1,
-    "crates/nvim/src/syntax/cluster.rs": 1,
-    "crates/nvim/src/syntax/endpos.rs": 3,
-    "crates/nvim/src/syntax/items.rs": 2,
-    "crates/nvim/src/syntax/list.rs": 1,
-    "crates/nvim/src/syntax/state.rs": 1,
-    "crates/nvim/src/syntax/sync.rs": 1
+    "crates/nvim/src/mark/adjust.rs": 1
   }
 }

@@ -138,7 +138,7 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
     let line = args.line.arg().to_vec();
     let mut conceal_char: c_int = 0;
     let mut opt = item_opt(syncing != 0);
-    let mut item = EMPTY_SYNPAT;
+    let mut item = empty_synpat();
 
     // Isolate the group name, then the options before the pattern, the
     // pattern, and the options after it.
@@ -149,7 +149,9 @@ pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
         .and_then(|name| {
             let at = read_item_options(&line, name.rest, &mut opt, &mut conceal_char, args.skip)?;
             let at = read_pattern(&line, at, &mut item, 0)?;
-            if item.sp_prog.as_ref().is_some_and(OwnedProg::had_eol)
+            if item
+                .sp_prog
+                .with(|prog| prog.is_some_and(OwnedProg::had_eol))
                 && !opt.flags.has(SynFlags::EXCLUDENL)
             {
                 opt.flags |= SynFlags::HAS_EOL;
@@ -321,12 +323,14 @@ impl ExArg<'_> {
             // Enable the appropriate `\z` specials: a start pattern defines the
             // external matches, skip and end patterns use them.
             let extmatch = if item == ITEM_START { REX_SET } else { REX_USE };
-            let mut pat = EMPTY_SYNPAT;
+            let mut pat = empty_synpat();
             cursor = read_pattern(line, at, &mut pat, extmatch)
                 .map_err(|why| why.report())
                 .ok();
             if item == ITEM_END
-                && pat.sp_prog.as_ref().is_some_and(OwnedProg::had_eol)
+                && pat
+                    .sp_prog
+                    .with(|prog| prog.is_some_and(OwnedProg::had_eol))
                 && !out.opt.flags.has(SynFlags::EXCLUDENL)
             {
                 pat.sp_flags |= SynFlags::HAS_EOL;
@@ -476,14 +480,15 @@ pub(crate) fn read_pattern(
     // first, to avoid the 'l' flag.
     let pattern = cstr::owned(&tail[1..end]);
     let _cpo = SavedCpo::empty();
-    ci.sp_prog = vim_regcomp_ext(&pattern, RE_MAGIC, extmatch).ok();
+    ci.sp_prog
+        .put(vim_regcomp_ext(&pattern, RE_MAGIC, extmatch).ok());
     ci.sp_pattern = Some(pattern);
     if ci.sp_prog.is_none() {
         // The compiler has said why.
         return Err(SyntaxError::Reported(Failed));
     }
     ci.sp_ic = cur_syn_block().read().b_syn_ic;
-    syn_clear_time(&mut ci.sp_time);
+    syn_clear_time(ci.sp_time.get_mut());
 
     let end = read_pattern_offsets(ci, &mut tail, end + 1);
     let after = cstr::byte_at(&tail, end);
@@ -570,7 +575,7 @@ mod tests {
     /// The offsets `text` names, read as `read_pattern` would read them.
     fn offsets(text: &str) -> (SynPat, usize) {
         let mut buffer: Vec<u8> = text.bytes().chain([0]).collect();
-        let mut pat = EMPTY_SYNPAT;
+        let mut pat = empty_synpat();
         let at = read_pattern_offsets(&mut pat, &mut buffer, 0);
         (pat, at)
     }

@@ -90,7 +90,7 @@ impl Win {
             return (1, HLF_COUNT);
         }
         // Loading the language files failed.
-        if self.syn_block().b_langp.is_empty() {
+        if self.syntax().read().b_langp.is_empty() {
             return (1, HLF_COUNT);
         }
 
@@ -123,7 +123,7 @@ impl Win {
         // Sitting on a non-word character is not an error; step over it and
         // look for a word after it.
         if let Some(capcol) = capcol
-            && self.syn_block().b_cap_prog.is_some()
+            && self.syntax().read().b_cap_prog.is_some()
         {
             // Did a sentence end here?
             let mut regmatch = RegMatch::new(self.take_cap_prog(), false);
@@ -151,7 +151,7 @@ impl Win {
         docount: bool,
         counted: &mut Option<(LangId, usize)>,
     ) -> Option<(usize, Hlf)> {
-        let syn = self.syn_block();
+        let syn = self.syntax().read();
         let langp = &syn.b_langp[..];
         let mut nrlen = 0usize; // a number came first
         let mut wrongcaplen = 0usize;
@@ -382,15 +382,15 @@ pub fn spell_valid_case(wordflags: WordFlags, treeflags: WordFlags) -> bool {
 
 /// Whether spell checking is on for `window` and a language is actually loaded.
 pub fn spell_check_window(window: Win) -> bool {
-    let syn = window.syn_block();
+    let syn = window.syntax().read();
     window.wo_spell() != 0 && syn.b_p_spl.first_byte() != 0 && !syn.b_langp.is_empty()
 }
 
 /// Whether spell checking is *off* for `window`, giving an error if so.
 pub fn no_spell_checking(window: Win) -> bool {
     if window.wo_spell() == 0
-        || window.syn_block().b_p_spl.first_byte() == 0
-        || window.syn_block().b_langp.is_empty()
+        || window.syntax().read().b_p_spl.first_byte() == 0
+        || window.syntax().read().b_langp.is_empty()
     {
         emsg(gettext(E_NO_SPELL));
         return true;
@@ -405,7 +405,7 @@ pub fn no_spell_checking(window: Win) -> bool {
 /// a line that means looking at the previous line, with a space standing
 /// in for the line break.
 pub fn check_need_cap(window: Win, lnum: LineNr, col: ColNr) -> bool {
-    if window.syn_block().b_cap_prog.is_none() {
+    if window.syntax().read().b_cap_prog.is_none() {
         return false;
     }
 

@@ -647,7 +647,7 @@ mod tests {
             let buffer = bare_buffer();
             let block = buffer.syntax();
             for _ in 0..patterns {
-                let mut pattern = EMPTY_SYNPAT;
+                let mut pattern = empty_synpat();
                 pattern.sp_type = sp_type_char(SPTYPE_MATCH);
                 block.edit().b_syn_patterns.push(pattern);
             }

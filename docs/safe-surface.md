@@ -269,7 +269,7 @@ gains a `Cell` or a raw pointer fails to build.
 ~~`Win`~~, ~~`Buf`~~, ~~`TabPage`, `FrameRef`, `PosRef`~~, ~~`Live<T>`~~, `GridRef`, `Term`:
 `Deref`/`DerefMut` from a `Copy` value. Constructors are `unsafe` (or the
 registries, which check); every dereference after is safe and unchecked.
-Rows: the eight `Deref`/`DerefMut` pairs; `Win::syn_block`/~~`syn_block_mut`~~
+Rows: the eight `Deref`/`DerefMut` pairs; ~~`Win::syn_block`~~/~~`syn_block_mut`~~
 (may be the buffer's `b_s`); ~~`GridRef::of_cell` (a cell's grid outside its
 tracker)~~; ~~`GridRef`'s null "unresolved" form~~; ~~`memline::held_line` (a
 line's bytes for the life of a `&Buf`, i.e. a local)~~.
@@ -518,22 +518,31 @@ w_lines[b].clone()` (the right side's read temporary lives to the end of
   and `win.w_alt_fnum().take()` each failed it). Cost (release,
   codegen-units = 1, cachegrind Ir) against the build before: every bench
   within ±0.5 % (edbench +0.43 %, mkspellbench +0.48 %, scrbench +0.12 %).
-- **Open — `SynBlockRef`:** `read()`/`edit()` replaced its `Deref`/
-  `DerefMut`, but both are `SynEdit`, checked against the owner's slot
-  (live, not lent to an edit) and not counted: the engine holds the
-  pattern list across matches that take a pattern's program out, so a
-  counted borrow refuses the engine itself. Closing it needs the program in
-  a cell of its own (`sp_prog`, `b_syn_linecont_prog`); then the block can
-  ride on the buffer's read/edit like any other field. Left for the `Win`
-  slices: a window's `:ownsyntax` block lives in the `Window`, which has no
-  counted guards yet, so only the buffer half could close now. Plan: (1)
-  the two programs become a take/put cell (`Cell<Option<RegProg>>`-shaped,
-  taken for a match and put back) so the engine needs only a read of the
-  block; (2) `SynBlockRef::read` = the owner's `read()` narrowed to the
-  block (`ReadPart`), `edit` = `EditPart`; (3) the engine's walks that now
-  hold a `SynEdit` across a match take a read instead. The `:syntax list`
-  printers already copy out before printing (they held block reads across
-  messages).
+- **Closed — `SynBlockRef` (both halves, checked):** its `read()` is the
+  owner's counted `read()` and its `edit()` the owner's `edit()` (the
+  buffer for its `b_s`, the window for an `:ownsyntax` block), each
+  narrowed to the block (`winlayer/deref.rs`, `SynRead`/`SynEdit`), so a
+  borrow of a block held across another way to it panics there. What made
+  the engine hold an uncounted borrow -- a pattern's program taken out for
+  a match while the pattern list was borrowed -- is gone: `sp_prog` and
+  `b_syn_linecont_prog` are take/put cells (`syntax::ProgCell`), their
+  `:syntime` totals `Cell`s, so a match needs only a read of the block.
+  `Win::syn_block`, which lent `&SynBlock` through `w_s` with no check at
+  all (the spell checker's way in), is gone too: those reads go through
+  `Win::syntax().read()`. The suites found two borrows the counted guards
+  refuse, both reads of the block held across the matcher installing the
+  syntax's `iskeyword` table in the buffer (a write of the buffer):
+  `push_next_match` and the zero-width-nextgroup test now copy what they
+  need out of the pattern first, and the state cache walk in
+  `record_line` scopes its borrow before storing a state. The spell
+  checker's per-character `MIDWORD`/`cjk` questions read their two `Copy`
+  fields in place (`Win::spell_ismw`, `Win::spell_cjk`: the owner checked,
+  no count), and `current_attr` asks the block's three flags once per call
+  rather than per loop. Cost (release, codegen-units = 1, cachegrind Ir)
+  against the build before both rows: spellbench +1.25 % (the owner check
+  in `spell_iswordp`), scrbench +0.65 % (most of it `win_line` register
+  allocation again, the rest the counted reads in the syntax engine),
+  edbench +0.44 %, every other bench within ±0.35 %.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with

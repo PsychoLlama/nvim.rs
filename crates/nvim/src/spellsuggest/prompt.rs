@@ -108,7 +108,7 @@ pub(crate) fn spell_suggest(count: c_int) {
 
 /// The body of `z=`, with `'spell'` already on.
 fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
-    if c_int::from(Win::current().syn_block().b_p_spl.first_byte()) == 0 {
+    if c_int::from(Win::current().syntax().read().b_p_spl.first_byte()) == 0 {
         emsg(gettext(E_NO_SPELL));
         return;
     }

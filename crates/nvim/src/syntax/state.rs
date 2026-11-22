@@ -165,13 +165,17 @@ impl SynState {
         if prev.is_none() {
             prev = block.read().b_sst.find(parsed_lnum - 1);
         }
-        let cache = &block.read().b_sst;
-        let mut sp = prev.or(cache.first());
-        while let Some(id) = sp
-            && cache.entry(id).lnum < parsed_lnum
-        {
-            sp = cache.next(id);
-        }
+        let sp = {
+            let held = block.read();
+            let cache = &held.b_sst;
+            let mut sp = prev.or(cache.first());
+            while let Some(id) = sp
+                && cache.entry(id).lnum < parsed_lnum
+            {
+                sp = cache.next(id);
+            }
+            sp
+        };
 
         if let Some(id) = sp
             && block.read().b_sst.entry(id).lnum == parsed_lnum

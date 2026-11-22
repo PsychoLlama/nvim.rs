@@ -307,7 +307,7 @@ static SPS_LIMIT: GlobalCell<c_int> = GlobalCell::new(9999);
 /// `'spelllang'` put them in: a copy, because a search reaches back into
 /// the window for its word characters while it walks them.
 pub(crate) fn window_langs() -> Vec<LangP> {
-    Win::current().syn_block().b_langp.clone()
+    Win::current().syntax().read().b_langp.clone()
 }
 
 /// The capitalisation of a bad word, for reproducing it in the

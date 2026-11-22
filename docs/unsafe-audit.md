@@ -407,10 +407,7 @@ not taken, or a fix listed for later.
   check it; the release check cost 0.8–1.7 % on the Lua benchmarks, so the
   row's text is the contract.
 - **The handle borrow model** (`winlayer`): a `Copy` handle lends `&`/`&mut`
-  into an object the type system cannot tie it to — `Buf::header`/
-  `header_mut` (an undo header through the buffer), `Win::syn_block`
-  (which may be the buffer's own block; its writes are in-place writers
-  that lend no `&mut`), `GridRef`'s
+  into an object the type system cannot tie it to — `GridRef`'s
   `Deref` (the compositor reads a grid while it is drawn; its writes are
   in-place writers that lend no `&mut`). Two copies of one handle can
   produce overlapping borrows; the rule is that no borrow is held across an

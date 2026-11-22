@@ -169,9 +169,17 @@ impl SynState {
             self.try_next_column = false;
         }
 
+        // What the block holds, asked once: nothing below defines syntax.
+        let (has_keywords, containedin, has_patterns) = {
+            let held = block.read();
+            (
+                !held.b_keywtab.is_empty() || !held.b_keywtab_ic.is_empty(),
+                held.b_syn_containedin != 0,
+                !held.patterns().is_empty(),
+            )
+        };
         // Only check for keywords when not syncing and there are some.
-        let do_keywords = !syncing
-            && (!block.read().b_keywtab.is_empty() || !block.read().b_keywtab_ic.is_empty());
+        let do_keywords = !syncing && has_keywords;
 
         // Zero-width matches with a nextlist already used here, so the same
         // one cannot match twice in this column and loop forever.
@@ -196,9 +204,7 @@ impl SynState {
             //    and patterns. Always look for contained items when some item
             //    has a `containedin=` (which costs extra time).
             cur_si = (self.state_len() != 0).then(|| self.top());
-            if block.read().b_syn_containedin != 0
-                || cur_si.is_none_or(|si| !self.item(si).si_cont_list.is_none())
-            {
+            if containedin || cur_si.is_none_or(|si| !self.item(si).si_cont_list.is_none()) {
                 // 2. A keyword, if we are on a keyword character after a
                 //    non-keyword one. Never while syncing.
                 if do_keywords && let Some(si) = self.try_keyword(cur_si) {
@@ -207,7 +213,7 @@ impl SynState {
                 }
 
                 // 3. A pattern, only if no keyword was found.
-                if !found_keyword && !block.read().patterns().is_empty() {
+                if !found_keyword && has_patterns {
                     // If we have not looked yet, or we are past what we
                     // found, look for a match with any pattern.
                     if self.next_match.idx < 0 || self.next_match.col < self.col {
@@ -215,17 +221,21 @@ impl SynState {
                     }
                     // If we found a match at the current column, use it.
                     if self.next_match.idx >= 0 && self.next_match.col == self.col {
-                        let held = block.read();
-                        let lspp = held.pattern(self.next_match.idx);
-                        if self.next_match.m_endpos.lnum == self.lnum
-                            && self.next_match.m_endpos.col == self.col
-                            && !lspp.sp_next_list.is_none()
-                        {
+                        let zero_width_next = (self.next_match.m_endpos.lnum == self.lnum
+                            && self.next_match.m_endpos.col == self.col)
+                            .then(|| {
+                                let held = block.read();
+                                let lspp = held.pattern(self.next_match.idx);
+                                (!lspp.sp_next_list.is_none())
+                                    .then(|| (lspp.sp_next_list.clone(), lspp.sp_flags))
+                            })
+                            .flatten();
+                        if let Some((next_list, next_flags)) = zero_width_next {
                             // A zero-width item with a nextgroup: do not push
                             // it, just set the nextgroup -- and remember it,
                             // so it cannot match here again.
-                            self.next_list = lspp.sp_next_list.clone();
-                            self.next_flags = lspp.sp_flags;
+                            self.next_list = next_list;
+                            self.next_flags = next_flags;
                             keep_next_list = true;
                             zero_width_next_list = true;
                             zero_width.push(self.next_match.idx);
@@ -233,7 +243,6 @@ impl SynState {
                         } else {
                             cur_si = Some(self.push_next_match());
                         }
-                        drop(held);
                         found_match = true;
                     }
                 }

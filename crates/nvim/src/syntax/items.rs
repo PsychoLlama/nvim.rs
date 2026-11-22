@@ -57,9 +57,20 @@ impl SynState {
     /// itself otherwise.
     pub(crate) fn push_next_match(&mut self) -> c_int {
         let idx = self.next_match.idx;
-        let block = self.block();
-        let held = block.read();
-        let spp = held.pattern(idx);
+        // What the pattern says, copied out: the end search below matches
+        // and installs the syntax's character table in the buffer, neither
+        // of which may run under a read of the block.
+        let (sp_flags, sp_cchar, sp_next_list, sp_type, sp_syn_match_id) = {
+            let held = self.block().read();
+            let spp = held.pattern(idx);
+            (
+                spp.sp_flags,
+                spp.sp_cchar,
+                spp.sp_next_list.clone(),
+                spp.sp_type,
+                spp.sp_syn_match_id,
+            )
+        };
 
         self.push_current_state(idx);
         let top = self.top();
@@ -77,13 +88,13 @@ impl SynState {
         cur_si.si_h_startpos = h_startpos;
         cur_si.si_m_startcol = col.get();
         cur_si.si_m_lnum = lnum.get();
-        cur_si.si_flags = spp.sp_flags | outer_conceal;
+        cur_si.si_flags = sp_flags | outer_conceal;
         cur_si.si_seqnr = seqnr;
-        cur_si.si_cchar = spp.sp_cchar;
-        cur_si.si_next_list = spp.sp_next_list.clone();
+        cur_si.si_cchar = sp_cchar;
+        cur_si.si_next_list = sp_next_list;
         cur_si.si_extmatch = extmatch;
 
-        if c_int::from(spp.sp_type) == SPTYPE_START && !spp.sp_flags.has(SynFlags::ONELINE) {
+        if c_int::from(sp_type) == SPTYPE_START && !sp_flags.has(SynFlags::ONELINE) {
             // A start-skip-end that may cross lines: work out how much of it
             // is in this line.
             let endcol = self.next_match.m_endpos.col;
@@ -119,7 +130,7 @@ impl SynState {
 
         // If the start pattern has a `matchgroup=` of its own, push a second
         // item for it, ending where the start match ends.
-        if c_int::from(spp.sp_type) == SPTYPE_START && spp.sp_syn_match_id != 0 {
+        if c_int::from(sp_type) == SPTYPE_START && sp_syn_match_id != 0 {
             self.push_current_state(idx);
             let top = self.top();
             let seqnr = self.take_seqnr();
@@ -141,7 +152,6 @@ impl SynState {
             self.check_keepend();
             self.update_si_attr(top);
         }
-        drop(held);
 
         self.next_match.idx = -1; // try another match next time
         self.top()

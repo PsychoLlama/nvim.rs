@@ -333,7 +333,7 @@ impl SpellScan {
         match decor_says {
             Some(says) => says,
             None if self.has_syntax => can_syn_spell(window, self.lnum, col.get()),
-            None => window.syn_block().b_p_spo_flags & OPT_SPO_FLAG_NOPLAINBUFFER == 0,
+            None => window.syntax().read().b_p_spo_flags & OPT_SPO_FLAG_NOPLAINBUFFER == 0,
         }
     }
 

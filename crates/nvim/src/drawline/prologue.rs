@@ -250,8 +250,8 @@ impl LineSetup {
     /// than being reported once per redraw.
     fn start_syntax(&mut self, window: Win, lnum: LineNr) {
         if !syntax_present(window)
-            || window.syn_block().b_syn_error
-            || window.syn_block().b_syn_slow
+            || window.syntax().read().b_syn_error
+            || window.syntax().read().b_syn_slow
             || self.has_foldtext
         {
             return;
@@ -263,7 +263,7 @@ impl LineSetup {
             window.set_syn_error();
         } else {
             DID_EMSG.set(save_did_emsg);
-            if !window.syn_block().b_syn_slow {
+            if !window.syntax().read().b_syn_slow {
                 self.has_syntax = true;
                 self.extra_check = true;
             }

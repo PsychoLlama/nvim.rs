@@ -298,7 +298,7 @@ pub fn parse_spelllang(window: Win) -> Result<(), OptError> {
     clear_midword(window);
 
     // The SpellFileMissing autocommands may change 'spelllang' underfoot.
-    let spl_copy = window.syn_block().b_p_spl.bytes().to_vec();
+    let spl_copy = window.syntax().read().b_p_spl.bytes().to_vec();
     parse.window.set_spell_cjk(false);
 
     let mut splp: &[u8] = &spl_copy;
@@ -520,7 +520,7 @@ impl LangParse {
     fn add_spellfiles(&mut self) {
         // Round 0 is the internal word list; each round after that is one
         // entry of 'spellfile'.
-        let spf_copy = Win::current().syn_block().b_p_spf.bytes().to_vec();
+        let spf_copy = Win::current().syntax().read().b_p_spf.bytes().to_vec();
         let mut spf: &[u8] = &spf_copy;
         let mut round = 0;
         while round == 0 || !spf.is_empty() {
@@ -713,7 +713,7 @@ pub fn spell_reload() {
     // the buffer has 'spell' on. The walk is over the current tab, which
     // always starts at `FIRSTWIN`.
     for wp in windows() {
-        if wp.syn_block().b_p_spl.first_byte() != 0 && wp.wo_spell() != 0 {
+        if wp.syntax().read().b_p_spl.first_byte() != 0 && wp.wo_spell() != 0 {
             let _ = parse_spelllang(wp);
             break;
         }

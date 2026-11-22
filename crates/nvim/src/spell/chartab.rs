@@ -153,7 +153,7 @@ pub(crate) fn tail(text: &[u8], at: usize) -> &[u8] {
 
 /// Whether `c` is one of the window's multibyte `MIDWORD` characters.
 fn is_midword_mb(window: Win, c: c_int) -> bool {
-    find_char(&window.syn_block().b_spell_ismw_mb, Codepoint::new(c)).is_some()
+    find_char(&window.syntax().read().b_spell_ismw_mb, Codepoint::new(c)).is_some()
 }
 
 /// Whether `p` starts with a word character.
@@ -170,7 +170,7 @@ pub fn spell_iswordp(p: &[u8], window: Win) -> bool {
     let mut s = p;
     if first != 0 && first < 0x80 && p.get(1).is_none_or(|&next| next < 0x80) {
         // Be quick for ASCII: one byte, and nothing composing on it.
-        if window.syn_block().b_spell_ismw[usize::from(first)] {
+        if window.spell_ismw(usize::from(first)) {
             s = &p[1..];
         }
     } else {
@@ -178,7 +178,7 @@ pub fn spell_iswordp(p: &[u8], window: Win) -> bool {
         // so it lands in the table like any other byte below 256.
         let c = char_at(p);
         let midword = if c.get() < 256 {
-            window.syn_block().b_spell_ismw[tab_index(c.get())]
+            window.spell_ismw(tab_index(c.get()))
         } else {
             is_midword_mb(window, c.get())
         };
@@ -208,7 +208,7 @@ pub fn spell_iswordp_nmw(p: &[u8], window: Win) -> bool {
 /// Only meaningful above 255. Unicode sub- and superscripts are excluded;
 /// with `'spelloptions'` containing `cjk` the East Asian scripts are too.
 fn spell_mb_isword_class(cl: c_int, window: Win) -> bool {
-    if window.syn_block().b_cjk != 0 {
+    if window.spell_cjk() {
         return cl == 2 || cl == 0x2800;
     }
     cl >= 2 && cl != 0x2070 && cl != 0x2080 && cl != 3
@@ -219,7 +219,7 @@ fn spell_mb_isword_class(cl: c_int, window: Win) -> bool {
 pub(super) fn spell_iswordp_w(w: &[c_int], window: Win) -> bool {
     let first = w.first().copied().unwrap_or(0);
     let midword = if first < 256 {
-        window.syn_block().b_spell_ismw[tab_index(first)]
+        window.spell_ismw(tab_index(first))
     } else {
         is_midword_mb(window, first)
     };

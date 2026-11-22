@@ -58,7 +58,7 @@ fn spell_check_text(stack: &mut Stack) -> Result<c_int, Raise> {
         let _ = parse_spelllang(win);
         win.set_wo_spell(1);
     }
-    if win.syn_block().b_p_spl.first_byte() == 0 {
+    if win.syntax().read().b_p_spl.first_byte() == 0 {
         emsg(gettext(E_NO_SPELL));
         win.set_wo_spell(wo_spell_save);
         return Ok(0);

@@ -147,7 +147,7 @@
 )]
 
 mod deref;
-pub(crate) use deref::{MlRef, SynEdit};
+pub(crate) use deref::{MlRef, SynEdit, SynRead};
 mod frame;
 pub mod graph;
 mod grid;
@@ -447,20 +447,6 @@ impl Win {
     #[inline(always)]
     pub fn buffer(self) -> Buf {
         self.w_buffer()
-    }
-
-    /// The window's syntax block, `w_s`: its buffer's own `b_s`
-    /// ([`Buf::syntax_block`]) unless `:ownsyntax` gave the window one of its
-    /// own. The syntax, spell and keyword state a window draws with lives
-    /// there, so this is the one front the `(*w_s)` reads go through.
-    #[inline(always)]
-    pub fn syn_block(&self) -> &SynBlock {
-        // SAFETY: a live window's `w_s` is set with its buffer -- every
-        // writer stores either `Buf::syntax_block` of the buffer it installs
-        // or the window's own `:ownsyntax` block -- and the block outlives
-        // the assignment that replaces it. The borrow is the handle's, so it
-        // ends with the expression that asked, as `Deref` does.
-        unsafe { &*self.w_s() }
     }
 
     /// The window's cursor, which lives inside the window.

@@ -312,12 +312,15 @@ impl SynState {
     /// never read.
     pub(crate) fn install_syntax_chartab(&self, chartab: &mut [uint64_t; 4]) {
         let (buffer, block) = (self.buffer, self.block());
-        if block.read().b_syn_isk.is_unset() {
-            return;
-        }
         // The two tables are the same 32 bytes, one typed as four `uint64_t`
         // and one as `uint8_t[32]`.
-        let installed: [uint8_t; 32] = block.read().b_syn_chartab;
+        let installed: [uint8_t; 32] = {
+            let held = block.read();
+            if held.b_syn_isk.is_unset() {
+                return;
+            }
+            held.b_syn_chartab
+        };
         *chartab = buffer.b_chartab();
         buffer.set_b_chartab(::core::array::from_fn(|i| {
             uint64_t::from_ne_bytes(::core::array::from_fn(|j| installed[i * 8 + j]))
@@ -342,7 +345,7 @@ impl SynState {
         self.install_syntax_chartab(&mut buf_chartab);
 
         let mut regmatch = RegMMatch {
-            regprog: self.block().edit().b_syn_linecont_prog.take(),
+            regprog: self.block().read().b_syn_linecont_prog.take(),
             startpos: [LPos {
                 lnum: LineNr::ZERO,
                 col: ColNr::ZERO,
@@ -358,15 +361,15 @@ impl SynState {
         let block = self.block();
         // A copy for the match, which reads the buffer (whose block this may
         // be), stored back after.
-        let mut time = block.read().b_syn_linecont_time;
+        let mut time = block.read().b_syn_linecont_time.get();
         let io = ExtMatchIo {
             input: None,
             output: None,
         };
         let r = self.syn_regexec(&mut regmatch, lnum, ColNr::ZERO, &mut time, io);
-        let mut held = block.edit();
-        held.b_syn_linecont_prog = regmatch.regprog.take();
-        held.b_syn_linecont_time = time;
+        let held = block.read();
+        held.b_syn_linecont_prog.put(regmatch.regprog.take());
+        held.b_syn_linecont_time.set(time);
         drop(held);
 
         self.restore_chartab(&buf_chartab);
@@ -564,8 +567,11 @@ fn sync_linecont(args: &ExArg, next_arg: usize) -> Result<usize, SyntaxError> {
         let value = block.read().b_syn_ic;
         block.edit().b_syn_linecont_ic = value;
         let _cpo = SavedCpo::empty();
-        block.edit().b_syn_linecont_prog = vim_regcomp(&pat, RE_MAGIC);
-        syn_clear_time(&mut block.edit().b_syn_linecont_time);
+        block
+            .edit()
+            .b_syn_linecont_prog
+            .put(vim_regcomp(&pat, RE_MAGIC));
+        syn_clear_time(block.edit().b_syn_linecont_time.get_mut());
 
         if block.read().b_syn_linecont_prog.is_none() {
             // The compiler has said why.

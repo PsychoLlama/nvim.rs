@@ -98,7 +98,8 @@ pub fn ex_spellinfo(_excmd: &mut ExArg) {
     // Copied out first: the messages may scroll and redraw.
     let entries: Vec<(XString, Option<XString>)> = LOADED_LANGS.with(|langs| {
         Win::current()
-            .syn_block()
+            .syntax()
+            .read()
             .b_langp
             .iter()
             .filter_map(|lp| {
@@ -205,7 +206,7 @@ pub fn spell_dump_compl(
         }
     }
 
-    let langp = Win::current().syn_block().b_langp.clone();
+    let langp = Win::current().syntax().read().b_langp.clone();
 
     // Regions can only be dumped when every language agrees on them.
     let mut region_names: Option<Vec<u8>> = None;

@@ -18,6 +18,7 @@
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
 use crate::winlayer::Win;
+use core::cell::Cell;
 use core::ffi::c_int;
 
 use super::*;
@@ -48,7 +49,7 @@ pub(crate) fn syntax_clear(block: SynBlockRef) {
     block.edit().b_syn_sync_maxlines = 0;
     block.edit().b_syn_sync_linebreaks = 0;
 
-    block.edit().b_syn_linecont_prog = None;
+    block.edit().b_syn_linecont_prog.put(None);
     block.edit().b_syn_linecont_pat = None;
     block.edit().b_syn_folditems = 0;
     block.edit().b_syn_isk = None;
@@ -85,8 +86,8 @@ impl SynBlock {
             b_syn_sync_maxlines: 0,
             b_syn_sync_linebreaks: 0,
             b_syn_linecont_pat: None,
-            b_syn_linecont_prog: None,
-            b_syn_linecont_time: no_time,
+            b_syn_linecont_prog: ProgCell::new(None),
+            b_syn_linecont_time: Cell::new(no_time),
             b_syn_linecont_ic: 0,
             b_syn_topgrp: 0,
             b_syn_conceal: 0,
@@ -139,7 +140,7 @@ fn syntax_sync_clear() {
     block.edit().b_syn_sync_maxlines = 0;
     block.edit().b_syn_sync_linebreaks = 0;
 
-    block.edit().b_syn_linecont_prog = None;
+    block.edit().b_syn_linecont_prog.put(None);
     block.edit().b_syn_linecont_pat = None;
     block.edit().b_syn_isk = None;
 

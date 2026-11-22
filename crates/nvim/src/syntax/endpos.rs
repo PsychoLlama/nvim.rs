@@ -97,12 +97,13 @@ impl SynState {
         }
         let block = self.block();
         // The program and the timing are taken out for the match, which
-        // reads the buffer (whose block this may be), and put back after.
-        let mut held = block.edit();
-        let spp = held.pattern_mut(idx);
+        // reads the buffer (whose block this may be), and put back after:
+        // both are cells, so neither side needs more than a read.
+        let held = block.read();
+        let spp = held.pattern(idx);
         regmatch.rmm_ic = spp.sp_ic;
         regmatch.regprog = spp.sp_prog.take();
-        let mut time = spp.sp_time;
+        let mut time = spp.sp_time.get();
         drop(held);
         let mut captures = None;
         let io = ExtMatchIo {
@@ -110,10 +111,10 @@ impl SynState {
             output: Some(&mut captures),
         };
         let matched = self.syn_regexec(&mut regmatch, lnum, col, &mut time, io);
-        let mut held = block.edit();
-        let spp = held.pattern_mut(idx);
-        spp.sp_prog = regmatch.regprog.take();
-        spp.sp_time = time;
+        let held = block.read();
+        let spp = held.pattern(idx);
+        spp.sp_prog.put(regmatch.regprog.take());
+        spp.sp_time.set(time);
         drop(held);
         (matched, regmatch, captures)
     }

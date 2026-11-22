@@ -100,16 +100,16 @@ pub fn spell_add_word(word: &[u8], what: SpellAddType, idx: c_int, undo: bool) {
             .expect("the internal word list was named on the line above")
     } else {
         // Give 'spellfile' a sensible default if it has none.
-        if Win::current().syn_block().b_p_spf.first_byte() == 0 {
+        if Win::current().syntax().read().b_p_spf.first_byte() == 0 {
             init_spellfile();
             new_spf = true;
         }
-        if Win::current().syn_block().b_p_spf.first_byte() == 0 {
+        if Win::current().syntax().read().b_p_spf.first_byte() == 0 {
             semsg!("E764: Option '{}' is not set", "spellfile");
             return;
         }
 
-        let spf = Win::current().syn_block().b_p_spf.get();
+        let spf = Win::current().syntax().read().b_p_spf.get();
         let mut rest: &[u8] = &spf;
         let mut i = 1;
         let name = loop {
@@ -251,8 +251,8 @@ fn comment_out_word(fname: &CStr, word: &[u8], undo: bool) -> bool {
 /// directory `'spelllang'` named if it named one by path, holding a
 /// `.add` file named after the language and encoding in use.
 fn init_spellfile() {
-    if Win::current().syn_block().b_p_spl.first_byte() == 0
-        || Win::current().syn_block().b_langp.is_empty()
+    if Win::current().syntax().read().b_p_spl.first_byte() == 0
+        || Win::current().syntax().read().b_langp.is_empty()
     {
         return;
     }
@@ -261,7 +261,7 @@ fn init_spellfile() {
     // path, the file goes beside it and "lstart" is its last component.
     // Upstream started "lstart" in the buffer's value and walked the
     // window's; they are one value unless the window has its own syntax.
-    let spl = Win::current().syn_block().b_p_spl.get();
+    let spl = Win::current().syntax().read().b_p_spl.get();
     let mut lstart = 0;
     let mut lend = 0;
     let mut aspath = false;
@@ -301,7 +301,7 @@ fn init_spellfile() {
 
     // The suffix has to match the file actually loaded, which may be
     // the ASCII build of the language rather than the current encoding.
-    let first = Win::current().syn_block().b_langp[0].slang;
+    let first = Win::current().syntax().read().b_langp[0].slang;
     let ascii = with_lang(first, |slang| {
         has_bytes(path_tail(slang.sl_fname.as_cstr()), b".ascii.")
     });

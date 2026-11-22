@@ -831,8 +831,8 @@ pub struct SynBlock {
     /// `:syntax sync linecont`'s pattern, owned; `b_syn_linecont_prog`
     /// is what it compiled to.
     pub(crate) b_syn_linecont_pat: Option<::std::ffi::CString>,
-    pub b_syn_linecont_prog: Option<crate::regexp::OwnedProg>,
-    pub b_syn_linecont_time: SynTime,
+    pub(crate) b_syn_linecont_prog: crate::syntax::ProgCell,
+    pub b_syn_linecont_time: ::core::cell::Cell<SynTime>,
     pub b_syn_linecont_ic: ::core::ffi::c_int,
     pub b_syn_topgrp: ::core::ffi::c_int,
     pub b_syn_conceal: ::core::ffi::c_int,

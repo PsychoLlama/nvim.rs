@@ -47,7 +47,6 @@
 
 use core::cell::UnsafeCell;
 use core::ffi::{c_char, c_int};
-use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 use core::ptr::{self, NonNull};
 
@@ -433,14 +432,27 @@ impl Buf {
     }
 }
 
-/// A syntax block lent through its owner ([`crate::syntax::SynBlockRef`]):
-/// the owner was live and lent to no edit when it was made, and nothing
-/// counts it after. The engine holds the pattern list across matches that
-/// take a pattern's program out, so the block's aliasing stays open until a
-/// program lives in a cell of its own (`docs/safe-surface.md`).
+/// A syntax block lent mutably through its owner
+/// ([`crate::syntax::SynBlockRef::edit`]): the owner's own `edit()`, narrowed
+/// to the block. While it is held every other way to the owner -- and so to
+/// the block -- panics.
+///
+/// The owner's guard is held for its drop alone: a buffer's (its `b_s`) or a
+/// window's (its `:ownsyntax` block), whichever owns the block.
 pub(crate) struct SynEdit<'a> {
     block: NonNull<SynBlock>,
-    _lent: PhantomData<&'a mut SynBlock>,
+    _buffer: Option<SlotEdit<'a, Buffer>>,
+    _window: Option<SlotEdit<'a, Window>>,
+}
+
+/// A syntax block borrowed through its owner
+/// ([`crate::syntax::SynBlockRef::read`]): the owner's own `read()`, counted,
+/// narrowed to the block. An edit of the owner (and so of the block) or a
+/// setter on it panics while one is held; other reads are welcome.
+pub(crate) struct SynRead<'a> {
+    block: NonNull<SynBlock>,
+    _buffer: Option<SlotRead<'a, Buffer>>,
+    _window: Option<SlotRead<'a, Window>>,
 }
 
 impl Deref for SynEdit<'_> {
@@ -448,8 +460,8 @@ impl Deref for SynEdit<'_> {
 
     #[inline(always)]
     fn deref(&self) -> &SynBlock {
-        // SAFETY: the owner was live when the guard was made, and a slot's
-        // memory is never given back; the aliasing is the open row above.
+        // SAFETY: borrowed from the value the owner's edit lends, which is
+        // held for as long as this is.
         unsafe { self.block.as_ref() }
     }
 }
@@ -457,40 +469,134 @@ impl Deref for SynEdit<'_> {
 impl DerefMut for SynEdit<'_> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut SynBlock {
-        // SAFETY: as `deref`.
+        // SAFETY: as `deref`; `&mut self` is the one way in.
         unsafe { self.block.as_mut() }
     }
 }
 
+impl Deref for SynRead<'_> {
+    type Target = SynBlock;
+
+    #[inline(always)]
+    fn deref(&self) -> &SynBlock {
+        // SAFETY: borrowed from the value the owner's read counts, which is
+        // held for as long as this is.
+        unsafe { self.block.as_ref() }
+    }
+}
+
 impl Buf {
-    /// The buffer's own syntax block, `b_s`, as [`SynEdit`] lends it.
+    /// The buffer's own syntax block, `b_s`, under an edit of the buffer.
     #[inline(always)]
     #[track_caller]
-    pub(crate) fn syn_block_lent<'a>(self) -> SynEdit<'a> {
-        self.check_live();
+    pub(crate) fn syn_block_edit<'a>(self) -> SynEdit<'a> {
+        let mut edit = self.edit();
+        let block = NonNull::from(&mut edit.b_s);
         SynEdit {
-            block: NonNull::new(self.syntax_block()).expect("a live buffer's block"),
-            _lent: PhantomData,
+            block,
+            _buffer: Some(edit),
+            _window: None,
+        }
+    }
+
+    /// The buffer's own syntax block, `b_s`, under a read of the buffer.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn syn_block_read<'a>(self) -> SynRead<'a> {
+        let read = self.read();
+        let block = NonNull::from(&read.b_s);
+        SynRead {
+            block,
+            _buffer: Some(read),
+            _window: None,
         }
     }
 }
 
 impl Win {
-    /// The window's `:ownsyntax` block, as [`SynEdit`] lends it.
+    /// The window's `:ownsyntax` block, under an edit of the window.
     ///
     /// # Panics
     /// When the window has none.
     #[inline(always)]
     #[track_caller]
-    pub(crate) fn own_syn_block_lent<'a>(self) -> SynEdit<'a> {
-        self.check_live();
-        // SAFETY: live and lent to no edit; a place read of the one field.
-        let own = unsafe { (*self.ptr).w_own_syntax.as_deref() }
-            .expect("an :ownsyntax block outlives its handles");
+    pub(crate) fn own_syn_block_edit<'a>(self) -> SynEdit<'a> {
+        let mut edit = self.edit();
+        let block = NonNull::from(
+            edit.w_own_syntax
+                .as_deref_mut()
+                .expect("an :ownsyntax block outlives its handles"),
+        );
         SynEdit {
-            block: NonNull::from(own),
-            _lent: PhantomData,
+            block,
+            _buffer: None,
+            _window: Some(edit),
         }
+    }
+
+    /// The window's `:ownsyntax` block, under a read of the window.
+    ///
+    /// # Panics
+    /// When the window has none.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn own_syn_block_read<'a>(self) -> SynRead<'a> {
+        let read = self.read();
+        let block = NonNull::from(
+            read.w_own_syntax
+                .as_deref()
+                .expect("an :ownsyntax block outlives its handles"),
+        );
+        SynRead {
+            block,
+            _buffer: None,
+            _window: Some(read),
+        }
+    }
+}
+
+impl Win {
+    /// The syntax block the window uses, checked for a place read: its
+    /// buffer's `b_s` (the buffer checked live and lent to no edit) or its
+    /// own `:ownsyntax` block (owned by the window, whose `w_s` getter just
+    /// checked it). The address is only ever read through by place, for one
+    /// `Copy` field.
+    #[inline(always)]
+    #[track_caller]
+    fn syn_block_place(self) -> *const SynBlock {
+        let at = self.w_s();
+        let buffer = self.w_buffer();
+        if !buffer.is_null() && ptr::eq(at, buffer.syntax_block()) {
+            buffer.check_live();
+        }
+        at
+    }
+
+    /// Whether character `c` (below 256) is one of the window's spell
+    /// `MIDWORD` characters: `b_spell_ismw[c]` of the block it uses, read in
+    /// place (the spell checker asks per character).
+    ///
+    /// # Panics
+    /// When `c` is 256 or more.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn spell_ismw(self, c: usize) -> bool {
+        let at = self.syn_block_place();
+        // SAFETY: a live window's `w_s` is its buffer's block or its own
+        // (every writer stores one of the two), and its owner was just
+        // checked live and lent to no edit; a place read of one element
+        // forms no reference to the block.
+        unsafe { (*at).b_spell_ismw[c] }
+    }
+
+    /// `'spelloptions'` "cjk" for the block the window uses: `b_cjk`, read
+    /// in place.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn spell_cjk(self) -> bool {
+        let at = self.syn_block_place();
+        // SAFETY: as `spell_ismw`.
+        unsafe { (*at).b_cjk != 0 }
     }
 }
 

@@ -4,7 +4,7 @@ count	callee	no_raw	defs	def
 20	from_raw_parts	0	0	
 17	zeroed	0	0	
 16	Reader::new	0	1	crates/nvim/src/event/rstream.rs
-12	.as_ref	0	0	
+13	.as_ref	0	0	
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 10	Box::from_raw	0	6	
 10	notify	0	0	

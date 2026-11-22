@@ -36,6 +36,8 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use core::cell::Cell;
+
 use crate::ascii::ascii_iswhite;
 use crate::autocmd::apply_autocmds_exarg;
 use crate::buffer::buf_get_changedtick;
@@ -64,8 +66,8 @@ use crate::message::{
 };
 use crate::narrow::{as_index, count_as_int};
 use crate::regexp::{REX_SET, REX_USE};
-pub(crate) use crate::winlayer::SynEdit;
 use crate::winlayer::{Buf, BufId, WinId};
+pub(crate) use crate::winlayer::{SynEdit, SynRead};
 
 use crate::autocmd::defs::AutoEvent;
 use crate::cmdexpand::defs::Expand;
@@ -271,9 +273,57 @@ pub(crate) struct SynPat {
     /// The pattern text, as `:syntax list` prints it. `None` only in a
     /// half-built pattern that never got one.
     pub sp_pattern: Option<::std::ffi::CString>,
-    /// The compiled program; `None` only in a half-built pattern.
-    pub sp_prog: Option<OwnedProg>,
-    pub sp_time: SynTime,
+    /// The compiled program; `None` only in a half-built pattern. Taken out
+    /// for a match and put back after, under a read of the block.
+    pub sp_prog: ProgCell,
+    /// The pattern's `:syntime` totals, updated after each match under a
+    /// read of the block.
+    pub sp_time: Cell<SynTime>,
+}
+
+/// A compiled program kept where the matcher takes it out for a match and
+/// puts it back after (the engine may hand back a different one): a take/put
+/// cell, so a match needs only a read of the block that holds it.
+#[derive(Default)]
+pub(crate) struct ProgCell(Cell<Option<OwnedProg>>);
+
+impl ProgCell {
+    /// An empty cell.
+    pub(crate) const fn new(prog: Option<OwnedProg>) -> Self {
+        ProgCell(Cell::new(prog))
+    }
+
+    /// The program, taken out; `None` while a match has it, or if there is
+    /// none.
+    #[inline]
+    pub(crate) fn take(&self) -> Option<OwnedProg> {
+        self.0.take()
+    }
+
+    /// Put the program (back).
+    #[inline]
+    pub(crate) fn put(&self, prog: Option<OwnedProg>) {
+        self.0.set(prog);
+    }
+
+    /// Whether there is no program (none compiled, or a match has it out).
+    pub(crate) fn is_none(&self) -> bool {
+        self.with(|prog| prog.is_none())
+    }
+
+    /// Run `f` on the program while it stays in the cell.
+    pub(crate) fn with<R>(&self, f: impl FnOnce(Option<&OwnedProg>) -> R) -> R {
+        let prog = self.0.take();
+        let r = f(prog.as_ref());
+        self.0.set(prog);
+        r
+    }
+}
+
+impl core::fmt::Debug for ProgCell {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.with(|prog| f.debug_tuple("ProgCell").field(&prog.is_some()).finish())
+    }
 }
 
 impl SynPat {
@@ -299,32 +349,35 @@ pub(crate) struct PatOffsets {
     pub offsets: [::core::ffi::c_int; SPO_COUNT as usize],
 }
 
-/// A half-built pattern: what upstream's `CLEAR_FIELD` left.
-pub(crate) const EMPTY_SYNPAT: SynPat = SynPat {
-    sp_type: 0,
-    sp_syncing: false,
-    sp_syn_match_id: 0,
-    sp_off_flags: 0,
-    sp_offsets: [0; SPO_COUNT as usize],
-    sp_flags: SynFlags::NONE,
-    sp_cchar: 0,
-    sp_ic: 0,
-    sp_sync_idx: 0,
-    sp_line_id: 0,
-    sp_startcol: ColNr::ZERO,
-    sp_cont_list: IdList::NONE,
-    sp_next_list: IdList::NONE,
-    sp_cont_in_list: IdList::NONE,
-    sp_syn: SynGroup { inc_tag: 0, id: 0 },
-    sp_pattern: None,
-    sp_prog: None,
-    sp_time: SynTime {
-        total: 0,
-        slowest: 0,
-        count: 0,
-        match_0: 0,
-    },
-};
+/// A half-built pattern: what upstream's `CLEAR_FIELD` left. A function, not
+/// a `const`: the pattern holds cells.
+pub(crate) const fn empty_synpat() -> SynPat {
+    SynPat {
+        sp_type: 0,
+        sp_syncing: false,
+        sp_syn_match_id: 0,
+        sp_off_flags: 0,
+        sp_offsets: [0; SPO_COUNT as usize],
+        sp_flags: SynFlags::NONE,
+        sp_cchar: 0,
+        sp_ic: 0,
+        sp_sync_idx: 0,
+        sp_line_id: 0,
+        sp_startcol: ColNr::ZERO,
+        sp_cont_list: IdList::NONE,
+        sp_next_list: IdList::NONE,
+        sp_cont_in_list: IdList::NONE,
+        sp_syn: SynGroup { inc_tag: 0, id: 0 },
+        sp_pattern: None,
+        sp_prog: ProgCell::new(None),
+        sp_time: Cell::new(SynTime {
+            total: 0,
+            slowest: 0,
+            count: 0,
+            match_0: 0,
+        }),
+    }
+}
 
 /// One `:syntax cluster`: a name and the ids it stands for.
 #[derive(Debug)]
@@ -504,9 +557,9 @@ pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
 /// reading freed memory. The block's address is kept beside the owner for
 /// identity alone ([`SynBlockRef::raw`]) and is never dereferenced.
 ///
-/// Every access is a [`SynBlockRef::read`] or [`SynBlockRef::edit`], checked
-/// against the owner's slot; two guards at once still alias (the open row in
-/// `docs/safe-surface.md`).
+/// Every access is a [`SynBlockRef::read`] or [`SynBlockRef::edit`]: the
+/// owner's own counted read or edit, narrowed to the block, so a borrow of
+/// the block held across another way to it panics there instead of aliasing.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct SynBlockRef {
     owner: SynOwner,
@@ -547,36 +600,24 @@ impl SynBlockRef {
     #[inline]
     #[track_caller]
     pub(crate) fn read<'a>(self) -> SynRead<'a> {
-        SynRead(self.edit())
+        match self.owner {
+            SynOwner::Buffer(buffer) => buffer.syn_block_read(),
+            SynOwner::Window(window) => window.own_syn_block_read(),
+        }
     }
 
-    /// Lend the block mutably until the guard is dropped. Checked against
-    /// the owner's slot (live, not lent to an edit) and no further: the
-    /// engine holds the pattern list across matches that take a pattern's
-    /// program out, so a counted borrow here would refuse the engine itself
-    /// (`docs/safe-surface.md`, the syntax block row).
+    /// Lend the block mutably until the guard is dropped: an edit of its
+    /// owner, so every other way to the owner panics meanwhile.
     ///
     /// # Panics
-    /// As [`SynBlockRef::read`].
+    /// As [`SynBlockRef::read`], and while a read of the owner is held.
     #[inline]
     #[track_caller]
     pub(crate) fn edit<'a>(self) -> SynEdit<'a> {
         match self.owner {
-            SynOwner::Buffer(buffer) => buffer.syn_block_lent(),
-            SynOwner::Window(window) => window.own_syn_block_lent(),
+            SynOwner::Buffer(buffer) => buffer.syn_block_edit(),
+            SynOwner::Window(window) => window.own_syn_block_edit(),
         }
-    }
-}
-
-/// A syntax block borrowed through its owner: [`SynBlockRef::read`].
-pub(crate) struct SynRead<'a>(SynEdit<'a>);
-
-impl core::ops::Deref for SynRead<'_> {
-    type Target = SynBlock;
-
-    #[inline(always)]
-    fn deref(&self) -> &SynBlock {
-        &self.0
     }
 }
 
@@ -698,7 +739,7 @@ mod tests {
         assert_eq!(through_buffer.read().b_syn_ic, 1);
         win.set_syn_error();
         assert!(buffer.syntax().read().b_syn_error);
-        assert_eq!(win.syn_block().b_syn_ic, 1);
+        assert_eq!(win.syntax().read().b_syn_ic, 1);
         win.set_w_s(::core::ptr::null_mut());
         free_bare_window(win);
         free_bare_buffer(buffer);
@@ -722,7 +763,7 @@ mod tests {
         assert_eq!(block.raw(), own);
         block.edit().b_syn_ic = 1;
         assert_eq!(buffer.syntax().read().b_syn_ic, 0);
-        assert_eq!(win.syn_block().b_syn_ic, 1);
+        assert_eq!(win.syntax().read().b_syn_ic, 1);
         win.set_w_s(::core::ptr::null_mut());
         win.edit().w_own_syntax = None;
         free_bare_window(win);

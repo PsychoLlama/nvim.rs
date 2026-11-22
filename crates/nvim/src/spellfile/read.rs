@@ -407,7 +407,8 @@ fn read_trees(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
 /// reported and the language carries on without sound-a-like suggestions.
 pub fn suggest_load_files() {
     let ids: Vec<LangId> = Win::current()
-        .syn_block()
+        .syntax()
+        .read()
         .b_langp
         .iter()
         .map(|lp| lp.slang)
