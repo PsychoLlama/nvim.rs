@@ -1,12 +1,13 @@
 -- Closing windows and tab pages from user code the editor runs in the middle
 -- of its own work. Each case once left Rust holding a window across the
--- handler.
+-- handler, or looping for good.
 
 local t = require('test.testutil')
 local n = require('test.functional.testnvim')()
 
 local clear, eq = n.clear, t.eq
 local command, eval, exec = n.command, n.eval, n.exec
+local api = n.api
 local assert_alive = n.assert_alive
 
 describe('closing windows from an autocommand', function()
@@ -48,5 +49,25 @@ describe('closing windows from an autocommand', function()
     command('diffthis')
     assert_alive()
     eq(2, eval('winnr("$")'))
+  end)
+end)
+
+describe(':tabclose', function()
+  before_each(clear)
+
+  it('stops at a floating window that refuses to close', function()
+    command('set nohidden')
+    command('tabnew')
+    local buf = api.nvim_create_buf(true, false)
+    api.nvim_open_win(buf, true, { relative = 'editor', row = 1, col = 1, width = 5, height = 2 })
+    api.nvim_buf_set_lines(buf, 0, -1, true, { 'changed' })
+    -- The float's buffer is changed and there is no `!`: it stays, and so
+    -- does the tab page. This used to retry the float forever.
+    t.matches('E37', t.pcall_err(command, 'tabclose'))
+    assert_alive()
+    eq(2, eval('tabpagenr("$")'))
+    eq(true, api.nvim_win_get_config(0).relative ~= '')
+    command('tabclose!')
+    eq(1, eval('tabpagenr("$")'))
   end)
 end)

@@ -435,8 +435,18 @@ pub fn tabpage_close(forceit: c_int) {
     TabPage::current().tp_did_tabclosedpre = true;
     let save_curtab = TabPage::current_raw();
 
+    // A float that refuses to close (a changed buffer without `!`, the
+    // autocommand window) stays current: the tab page stays too. Upstream
+    // loops here for good.
     while Win::current().w_floating {
-        ex_win_close(forceit, Win::current(), None);
+        let float = Win::current();
+        ex_win_close(forceit, float, None);
+        if float.is_live() && float.is_current() {
+            if TabPage::current_raw() == save_curtab {
+                TabPage::current().tp_did_tabclosedpre = false;
+            }
+            return;
+        }
     }
     if FIRSTWIN.get() != LASTWIN.get() {
         close_others(1, forceit);
