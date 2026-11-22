@@ -320,8 +320,8 @@ pub fn prompt_invoke_callback() {
 
     let _ = ml_append_bytes(Buf::current(), lnum, b"");
     appended_lines_mark(lnum, 1);
-    Win::current().w_cursor.lnum = lnum + 1;
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_lnum(lnum + 1);
+    Win::current().cursor().set_col(ColNr::ZERO);
     Buf::current().edit().b_prompt_start.mark.lnum = lnum + 1;
 
     if !Buf::current().read().b_prompt_callback.is_set() {

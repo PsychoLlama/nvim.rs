@@ -419,9 +419,9 @@ pub(crate) fn eval_foldexpr(window: Win) -> (c_int, c_int) {
     let saved_sctx: ScriptCtx = CURRENT_SCTX.get();
     let use_sandbox = was_set_insecurely(window, OPT_FOLDEXPR, OptionSetFlags::LOCAL);
     // A copy: the expression may set 'foldexpr' and free the option's text.
-    let expr = window.w_onebuf_opt.wo_fde.get();
+    let expr = window.read().w_onebuf_opt.wo_fde.get();
     let text = &expr[skip::white(&expr)..];
-    CURRENT_SCTX.set(window.w_onebuf_opt.wo_script_ctx[WIN_OPT_FOLDEXPR as usize]);
+    CURRENT_SCTX.set(window.read().w_onebuf_opt.wo_script_ctx[WIN_OPT_FOLDEXPR as usize]);
     let mut marker = 0;
     let retval: VarNumber = {
         let _no_emsg = Suppress::emsg();
@@ -461,7 +461,7 @@ pub fn eval_foldtext(window: Win) -> Object {
     let mut numbuf = NumBuf::new();
     let use_sandbox = was_set_insecurely(window, OPT_FOLDTEXT, OptionSetFlags::LOCAL);
     // A copy: the expression may set 'foldtext' and free the option's text.
-    let expr = window.w_onebuf_opt.wo_fdt.get();
+    let expr = window.read().w_onebuf_opt.wo_fdt.get();
     let call_stack_aside = CallStackAside::new();
     let _sandboxed = use_sandbox.then(Lock::sandbox);
     let _locked = Lock::text();

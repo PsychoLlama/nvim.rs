@@ -100,7 +100,7 @@ impl SynState {
 
     /// Search backwards for the end of a C-style comment, and if the start line
     /// turns out to be inside one, push the syntax item that defines it.
-    fn sync_by_ccomment(&mut self, mut window: Win, mut start_lnum: LineNr) {
+    fn sync_by_ccomment(&mut self, window: Win, mut start_lnum: LineNr) {
         // `find_start_comment` works on the current buffer, so make syn_buf it
         // for a moment. The window moves without its buffer: the parser's buffer
         // is `syn_buf`, which need not be the one `window` shows.
@@ -117,9 +117,9 @@ impl SynState {
         self.lnum = start_lnum;
 
         // Set the cursor to the start of the search.
-        let cursor_save = window.w_cursor;
-        window.w_cursor.lnum = start_lnum;
-        window.w_cursor.col = ColNr::ZERO;
+        let cursor_save = window.w_cursor();
+        window.cursor().set_lnum(start_lnum);
+        window.cursor().set_col(ColNr::ZERO);
 
         // Restrict the search for the end of the comment to "maxlines".
         let maxlines = self.block().read().b_syn_sync_maxlines as c_int;
@@ -141,7 +141,7 @@ impl SynState {
             }
         }
 
-        window.w_cursor = cursor_save;
+        window.set_w_cursor(cursor_save);
         saved_win.restore();
         saved_buf.restore();
     }

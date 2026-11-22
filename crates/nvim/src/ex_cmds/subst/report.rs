@@ -260,8 +260,8 @@ pub(crate) fn show_sub(
         .iter()
         .find(|r| r.start.lnum >= old_cusr.lnum)
     {
-        Win::current().w_cursor.lnum = curres.start.lnum;
-        Win::current().w_cursor.col = curres.start.col;
+        Win::current().cursor().set_lnum(curres.start.lnum);
+        Win::current().cursor().set_col(curres.start.col);
     }
 
     // Update the topline so that the main window is on the correct line.

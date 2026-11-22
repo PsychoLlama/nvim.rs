@@ -290,8 +290,8 @@ fn prepare_command_line(s: &mut CommandLineState, cc: Cc) {
     clear_cmdline_orig();
 
     CMDMSG_RL.set(
-        Win::current().w_onebuf_opt.wo_rl != 0
-            && Win::current().w_onebuf_opt.wo_rlc.first_byte() == b's'
+        Win::current().wo_rl() != 0
+            && Win::current().read().w_onebuf_opt.wo_rlc.first_byte() == b's'
             && (s.firstc == b'/' || s.firstc == b'?'),
     );
 
@@ -374,13 +374,13 @@ fn fire_cmdline_enter(cmdline_type: u8) {
 /// may show the mode through `mode()`, now that it is the command line.
 fn redraw_mode_readers() {
     let mut found_one = false;
-    for mut wp in windows_in_curtab() {
+    for wp in windows_in_curtab() {
         if P_STL.first_byte() != 0
-            || wp.w_onebuf_opt.wo_stl.first_byte() != 0
+            || wp.read().w_onebuf_opt.wo_stl.first_byte() != 0
             || P_WBR.first_byte() != 0
-            || wp.w_onebuf_opt.wo_wbr.first_byte() != 0
+            || wp.read().w_onebuf_opt.wo_wbr.first_byte() != 0
         {
-            wp.w_redr_status = true;
+            wp.set_w_redr_status(true);
             found_one = true;
         }
     }

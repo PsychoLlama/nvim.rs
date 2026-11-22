@@ -165,7 +165,7 @@ pub fn ex_append(excmd: &mut ExArg) {
     }
     set_op_range(start, if line2 < lnum { lnum } else { start });
 
-    Win::current().w_cursor.lnum = lnum;
+    Win::current().cursor().set_lnum(lnum);
     check_cursor_lnum(Win::current());
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 
@@ -349,9 +349,9 @@ pub fn ex_z(excmd: &mut ExArg) {
         }
     }
 
-    if Win::current().w_cursor.lnum != curs {
-        Win::current().w_cursor.lnum = curs;
-        Win::current().w_cursor.col = ColNr::ZERO;
+    if Win::current().cursor().lnum() != curs {
+        Win::current().cursor().set_lnum(curs);
+        Win::current().cursor().set_col(ColNr::ZERO);
     }
     EX_NO_REPRINT.set(true);
 }
@@ -362,9 +362,9 @@ fn default_bigness(forceit: c_int) -> int64_t {
     if forceit != 0 {
         int64_t::from(ROWS.get() - 1)
     } else if FIRSTWIN.get() == LASTWIN.get() {
-        Win::current().w_onebuf_opt.wo_scr * 2
+        Win::current().wo_scr() * 2
     } else {
-        int64_t::from(Win::current().w_view_height - 3)
+        int64_t::from(Win::current().w_view_height() - 3)
     }
 }
 

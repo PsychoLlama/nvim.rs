@@ -291,9 +291,10 @@ pub(crate) fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
 
 /// Whether the window's grid has to be composed with what is under it —
 /// 'winblend', or a float with a shadow.
-pub(crate) fn check_blending(mut window: Win) {
-    window.w_grid_alloc.blending =
-        window.w_onebuf_opt.wo_winbl > 0 as OptInt || (window.w_floating && window.w_config.shadow);
+pub(crate) fn check_blending(window: Win) {
+    let blending =
+        window.wo_winbl() > 0 as OptInt || (window.w_floating() && window.config_shadow());
+    window.edit().w_grid_alloc.blending = blending;
 }
 
 /// Parse 'winhighlight' — a comma-separated list of `from:to` group pairs —
@@ -308,7 +309,7 @@ pub(crate) fn parse_winhl_opt(winhl: Option<&[u8]>, window: Option<Win>) -> bool
     let value: &[u8] = match (winhl, window) {
         (Some(winhl), _) => winhl,
         (None, Some(w)) => {
-            own = w.w_onebuf_opt.wo_winhl.bytes().to_vec();
+            own = w.read().w_onebuf_opt.wo_winhl.bytes().to_vec();
             &own
         }
         (None, None) => b"",
@@ -317,28 +318,28 @@ pub(crate) fn parse_winhl_opt(winhl: Option<&[u8]>, window: Option<Win>) -> bool
     if value.is_empty() {
         // An empty value drops the window's namespace, but only while it
         // is still the one 'winhighlight' made.
-        if let Some(mut w) =
-            window.filter(|w| w.w_ns_hl_winhl > 0 && w.w_ns_hl == Handle::new(w.w_ns_hl_winhl))
+        if let Some(w) = window
+            .filter(|w| w.w_ns_hl_winhl() > 0 && w.w_ns_hl() == Handle::new(w.w_ns_hl_winhl()))
         {
-            w.w_ns_hl = Handle::NONE;
-            w.w_hl_needs_update = true;
+            w.set_w_ns_hl(Handle::NONE);
+            w.set_w_hl_needs_update(true);
         }
         return true;
     }
 
     let mut ns_hl: c_int = 0;
-    if let Some(mut w) = window {
-        if w.w_ns_hl_winhl == 0 {
+    if let Some(w) = window {
+        if w.w_ns_hl_winhl() == 0 {
             let ns = nvim_create_namespace(ApiString::NULL);
-            w.w_ns_hl_winhl = c_int::try_from(ns).expect("a namespace id fits an int");
+            w.set_w_ns_hl_winhl(c_int::try_from(ns).expect("a namespace id fits an int"));
         } else {
             // Reusing the namespace: bump the generation so attributes
             // cached against it are re-resolved.
-            with_decor_provider(Handle::new(w.w_ns_hl_winhl), true, |dp| dp.hl_valid += 1);
+            with_decor_provider(Handle::new(w.w_ns_hl_winhl()), true, |dp| dp.hl_valid += 1);
         }
-        ns_hl = w.w_ns_hl_winhl;
-        if w.w_ns_hl <= Handle::NONE {
-            w.w_ns_hl = Handle::new(w.w_ns_hl_winhl);
+        ns_hl = w.w_ns_hl_winhl();
+        if w.w_ns_hl() <= Handle::NONE {
+            w.set_w_ns_hl(Handle::new(w.w_ns_hl_winhl()));
         }
     }
 
@@ -378,8 +379,8 @@ pub(crate) fn parse_winhl_opt(winhl: Option<&[u8]>, window: Option<Win>) -> bool
         rest = after.get(comma + 1..).unwrap_or_default();
     }
 
-    if let Some(mut window) = window {
-        window.w_hl_needs_update = true;
+    if let Some(window) = window {
+        window.set_w_hl_needs_update(true);
     }
     true
 }

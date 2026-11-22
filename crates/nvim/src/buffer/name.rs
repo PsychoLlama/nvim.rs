@@ -100,7 +100,7 @@ impl Buf {
                 if let Some(o) = obuf.filter(|&o| o != self) {
                     // During startup a window may use a buffer that is not
                     // loaded yet.
-                    let in_use = tab_windows().any(|win| win.w_buffer == o);
+                    let in_use = tab_windows().any(|win| win.w_buffer() == o);
                     if o.ml().ml_mfp.is_some() || in_use {
                         // It is loaded or used in a window: fail.
                         if message {
@@ -179,7 +179,7 @@ pub fn buf_name_changed(b: Buf) {
         ml_setname(b);
     }
     let cur = current_win();
-    if cur.w_buffer == b {
+    if cur.w_buffer() == b {
         // Check the file name against the argument list.
         // SAFETY: a live window.
         check_arg_idx(cur);
@@ -202,7 +202,7 @@ pub fn setaltfname(ffname: Option<&CStr>, sfname: Option<&CStr>, lnum: LineNr) -
     if let Some(buf) = buf
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        current_win().w_alt_fnum = Some(buf.handle());
+        current_win().set_w_alt_fnum(Some(buf.handle()));
     }
     buf
 }
@@ -224,7 +224,7 @@ pub fn getaltfname(errmsg: bool) -> *mut c_char {
 /// Record the alternate cursor position for the current buffer in `win`,
 /// saving its window-local options too.
 pub fn buflist_altfpos(win: Win) {
-    let (lnum, col) = (win.w_cursor.lnum, win.w_cursor.col);
+    let (lnum, col) = (win.cursor().lnum(), win.cursor().col());
     buflist_setfpos(Buf::current(), Some(win), lnum, col, true);
 }
 

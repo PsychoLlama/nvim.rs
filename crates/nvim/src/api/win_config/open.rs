@@ -107,7 +107,7 @@ impl Opening {
             didset_window_options(window, true);
             changed_window_setting(window);
         }
-        Ok(window.handle)
+        Ok(window.handle())
     }
 
     /// Resolve the `win` key into the window to split or position against.
@@ -122,7 +122,7 @@ impl Opening {
             return Ok(false);
         };
         self.parent = Some(found);
-        if self.is_split && found.w_floating {
+        if self.is_split && found.w_floating() {
             return Err(Error::exception(c"Cannot split a floating window"));
         }
         self.tabpage = win_find_tabpage(found.id());
@@ -175,9 +175,9 @@ impl Opening {
         let made = self.split_ins(size, flags);
         *raised = try_leave(&tstate).err();
 
-        if let Some(mut new) = made {
-            new.w_config = self.config.clone();
-            let (width, height) = (new.w_width, new.w_height);
+        if let Some(new) = made {
+            new.edit().w_config = self.config.clone();
+            let (width, height) = (new.w_width(), new.w_height());
             if size > 0 {
                 if vertical && width != size {
                     win_setwidth_win(size, new);
@@ -379,7 +379,7 @@ pub(crate) fn win_can_move_tp(window: Win, tabpage: TabPage) -> Result<(), Error
 pub(crate) fn win_find_altwin(win: Win, tabpage: TabPage) -> Option<Win> {
     let w = win;
     let at = (tabpage != TabPage::current()).then_some(tabpage);
-    if win.w_floating {
+    if win.w_floating() {
         // `at` names the tab page to look in.
         win_float_find_altwin(win, at)
     } else {

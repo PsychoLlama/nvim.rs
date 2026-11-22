@@ -586,9 +586,9 @@ pub(crate) fn do_one_cmd(
     };
 
     // Can happen with a zero line number.
-    if Win::current().w_cursor.lnum == LineNr::ZERO {
-        Win::current().w_cursor.lnum = LineNr::ONE;
-        Win::current().w_cursor.col = ColNr::ZERO;
+    if Win::current().cursor().lnum() == LineNr::ZERO {
+        Win::current().cursor().set_lnum(LineNr::ONE);
+        Win::current().cursor().set_col(ColNr::ZERO);
     }
 
     if let Some(msg) = errormsg
@@ -727,11 +727,13 @@ pub(crate) fn ex_range_without_command(excmd: &mut ExArg) -> Result<(), CmdError
             return Err(CmdError::Message(ex_msg(E_INVRANGE)));
         } else {
             // Line 0 is not a position; the cursor goes to line 1.
-            Win::current().w_cursor.lnum = if excmd.line2 == LineNr::ZERO {
-                LineNr::ONE
-            } else {
-                excmd.line2
-            };
+            Win::current()
+                .cursor()
+                .set_lnum(if excmd.line2 == LineNr::ZERO {
+                    LineNr::ONE
+                } else {
+                    excmd.line2
+                });
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     }

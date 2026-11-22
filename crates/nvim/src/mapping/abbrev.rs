@@ -227,7 +227,7 @@ pub(crate) fn eval_map_expr(expr: &MapExpr, c: Key) -> Option<MapStr> {
     // side effects, and restore the cursor position afterwards.
     let locked = Lock::expr_map();
     set_vim_var_char(c); // set v:char to the typed character
-    let save_cursor = Win::current().w_cursor;
+    let save_cursor = Win::current().w_cursor();
     let save_msg_col = MSG_COL.get();
     let save_msg_row = MSG_ROW.get();
 
@@ -248,7 +248,7 @@ pub(crate) fn eval_map_expr(expr: &MapExpr, c: Key) -> Option<MapStr> {
     };
 
     drop(locked);
-    Win::current().w_cursor = save_cursor;
+    Win::current().set_w_cursor(save_cursor);
     MSG_COL.set(save_msg_col);
     MSG_ROW.set(save_msg_row);
 

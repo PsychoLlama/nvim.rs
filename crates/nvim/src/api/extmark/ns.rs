@@ -64,17 +64,17 @@ fn buffer_uses_ns(win: Win, ns_id: uint32_t) -> bool {
 
 /// Whether namespace `ns_id` is one of the ones `win` shows.
 fn window_shows_ns(win: Win, ns_id: uint32_t) -> bool {
-    win.w_ns_set.contains(&ns_id)
+    win.read().w_ns_set.contains(&ns_id)
 }
 
 /// Show namespace `ns_id` in `win`.
-fn show_ns_in_window(mut win: Win, ns_id: uint32_t) {
-    win.w_ns_set.insert(ns_id);
+fn show_ns_in_window(win: Win, ns_id: uint32_t) {
+    win.edit().w_ns_set.insert(ns_id);
 }
 
 /// Stop showing namespace `ns_id` in `win`.
-fn hide_ns_in_window(mut win: Win, ns_id: uint32_t) {
-    win.w_ns_set.remove(&ns_id);
+fn hide_ns_in_window(win: Win, ns_id: uint32_t) {
+    win.edit().w_ns_set.remove(&ns_id);
 }
 
 pub fn nvim_create_namespace(name: ApiString) -> Integer {

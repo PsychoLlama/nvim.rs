@@ -152,7 +152,7 @@ pub fn nvim__inspect_cell(grid: Integer, row: Integer, col: Integer) -> Result<A
         g = pum_grid_ref();
     } else if grid > 1 as Integer {
         let wp = get_win_by_grid_handle(handle_arg(c"grid handle", grid)?)
-            .filter(|wp| wp.w_grid_alloc.is_allocated());
+            .filter(|wp| wp.read().w_grid_alloc.is_allocated());
         let Some(wp) = wp else {
             return Err(err_bad_number(c"grid handle", grid));
         };

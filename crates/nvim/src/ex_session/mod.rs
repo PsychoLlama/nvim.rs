@@ -281,7 +281,7 @@ fn ses_arglist(out: &mut SessionFile, cmd: &CStr, names: &[XString], fullname: b
 /// never does (#18432); the rest is what 'sessionoptions' says about the
 /// kind of buffer it holds.
 pub(crate) fn ses_do_win(win: Win) -> bool {
-    if win.w_floating {
+    if win.w_floating() {
         return false;
     }
     let buf = win.buffer();

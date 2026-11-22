@@ -34,26 +34,26 @@ fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> DictRef {
 
     nr(c"tabnr", VarNumber::from(tpnr));
     nr(c"winnr", VarNumber::from(winnr));
-    nr(c"winid", VarNumber::from(window.handle));
-    nr(c"height", VarNumber::from(window.w_view_height));
-    nr(c"status_height", VarNumber::from(window.w_status_height));
-    nr(c"winrow", VarNumber::from(window.w_winrow + 1));
-    nr(c"topline", VarNumber::from(window.w_topline));
-    nr(c"botline", VarNumber::from(window.w_botline - 1));
-    nr(c"leftcol", VarNumber::from(window.w_leftcol));
-    nr(c"winbar", VarNumber::from(window.w_winbar_height));
-    nr(c"width", VarNumber::from(window.w_view_width));
+    nr(c"winid", VarNumber::from(window.handle()));
+    nr(c"height", VarNumber::from(window.w_view_height()));
+    nr(c"status_height", VarNumber::from(window.w_status_height()));
+    nr(c"winrow", VarNumber::from(window.w_winrow() + 1));
+    nr(c"topline", VarNumber::from(window.w_topline()));
+    nr(c"botline", VarNumber::from(window.w_botline() - 1));
+    nr(c"leftcol", VarNumber::from(window.w_leftcol()));
+    nr(c"winbar", VarNumber::from(window.w_winbar_height()));
+    nr(c"width", VarNumber::from(window.w_view_width()));
     nr(c"bufnr", VarNumber::from(buf.handle()));
-    nr(c"wincol", VarNumber::from(window.w_wincol + 1));
+    nr(c"wincol", VarNumber::from(window.w_wincol() + 1));
     nr(c"textoff", VarNumber::from(textoff));
     nr(c"terminal", VarNumber::from(terminal));
     nr(c"quickfix", VarNumber::from(quickfix));
     nr(
         c"loclist",
-        VarNumber::from(quickfix && !window.w_llist_ref.is_none()),
+        VarNumber::from(quickfix && !window.w_llist_ref().is_none()),
     );
     // The window's own `w:` scope; the answer takes a reference.
-    let vars = window.w_winvar.di_tv.dict_handle();
+    let vars = window.read().w_winvar.di_tv.dict_handle();
     let _ = dict.edit().add_dict(b"variables", vars);
     dict
 }
@@ -66,7 +66,7 @@ fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> DictRef {
     let _ = dict.edit().add_number(b"tabnr", VarNumber::from(tp_idx));
     let windows = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
     for wp in windows_in_tab(tabpage) {
-        windows.edit().push_number(VarNumber::from(wp.handle));
+        windows.edit().push_number(VarNumber::from(wp.handle()));
     }
     let _ = dict.edit().add_list(b"windows", Some(windows));
     // The tab page's own `t:` scope; the answer takes a reference.
@@ -152,7 +152,7 @@ impl FrameRef {
             // left out of the answer rather than described.
             if let Some(wp) = self.win() {
                 into.push_str(Some(c"leaf"));
-                into.push_number(VarNumber::from(wp.handle));
+                into.push_number(VarNumber::from(wp.handle()));
             }
             return;
         }
@@ -202,14 +202,14 @@ pub fn f_win_gettype(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     };
     let kind = if is_aucmd_win(wp) {
         c"autocmd"
-    } else if wp.w_onebuf_opt.wo_pvw != 0 {
+    } else if wp.wo_pvw() != 0 {
         c"preview"
-    } else if wp.w_floating {
+    } else if wp.w_floating() {
         c"popup"
     } else if CMDWIN_WIN.get() == Some(wp.id()) {
         c"command"
     } else if buf_is_quickfix(wp.buffer_or_none()) {
-        if wp.w_llist_ref.is_none() {
+        if wp.w_llist_ref().is_none() {
             c"quickfix"
         } else {
             c"loclist"

@@ -403,7 +403,7 @@ fn tabpage_from_range(excmd: &mut ExArg, unaccept_arg0: c_int) -> c_int {
 /// `QUITMORE` is what makes the second `:q` work: [`check_more`]'s refusal
 /// sets it, and `do_one_cmd` counts it down.
 pub(crate) fn unedited_files(forceit: bool) -> Option<c_int> {
-    let n = crate::arglist::argcount() - Win::current().w_arg_idx - 1;
+    let n = crate::arglist::argcount() - Win::current().w_arg_idx() - 1;
     let allowed = forceit
         || !only_one_window()
         || crate::arglist::argcount() <= 1

@@ -44,7 +44,7 @@ impl Restore {
     /// which is what makes the restoration exclusive too.
     fn new(_editor: &Editor) -> Restore {
         Restore {
-            cursor: Win::current().w_cursor,
+            cursor: Win::current().w_cursor(),
         }
     }
 }
@@ -62,7 +62,7 @@ impl Drop for Restore {
             // SAFETY: `text` is NUL-terminated and outlives the call.
             let _ = do_cmdline_cmd(&text);
         }
-        Win::current().w_cursor = self.cursor;
+        Win::current().set_w_cursor(self.cursor);
     }
 }
 

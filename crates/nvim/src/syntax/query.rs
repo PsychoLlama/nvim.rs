@@ -274,8 +274,8 @@ pub(crate) fn syn_get_foldlevel(window: Win, lnum: LineNr) -> c_int {
         });
     }
 
-    if OptInt::from(level) > window.w_onebuf_opt.wo_fdn {
-        level = number_as_int(window.w_onebuf_opt.wo_fdn);
+    if OptInt::from(level) > window.wo_fdn() {
+        level = number_as_int(window.wo_fdn());
         if level < 0 {
             level = 0;
         }

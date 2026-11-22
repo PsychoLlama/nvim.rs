@@ -102,11 +102,11 @@ pub(crate) fn did_set_statustabline_rulerformat(
     rulerformat: bool,
     statuscolumn: bool,
 ) -> Result<(), OptError> {
-    let (mut wp, varp) = (win(args), varp(args));
+    let (wp, varp) = (win(args), varp(args));
     if rulerformat {
         RU_WID.set(0);
     } else if statuscolumn {
-        wp.w_nrwidth_line_count = LineNr::ZERO;
+        wp.set_w_nrwidth_line_count(LineNr::ZERO);
     }
 
     let (idx, flags) = (args.os_idx, args.os_flags);
@@ -127,8 +127,8 @@ pub(crate) fn did_set_statustabline_rulerformat(
         new_bytes(args)
     };
     // A floating window's status line is part of its frame.
-    if is_stl && wp.w_floating {
-        win_config_float(wp, wp.w_config.clone());
+    if is_stl && wp.w_floating() {
+        win_config_float(wp, wp.config());
     }
 
     let mut errmsg = Ok(());

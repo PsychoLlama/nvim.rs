@@ -291,9 +291,9 @@ pub fn parse_border_style(style: &Object, cfg: &mut WinConfig) -> Result<(), Err
 }
 
 pub(crate) fn generate_api_error(window: Option<Win>, attribute: &CStr) -> Error {
-    match window.filter(|w| w.w_floating) {
+    match window.filter(|w| w.w_floating()) {
         Some(window) => {
-            let handle = window.handle;
+            let handle = window.handle();
             api_error!(
                 ERROR_TYPE_VALIDATION,
                 "Required: 'relative' when reconfiguring floating window {handle}"

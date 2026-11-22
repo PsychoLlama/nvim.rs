@@ -43,7 +43,7 @@ pub fn nvim_tabpage_list_wins(tabpage: TabpageHandle) -> Result<Array, Error> {
     let n = windows_in_tab(tab).count() as size_t;
     rv = Vec::with_capacity(n);
     for wp in windows_in_tab(tab) {
-        rv.push(Object::window(wp.handle));
+        rv.push(Object::window(wp.handle()));
     }
     Ok(rv.into())
 }
@@ -89,7 +89,7 @@ pub fn nvim_tabpage_get_win(tabpage: TabpageHandle) -> Result<WindowHandle, Erro
     }
     let curwin_of_tab = tab.current_window();
     match windows_in_tab(tab).find(|&wp| curwin_of_tab == Some(wp)) {
-        Some(wp) => Ok(wp.handle as WindowHandle),
+        Some(wp) => Ok(wp.handle() as WindowHandle),
         // A tab page that is not current always has a `tp_curwin` in its own
         // window list; upstream aborts here rather than answer a handle it
         // cannot justify.
@@ -163,7 +163,7 @@ pub fn nvim_open_tabpage(
 
     let new_win = wp
         .and_then(|w| windows_in_tab(tp).find(|live| live.raw() == w.raw()))
-        .filter(|w| w.w_buffer != b);
+        .filter(|w| w.w_buffer() != b);
     if let Some(w) = new_win {
         // `win_set_buf` fires `BufEnter`/`BufLeave` only for the window the
         // user is in; a tab page opened without entering it must not.

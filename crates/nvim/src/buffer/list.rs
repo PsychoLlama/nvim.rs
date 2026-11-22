@@ -551,11 +551,11 @@ pub fn buflist_getfile(
     }
 
     if !p_sol() && col != ColNr::ZERO {
-        let mut win = current_win();
-        win.w_cursor.col = col;
+        let win = current_win();
+        win.cursor().set_col(col);
         check_cursor_col(win);
-        win.w_cursor.coladd = 0;
-        win.w_set_curswant = true;
+        win.cursor().set_coladd(0);
+        win.set_w_set_curswant(true);
     }
     if JOP_FLAGS.get() & OPT_JOP_FLAG_VIEW != 0 && fm.is_some() {
         mark_view_restore(fm.as_ref());
@@ -580,9 +580,9 @@ fn goto_existing_window(buffer: Buf) -> bool {
             return false;
         }
     }
-    let mut win = current_win();
-    win.w_onebuf_opt.wo_scb = 0;
-    win.w_onebuf_opt.wo_crb = 0;
+    let win = current_win();
+    win.set_wo_scb(0);
+    win.set_wo_crb(0);
     true
 }
 
@@ -591,16 +591,16 @@ pub(crate) fn buflist_getfpos() {
     let fm = buflist_findfmark(Buf::current());
     let (lnum, col) = (fm.mark.lnum, fm.mark.col);
 
-    let mut win = current_win();
-    win.w_cursor.lnum = lnum;
+    let win = current_win();
+    win.cursor().set_lnum(lnum);
     check_cursor_lnum(win);
     if p_sol() {
-        win.w_cursor.col = ColNr::ZERO;
+        win.cursor().set_col(ColNr::ZERO);
     } else {
-        win.w_cursor.col = col;
+        win.cursor().set_col(col);
         check_cursor_col(win);
-        win.w_cursor.coladd = 0;
-        win.w_set_curswant = true;
+        win.cursor().set_coladd(0);
+        win.set_w_set_curswant(true);
     }
     if JOP_FLAGS.get() & OPT_JOP_FLAG_VIEW != 0 {
         mark_view_restore(Some(&fm));
@@ -702,7 +702,7 @@ fn match_shorthand(head: u8, diffmode: bool) -> Matched {
     let matched = if head == b'%' {
         Some(Buf::current().handle())
     } else {
-        current_win().w_alt_fnum
+        current_win().w_alt_fnum()
     };
     if diffmode && !find_buf(matched).is_some_and(is_diff_mode) {
         return Matched::Nothing;
@@ -761,7 +761,7 @@ fn match_pattern(
                 }
                 // Ignore the match when the buffer is not open in the
                 // current tab page.
-                if curtab_only && !windows().any(|win| win.w_buffer == b) {
+                if curtab_only && !windows().any(|win| win.w_buffer() == b) {
                     continue;
                 }
                 if let Matched::One(_) = matched {
@@ -879,7 +879,8 @@ mod tests {
         let _held = editor_state_lock();
         let window = bare_window();
         {
-            let w: &crate::types::Window = &window;
+            let held = window.read();
+            let w: &crate::types::Window = &held;
             assert!(w.w_ns_set.is_empty());
             assert!(!w.w_grid_alloc.is_allocated());
             assert!(!w.w_grid_alloc.tracks_dirty_cols());

@@ -214,7 +214,7 @@ pub(crate) fn run(argv: Vec<CString>) -> c_int {
         time_msg_at(c"waiting for UI");
         remote_ui_wait_for_attach();
         time_msg_at(c"done waiting for UI");
-        first_win().w_prev_height = first_win().w_height;
+        first_win().set_w_prev_height(first_win().w_height());
     }
 
     starting.set(NO_BUFFERS);
@@ -472,7 +472,9 @@ fn open_buffers(params: &mut MainParams) {
     set_vim_var_string(Vv::Swapcommand, None);
 
     if EXMODE_ACTIVE.get() {
-        Win::current().w_cursor.lnum = Buf::current().line_count();
+        Win::current()
+            .cursor()
+            .set_lnum(Buf::current().line_count());
     }
     fire_autocmds(AutoEvent::BufEnter, false, Buf::current_or_none());
     time_msg_at(c"BufEnter autocommands");
@@ -487,7 +489,7 @@ fn open_buffers(params: &mut MainParams) {
 
     if params.diff_mode {
         for wp in windows() {
-            if !wp.w_arg_idx_invalid {
+            if !wp.w_arg_idx_invalid() {
                 diff_win_options(wp, true);
             }
         }
@@ -519,7 +521,7 @@ fn enter_editor(use_remote_ui: bool) {
 
     set_reg_var(get_default_register_name().byte());
 
-    if Win::current().w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_scb != 0 {
+    if Win::current().wo_diff() != 0 && Win::current().wo_scb() != 0 {
         update_topline(Win::current());
         check_scrollbind(0, 0);
         time_msg_at(c"diff scrollbinding");

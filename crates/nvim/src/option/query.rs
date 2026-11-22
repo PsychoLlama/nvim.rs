@@ -126,12 +126,12 @@ fn culopt_flags(value: &[u8]) -> Result<uint8_t, InvalidValue> {
 /// Parse 'cursorlineopt' into `window.w_p_culopt_flags`, from `val` or from the
 /// window's own value. `Err` for a value that does not parse; the flags are
 /// only stored on success.
-pub(crate) fn fill_culopt_flags(val: Option<&CStr>, mut window: Win) -> Result<(), InvalidValue> {
+pub(crate) fn fill_culopt_flags(val: Option<&CStr>, window: Win) -> Result<(), InvalidValue> {
     let flags = match val {
         Some(val) => culopt_flags(val.to_bytes()),
-        None => culopt_flags(window.w_onebuf_opt.wo_culopt.bytes()),
+        None => culopt_flags(window.read().w_onebuf_opt.wo_culopt.bytes()),
     }?;
-    window.w_p_culopt_flags = flags;
+    window.set_w_p_culopt_flags(flags);
     Ok(())
 }
 
@@ -228,7 +228,7 @@ pub(crate) fn get_bkc_flags(buffer: Buf) -> c_uint {
 /// nothing, so they never reach a caller.
 ///
 pub(crate) fn get_ve_flags(window: Win) -> c_uint {
-    let flags = match window.w_onebuf_opt.wo_ve_flags {
+    let flags = match window.wo_ve_flags() {
         0 => VE_FLAGS.get(),
         local => local,
     };
@@ -240,7 +240,7 @@ impl Win {
     /// `"NONE"` is how a window says "no leader" against a global value that
     /// has one, and reads as empty.
     pub(crate) fn with_showbreak<R>(self, f: impl FnOnce(&[u8]) -> R) -> R {
-        let local = &self.w_onebuf_opt.wo_sbr;
+        let local = &self.read().w_onebuf_opt.wo_sbr;
         if local.bytes() == b"NONE" {
             return f(b"");
         }
@@ -251,14 +251,14 @@ impl Win {
     /// `*get_showbreak_value(wp) != NUL`, without the pointer.
     #[inline(always)]
     pub(crate) fn has_showbreak(self) -> bool {
-        let local = &self.w_onebuf_opt.wo_sbr;
+        let local = &self.read().w_onebuf_opt.wo_sbr;
         local.bytes() != b"NONE" && local_or_global(local, P_SBR).first_byte() != 0
     }
 
     /// Cells the 'showbreak' leader takes on screen, zero for none:
     /// upstream's `vim_strsize(get_showbreak_value(wp))`.
     pub(crate) fn showbreak_cells(self) -> c_int {
-        let local = &self.w_onebuf_opt.wo_sbr;
+        let local = &self.read().w_onebuf_opt.wo_sbr;
         if local.bytes() == b"NONE" {
             return 0;
         }
@@ -523,10 +523,10 @@ pub(crate) fn get_winbuf_options(buffer: bool) -> DictRef {
 /// scrolls off, whatever the option says.
 ///
 pub(crate) fn get_scrolloff_value(window: Win) -> int64_t {
-    if STATE.get() & MODE_TERMINAL != 0 && !window.w_buffer.terminal().is_null() {
+    if STATE.get() & MODE_TERMINAL != 0 && !window.w_buffer().terminal().is_null() {
         return 0;
     }
-    match window.w_onebuf_opt.wo_so {
+    match window.wo_so() {
         local if local < 0 => p_so(),
         local => local,
     }
@@ -535,7 +535,7 @@ pub(crate) fn get_scrolloff_value(window: Win) -> int64_t {
 /// 'sidescrolloff' for a window, local where set.
 ///
 pub(crate) fn get_sidescrolloff_value(window: Win) -> int64_t {
-    match window.w_onebuf_opt.wo_siso {
+    match window.wo_siso() {
         local if local < 0 => p_siso(),
         local => local,
     }
@@ -570,8 +570,8 @@ impl ScrollOff {
     /// The margin `win` reads right now.
     pub(crate) fn of(win: Win, margin: ScrollMargin) -> Self {
         let local = match margin {
-            ScrollMargin::Lines => win.w_onebuf_opt.wo_so,
-            ScrollMargin::Columns => win.w_onebuf_opt.wo_siso,
+            ScrollMargin::Lines => win.wo_so(),
+            ScrollMargin::Columns => win.wo_siso(),
         };
         if local >= 0 {
             Self::Window(win, margin)
@@ -583,8 +583,8 @@ impl ScrollOff {
     /// The value in effect.
     pub(crate) fn get(self) -> OptInt {
         match self {
-            Self::Window(win, ScrollMargin::Lines) => win.w_onebuf_opt.wo_so,
-            Self::Window(win, ScrollMargin::Columns) => win.w_onebuf_opt.wo_siso,
+            Self::Window(win, ScrollMargin::Lines) => win.wo_so(),
+            Self::Window(win, ScrollMargin::Columns) => win.wo_siso(),
             Self::Global(ScrollMargin::Lines) => p_so(),
             Self::Global(ScrollMargin::Columns) => p_siso(),
         }
@@ -593,8 +593,8 @@ impl ScrollOff {
     /// Write it back where it came from.
     pub(crate) fn set(self, value: OptInt) {
         match self {
-            Self::Window(mut win, ScrollMargin::Lines) => win.w_onebuf_opt.wo_so = value,
-            Self::Window(mut win, ScrollMargin::Columns) => win.w_onebuf_opt.wo_siso = value,
+            Self::Window(win, ScrollMargin::Lines) => win.set_wo_so(value),
+            Self::Window(win, ScrollMargin::Columns) => win.set_wo_siso(value),
             Self::Global(ScrollMargin::Lines) => P_SO.set(value),
             Self::Global(ScrollMargin::Columns) => P_SISO.set(value),
         }

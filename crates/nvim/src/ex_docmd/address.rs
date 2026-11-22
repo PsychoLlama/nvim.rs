@@ -215,7 +215,7 @@ fn read_range(
                 // Upstream moves the cursor to the first address whatever
                 // the kind counts, so `:2;3close` leaves it on line 2.
                 let (_, last) = excmd.range_numbers();
-                Win::current().w_cursor.lnum = LineNr::new(last);
+                Win::current().cursor().set_lnum(LineNr::new(last));
                 // A zero line number is not a position, so only the
                 // column is worth correcting there.
                 if last > 0 {
@@ -481,7 +481,7 @@ fn mark_address(
     match &found {
         Some(fm) if fm.fnum() != Some(Buf::current().handle()) => {
             mark_move_to(Some(fm), 0 as MarkMove);
-            Ok(Some(Win::current().w_cursor.lnum))
+            Ok(Some(Win::current().cursor().lnum()))
         }
         _ => {
             check_mark(found.as_ref())?;
@@ -514,15 +514,19 @@ fn search_address(
         }
         return Ok(None);
     }
-    let pos = Win::current().w_cursor;
+    let pos = Win::current().w_cursor();
     if lnum > LineNr::ZERO && lnum != MAXLNUM {
-        Win::current().w_cursor.lnum = lnum.min(Buf::current().line_count());
+        Win::current()
+            .cursor()
+            .set_lnum(lnum.min(Buf::current().line_count()));
     }
-    Win::current().w_cursor.col = if delim == b'/' && Win::current().w_cursor.lnum > LineNr::ZERO {
-        ColNr::MAX
-    } else {
-        ColNr::ZERO
-    };
+    Win::current().cursor().set_col(
+        if delim == b'/' && Win::current().cursor().lnum() > LineNr::ZERO {
+            ColNr::MAX
+        } else {
+            ColNr::ZERO
+        },
+    );
     SEARCHCMDLEN.set(0);
     let flags = if silent {
         SEARCH_KEEP as c_int
@@ -530,11 +534,11 @@ fn search_address(
         SEARCH_HIS as c_int | SEARCH_MSG as c_int
     };
     if do_search_in(&text[*cmd..], c, c, flags).is_none() {
-        Win::current().w_cursor = pos;
+        Win::current().set_w_cursor(pos);
         return Err(CmdError::Quiet);
     }
-    let found = Win::current().w_cursor.lnum;
-    Win::current().w_cursor = pos;
+    let found = Win::current().cursor().lnum();
+    Win::current().set_w_cursor(pos);
     // What `do_search` consumed. Wrapping, as upstream's pointer
     // arithmetic: the unescaping copy can leave this negative.
     *cmd =
@@ -569,7 +573,7 @@ fn last_pattern_address(
         lnum: if lnum != MAXLNUM {
             lnum
         } else {
-            Win::current().w_cursor.lnum
+            Win::current().cursor().lnum()
         },
         col: if which != b'?' {
             ColNr::MAX
@@ -675,9 +679,9 @@ fn dot_lnum(cmdidx: Option<CmdIdx>, addr_type: CmdAddr) -> Addr {
     // can name one: `get_address` with no command never reaches them.
     let quickfix = || cmdidx.expect("a quickfix address is asked by a quickfix command");
     Addr::At(match addr_type {
-        CmdAddr::Lines | CmdAddr::Other => Win::current().w_cursor.lnum,
+        CmdAddr::Lines | CmdAddr::Other => Win::current().cursor().lnum(),
         CmdAddr::Windows => LineNr::new(current_win_nr(Win::current_or_none())),
-        CmdAddr::Arguments => LineNr::new(Win::current().w_arg_idx + 1),
+        CmdAddr::Arguments => LineNr::new(Win::current().w_arg_idx() + 1),
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => LineNr::new(Buf::current().handle().get()),
         CmdAddr::Tabs => LineNr::new(current_tab_nr(TabPage::current_or_none())),
         CmdAddr::Quickfix => LineNr::new(len_as_int(qf_get_cur_idx(quickfix()))),

@@ -121,7 +121,7 @@ pub fn rename_buffer(new_fname: &CStr) -> Result<(), Failed> {
     {
         // `saved` keeps both names alive across the call, which copies
         // whatever it keeps.
-        let _ = setaltfname(saved.full(), saved.shown(), Win::current().w_cursor.lnum);
+        let _ = setaltfname(saved.full(), saved.shown(), Win::current().cursor().lnum());
     }
     drop(saved);
     buf_autocmd(AutoEvent::BufFilePost, Buf::current());
@@ -513,9 +513,9 @@ pub fn ex_wnext(excmd: &mut ExArg) {
     let step = excmd.number2;
     let forwards = c_int::from(excmd.line.byte_at(excmd.line.cmd + 1)) == 'n' as c_int;
     let i = if forwards {
-        Win::current().w_arg_idx + step
+        Win::current().w_arg_idx() + step
     } else {
-        Win::current().w_arg_idx - step
+        Win::current().w_arg_idx() - step
     };
     excmd.line1 = LineNr::ONE;
     excmd.line2 = Buf::current().line_count();
@@ -751,7 +751,7 @@ pub fn getfile(
 
     if !other {
         if lnum != LineNr::ZERO {
-            Win::current().w_cursor.lnum = lnum;
+            Win::current().cursor().set_lnum(lnum);
         }
         check_cursor_lnum(Win::current());
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);

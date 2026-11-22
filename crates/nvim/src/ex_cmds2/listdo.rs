@@ -140,7 +140,7 @@ pub(crate) fn ex_listdo(excmd: &mut ExArg) {
 /// must not run at all -- has been said.
 fn leave_winfixbuf(list: ListDo, forceit: bool) -> Result<(), Failed> {
     const E_WINFIXBUF: &CStr = c"E1513: Cannot switch buffer. 'winfixbuf' is enabled";
-    if Win::current().w_onebuf_opt.wo_wfb == 0 {
+    if Win::current().wo_wfb() == 0 {
         return Ok(());
     }
     if list == (ListDo::Quickfix { location: true }) && !forceit {
@@ -148,13 +148,13 @@ fn leave_winfixbuf(list: ListDo, forceit: bool) -> Result<(), Failed> {
         emsg(E_WINFIXBUF);
         return Err(Failed);
     }
-    if let Some(prev) = prev_window().filter(|p| win_valid(p.id()) && p.w_onebuf_opt.wo_wfb == 0) {
+    if let Some(prev) = prev_window().filter(|p| win_valid(p.id()) && p.wo_wfb() == 0) {
         win_goto(prev);
     }
-    if Win::current().w_onebuf_opt.wo_wfb != 0 {
+    if Win::current().wo_wfb() != 0 {
         // The new window is 'nowinfixbuf' and becomes the current one.
         let _ = win_split(0, 0);
-        if Win::current().w_onebuf_opt.wo_wfb != 0 {
+        if Win::current().wo_wfb() != 0 {
             // Autocommands set 'winfixbuf', or sent us to another window
             // that has it set, or the split failed. Give up.
             emsg(E_WINFIXBUF);
@@ -245,10 +245,10 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                 }
                 // Don't call `do_argfile` when already there, it would
                 // try reloading the file.
-                if Win::current().w_arg_idx != i || !editing_arg_idx(Win::current()) {
+                if Win::current().w_arg_idx() != i || !editing_arg_idx(Win::current()) {
                     do_argfile(excmd, i);
                 }
-                if Win::current().w_arg_idx != i {
+                if Win::current().w_arg_idx() != i {
                     break;
                 }
             }
@@ -257,7 +257,8 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                 let Some(cur) = wp.and_then(valid_win) else {
                     break;
                 };
-                execute = !cur.w_floating || (!cur.w_config.hide && cur.w_config.focusable);
+                execute =
+                    !cur.w_floating() || (!cur.config_hide() && cur.read().w_config.focusable);
                 if execute {
                     win_goto(cur);
                     if Win::current_raw() != cur.raw() {
@@ -325,7 +326,7 @@ fn listdo_walk(excmd: &mut ExArg, list: ListDo) {
                     // The cursor may have moved.
                     validate_cursor(Win::current());
                     // Required when 'scrollbind' has been set.
-                    if Win::current().w_onebuf_opt.wo_scb != 0 {
+                    if Win::current().wo_scb() != 0 {
                         do_check_scrollbind(true);
                     }
                 }

@@ -225,7 +225,7 @@ fn search_cmn(
         return Err(ArgsRefused::invalid(numbuf2.string(&args[1])));
     }
 
-    let save_cursor = Win::current().w_cursor;
+    let save_cursor = Win::current().w_cursor();
     let mut pos = save_cursor;
     let mut firstpos = Pos {
         lnum: LineNr::ZERO,
@@ -250,10 +250,10 @@ fn search_cmn(
         }
 
         // {skip} is evaluated with the cursor on the match.
-        let save_pos = Win::current().w_cursor;
-        Win::current().w_cursor = pos;
+        let save_pos = Win::current().w_cursor();
+        Win::current().set_w_cursor(pos);
         let answer = eval_expr_to_bool(&args[4]);
-        Win::current().w_cursor = save_pos;
+        Win::current().set_w_cursor(save_pos);
         let Ok(do_skip) = answer else {
             subpatnum = None;
             break;
@@ -275,7 +275,7 @@ fn search_cmn(
         if flags & SP_SETPCMARK != 0 {
             setpcmark();
         }
-        Win::current().w_cursor = pos;
+        Win::current().set_w_cursor(pos);
         if let Some(match_pos) = match_pos {
             match_pos.lnum = pos.lnum;
             match_pos.col = pos.col + 1;
@@ -285,9 +285,9 @@ fn search_cmn(
     }
 
     if flags & SP_NOMOVE != 0 {
-        Win::current().w_cursor = save_cursor;
+        Win::current().set_w_cursor(save_cursor);
     } else {
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
     }
     Ok(retval)
 }
@@ -494,7 +494,7 @@ pub fn do_searchpair(
     }
     let use_skip = skip.is_some_and(eval_expr_valid_arg);
 
-    let save_cursor = Win::current().w_cursor;
+    let save_cursor = Win::current().w_cursor();
     let mut pos = save_cursor;
     let mut firstpos = Pos {
         lnum: LineNr::ZERO,
@@ -533,13 +533,13 @@ pub fn do_searchpair(
         options &= !(SEARCH_START as c_int);
 
         if use_skip {
-            let save_pos = Win::current().w_cursor;
-            Win::current().w_cursor = pos;
+            let save_pos = Win::current().w_cursor();
+            Win::current().set_w_cursor(pos);
             let expr = skip.expect("`use_skip` means there is one");
             let answer = eval_expr_to_bool(expr);
-            Win::current().w_cursor = save_pos;
+            Win::current().set_w_cursor(save_pos);
             let Ok(skipped) = answer else {
-                Win::current().w_cursor = save_cursor;
+                Win::current().set_w_cursor(save_cursor);
                 retval = -1;
                 break;
             };
@@ -573,7 +573,7 @@ pub fn do_searchpair(
         if flags & SP_SETPCMARK != 0 {
             setpcmark();
         }
-        Win::current().w_cursor = pos;
+        Win::current().set_w_cursor(pos);
         if flags & SP_REPEAT == 0 {
             break;
         }
@@ -581,11 +581,11 @@ pub fn do_searchpair(
     }
 
     if let Some(match_pos) = match_pos {
-        match_pos.lnum = Win::current().w_cursor.lnum;
-        match_pos.col = Win::current().w_cursor.col + 1;
+        match_pos.lnum = Win::current().cursor().lnum();
+        match_pos.col = Win::current().cursor().col() + 1;
     }
     if flags & SP_NOMOVE != 0 || retval == 0 {
-        Win::current().w_cursor = save_cursor;
+        Win::current().set_w_cursor(save_cursor);
     }
     retval
 }

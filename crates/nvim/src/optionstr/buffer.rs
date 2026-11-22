@@ -138,7 +138,7 @@ pub fn did_set_bufhidden(args: &mut OptSet) -> Result<(), OptError> {
 /// 'buftype' cannot be changed into or out of "terminal": that is decided
 /// by whether the buffer actually has a terminal attached.
 pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
-    let (buf, mut wp) = (args.os_buf, win(args));
+    let (buf, wp) = (args.os_buf, win(args));
     // Checked as the buffer holds it, whichever copy was set. Only the first
     // letter is ever distinguishing.
     let (first, listed) = {
@@ -169,8 +169,8 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
         buf.edit().b_prompt_start = FileMark::fresh(next_prompt, None, FileMarkView::NONE);
     }
 
-    if wp.w_status_height != 0 || global_stl_height() != 0 {
-        wp.w_redr_status = true;
+    if wp.w_status_height() != 0 || global_stl_height() != 0 {
+        wp.set_w_redr_status(true);
         redraw_later(wp, UPD_VALID);
     }
     buf.set_b_help(first == b'h');

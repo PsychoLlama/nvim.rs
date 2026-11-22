@@ -151,14 +151,14 @@ pub fn var2fpos(
     let first = name.first().copied().unwrap_or(0);
     let second = name.get(1).copied().unwrap_or(0);
     if first == b'.' {
-        pos = wp.w_cursor;
+        pos = wp.w_cursor();
     } else if first == b'v' && second == 0 {
         // The other end of the Visual selection — but only in the
         // window that owns it.
         if visual_active() && wp.is_current() {
             pos = visual_anchor();
         } else {
-            pos = wp.w_cursor;
+            pos = wp.w_cursor();
         }
     } else if first == b'\'' {
         let fm = mark_get(bp, wp, MARK_ALL, second)?;
@@ -185,13 +185,13 @@ pub fn var2fpos(
         pos.col = ColNr::ZERO;
         if second == b'0' {
             update_topline(wp);
-            pos.lnum = wp.w_topline.max(LineNr::ONE);
+            pos.lnum = wp.w_topline().max(LineNr::ONE);
             return Some(pos);
         }
         if second == b'$' {
             validate_botline_win(wp);
-            pos.lnum = if wp.w_botline > LineNr::ZERO {
-                wp.w_botline - 1
+            pos.lnum = if wp.w_botline() > LineNr::ZERO {
+                wp.w_botline() - 1
             } else {
                 LineNr::ZERO
             };
@@ -204,7 +204,7 @@ pub fn var2fpos(
             pos.lnum = bp.line_count();
             pos.col = ColNr::ZERO;
         } else {
-            let lnum = wp.w_cursor.lnum;
+            let lnum = wp.cursor().lnum();
             pos.lnum = lnum;
             pos.col = if charcol {
                 ColNr::new(line_char_count(bp, lnum))
@@ -275,7 +275,7 @@ pub fn list2fpos(
             return Err(Failed);
         };
         let lnum = if pos.lnum == LineNr::ZERO {
-            Win::current().w_cursor.lnum
+            Win::current().cursor().lnum()
         } else {
             pos.lnum
         };

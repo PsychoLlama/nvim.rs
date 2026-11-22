@@ -1242,8 +1242,8 @@ fn getting_a_line_number_resolves_the_cursor() {
     // something the editor can stand in. The cursor line is the only field
     // the case writes, and it is put back at the end -- which is what the
     // LuaJIT spec's forked child got for free.
-    let mut win = Win::current();
-    let saved_cursor = win.w_cursor;
+    let win = Win::current();
+    let saved_cursor = win.w_cursor();
 
     let number = cstr("100500");
     let dot = cstr(".");
@@ -1260,7 +1260,7 @@ fn getting_a_line_number_resolves_the_cursor() {
     let answers = [42, 100500, 46, -1, -1, -1, -1, -1, 0, 1, 0, -1];
 
     for (row, want) in rows.into_iter().zip(answers) {
-        win.w_cursor.lnum = LineNr::new(46);
+        win.cursor().set_lnum(LineNr::new(46));
         let tv = row.tv;
         log.check(&[]);
         let got = check_emsg(log.editor(), || tv_get_lnum(&tv), row.emsg);
@@ -1272,7 +1272,7 @@ fn getting_a_line_number_resolves_the_cursor() {
         }
     }
 
-    win.w_cursor = saved_cursor;
+    win.set_w_cursor(saved_cursor);
 }
 
 /// `describe('float()') itp('works')`, spec line 3241: only a number and a

@@ -77,7 +77,7 @@ pub fn parse_cmdline(
     cmdinfo: &mut CmdParseInfo,
 ) -> Result<(), CmdError> {
     let save_ex_pressedreturn = EX_PRESSEDRETURN.get();
-    let save_cursor: Pos = Win::current().w_cursor;
+    let save_cursor: Pos = Win::current().w_cursor();
     save_last_search_pattern();
 
     // The caller's old modifiers go.
@@ -90,7 +90,7 @@ pub fn parse_cmdline(
         undo_cmdmod(&mut cmdinfo.cmdmod);
     }
     EX_PRESSEDRETURN.set(save_ex_pressedreturn);
-    Win::current().w_cursor = save_cursor;
+    Win::current().set_w_cursor(save_cursor);
     restore_last_search_pattern();
     parsed
 }

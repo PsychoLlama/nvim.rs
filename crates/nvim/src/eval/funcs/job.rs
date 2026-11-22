@@ -515,11 +515,11 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         stdin_mode = CHANNEL_STDIN_PIPE;
         if width == 0 {
             width = number_as_u16(i64::from(
-                (Win::current().w_view_width - Win::current().col_off()).max(0),
+                (Win::current().w_view_width() - Win::current().col_off()).max(0),
             ));
         }
         if height == 0 {
-            height = number_as_u16(i64::from(Win::current().w_view_height));
+            height = number_as_u16(i64::from(Win::current().w_view_height()));
         }
     }
     if pty && term_name.is_none() {

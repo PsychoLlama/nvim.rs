@@ -161,7 +161,7 @@ impl ExArg<'_> {
             if first == 0
                 && EXMODE_ACTIVE.get()
                 && self.source_kind() == SourceKind::Typed
-                && Win::current().w_cursor.lnum < Buf::current().line_count()
+                && Win::current().cursor().lnum() < Buf::current().line_count()
             {
                 // An Ex-mode empty line *becomes* a `+` command: the line the
                 // user did not type is retired and this one takes its place.

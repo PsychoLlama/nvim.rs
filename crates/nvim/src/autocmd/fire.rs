@@ -234,14 +234,18 @@ fn ignored_in_every_window(event: AutoEvent, buffer: Option<Buf>) -> bool {
         return false;
     }
     if buffer == Buf::current_or_none() {
-        return event_ignored(event, Win::current().w_onebuf_opt.wo_eiw.bytes(), true);
+        return event_ignored(
+            event,
+            Win::current().read().w_onebuf_opt.wo_eiw.bytes(),
+            true,
+        );
     }
     if !buffer.is_some_and(|b| b.b_nwindows() > 0) {
         return false;
     }
     tab_windows()
         .filter(|wp| Some(wp.buffer()) == buffer)
-        .all(|wp| event_ignored(event, wp.w_onebuf_opt.wo_eiw.bytes(), true))
+        .all(|wp| event_ignored(event, wp.read().w_onebuf_opt.wo_eiw.bytes(), true))
 }
 
 /// Fire `event` for `buffer`, running every autocommand in `group` whose

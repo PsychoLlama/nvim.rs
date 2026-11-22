@@ -100,7 +100,7 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
     let Some(wp) = find_window_by_handle(win)? else {
         return Ok(rv);
     };
-    let config = &wp.w_config;
+    let config = &wp.read().w_config;
 
     rv.focusable = Some(config.focusable);
     rv.external = Some(config.external);
@@ -108,7 +108,7 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
     rv.mouse = Some(config.mouse);
     rv.style = Some(ApiString::from_cstr(WIN_STYLE_STR[config.style as usize]));
 
-    if wp.w_floating {
+    if wp.w_floating() {
         rv.width = Some(Integer::from(config.width));
         rv.height = Some(Integer::from(config.height));
         if !config.external {
@@ -140,13 +140,13 @@ pub fn nvim_win_get_config(win: WindowHandle) -> Result<KeyDict_win_config, Erro
             rv.border = Some(Object::string(ApiString::from_cstr(c"none")));
         }
     } else if !config.external {
-        rv.width = Some(Integer::from(wp.w_width));
-        rv.height = Some(Integer::from(wp.w_height));
+        rv.width = Some(Integer::from(wp.w_width()));
+        rv.height = Some(Integer::from(wp.w_height()));
         let split = win_split_dir(wp);
         rv.split = Some(ApiString::from_cstr(WIN_SPLIT_STR[split as usize]));
     }
 
-    let rel = if wp.w_floating && !config.external {
+    let rel = if wp.w_floating() && !config.external {
         FLOAT_RELATIVE_STR[config.relative as usize]
     } else {
         c""

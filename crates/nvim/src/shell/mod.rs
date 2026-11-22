@@ -454,7 +454,7 @@ fn write_output(output: &mut [u8], eof: bool) -> usize {
             let mut line = output[start..].to_vec();
             line.push(0);
             append_at_cursor(&line);
-            Buf::current().set_b_no_eol_lnum(Win::current().w_cursor.lnum);
+            Buf::current().set_b_no_eol_lnum(Win::current().cursor().lnum());
             start = output.len();
         } else {
             Buf::current().set_b_no_eol_lnum(LineNr::ZERO);
@@ -468,8 +468,10 @@ fn write_output(output: &mut [u8], eof: bool) -> usize {
 /// Append one terminated `line` below the cursor, and move the cursor onto
 /// it.
 fn append_at_cursor(line: &[u8]) {
-    let lnum = Win::current().w_cursor.lnum;
-    Win::current().w_cursor.lnum += 1;
+    let lnum = Win::current().cursor().lnum();
+    Win::current()
+        .cursor()
+        .set_lnum(Win::current().cursor().lnum() + 1);
     let _ = ml_append_terminated(lnum, line, false);
 }
 

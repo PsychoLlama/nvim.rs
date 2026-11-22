@@ -57,7 +57,9 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     // the 'modified' flag from being set without cause.  The cursor still
     // moves as if the lines had, to stay backwards compatible.
     if dest == line1 - 1 || dest == line2 {
-        Win::current().w_cursor.lnum = last_moved_line(line1, line2, dest);
+        Win::current()
+            .cursor()
+            .set_lnum(last_moved_line(line1, line2, dest));
         return Ok(());
     }
 
@@ -178,7 +180,9 @@ pub fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed>
     );
 
     // Leave the cursor on the last of the moved lines.
-    Win::current().w_cursor.lnum = last_moved_line(line1, line2, dest);
+    Win::current()
+        .cursor()
+        .set_lnum(last_moved_line(line1, line2, dest));
 
     if line1 < dest {
         let end = (dest + num_lines + 1).min(Buf::current().line_count() + 1);
@@ -221,9 +225,9 @@ fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
 /// Move the folds of `line1`..`line2` to `dest` in every window showing the
 /// current buffer -- a window on another tab page holds folds of its own.
 fn move_folds_in_windows(line1: LineNr, line2: LineNr, dest: LineNr) {
-    for mut win in tab_windows() {
-        if win.w_buffer.is_current() {
-            fold_move_range(&mut win.w_folds, line1, line2, dest);
+    for win in tab_windows() {
+        if win.w_buffer().is_current() {
+            fold_move_range(&mut win.edit().w_folds, line1, line2, dest);
         }
     }
 }
@@ -258,28 +262,28 @@ pub fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
         return;
     }
 
-    Win::current().w_cursor.lnum = n;
+    Win::current().cursor().set_lnum(n);
     let mut copy = LineCopy::new();
     while line1 <= line2 {
         // Need to make a copy because the line will be unlocked within
         // `ml_append`.
         copy.fill_line(line1);
-        let at = Win::current().w_cursor.lnum;
+        let at = Win::current().cursor().lnum();
         let _ = ml_append_cstr(at, copy.as_cstr());
-        let cursor = &mut Win::current().w_cursor;
+        let cursor = Win::current().cursor();
 
         // Situation 2: skip the lines already copied.
         if line1 == n {
-            line1 = cursor.lnum;
+            line1 = cursor.lnum();
         }
         line1 += 1;
-        if cursor.lnum < line1 {
+        if cursor.lnum() < line1 {
             line1 += 1;
         }
-        if cursor.lnum < line2 {
+        if cursor.lnum() < line2 {
             line2 += 1;
         }
-        cursor.lnum += 1;
+        cursor.set_lnum(cursor.lnum() + 1);
     }
 
     appended_lines_mark(n, count);

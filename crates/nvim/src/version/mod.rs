@@ -360,7 +360,7 @@ pub(crate) fn may_show_intro() -> bool {
     empty
         && Buf::current().read().name.is_unnamed()
         && Buf::current().handle() == Handle::new(1)
-        && Win::current().handle == Handle::new(LOWEST_WIN_ID)
+        && Win::current().handle() == Handle::new(LOWEST_WIN_ID)
         && one_window(Win::current(), None)
         && !P_SHM.has_byte(ShmFlag::INTRO.byte())
 }
@@ -460,7 +460,7 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
     let text = mesg.to_bytes();
     let mut col = ((COLUMNS.get() - vim_strsize_cstr(mesg)) / 2).max(0);
     let grid = if !colon && ui_has(UI_MULTIGRID) {
-        first_window().map_or_else(default_gridview, |wp| wp.w_grid)
+        first_window().map_or_else(default_gridview, |wp| wp.w_grid())
     } else {
         default_gridview()
     };

@@ -368,8 +368,8 @@ pub(crate) fn sign_jump(id: c_int, group: Option<&[u8]>, buffer: Buf) -> Result<
         return Err(SignError::InvalidId(id));
     }
     if buf_jump_open_win(buffer).is_some() {
-        let mut win = Win::current();
-        win.w_cursor.lnum = LineNr::new(lnum);
+        let win = Win::current();
+        win.cursor().set_lnum(LineNr::new(lnum));
         check_cursor_lnum(win);
         beginline(BeginlineOpts::WHITE);
     } else {

@@ -400,10 +400,10 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
         // (probably unlisted) buffer, in which case it is fine.  When it is
         // not, `close_windows` would refuse to close the last non-floating
         // window, so it is allowed to close the current one instead.
-        let can_close_all_others = !Win::current().w_floating
+        let can_close_all_others = !Win::current().w_floating()
             || windows()
-                .take_while(|wp| !wp.w_floating)
-                .any(|wp| !wp.w_buffer.is_current());
+                .take_while(|wp| !wp.w_floating())
+                .any(|wp| !wp.w_buffer().is_current());
         close_all_windows(buf, can_close_all_others);
     }
 
@@ -519,9 +519,9 @@ fn do_buffer_ext(
     set_curbuf(buf, action, update_jumplist);
 
     if action == DOBUF_SPLIT {
-        let mut win = Win::current(); // reset 'scrollbind' and 'cursorbind'
-        win.w_onebuf_opt.wo_scb = 0;
-        win.w_onebuf_opt.wo_crb = 0;
+        let win = Win::current(); // reset 'scrollbind' and 'cursorbind'
+        win.set_wo_scb(0);
+        win.set_wo_crb(0);
     }
 
     if aborting_now() {
@@ -778,14 +778,14 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
     let mut buf = BufRef::of_record(AU_NEW_CURBUF.get())
         .get()
         .filter(|b| b.b_locked_split() == 0);
-    if buf.is_none() && Win::current().w_jumplistlen > 0 {
+    if buf.is_none() && Win::current().w_jumplistlen() > 0 {
         if jop_clean() {
             // Remove the buffer from the jump list.
             forget_jumps(Win::current(), buf_fnum);
         }
         // It's possible that we removed all jump list entries, in that case we
         // need to try another approach.
-        if Win::current().w_jumplistlen > 0 {
+        if Win::current().w_jumplistlen() > 0 {
             buf = walk_jumplist(&mut unloaded, update_jumplist);
         }
     }
@@ -822,27 +822,27 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
 /// The jump list, newest first, for the most recently visited buffer that is
 /// listed, loaded and not closing.
 fn walk_jumplist(unloaded: &mut Option<Buf>, update_jumplist: &mut bool) -> Option<Buf> {
-    let mut win = Win::current();
-    let mut jumpidx = win.w_jumplistidx;
+    let win = Win::current();
+    let mut jumpidx = win.w_jumplistidx();
 
     if jop_clean() {
         // If the index is the same as the length, the current position was not
         // yet added to the jump list. So we can safely go back to the last
         // entry and search from there.
-        if jumpidx == win.w_jumplistlen {
-            win.w_jumplistidx = win.w_jumplistlen - 1;
-            jumpidx = win.w_jumplistidx;
+        if jumpidx == win.w_jumplistlen() {
+            win.set_w_jumplistidx(win.w_jumplistlen() - 1);
+            jumpidx = win.w_jumplistidx();
         }
     } else {
         jumpidx -= 1;
         if jumpidx < 0 {
-            jumpidx = win.w_jumplistlen - 1;
+            jumpidx = win.w_jumplistlen() - 1;
         }
     }
 
     let forward = jumpidx;
-    while jop_clean() || jumpidx != win.w_jumplistidx {
-        let mut buf = find_buf(win.w_jumplist[as_index(jumpidx)].fmark.fnum());
+    while jop_clean() || jumpidx != win.w_jumplistidx() {
+        let mut buf = find_buf(win.read().w_jumplist[as_index(jumpidx)].fmark.fnum());
 
         if let Some(b) = buf {
             // Skip current and unlisted bufs.  Also skip a quickfix or closing
@@ -862,18 +862,18 @@ fn walk_jumplist(unloaded: &mut Option<Buf>, update_jumplist: &mut bool) -> Opti
         if buf.is_some() {
             // found a valid buffer: stop searching
             if jop_clean() {
-                win.w_jumplistidx = jumpidx;
+                win.set_w_jumplistidx(jumpidx);
                 *update_jumplist = false;
             }
             return buf;
         }
         // advance to older entry in jump list
-        if jumpidx == 0 && win.w_jumplistidx == win.w_jumplistlen {
+        if jumpidx == 0 && win.w_jumplistidx() == win.w_jumplistlen() {
             return None;
         }
         jumpidx -= 1;
         if jumpidx < 0 {
-            jumpidx = win.w_jumplistlen - 1;
+            jumpidx = win.w_jumplistlen() - 1;
         }
         if jumpidx == forward {
             return None; // List exhausted for sure

@@ -43,7 +43,7 @@ fn drag_target(args: &[TypVal]) -> Result<Option<(Win, c_int)>, Failed> {
     let Some(wp) = arg_win(args, 0) else {
         return Ok(None);
     };
-    if wp.w_floating {
+    if wp.w_floating() {
         return Ok(None);
     }
     if !win_valid(wp.id()) {
@@ -81,7 +81,7 @@ pub fn f_win_move_statusline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFu
 pub fn f_win_screenpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut list = tv_list_alloc_ret(result, 2);
     let wp = arg_win(args, 0);
-    let (row, col) = wp.map_or((0, 0), |wp| (wp.w_winrow + 1, wp.w_wincol + 1));
+    let (row, col) = wp.map_or((0, 0), |wp| (wp.w_winrow() + 1, wp.w_wincol() + 1));
     (*list).push_number(VarNumber::from(row));
     (*list).push_number(VarNumber::from(col));
 }
@@ -111,7 +111,10 @@ pub fn f_win_splitmove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         crate::semsg!("E957: Invalid window number");
         return;
     };
-    if wp == targetwin || !win_valid(wp.id()) || !win_valid(targetwin.id()) || targetwin.w_floating
+    if wp == targetwin
+        || !win_valid(wp.id())
+        || !win_valid(targetwin.id())
+        || targetwin.w_floating()
     {
         crate::semsg!("E957: Invalid window number");
         return;
@@ -146,26 +149,26 @@ pub fn f_win_splitmove(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
 pub fn f_wincol(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let win = Win::current();
     validate_cursor(win);
-    result.write_number(VarNumber::from(win.w_wcol + 1));
+    result.write_number(VarNumber::from(win.w_wcol() + 1));
 }
 
 /// `winline()` — the cursor's screen row within the window, one-based.
 pub fn f_winline(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let win = Win::current();
     validate_cursor(win);
-    result.write_number(VarNumber::from(win.w_wrow + 1));
+    result.write_number(VarNumber::from(win.w_wrow() + 1));
 }
 
 /// `winheight({nr})` — text height, -1 for a window that does not exist.
 pub fn f_winheight(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let wp = arg_win(args, 0);
-    result.write_number(wp.map_or(-1, |wp| VarNumber::from(wp.w_view_height)));
+    result.write_number(wp.map_or(-1, |wp| VarNumber::from(wp.w_view_height())));
 }
 
 /// `winwidth({nr})` — text width, -1 for a window that does not exist.
 pub fn f_winwidth(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let wp = arg_win(args, 0);
-    result.write_number(wp.map_or(-1, |wp| VarNumber::from(wp.w_view_width)));
+    result.write_number(wp.map_or(-1, |wp| VarNumber::from(wp.w_view_width())));
 }
 
 /// `winrestcmd()` — the `:resize` commands that rebuild the current tab page's
@@ -184,8 +187,8 @@ pub fn f_winrestcmd(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         let numbered = || (1..).zip(windows_in_tab(tp).filter(|wp| wp.has_winnr(tp)));
         for _ in 0..2 {
             for (winnr, wp) in numbered() {
-                emit("", winnr, wp.w_height);
-                emit("vert ", winnr, wp.w_width);
+                emit("", winnr, wp.w_height());
+                emit("vert ", winnr, wp.w_width());
             }
         }
     }
@@ -201,22 +204,22 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
         return;
     }
     let dict = args[0].dict_ref();
-    let mut win = Win::current();
+    let win = Win::current();
     let entry =
         |key: &CStr| dict_find(dict.as_deref(), key.to_bytes()).map(|di| tv_get_number(&di.di_tv));
 
     if let Some(v) = entry(c"lnum") {
-        win.w_cursor.lnum = number_as_lnum(v);
+        win.cursor().set_lnum(number_as_lnum(v));
     }
     if let Some(v) = entry(c"col") {
-        win.w_cursor.col = ColNr::new(number_as_int(v));
+        win.cursor().set_col(ColNr::new(number_as_int(v)));
     }
     if let Some(v) = entry(c"coladd") {
-        win.w_cursor.coladd = number_as_int(v);
+        win.cursor().set_coladd(number_as_int(v));
     }
     if let Some(v) = entry(c"curswant") {
-        win.w_curswant = ColNr::new(number_as_int(v));
-        win.w_set_curswant = false;
+        win.set_w_curswant(ColNr::new(number_as_int(v)));
+        win.set_w_set_curswant(false);
     }
     if let Some(v) = entry(c"topline") {
         // Not a plain assignment: 'scrolloff' and folds decide where the
@@ -224,21 +227,21 @@ pub fn f_winrestview(args: &[TypVal], _result: &mut TypVal, _fptr: EvalFuncData)
         set_topline(win, number_as_lnum(v));
     }
     if let Some(v) = entry(c"topfill") {
-        win.w_topfill = number_as_int(v);
+        win.set_w_topfill(number_as_int(v));
     }
     if let Some(v) = entry(c"leftcol") {
-        win.w_leftcol = ColNr::new(number_as_int(v));
+        win.set_w_leftcol(ColNr::new(number_as_int(v)));
     }
     if let Some(v) = entry(c"skipcol") {
-        win.w_skipcol = ColNr::new(number_as_int(v));
+        win.set_w_skipcol(ColNr::new(number_as_int(v)));
     }
 
     check_cursor(win);
-    win_new_height(win, win.w_height);
-    win_new_width(win, win.w_width);
+    win_new_height(win, win.w_height());
+    win_new_width(win, win.w_width());
     changed_window_setting(win);
     let line_count = Buf::current().line_count();
-    win.w_topline = restored_topline(win.w_topline, line_count);
+    win.set_w_topline(restored_topline(win.w_topline(), line_count));
     check_topfill(win, true);
 }
 
@@ -272,16 +275,16 @@ pub fn f_winsaveview(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         let _ = dict.add_number(key.to_bytes(), value);
     };
 
-    nr(c"lnum", VarNumber::from(win.w_cursor.lnum));
-    nr(c"col", VarNumber::from(win.w_cursor.col));
-    nr(c"coladd", VarNumber::from(win.w_cursor.coladd));
+    nr(c"lnum", VarNumber::from(win.cursor().lnum()));
+    nr(c"col", VarNumber::from(win.cursor().col()));
+    nr(c"coladd", VarNumber::from(win.cursor().coladd()));
     // 'curswant' is only up to date once the cursor move has been resolved.
     update_curswant();
-    nr(c"curswant", VarNumber::from(win.w_curswant));
-    nr(c"topline", VarNumber::from(win.w_topline));
-    nr(c"topfill", VarNumber::from(win.w_topfill));
-    nr(c"leftcol", VarNumber::from(win.w_leftcol));
-    nr(c"skipcol", VarNumber::from(win.w_skipcol));
+    nr(c"curswant", VarNumber::from(win.w_curswant()));
+    nr(c"topline", VarNumber::from(win.w_topline()));
+    nr(c"topfill", VarNumber::from(win.w_topfill()));
+    nr(c"leftcol", VarNumber::from(win.w_leftcol()));
+    nr(c"skipcol", VarNumber::from(win.w_skipcol()));
 }
 
 #[cfg(test)]

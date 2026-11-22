@@ -94,7 +94,7 @@ pub fn aucmd_prepbuf(aco: &mut AcoSave, buffer: Buf) {
     let win: Option<Win> = if same_buffer {
         Some(Win::current())
     } else {
-        windows().find(|wp| wp.w_buffer == buffer)
+        windows().find(|wp| wp.w_buffer() == buffer)
     };
 
     // Allocate an autocommand window when there is no window to use.
@@ -128,7 +128,7 @@ pub fn aucmd_prepbuf(aco: &mut AcoSave, buffer: Buf) {
         set_aucmd_slot_used(auc_idx, true);
     }
 
-    aco.save_curwin_handle = Win::current().handle;
+    aco.save_curwin_handle = Win::current().handle();
     aco.save_prevwin_handle = PREVWIN.get().map_or(Handle::NONE, WinId::handle);
     if buf_is_prompt(current_buf()) {
         aco.save_prompt_insert = Buf::current().b_prompt_insert();
@@ -142,15 +142,15 @@ pub fn aucmd_prepbuf(aco: &mut AcoSave, buffer: Buf) {
         // put it in the current tab page.
         aco.use_aucmd_win_idx = ::core::ffi::c_int::try_from(auc_idx).expect("a nesting depth");
         // The slot's window, allocated or reused just above.
-        let mut auc = auc_win.expect("the slot was given a window above");
-        auc.w_buffer = buffer;
-        auc.w_s = buffer.syntax_block();
+        let auc = auc_win.expect("the slot was given a window above");
+        auc.set_w_buffer(buffer);
+        auc.set_w_s(buffer.syntax_block());
         buffer.set_b_nwindows(buffer.b_nwindows() + 1);
         win_init_empty(auc);
 
         // `w_localdir`, `tp_localdir` and `globaldir` all have to be
         // unset, or `win_enter_ext` chdir()s.
-        auc.w_localdir = None;
+        auc.edit().w_localdir = None;
         aco.tp_localdir = TabPage::current().edit().tp_localdir.take();
         aco.globaldir = GLOBALDIR.take();
 
@@ -162,7 +162,7 @@ pub fn aucmd_prepbuf(aco: &mut AcoSave, buffer: Buf) {
             // `aucmd_restbuf` takes it back out, after the `win_remove`.
             register_window(auc);
             win_append(last_window(), auc, None);
-            let config = auc.w_config.clone();
+            let config = auc.config();
             win_config_float(auc, config);
         }
         // `p_acd` off keeps `win_enter_ext` out of `do_autochdir`;
@@ -179,7 +179,7 @@ pub fn aucmd_prepbuf(aco: &mut AcoSave, buffer: Buf) {
     }
 
     buffer.make_current();
-    aco.new_curwin_handle = Win::current().handle;
+    aco.new_curwin_handle = Win::current().handle();
     aco.new_curbuf = BufRef::of_opt(current_buf()).record();
 
     aco.save_visual_active = visual_active();
@@ -221,14 +221,14 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
         // deregistration: it is still current and still perfectly alive, but
         // `Win::current()` answers from the registry and would say there is
         // no current window between here and the `make_current` below.
-        let mut auc = Win::current();
+        let auc = Win::current();
         // The window is given back, not freed, so it goes out of the
         // registry rather than being forgotten by a free path.
-        hide_window(auc.handle);
-        if auc.w_grid_alloc.is_allocated() {
+        hide_window(auc.handle());
+        if auc.read().w_grid_alloc.is_allocated() {
             ui_comp_remove_grid(auc.grid_alloc());
-            ui_call_win_hide(Integer::from(auc.w_grid_alloc.handle));
-            auc.w_grid_alloc.free();
+            ui_call_win_hide(Integer::from(auc.grid_alloc().handle));
+            auc.edit().w_grid_alloc.free();
         }
 
         // The window is given back, not freed: it is used again.
@@ -255,13 +255,14 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
         PREVWIN.set(win_find_by_handle(aco.save_prevwin_handle).map(Win::id));
         // Free the autocommand window's `w:` variables, keeping the
         // hashtab for the next borrower.
-        if let Some(vars) = aw.w_winvar.di_tv.dict_handle() {
+        let vars = aw.read().w_winvar.di_tv.dict_handle();
+        if let Some(vars) = vars {
             vars_clear(&vars);
         }
 
         // A `:lcd` inside the autocommand window has to be undone
         // *before* `tp_localdir` and `globaldir` come back.
-        if aw.w_localdir.is_some() {
+        if aw.read().w_localdir.is_some() {
             win_fix_current_dir();
         }
         TabPage::current().edit().tp_localdir = aco.tp_localdir.take();
@@ -270,9 +271,9 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
         // The buffer's contents may have changed under the cursor.
         set_visual_active(aco.save_visual_active);
         check_cursor(Win::current());
-        if Win::current().w_topline > Buf::current().line_count() {
-            Win::current().w_topline = Buf::current().line_count();
-            Win::current().w_topfill = 0;
+        if Win::current().w_topline() > Buf::current().line_count() {
+            Win::current().set_w_topline(Buf::current().line_count());
+            Win::current().set_w_topfill(0);
         }
     } else {
         // Restore `curwin` by handle: a window may have been closed and
@@ -282,17 +283,17 @@ pub fn aucmd_restbuf(aco: &mut AcoSave) {
             // Put back the buffer `curwin` was editing, if it changed
             // and we are still the same window with a valid buffer.
             let new_curbuf = BufRef::of_record(aco.new_curbuf);
-            if Win::current().handle == aco.new_curwin_handle
+            if Win::current().handle() == aco.new_curwin_handle
                 && !new_curbuf.is(Buf::current_or_none())
                 && let Some(new_curbuf) = new_curbuf.get()
                 && new_curbuf.ml().ml_mfp.is_some()
             {
-                if Win::current().w_s == Buf::current().syntax_block() {
-                    Win::current().w_s = new_curbuf.syntax_block();
+                if Win::current().w_s() == Buf::current().syntax_block() {
+                    Win::current().set_w_s(new_curbuf.syntax_block());
                 }
                 Buf::current().set_b_nwindows(Buf::current().b_nwindows() - 1);
                 new_curbuf.make_current();
-                Win::current().w_buffer = new_curbuf;
+                Win::current().set_w_buffer(new_curbuf);
                 Buf::current().set_b_nwindows(Buf::current().b_nwindows() + 1);
             }
 

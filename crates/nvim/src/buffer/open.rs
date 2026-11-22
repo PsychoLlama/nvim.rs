@@ -340,7 +340,7 @@ fn open_buffer_inner(
     buf.set_b_modified_was_set(false);
 
     // mark cursor position as being invalid
-    Win::current().w_valid = WinValid::NONE;
+    Win::current().set_w_valid(WinValid::NONE);
 
     // A buffer without an actual file should not use the buffer name to read
     // a file.
@@ -462,10 +462,10 @@ fn open_buffer_inner(
     invalidate_window_folds(Win::current());
 
     // need to set w_topline, unless some autocommand already did that.
-    let mut win = Win::current();
-    if !win.w_valid.has(WinValid::TOPLINE) {
-        win.w_topline = LineNr::ONE;
-        win.w_topfill = 0;
+    let win = Win::current();
+    if !win.w_valid().has(WinValid::TOPLINE) {
+        win.set_w_topline(LineNr::ONE);
+        win.set_w_topfill(0);
     }
     fire_autocmds_retval(AutoEvent::BufEnter, Buf::current(), &mut retval);
     retval?;
@@ -581,8 +581,8 @@ pub fn buf_open_scratch(bufnr: Handle, bufname: Option<&CStr>) -> Result<(), Fai
     set_option_string(OPT_BUFHIDDEN, c"hide");
     set_option_string(OPT_BUFTYPE, c"nofile");
     set_option_false(OPT_SWAPFILE);
-    let mut win = Win::current();
-    win.w_onebuf_opt.wo_scb = 0; // reset 'scrollbind'
-    win.w_onebuf_opt.wo_crb = 0; // reset 'cursorbind'
+    let win = Win::current();
+    win.set_wo_scb(0); // reset 'scrollbind'
+    win.set_wo_crb(0); // reset 'cursorbind'
     Ok(())
 }

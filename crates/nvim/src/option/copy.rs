@@ -82,11 +82,11 @@ fn dup(value: &CStr) -> Option<XString> {
 }
 
 /// Give a window's option values to a freshly split one.
-pub(crate) fn win_copy_options(wp_from: Win, mut wp_to: Win) {
+pub(crate) fn win_copy_options(wp_from: Win, wp_to: Win) {
     // Two windows, so the two borrows below are of two objects.
     debug_assert!(wp_from != wp_to);
-    copy_winopt(&wp_from.w_onebuf_opt, &mut wp_to.w_onebuf_opt);
-    copy_winopt(&wp_from.w_allbuf_opt, &mut wp_to.w_allbuf_opt);
+    copy_winopt(&wp_from.read().w_onebuf_opt, &mut wp_to.edit().w_onebuf_opt);
+    copy_winopt(&wp_from.read().w_allbuf_opt, &mut wp_to.edit().w_allbuf_opt);
     didset_window_options(wp_to, true);
 }
 
@@ -233,13 +233,13 @@ pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
     // SAFETY: the caller's window. The handle borrows it for the one field
     // access that asked and never across a call, so none of the callees
     // below is reached while a `&mut Window` is live.
-    let mut w = window;
+    let w = window;
     // 'wrap' and 'smoothscroll' scroll in different directions, and only
     // one of the two offsets can be non-zero.
-    if w.w_onebuf_opt.wo_wrap != 0 {
-        w.w_leftcol = ColNr::ZERO;
+    if w.wo_wrap() != 0 {
+        w.set_w_leftcol(ColNr::ZERO);
     } else {
-        w.w_skipcol = ColNr::ZERO;
+        w.set_w_skipcol(ColNr::ZERO);
     }
     let _ = check_window_colorcolumn(window);
     check_window_briopt(window);
@@ -252,7 +252,7 @@ pub(crate) fn didset_window_options(window: Win, valid_cursor: bool) {
     check_blending(window);
     let _ = set_winbar_win(window, false, valid_cursor);
     let _ = check_window_signcolumn(window);
-    w.w_grid_alloc.blending = w.w_onebuf_opt.wo_winbl > 0 as OptInt;
+    w.edit().w_grid_alloc.blending = w.wo_winbl() > 0 as OptInt;
 }
 
 /// Attribute a buffer-local option to whatever script set the global value

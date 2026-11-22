@@ -204,7 +204,7 @@ pub(crate) fn match_one(
 /// The cursor of the window the match runs in, if it runs in one. `\%#`
 /// needs a window and a string match has none.
 fn cursor_of(rex: Rex) -> Option<Pos> {
-    rex.reg_win().map(|win| win.w_cursor)
+    rex.reg_win().map(|win| win.w_cursor())
 }
 
 fn nomatch_unless(ok: bool) -> Verdict {

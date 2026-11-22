@@ -279,8 +279,8 @@ pub fn callback_call(
     };
 
     let mut with = CallWith::new(true);
-    with.firstline = Win::current().w_cursor.lnum;
-    with.lastline = Win::current().w_cursor.lnum;
+    with.firstline = Win::current().cursor().lnum();
+    with.lastline = Win::current().cursor().lnum();
     with.partial = partial;
     // The un-bump is the guard's, so that an early exit cannot skip it.
     let depth = Depth::of(&CALLBACK_DEPTH);

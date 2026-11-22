@@ -74,7 +74,7 @@ impl<'a> CallWith<'a> {
 
     /// A call with nothing bound, over the cursor line.
     pub(crate) fn at_cursor(evaluate: bool) -> Self {
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         CallWith {
             firstline: lnum,
             lastline: lnum,

@@ -407,8 +407,8 @@ fn changed_check_order() -> Vec<c_int> {
     let mut nrs = Vec::new();
     nrs.push(Buf::current().handle().get());
     for wp in windows() {
-        if !wp.w_buffer.is_current() {
-            push_unique(&mut nrs, wp.w_buffer.handle().get());
+        if !wp.w_buffer().is_current() {
+            push_unique(&mut nrs, wp.w_buffer().handle().get());
         }
     }
     for (tp, wp) in tab_windows() {
@@ -677,7 +677,7 @@ pub(crate) fn ex_drop(excmd: &mut ExArg) {
             continue;
         }
         goto_tabpage_win(tp, wp);
-        Win::current().w_arg_idx = 0;
+        Win::current().set_w_arg_idx(0);
         if !buf_is_changed(Buf::current()) {
             // Reload the file if it is newer.
             let save_ar = Buf::current().b_p_ar();

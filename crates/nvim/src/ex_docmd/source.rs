@@ -151,13 +151,13 @@ pub fn do_exmode() {
         EX_NO_REPRINT.set(false);
         let changedtick = buf_get_changedtick(Buf::current());
         let prev_msg_row = MSG_ROW.get();
-        let prev_line = Win::current().w_cursor.lnum;
+        let prev_line = Win::current().cursor().lnum();
         CMDLINE_ROW.set(MSG_ROW.get());
 
         let _ = do_cmdline(None, Some(&mut LineSource::Typed), DoCmdOpts::NONE);
         LINES_LEFT.set(ROWS.get() - 1);
 
-        let moved = prev_line != Win::current().w_cursor.lnum
+        let moved = prev_line != Win::current().cursor().lnum()
             || changedtick != buf_get_changedtick(Buf::current());
         if moved && !EX_NO_REPRINT.get() {
             if Buf::current().ml_flags().has(MlFlags::EMPTY) {
@@ -173,7 +173,7 @@ pub fn do_exmode() {
                     }
                 }
                 MSG_COL.set(0);
-                print_line_no_prefix(Win::current().w_cursor.lnum, false, false);
+                print_line_no_prefix(Win::current().cursor().lnum(), false, false);
                 msg_clr_eos();
             }
         } else if EX_PRESSEDRETURN.get() && !EX_NO_REPRINT.get() {

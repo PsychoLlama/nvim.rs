@@ -65,7 +65,7 @@ struct ArgAllState {
 /// ordinary ones.
 fn first_window_to_walk() -> Option<Win> {
     let last = last_window().expect("the editor always has a window");
-    match last.w_floating {
+    match last.w_floating() {
         true => Some(last),
         false => first_window(),
     }
@@ -73,14 +73,14 @@ fn first_window_to_walk() -> Option<Win> {
 
 /// The window after `window` in that walk, or null at its end.
 fn next_window_to_walk(window: Win) -> Option<Win> {
-    if window.w_floating {
+    if window.w_floating() {
         let prev = window.prev().expect("a float is never the first window");
-        match prev.w_floating {
+        match prev.w_floating() {
             true => Some(prev),
             false => first_window(),
         }
     } else {
-        window.next().filter(|next| !next.w_floating)
+        window.next().filter(|next| !next.w_floating())
     }
 }
 
@@ -90,7 +90,7 @@ fn next_window_to_walk(window: Win) -> Option<Win> {
 /// and adopts the argument list into it.
 fn arg_index_for_window(
     aall: &mut ArgAllState,
-    mut window: Win,
+    window: Win,
     buffer: Buf,
     old_curwin: Win,
     old_curtab: TabPage,
@@ -101,8 +101,8 @@ fn arg_index_for_window(
     let unwanted = buffer.read().name.full().is_none()
         || !aall.keep_tabs
             && (buffer.b_nwindows() > 1
-                || window.w_width != COLUMNS.get()
-                || window.w_floating && !aucmd_win);
+                || window.w_width() != COLUMNS.get()
+                || window.w_floating() && !aucmd_win);
     if unwanted {
         return aall.opened_len;
     }
@@ -131,8 +131,8 @@ fn arg_index_for_window(
         if weight > best {
             aall.opened[at] = u8::try_from(weight).expect("a weight is at most 3");
             if i == 0 {
-                if let Some(mut prev) = aall.new_curwin.and_then(WinId::get) {
-                    prev.w_arg_idx = aall.opened_len;
+                if let Some(prev) = aall.new_curwin.and_then(WinId::get) {
+                    prev.set_w_arg_idx(aall.opened_len);
                 }
                 aall.new_curwin = Some(window.id());
                 aall.new_curtab = Some(TabPage::current().id());
@@ -142,11 +142,11 @@ fn arg_index_for_window(
         }
         // `window` holds a reference of its own to whatever list it has, so
         // dropping it here is balanced by the one taken for `aall.alist`.
-        if window.w_alist != aall.alist {
+        if window.w_alist() != aall.alist {
             // Use the current argument list for every window holding a
             // file from it.
-            alist_unlink(window.w_alist);
-            window.w_alist = aall.alist;
+            alist_unlink(window.w_alist());
+            window.set_w_alist(aall.alist);
             alist_retain(aall.alist);
         }
         return i;
@@ -206,11 +206,11 @@ fn close_unused_window(
 /// window holds.
 fn close_unused_windows_in_tab(aall: &mut ArgAllState, old_curwin: Win, old_curtab: TabPage) {
     let mut next = first_window_to_walk();
-    while let Some(mut wp) = next {
+    while let Some(wp) = next {
         let wpnext = next_window_to_walk(wp);
         let buf = wp.buffer();
         let i = arg_index_for_window(aall, wp, buf, old_curwin, old_curtab);
-        wp.w_arg_idx = i;
+        wp.set_w_arg_idx(i);
         next = if i == aall.opened_len && !aall.keep_tabs {
             close_unused_window(aall, wp, buf, wpnext)
         } else {
@@ -256,10 +256,10 @@ fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
 /// with `keep_tabs`, only remember it. Answers true when the layout changed
 /// unexpectedly, which stops `:all` entirely (E249).
 fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool {
-    if Win::current().w_arg_idx == i {
+    if Win::current().w_arg_idx() == i {
         return false;
     }
-    let Some(wp) = windows().find(|wp| wp.w_arg_idx == i) else {
+    let Some(wp) = windows().find(|wp| wp.w_arg_idx() == i) else {
         return false;
     };
     if aall.keep_tabs {
@@ -270,13 +270,13 @@ fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool {
     // A window that changed parents is a layout change; a float has no parent
     // to change, and answers "not moved". Two identities compared, so neither
     // frame is read.
-    let moved = wp.w_floating || wp.frame().fr_parent() == Win::current().frame().fr_parent();
+    let moved = wp.w_floating() || wp.frame().fr_parent() == Win::current().frame().fr_parent();
     if !moved {
         crate::semsg!("E249: Window layout changed unexpectedly");
         return true;
     }
     // A floating window is left where it is.
-    if !wp.w_floating {
+    if !wp.w_floating() {
         win_move_after(wp, Win::current());
     }
     false
@@ -312,7 +312,7 @@ fn open_window_for_arg(
         P_EA.set(p_ea_save);
         split_ret?;
     }
-    Win::current().w_arg_idx = i;
+    Win::current().set_w_arg_idx(i);
     if i == 0 {
         aall.new_curwin = Some(Win::current().id());
         aall.new_curtab = Some(TabPage::current().id());

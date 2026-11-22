@@ -82,9 +82,9 @@ pub fn nvim_eval_statusline(
 
     // Temporarily reset 'cursorbind' to prevent side effects from moving the
     // cursor away and back.
-    let mut win = ctx.win;
-    let crb_save = win.w_onebuf_opt.wo_crb;
-    win.w_onebuf_opt.wo_crb = 0;
+    let win = ctx.win;
+    let crb_save = win.wo_crb();
+    win.set_wo_crb(0);
     let want_hl = opts.highlights.unwrap_or(false);
     let job = StlJob {
         win,
@@ -112,7 +112,7 @@ pub fn nvim_eval_statusline(
         c"width",
         Object::integer(Integer::from(built.width)),
     );
-    win.w_onebuf_opt.wo_crb = crb_save;
+    win.set_wo_crb(crb_save);
 
     if want_hl {
         let hl = highlight_dicts(&ctx, opts, &built.hl, built.item_count);
@@ -184,7 +184,7 @@ impl Context {
             (stc_hl_id, scl_hl_id) = statuscol_state(win, statuscol_lnum, statuscol, sattrs);
         } else if fillchar == 0 && !use_tabline {
             fillchar = if use_winbar {
-                win.w_p_fcs_chars.wbr
+                win.fcs_wbr()
             } else {
                 fillchar_status_of(win).1
             };
@@ -197,7 +197,7 @@ impl Context {
         } else if use_tabline || (!use_winbar && stl_is_global()) {
             COLUMNS.get()
         } else {
-            win.w_width
+            win.w_width()
         };
 
         Ok(Context {
@@ -246,9 +246,9 @@ fn statuscol_state(
         num_id
     } else if on_cursorline {
         HLF_CLN
-    } else if win.w_onebuf_opt.wo_rnu != 0 {
+    } else if win.wo_rnu() != 0 {
         // 'relativenumber' colours the lines above and below differently.
-        if lnum < win.w_cursor.lnum {
+        if lnum < win.cursor().lnum() {
             HLF_LNA
         } else {
             HLF_LNB
@@ -351,7 +351,7 @@ pub fn nvim__complete_set(
     if let Some(info) = opts.info.as_ref() {
         let win = pum_set_info(number_as_int(index), info.as_bytes());
         if let Some(win) = win {
-            put(&mut rv, c"winid", Object::window(win.handle));
+            put(&mut rv, c"winid", Object::window(win.handle()));
             put(&mut rv, c"bufnr", Object::buffer(win.buffer().handle()));
         }
     }

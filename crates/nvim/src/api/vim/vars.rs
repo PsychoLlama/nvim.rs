@@ -22,7 +22,7 @@ use crate::winlayer::{Buf, Win};
 /// The current buffer's handle and the cursor's line, as the deprecated
 /// `buffer_*_line` trio take them -- a zero-based index.
 fn cursor_line() -> (BufferHandle, Integer) {
-    let (buf, lnum) = (Buf::current().handle(), Win::current().w_cursor.lnum);
+    let (buf, lnum) = (Buf::current().handle(), Win::current().cursor().lnum());
     (buf, Integer::from(lnum - 1))
 }
 

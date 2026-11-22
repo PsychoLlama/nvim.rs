@@ -102,10 +102,10 @@ pub(crate) fn set_option_sctx(
         Buf::current().edit().b_p_script_ctx[at] = script_ctx;
     } else if option_has_scope(opt_idx, OPT_SCOPE_WIN) {
         let at = option_scope_idx(opt_idx, OPT_SCOPE_WIN).cast_unsigned();
-        Win::current().w_onebuf_opt.wo_script_ctx[at] = script_ctx;
+        Win::current().edit().w_onebuf_opt.wo_script_ctx[at] = script_ctx;
         if both {
             // A bare `:set` also writes the "all buffers" copy.
-            Win::current().w_allbuf_opt.wo_script_ctx[at] = script_ctx;
+            Win::current().edit().w_allbuf_opt.wo_script_ctx[at] = script_ctx;
         }
     }
 }
@@ -426,18 +426,18 @@ pub(crate) fn did_set_option(
     match opt_idx {
         OPT_MOUSE => setmouse(),
         // 'formatlistpat' is what 'breakindentopt' list mode indents by.
-        OPT_FORMATLISTPAT if Win::current().w_briopt_list != 0 => {
+        OPT_FORMATLISTPAT if Win::current().w_briopt_list() != 0 => {
             redraw_all_later(UPD_NOT_VALID);
         }
         OPT_WINBAR => set_winbar(true),
         _ => {}
     }
 
-    if Win::current().w_curswant != ColNr::MAX
+    if Win::current().w_curswant() != ColNr::MAX
         && opt.flags & (OPT_FLAG_CURSWANT | OPT_FLAG_REDR_ALL) as uint32_t != 0
         && opt.flags & OPT_FLAG_HL_ONLY as uint32_t == 0
     {
-        Win::current().w_set_curswant = true;
+        Win::current().set_w_set_curswant(true);
     }
 
     check_redraw(opt.flags);

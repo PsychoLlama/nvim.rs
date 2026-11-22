@@ -696,7 +696,7 @@ fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
         );
     }
 
-    Win::current().w_cursor.lnum = line1;
+    Win::current().cursor().set_lnum(line1);
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
 }
 
@@ -903,6 +903,6 @@ fn uniq_lines(args: &mut ExArg, regmatch: &mut Option<RegMatch>) {
             true,
         );
     }
-    Win::current().w_cursor.lnum = line1;
+    Win::current().cursor().set_lnum(line1);
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
 }

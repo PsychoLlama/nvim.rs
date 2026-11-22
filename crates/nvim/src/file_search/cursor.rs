@@ -87,7 +87,7 @@ pub(crate) fn file_name_at_cursor(
     count: c_int,
     file_lnum: Option<&mut LineNr>,
 ) -> Option<XString> {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     // The name is copied out of the line before anything can run that
     // might change the buffer.
     let name = {

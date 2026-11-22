@@ -90,13 +90,13 @@ pub fn buflist_setfpos(
         }
     }
     if let Some(win) = win {
-        entry.wi_changelistidx = win.w_changelistidx;
+        entry.wi_changelistidx = win.w_changelistidx();
     }
     if copy_options && let Some(win) = win {
         // Save the window-specific option values.
-        copy_winopt(&win.w_onebuf_opt, &mut entry.wi_opt);
-        entry.wi_fold_manual = win.w_fold_manual;
-        entry.wi_folds = win.w_folds.clone();
+        copy_winopt(&win.read().w_onebuf_opt, &mut entry.wi_opt);
+        entry.wi_fold_manual = win.w_fold_manual();
+        entry.wi_folds = win.read().w_folds.clone();
         entry.wi_optset = true;
     }
 
@@ -140,7 +140,7 @@ fn find_wininfo(buffer: Buf, need_options: bool, skip_diff_buffer: bool) -> Opti
             !wininfo_other_tab_diff(e)
                 && (!need_options
                     || e.wi_optset
-                    || e.window().is_some_and(|w| w.w_buffer == buffer))
+                    || e.window().is_some_and(|w| w.w_buffer() == buffer))
         });
     }
     (!list.is_empty()).then_some(0)
@@ -150,8 +150,8 @@ fn find_wininfo(buffer: Buf, need_options: bool, skip_diff_buffer: bool) -> Opti
 /// in this window; failing that, to the most recently used window's; failing
 /// that, to the window's own global values.
 pub fn get_winopts(buffer: Buf) {
-    let mut cur = current_win();
-    clear_winopt(&mut cur.w_onebuf_opt);
+    let cur = current_win();
+    clear_winopt(&mut cur.edit().w_onebuf_opt);
     clear_folding(cur);
 
     let found = find_wininfo(buffer, true, true);
@@ -163,40 +163,43 @@ pub fn get_winopts(buffer: Buf) {
         // The entry names another window still showing this buffer: copy
         // from the window itself, so that its current values are used.
         (Some(_), Some(wp))
-            if wp != cur && wp.w_buffer == buffer && wp.w_config.style != WIN_STYLE_MINIMAL =>
+            if wp != cur
+                && wp.w_buffer() == buffer
+                && wp.read().w_config.style != WIN_STYLE_MINIMAL =>
         {
-            copy_winopt(&wp.w_onebuf_opt, &mut cur.w_onebuf_opt);
-            cur.w_fold_manual = wp.w_fold_manual;
-            cur.w_foldinvalid = true;
-            cur.w_folds = wp.w_folds.clone();
+            copy_winopt(&wp.read().w_onebuf_opt, &mut cur.edit().w_onebuf_opt);
+            cur.set_w_fold_manual(wp.w_fold_manual());
+            cur.set_w_foldinvalid(true);
+            cur.edit().w_folds = wp.read().w_folds.clone();
         }
         (Some(entry), win)
             if entry.wi_optset
-                && win.is_none_or(|wp| wp == cur || wp.w_config.style != WIN_STYLE_MINIMAL) =>
+                && win.is_none_or(|wp| wp == cur || wp.config_style() != WIN_STYLE_MINIMAL) =>
         {
-            copy_winopt(&entry.wi_opt, &mut cur.w_onebuf_opt);
-            cur.w_fold_manual = entry.wi_fold_manual;
-            cur.w_foldinvalid = true;
-            cur.w_folds = entry.wi_folds.clone();
+            copy_winopt(&entry.wi_opt, &mut cur.edit().w_onebuf_opt);
+            cur.set_w_fold_manual(entry.wi_fold_manual);
+            cur.set_w_foldinvalid(true);
+            cur.edit().w_folds = entry.wi_folds.clone();
         }
         _ => {
-            let window: &mut crate::types::Window = &mut cur;
+            let mut edit = cur.edit();
+            let window = &mut *edit;
             copy_winopt(&window.w_allbuf_opt, &mut window.w_onebuf_opt);
         }
     }
     if let Some(entry) = entry {
-        cur.w_changelistidx = entry.wi_changelistidx;
+        cur.set_w_changelistidx(entry.wi_changelistidx);
     }
     drop(held);
 
-    if cur.w_config.style == WIN_STYLE_MINIMAL {
+    if cur.config_style() == WIN_STYLE_MINIMAL {
         didset_window_options(cur, false);
         win_set_minimal_style(cur);
     }
 
     // Set 'foldlevel' to 'foldlevelstart' if it's not negative.
     if p_fdls() >= 0 as OptInt {
-        cur.w_onebuf_opt.wo_fdl = p_fdls();
+        cur.set_wo_fdl(p_fdls());
     }
     didset_window_options(cur, false);
 }

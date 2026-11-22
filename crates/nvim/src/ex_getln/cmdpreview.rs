@@ -118,10 +118,10 @@ pub(crate) fn cmdpreview_open_win(cmdpreview_buf: Buf) -> Option<Win> {
         return None;
     }
 
-    Win::current().w_onebuf_opt.wo_cul = 0;
-    Win::current().w_onebuf_opt.wo_cuc = 0;
-    Win::current().w_onebuf_opt.wo_spell = 0;
-    Win::current().w_onebuf_opt.wo_fen = 0;
+    Win::current().set_wo_cul(0);
+    Win::current().set_wo_cuc(0);
+    Win::current().set_wo_spell(0);
+    Win::current().set_wo_fen(0);
 
     win_enter(save_curwin, false);
     preview_win.get()
@@ -183,7 +183,7 @@ pub(crate) fn cmdpreview_prepare(cpinfo: &mut CpInfo) {
     cpinfo.win_info = Vec::new();
 
     // C's FOR_ALL_WINDOWS_IN_TAB(win, curtab).
-    for mut win in windows_in_tab(TabPage::current()) {
+    for win in windows_in_tab(TabPage::current()) {
         let buf = win.buffer();
 
         // Don't save the state of the command preview buffer or window.
@@ -214,16 +214,16 @@ pub(crate) fn cmdpreview_prepare(cpinfo: &mut CpInfo) {
         let mut cp_wininfo = CP_WIN_INFO_INIT;
         cp_wininfo.win = Some(win.id());
         // Save the window's cursor position and view state.
-        cp_wininfo.save_w_cursor = win.w_cursor;
+        cp_wininfo.save_w_cursor = win.w_cursor();
         cp_wininfo.save_viewstate = save_viewstate(win);
         // Save 'cursorline' and 'cursorcolumn'.
-        cp_wininfo.save_w_p_cul = win.w_onebuf_opt.wo_cul;
-        cp_wininfo.save_w_p_cuc = win.w_onebuf_opt.wo_cuc;
+        cp_wininfo.save_w_p_cul = win.wo_cul();
+        cp_wininfo.save_w_p_cuc = win.wo_cuc();
         cpinfo.win_info.push(cp_wininfo);
 
         // Both would otherwise mess up the preview's highlights.
-        win.w_onebuf_opt.wo_cul = 0;
-        win.w_onebuf_opt.wo_cuc = 0;
+        win.set_wo_cul(0);
+        win.set_wo_cuc(0);
     }
 
     drop(saved_bufs);
@@ -306,14 +306,14 @@ pub(crate) fn cmdpreview_restore_state(cpinfo: &mut CpInfo) {
 
     for cp_wininfo in core::mem::take(&mut cpinfo.win_info) {
         // As the buffers above: a window the callback closed is skipped.
-        let Some(mut win) = cp_wininfo.win.and_then(WinId::get) else {
+        let Some(win) = cp_wininfo.win.and_then(WinId::get) else {
             continue;
         };
 
-        win.w_cursor = cp_wininfo.save_w_cursor;
+        win.set_w_cursor(cp_wininfo.save_w_cursor);
         restore_viewstate(win, &cp_wininfo.save_viewstate);
-        win.w_onebuf_opt.wo_cul = cp_wininfo.save_w_p_cul;
-        win.w_onebuf_opt.wo_cuc = cp_wininfo.save_w_p_cuc;
+        win.set_wo_cul(cp_wininfo.save_w_p_cul);
+        win.set_wo_cuc(cp_wininfo.save_w_p_cuc);
         update_topline(win);
     }
 

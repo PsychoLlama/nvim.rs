@@ -35,7 +35,7 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
     // The *current* buffer's line is the cursor's; any other's is the one it
     // will be entered at.
     let lnum = if buffer.is_current() {
-        Win::current().w_cursor.lnum
+        Win::current().cursor().lnum()
     } else {
         buflist_findlnum(buffer)
     };
@@ -59,8 +59,8 @@ fn get_buffer_info(buffer: Buf) -> DictRef {
 
     // The windows displaying this buffer.
     let windows = tv_list_alloc(LIST_LEN_MAY_KNOW as ptrdiff_t);
-    for wp in tab_windows().filter(|wp| wp.w_buffer == buffer) {
-        windows.edit().push_number(VarNumber::from(wp.handle));
+    for wp in tab_windows().filter(|wp| wp.w_buffer() == buffer) {
+        windows.edit().push_number(VarNumber::from(wp.handle()));
     }
     list(c"windows", Some(windows));
 

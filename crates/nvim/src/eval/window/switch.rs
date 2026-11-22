@@ -27,13 +27,13 @@ use crate::window::valid_win;
 /// is, because the saved state is written before the switch is attempted.
 pub fn win_execute_before(args: &mut WinExecute, window: Win, tabpage: TabPage) -> bool {
     args.wp = Some(window.id());
-    args.curpos = window.w_cursor;
+    args.curpos = window.w_cursor();
     args.cwd = None;
     args.apply_acd = false;
     args.save_sfname = None;
     if !window.is_current()
-        && (Win::current().w_localdir.is_some()
-            || window.w_localdir.is_some()
+        && (Win::current().read().w_localdir.is_some()
+            || window.read().w_localdir.is_some()
             || !tabpage.is_current()
                 && (TabPage::current().has_localdir() || tabpage.has_localdir())
             || p_acd())
@@ -82,10 +82,10 @@ pub fn win_execute_after(args: &mut WinExecute) {
     }
     // `valid_win` re-checks the saved window, because the code that ran may
     // have closed it.
-    if let Some(mut win) = args.wp.and_then(valid_win)
-        && !equalpos(args.curpos, win.w_cursor)
+    if let Some(win) = args.wp.and_then(valid_win)
+        && !equalpos(args.curpos, win.w_cursor())
     {
-        win.w_redr_status = true;
+        win.set_w_redr_status(true);
     }
     check_cursor(Win::current());
     if visual_active() {

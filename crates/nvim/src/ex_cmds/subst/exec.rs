@@ -318,7 +318,7 @@ fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult) {
 
     // Move the cursor to the start of the match, so that we can use
     // "\=col('.')".
-    Win::current().w_cursor.col = st.regmatch.startpos[0].col;
+    Win::current().cursor().set_col(st.regmatch.startpos[0].col);
     let line_count = Buf::current().line_count();
 
     // When the match included the "$" of the last line it may go beyond the
@@ -417,7 +417,7 @@ fn match_loop(st: &mut Sub, args: &SubArgs) {
 
         // Save the line number of the last change for the final cursor
         // position, just like Vi.
-        Win::current().w_cursor.lnum = st.lnum;
+        Win::current().cursor().set_lnum(st.lnum);
         st.do_again = false;
 
         match_one(st, args, &mut current_match);
@@ -509,7 +509,7 @@ fn substitute_range(st: &mut Sub, args: &SubArgs) {
         }
         if args.cmdpreview_ns > 0 as c_int
             && st.preview_lines.lines_needed > number_as_int(p_cwh())
-            && st.lnum > Win::current().w_botline
+            && st.lnum > Win::current().w_botline()
         {
             break;
         }
@@ -554,7 +554,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
 
     // ":s/pat//n" doesn't move the cursor.
     if SUB_FLAGS.with(|flags| flags.do_count) {
-        Win::current().w_cursor = args.old_cursor;
+        Win::current().set_w_cursor(args.old_cursor);
     }
 
     if SUB_NSUBS.get() > args.start_nsubs {
@@ -591,7 +591,7 @@ fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         }
         if SUB_FLAGS.with(|flags| flags.do_print) {
             print_line(
-                Win::current().w_cursor.lnum,
+                Win::current().cursor().lnum(),
                 SUB_FLAGS.with(|flags| flags.do_number),
                 SUB_FLAGS.with(|flags| flags.do_list),
                 true,
@@ -675,7 +675,7 @@ pub(crate) fn do_sub(
     }
     let start_nsubs = SUB_NSUBS.get();
     let keeppatterns = cmdmod_has(CmdModFlags::KEEPPATTERNS);
-    let (old_cursor, old_line_count) = (Win::current().w_cursor, Buf::current().line_count());
+    let (old_cursor, old_line_count) = (Win::current().w_cursor(), Buf::current().line_count());
 
     let setup = match parse_sub(args, cmdpreview_ns, keeppatterns) {
         Ok(Some(setup)) => setup,

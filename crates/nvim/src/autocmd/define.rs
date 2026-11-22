@@ -366,7 +366,7 @@ fn seed_first_autocmd(event: AutoEvent) {
         || (event == AutoEvent::CursorMovedI && !has_event(AutoEvent::CursorMovedI))
     {
         LAST_CURSORMOVED_WIN.set(Win::current_or_none().map(Win::id));
-        LAST_CURSORMOVED.set(Win::current().w_cursor);
+        LAST_CURSORMOVED.set(Win::current().w_cursor());
     }
     if (event == AutoEvent::WinScrolled || event == AutoEvent::WinResized)
         && !(has_event(AutoEvent::WinScrolled) || has_event(AutoEvent::WinResized))

@@ -223,7 +223,7 @@ pub(crate) fn check_signcolumn(
                 return Some(None);
             };
             // 'number' only wins when the window is actually showing numbers.
-            let numbered = w.w_onebuf_opt.wo_nu != 0 || w.w_onebuf_opt.wo_rnu != 0;
+            let numbered = w.wo_nu() != 0 || w.wo_rnu() != 0;
             return Some(Some(match val {
                 [b'n', b'o', ..] => (SCL_NO, SCL_NO),
                 [b'n', b'u', ..] if numbered => (SCL_NUM, SCL_NUM),
@@ -248,26 +248,26 @@ pub(crate) fn check_signcolumn(
     };
     let found = match (scl, window) {
         (Some(scl), _) => range(scl),
-        (None, Some(w)) => range(w.w_onebuf_opt.wo_scl.bytes()),
+        (None, Some(w)) => range(w.read().w_onebuf_opt.wo_scl.bytes()),
         (None, None) => range(b""),
     };
     let Some(found) = found else {
         return Err(InvalidValue);
     };
     // A range is only worked out for a window.
-    let (Some((min, max)), Some(mut window)) = (found, window) else {
+    let (Some((min, max)), Some(window)) = (found, window) else {
         return Ok(());
     };
-    window.w_minscwidth = min;
-    window.w_maxscwidth = max;
+    window.set_w_minscwidth(min);
+    window.set_w_maxscwidth(max);
     // Keep the width the window is currently drawing inside the new
     // range, without widening it on its own.
     let held = if min <= 0 {
         0
     } else {
-        max.min(window.w_scwidth)
+        max.min(window.w_scwidth())
     };
-    window.w_scwidth = min.max(held);
+    window.set_w_scwidth(min.max(held));
     Ok(())
 }
 

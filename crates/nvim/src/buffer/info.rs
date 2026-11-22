@@ -172,7 +172,7 @@ fn skip(buffer: Buf, arg: &CStr, forceit: c_int) -> bool {
     let is_terminal = !buffer.terminal().is_null();
     let job_running = buf_terminal_running(buffer);
     let loaded = buffer.ml().ml_mfp.is_some();
-    let alt_fnum = current_win().w_alt_fnum;
+    let alt_fnum = current_win().w_alt_fnum();
 
     buffer.b_p_bl() == 0 && forceit == 0 && !has_flag(arg, b'u')
         || has_flag(arg, b'u') && buffer.b_p_bl() != 0
@@ -233,7 +233,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
     let listed = if buffer.b_p_bl() != 0 { b' ' } else { b'u' };
     let current = if buffer.raw() == Buf::current_raw() {
         b'%'
-    } else if current_win().w_alt_fnum == Some(buffer.handle()) {
+    } else if current_win().w_alt_fnum() == Some(buffer.handle()) {
         b'#'
     } else {
         b' '
@@ -246,7 +246,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
         b'a'
     };
     let lnum = if buffer.raw() == Buf::current_raw() {
-        current_win().w_cursor.lnum
+        current_win().cursor().lnum()
     } else {
         buflist_findlnum(buffer)
     };
@@ -349,7 +349,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
 
     let win = current_win();
     let lines = buf.line_count();
-    let cursor = win.w_cursor.lnum;
+    let cursor = win.cursor().lnum();
     if buf.ml_flags().has(MlFlags::EMPTY) {
         out.push(gettext(NO_LINES_MSG).to_bytes());
     } else if p_ru() {
@@ -373,7 +373,7 @@ pub fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
             ],
         );
         validate_virtcol(win);
-        out.push(col_text(win.w_cursor.col.get() + 1, win.w_virtcol.get() + 1).as_bytes());
+        out.push(col_text(win.cursor().col().get() + 1, win.w_virtcol().get() + 1).as_bytes());
     }
 
     if let Some((fmt, idx, count)) = arg_number(win) {
@@ -546,15 +546,15 @@ pub fn get_rel_pos(window: Win, room: usize) -> Vec<u8> {
     let win = window;
 
     // The number of lines above the window.
-    let fill = win_get_fill(win, win.w_topline);
-    let mut above = win.w_topline - 1 + (fill - win.w_topfill);
-    if win.w_topline == LineNr::ONE && win.w_topfill >= 1 {
+    let fill = win_get_fill(win, win.w_topline());
+    let mut above = win.w_topline() - 1 + (fill - win.w_topfill());
+    if win.w_topline() == LineNr::ONE && win.w_topfill() >= 1 {
         // All the buffer's lines are displayed and there is an indication of
         // filler lines, which can be considered seeing all of them.
         above = LineNr::ZERO;
     }
     // The number of lines below it.
-    let below = win.buffer().line_count() - win.w_botline + 1;
+    let below = win.buffer().line_count() - win.w_botline() + 1;
     if below <= 0 {
         let all_or_bot = if above == LineNr::ZERO {
             gettext(c"All")
@@ -591,12 +591,12 @@ fn arg_number(window: Win) -> Option<(&'static CStr, c_int, c_int)> {
         // Nothing to do.
         return None;
     }
-    let fmt = if window.w_arg_idx_invalid {
+    let fmt = if window.w_arg_idx_invalid() {
         gettext(c" ((%d) of %d)")
     } else {
         gettext(c" (%d of %d)")
     };
-    Some((fmt, window.w_arg_idx + 1, argcount))
+    Some((fmt, window.w_arg_idx() + 1, argcount))
 }
 
 /// "(2 of 8)", cut as a `room`-byte buffer with its terminator would cut

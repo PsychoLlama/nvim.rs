@@ -552,8 +552,8 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
         prep_exarg(&mut ea, buffer);
     }
 
-    let old_cursor = Win::current().w_cursor;
-    let old_topline = Win::current().w_topline;
+    let old_cursor = Win::current().w_cursor();
+    let old_topline = Win::current().w_topline();
 
     if p_ur() < 0 || i64::from(Buf::current().line_count()) <= p_ur() {
         // Save all the text, so that the reload can be undone. Sync first
@@ -584,10 +584,10 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
         {
             // Open the memline.
             scratch.make_current();
-            Win::current().w_buffer = scratch;
+            Win::current().set_w_buffer(scratch);
             saved = ml_open(Buf::current());
             buffer.make_current();
-            Win::current().w_buffer = buffer;
+            Win::current().set_w_buffer(buffer);
         }
         if saved.is_err()
             || buffer.raw() != Buf::current_raw()
@@ -668,15 +668,15 @@ pub fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
 
     // Restore the topline and cursor position and check them; lines may
     // have been removed.
-    Win::current().w_topline = old_topline.min(Buf::current().line_count());
-    Win::current().w_cursor = old_cursor;
+    Win::current().set_w_topline(old_topline.min(Buf::current().line_count()));
+    Win::current().set_w_cursor(old_cursor);
     check_cursor(Win::current());
     update_topline(Win::current());
     Buf::current().set_b_keep_filetype(false);
 
     // Update folds unless they are defined manually.
     for wp in tab_windows() {
-        if wp.w_buffer == Win::current().w_buffer && !foldmethod_is_manual(wp) {
+        if wp.w_buffer() == Win::current().w_buffer() && !foldmethod_is_manual(wp) {
             fold_update_all(wp);
         }
     }

@@ -362,7 +362,7 @@ pub(crate) fn syn_stack_free_all(block: SynBlockRef) {
 
     // With 'foldmethod' "syntax", every fold has to be recomputed too.
     for wp in windows() {
-        if wp.w_s == block.raw() && foldmethod_is_syntax(wp) {
+        if wp.w_s() == block.raw() && foldmethod_is_syntax(wp) {
             fold_update_all(wp);
         }
     }
@@ -572,7 +572,7 @@ pub(crate) fn syn_stack_apply_changes(buffer: Buf) {
     syn_stack_apply_changes_block(buffer.syntax(), buffer);
 
     for wp in windows() {
-        if wp.w_buffer == buffer && wp.w_s != buffer.syntax_block() {
+        if wp.w_buffer() == buffer && wp.w_s() != buffer.syntax_block() {
             syn_stack_apply_changes_block(wp.syntax(), buffer);
         }
     }

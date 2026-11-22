@@ -375,13 +375,13 @@ impl Reading {
         // A window showing a buffer whose change list grew sits at the
         // end of it, as if the changes had just been made.
         if !self.cl_bufs.is_empty() {
-            for mut wp in tab_windows() {
+            for wp in tab_windows() {
                 if wp
-                    .w_buffer
+                    .w_buffer()
                     .try_id()
                     .is_some_and(|id| self.cl_bufs.contains(&id))
                 {
-                    wp.w_changelistidx = wp.w_buffer.b_changelistlen();
+                    wp.set_w_changelistidx(wp.w_buffer().b_changelistlen());
                 }
             }
         }

@@ -114,9 +114,9 @@ impl ExArg<'_> {
                     emsg(gettext(E_INVRANGE));
                     break;
                 }
-                Win::current().w_cursor.lnum = lnum;
-                Win::current().w_cursor.col = ColNr::ZERO;
-                Win::current().w_cursor.coladd = 0;
+                Win::current().cursor().set_lnum(lnum);
+                Win::current().cursor().set_col(ColNr::ZERO);
+                Win::current().cursor().set_coladd(0);
             }
 
             let with = CallWith {

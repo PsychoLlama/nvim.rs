@@ -145,7 +145,7 @@ pub(crate) fn at_mark(rex: Rex, state: &NfaState) -> bool {
 /// `\%#`: the cursor's own position.
 pub(crate) fn at_cursor(rex: Rex) -> bool {
     rex.reg_win()
-        .is_some_and(|w| lnum(rex) == w.w_cursor.lnum && col(rex) == w.w_cursor.col)
+        .is_some_and(|w| lnum(rex) == w.cursor().lnum() && col(rex) == w.cursor().col())
 }
 
 /// `\%V`: inside the Visual area.

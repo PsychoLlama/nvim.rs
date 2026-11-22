@@ -200,7 +200,7 @@ fn rewrite_prompt_line(buffer: Buf, new_prompt: &[u8]) {
     let old_line = Lines::in_buffer(buffer).line(prompt_lno).to_vec();
     let old_line_len = len_as_int(old_line.len());
     let old_prompt_len = len_as_int(old_prompt.len());
-    let mut cursor_col = Win::current().w_cursor.col;
+    let mut cursor_col = Win::current().cursor().col();
     let prompt_col = buffer.read().b_prompt_start.mark.col;
     // A byte offset into `old_line`. Every use is guarded by the
     // `prompt_col >= old_prompt_len` test below — `&&` short-circuits —
@@ -238,9 +238,9 @@ fn rewrite_prompt_line(buffer: Buf, new_prompt: &[u8]) {
         splice(old_line_len);
         cursor_col = ColNr::new(new_prompt_len);
     }
-    let mut win = Win::current();
-    if win.w_buffer == buffer && win.w_cursor.lnum == prompt_lno {
-        win.w_cursor.col = cursor_col;
+    let win = Win::current();
+    if win.w_buffer() == buffer && win.cursor().lnum() == prompt_lno {
+        win.cursor().set_col(cursor_col);
         check_cursor_col(win);
     }
     changed_lines(buffer, prompt_lno, ColNr::ZERO, prompt_lno + 1, 0, true);

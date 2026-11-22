@@ -250,7 +250,10 @@ fn sign_unplace_cmd(args: &SignCmdArgs) -> Result<(), SignError> {
     }
 
     let (buf, lnum) = if args.id == -1 {
-        (Some(Win::current().buffer()), Win::current().w_cursor.lnum)
+        (
+            Some(Win::current().buffer()),
+            Win::current().cursor().lnum(),
+        )
     } else {
         (args.buf, args.lnum)
     };

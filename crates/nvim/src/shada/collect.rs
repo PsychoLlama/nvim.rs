@@ -291,7 +291,7 @@ pub(crate) fn shada_init_jumps(
 /// the walk would have resumed, as upstream's iterator token named it.
 fn mark_lnum_zero(next: usize, len: usize) {
     let win = Win::current();
-    let list = win.w_jumplist.as_ptr();
+    let list = win.read().w_jumplist.as_ptr();
     let iter = if next < len {
         list.wrapping_add(next)
     } else {
@@ -301,7 +301,7 @@ fn mark_lnum_zero(next: usize, len: usize) {
         "ShaDa: mark lnum zero (ji:{}, js:{}, len:{})",
         msg_addr(iter),
         msg_addr(list),
-        win.w_jumplistlen,
+        win.w_jumplistlen(),
     );
 }
 

@@ -96,16 +96,17 @@ fn prompt_exmode(st: &Sub) -> Key {
 
     // The cursor is at the start of the match; moving it to the last byte
     // of the match and back is what gives the match's screen columns.
-    let mut cursor = Win::current().w_cursor;
+    let mut cursor = Win::current().w_cursor();
     let (mut sc, _, _) = getvcol(Win::current(), &mut cursor);
-    Win::current().w_cursor = cursor;
-    Win::current().w_cursor.col =
-        (st.regmatch.endpos[0].col - 1 as c_int).max(ColNr::new(0 as c_int));
-    let mut cursor = Win::current().w_cursor;
+    Win::current().set_w_cursor(cursor);
+    Win::current()
+        .cursor()
+        .set_col((st.regmatch.endpos[0].col - 1 as c_int).max(ColNr::new(0 as c_int)));
+    let mut cursor = Win::current().w_cursor();
     let (_, _, mut ec) = getvcol(Win::current(), &mut cursor);
-    Win::current().w_cursor = cursor;
-    Win::current().w_cursor.col = st.regmatch.startpos[0].col;
-    if SUB_FLAGS.with(|flags| flags.do_number) || Win::current().w_onebuf_opt.wo_nu != 0 {
+    Win::current().set_w_cursor(cursor);
+    Win::current().cursor().set_col(st.regmatch.startpos[0].col);
+    if SUB_FLAGS.with(|flags| flags.do_number) || Win::current().wo_nu() != 0 {
         let numw = number_width(Win::current()) + 1 as c_int;
         sc += numw;
         ec += numw;
@@ -150,8 +151,8 @@ fn prompt_visual(st: &Sub) -> Key {
     let mut orig_line: Option<Vec<u8>> = None;
     let mut len_change = 0 as c_int;
     let save_p_lz = p_lz();
-    let save_p_fen = Win::current().w_onebuf_opt.wo_fen;
-    Win::current().w_onebuf_opt.wo_fen = 0;
+    let save_p_fen = Win::current().wo_fen();
+    Win::current().set_wo_fen(0);
 
     // Invert the matched string; the inversion is removed afterwards.
     let redraw = Allow::redraw();
@@ -171,7 +172,9 @@ fn prompt_visual(st: &Sub) -> Key {
         // previous substitute may have inserted or deleted characters
         // before it.
         len_change = len_as_int(shown.len()) - len_as_int(saved.len());
-        Win::current().w_cursor.col += len_change;
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() + len_change);
         let _ = ml_replace_buf_text(Buf::current(), st.lnum, &shown);
         orig_line = Some(saved);
     }
@@ -190,7 +193,7 @@ fn prompt_visual(st: &Sub) -> Key {
     show_cursor_info_later(true);
     let _ = update_screen();
     redraw_later(Win::current(), UPD_SOME_VALID);
-    Win::current().w_onebuf_opt.wo_fen = save_p_fen;
+    Win::current().set_wo_fen(save_p_fen);
 
     let replacement = st.sub.as_cstr();
     let fmt = gettext(c"replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)");
@@ -216,8 +219,8 @@ fn prompt_visual(st: &Sub) -> Key {
 pub(super) fn ask_confirm(st: &mut Sub) -> Confirm {
     let mut typed = Key::NUL;
     let save_state = STATE.get();
-    Win::current().w_cursor.col = st.regmatch.startpos[0].col;
-    if Win::current().w_onebuf_opt.wo_crb != 0 {
+    Win::current().cursor().set_col(st.regmatch.startpos[0].col);
+    if Win::current().wo_crb() != 0 {
         do_check_cursorbind();
     }
     // Held for the whole prompt: `'cpoptions'` is read once, where the C

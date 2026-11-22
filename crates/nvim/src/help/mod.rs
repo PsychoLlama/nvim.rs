@@ -167,10 +167,10 @@ pub(crate) fn open_help(excmd: Option<&mut ExArg>) {
         }
         // Keep the previous alternate file.
         if opened.alt_fnum.is_some()
-            && Win::current().w_alt_fnum == opened.empty_fnum
+            && Win::current().w_alt_fnum() == opened.empty_fnum
             && keepalt_is_off()
         {
-            Win::current().w_alt_fnum = opened.alt_fnum;
+            Win::current().set_w_alt_fnum(opened.alt_fnum);
         }
     }
 }
@@ -245,7 +245,9 @@ fn enter_help_window() -> Result<HelpWindow, Failed> {
     let existing = same_tab
         .then(|| {
             windows().find(|wp| {
-                buf_is_help(wp.buffer_or_none()) && !wp.w_config.hide && wp.w_config.focusable
+                buf_is_help(wp.buffer_or_none())
+                    && !wp.config_hide()
+                    && wp.read().w_config.focusable
             })
         })
         .flatten();
@@ -267,13 +269,13 @@ fn enter_help_window() -> Result<HelpWindow, Failed> {
     // was given and the current window is vertically split and narrow.
     let mut split = WSP_HELP;
     if CMDMOD.with(|m| m.cmod_split) == 0
-        && Win::current().w_width != COLUMNS.get()
-        && Win::current().w_width < 80
+        && Win::current().w_width() != COLUMNS.get()
+        && Win::current().w_width() < 80
     {
         split |= if p_sb() { WSP_BOT } else { WSP_TOP };
     }
     win_split(0, split)?;
-    if OptInt::from(Win::current().w_height) < p_hh() {
+    if OptInt::from(Win::current().w_height()) < p_hh() {
         win_setheight(number_as_int(p_hh()));
     }
 
@@ -283,7 +285,7 @@ fn enter_help_window() -> Result<HelpWindow, Failed> {
     let (lnum, flags) = (newlnum::LASTL, EcmdFlags::HIDE | EcmdFlags::SET_HELP);
     let _ = do_ecmd(None, None, None, None, lnum, flags, None);
     if keepalt_is_off() {
-        Win::current().w_alt_fnum = opened.alt_fnum;
+        Win::current().set_w_alt_fnum(opened.alt_fnum);
     }
     opened.empty_fnum = Some(Buf::current().handle());
     Ok(opened)
@@ -505,8 +507,9 @@ pub(crate) fn prepare_help_buffer() {
     Buf::current().set_b_p_ts(8);
     Buf::current().edit().b_p_ma = 0; // not modifiable
     Buf::current().edit().b_p_bin = 0; // reset 'bin' before reading the file
-    let mut win = Win::current();
-    let wo = &mut win.w_onebuf_opt;
+    let win = Win::current();
+    let mut edit = win.edit();
+    let wo = &mut edit.w_onebuf_opt;
     wo.wo_list = 0;
     wo.wo_nu = 0;
     wo.wo_rnu = 0;
@@ -518,6 +521,7 @@ pub(crate) fn prepare_help_buffer() {
     wo.wo_diff = 0;
     wo.wo_spell = 0;
 
+    drop(edit);
     set_buflisted(0);
 }
 

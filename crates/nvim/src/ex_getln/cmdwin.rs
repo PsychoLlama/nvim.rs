@@ -272,8 +272,8 @@ fn set_up_cmdwin_buffer() -> HistoryType {
         OptionSetFlags::LOCAL,
     );
     Buf::current().set_b_p_ma(1);
-    Win::current().w_onebuf_opt.wo_fen = 0;
-    Win::current().w_onebuf_opt.wo_rl = ::core::ffi::c_int::from(CMDMSG_RL.get());
+    Win::current().set_wo_fen(0);
+    Win::current().set_wo_rl(::core::ffi::c_int::from(CMDMSG_RL.get()));
     CMDMSG_RL.set(false);
 
     // Don't allow switching to another buffer.
@@ -339,8 +339,12 @@ fn put_command_line_in_cmdwin() {
         let text = cstr::until_nul(&cc.bytes()).to_vec();
         let _ = ml_replace_buf_text(Buf::current(), last, &text);
     }
-    Win::current().w_cursor.lnum = Buf::current().line_count();
-    Win::current().w_cursor.col = ColNr::new(Cc::current().cmdpos());
+    Win::current()
+        .cursor()
+        .set_lnum(Buf::current().line_count());
+    Win::current()
+        .cursor()
+        .set_col(ColNr::new(Cc::current().cmdpos()));
     changed_line_abv_curs();
     invalidate_botline_win(Win::current());
     ui_ext_cmdline_hide(false);
@@ -417,7 +421,7 @@ fn take_cmdwin_line(histtype: HistoryType) {
         // cmdline window.
         Cc::current().close();
     } else {
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         Cc::current().set_text(Buf::current().lines().line(lnum));
     }
 
@@ -427,7 +431,7 @@ fn take_cmdwin_line(histtype: HistoryType) {
         cc.set_cmdpos(0);
         CMDWIN_RESULT.set(Key::CTRL_C);
     } else {
-        cc.set_cmdpos(Win::current().w_cursor.col.get());
+        cc.set_cmdpos(Win::current().cursor().col().get());
         // If the cursor is on the last character, it probably should be
         // after it.
         if cc.cmdpos() == cc.len() - 1 || cc.cmdpos() > cc.len() {
@@ -444,7 +448,7 @@ fn take_cmdwin_line(histtype: HistoryType) {
 /// buffer, and restore the window sizes.
 fn close_cmdwin(old_curwin: WinId, winsizes: &[::core::ffi::c_int]) {
     // Avoid the command-line window's first character being concealed.
-    Win::current().w_onebuf_opt.wo_cole = 0;
+    Win::current().set_wo_cole(0);
     // First go back to the original window.
     let wp = Win::current().id();
     let bufref = BufRef::of_opt(current_buf());

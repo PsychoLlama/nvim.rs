@@ -221,7 +221,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
         if parm.window_layout == WIN_TABS.cast_signed() {
             parm.window_count = make_tabpages(parm.window_count);
             time_msg_at(c"making tab pages");
-        } else if first_win().next().is_none_or(|next| next.w_floating) {
+        } else if first_win().next().is_none_or(|next| next.w_floating()) {
             let (count, vertical) = (
                 parm.window_count,
                 parm.window_layout == WIN_VER.cast_signed(),
@@ -277,7 +277,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
 
         if Buf::current().ml().ml_mfp.is_none() {
             if p_fdls() >= 0 as OptInt {
-                Win::current().w_onebuf_opt.wo_fdl = p_fdls();
+                Win::current().set_wo_fdl(p_fdls());
             }
             // Ask, rather than print, if the swap file is in the way.
             SWAP_EXISTS_ACTION.set(SEA_DIALOG);
@@ -292,7 +292,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
                 // what comes next: clear the name and mark the argument
                 // index so it is deleted later.
                 let _ = Buf::current().set_name(None, None, false);
-                Win::current().w_arg_idx = -1;
+                Win::current().set_w_arg_idx(-1);
                 SWAP_EXISTS_ACTION.set(SEA_NONE);
             } else {
                 handle_swap_exists(None);
@@ -329,7 +329,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
 
     // `create_windows` marks a window whose file could not be opened.
     let mut advance = true;
-    if Win::current().w_arg_idx == -1 {
+    if Win::current().w_arg_idx() == -1 {
         let _ = win_close(Win::current(), true, false);
         advance = false;
     }
@@ -340,7 +340,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
 
     let mut arg_idx: c_int = 1;
     for i in 1..parm.window_count {
-        if Win::current().w_arg_idx == -1 {
+        if Win::current().w_arg_idx() == -1 {
             arg_idx += 1;
             let _ = win_close(Win::current(), true, false);
             advance = false;
@@ -370,8 +370,8 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
 
         // Only load a file into a window that is still showing the first
         // window's buffer, or an unnamed one.
-        if first_win().w_buffer.is_current() || Buf::current().read().name.full().is_none() {
-            Win::current().w_arg_idx = arg_idx;
+        if first_win().w_buffer().is_current() || Buf::current().read().name.full().is_none() {
+            Win::current().set_w_arg_idx(arg_idx);
             SWAP_EXISTS_DID_QUIT.set(false);
             // A copy: the edit's autocommands may change the argument list.
             let name = arg_name(ArgListId::GLOBAL, arg_idx);
@@ -412,7 +412,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
 
     // Start in the first window that is not a preview.
     let mut win = first_win();
-    while win.w_onebuf_opt.wo_pvw != 0 {
+    while win.wo_pvw() != 0 {
         let Some(next) = win.next() else {
             win = first_win();
             break;

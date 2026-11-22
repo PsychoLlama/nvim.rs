@@ -30,7 +30,7 @@ fn selected_arglist(arg: Option<&TypVal>) -> Option<ArgListId> {
     if arg.v_type() == VAR_NUMBER && tv_get_number(arg) == -1 as VarNumber {
         return Some(ArgListId::GLOBAL);
     }
-    find_win_by_nr_or_id(arg).map(|win| win.w_alist)
+    find_win_by_nr_or_id(arg).map(|win| win.w_alist())
 }
 
 /// "argc()" function
@@ -42,13 +42,13 @@ pub fn f_argc(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 
 /// "argidx()" function
 pub fn f_argidx(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
-    result.write_number(VarNumber::from(Win::current().w_arg_idx));
+    result.write_number(VarNumber::from(Win::current().w_arg_idx()));
 }
 
 /// "arglistid()" function
 pub fn f_arglistid(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let found = find_tabwin(args.first(), args.get(1));
-    let id = found.map_or(-1, |wp| VarNumber::from(wp.w_alist.0));
+    let id = found.map_or(-1, |wp| VarNumber::from(wp.w_alist().0));
     result.write_number(id);
 }
 

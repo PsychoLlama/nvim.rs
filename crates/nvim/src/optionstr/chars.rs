@@ -295,6 +295,12 @@ pub(crate) fn set_window_chars_option(
 }
 
 impl Win {
+    /// The window's 'listchars' and 'fillchars' glyphs, copied out.
+    pub fn glyph_tables(self) -> (LcsChars, FcsChars) {
+        let held = self.read();
+        (held.w_p_lcs_chars.clone(), held.w_p_fcs_chars.clone())
+    }
+
     /// Set 'fillchars' or 'listchars' for one window.
     ///
     /// `value` is the global or the window-local value, or `None` for the
@@ -305,7 +311,7 @@ impl Win {
     ///
     /// Returns an error message when the value is not good.
     pub fn set_chars_option(
-        mut self,
+        self,
         value: Option<&[u8]>,
         what: CharsOption,
         apply: bool,
@@ -315,10 +321,11 @@ impl Win {
         // copied, since this runs at `:set` rate -- and parsed before anything
         // writes the window.
         let parsed = {
+            let held = self.read();
             let local = if listchars {
-                self.w_onebuf_opt.wo_lcs.bytes()
+                held.w_onebuf_opt.wo_lcs.bytes()
             } else {
-                self.w_onebuf_opt.wo_fcs.bytes()
+                held.w_onebuf_opt.wo_fcs.bytes()
             };
             if local.is_empty() {
                 // An empty local value defers to the global one.
@@ -331,9 +338,9 @@ impl Win {
         if let Some(chars) = parsed {
             // The runs the window held go with the struct they were in.
             if listchars {
-                self.w_p_lcs_chars = chars.list;
+                self.edit().w_p_lcs_chars = chars.list;
             } else {
-                self.w_p_fcs_chars = chars.fill;
+                self.edit().w_p_fcs_chars = chars.fill;
             }
         }
         Ok(())
@@ -569,7 +576,7 @@ fn new_run(len: usize) -> Option<Box<[ScreenChar]>> {
 /// has no local value of its own is refreshed too, because they were all
 /// drawing from the value that just changed.
 fn did_set_global_chars_option(
-    mut win: Win,
+    win: Win,
     val: &[u8],
     what: CharsOption,
     opt_flags: OptionSetFlags,
@@ -577,9 +584,9 @@ fn did_set_global_chars_option(
     let listchars = is_listchars(what);
     let local_is_empty = |wp: Win| {
         if listchars {
-            wp.w_onebuf_opt.wo_lcs.bytes().is_empty()
+            wp.read().w_onebuf_opt.wo_lcs.bytes().is_empty()
         } else {
-            wp.w_onebuf_opt.wo_fcs.bytes().is_empty()
+            wp.read().w_onebuf_opt.wo_fcs.bytes().is_empty()
         }
     };
     let for_this_window = local_is_empty(win) || !opt_flags.has(OptionSetFlags::GLOBAL);
@@ -588,9 +595,9 @@ fn did_set_global_chars_option(
 
     if !opt_flags.has(OptionSetFlags::GLOBAL) {
         let local = if listchars {
-            win.w_onebuf_opt.wo_lcs.take()
+            win.edit().w_onebuf_opt.wo_lcs.take()
         } else {
-            win.w_onebuf_opt.wo_fcs.take()
+            win.edit().w_onebuf_opt.wo_fcs.take()
         };
         drop(local);
     }

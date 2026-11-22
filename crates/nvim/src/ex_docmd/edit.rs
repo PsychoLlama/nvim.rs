@@ -89,7 +89,7 @@ pub(crate) fn ex_print(excmd: &mut ExArg) {
             os_breakcheck();
         }
         setpcmark();
-        Win::current().w_cursor.lnum = excmd.line2;
+        Win::current().cursor().set_lnum(excmd.line2);
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     // Ex mode has just printed the line itself; it must not print it
@@ -105,45 +105,47 @@ pub(crate) fn ex_goto(excmd: &mut ExArg) {
 /// `:syncbind` — line up every 'scrollbind' window at the same relative
 /// position.
 pub(crate) fn ex_syncbind(_excmd: &mut ExArg) {
-    let old_linenr = Win::current().w_cursor.lnum;
+    let old_linenr = Win::current().cursor().lnum();
     setpcmark();
 
     // The topline to use is the smallest that every bound window can
     // reach: one of them may be shorter than the rest.
     let mut vtopline: LineNr = LineNr::ONE;
-    if Win::current().w_onebuf_opt.wo_scb != 0 {
+    if Win::current().wo_scb() != 0 {
         vtopline = LineNr::new(get_vtopline(Win::current()));
         for wp in windows() {
-            if wp.w_onebuf_opt.wo_scb != 0 && !wp.w_buffer.is_null() {
-                let limit =
-                    LineNr::new(plines_m_win_fill(wp, LineNr::ONE, wp.w_buffer.line_count()))
-                        - number_as_lnum(get_scrolloff_value(Win::current()));
+            if wp.wo_scb() != 0 && !wp.w_buffer().is_null() {
+                let limit = LineNr::new(plines_m_win_fill(
+                    wp,
+                    LineNr::ONE,
+                    wp.w_buffer().line_count(),
+                )) - number_as_lnum(get_scrolloff_value(Win::current()));
                 vtopline = vtopline.min(LineNr::new(limit));
             }
         }
         vtopline = vtopline.max(LineNr::ONE);
     }
 
-    for mut wp in windows() {
-        if wp.w_onebuf_opt.wo_scb != 0 {
+    for wp in windows() {
+        if wp.wo_scb() != 0 {
             let y = vtopline.get() - get_vtopline(wp);
             if y > 0 {
                 scrollup(wp, y, true);
             } else {
                 scrolldown(wp, -y, true);
             }
-            wp.w_scbind_pos = vtopline.get();
+            wp.set_w_scbind_pos(vtopline.get());
             redraw_later(wp, UPD_VALID);
             cursor_correct(wp);
-            wp.w_redr_status = true;
+            wp.set_w_redr_status(true);
         }
     }
 
-    if Win::current().w_onebuf_opt.wo_scb != 0 {
+    if Win::current().wo_scb() != 0 {
         DID_SYNCBIND.set(true);
         checkpcmark();
         // The cursor moved with the scroll; CTRL-O puts it back.
-        if old_linenr != Win::current().w_cursor.lnum {
+        if old_linenr != Win::current().cursor().lnum() {
             let _ = ins_typebuf(b"\x0f", Remap::No, 0, true, false);
         }
     }
@@ -218,7 +220,7 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
     // context mark either.
     if excmd.cmdidx != CmdIdx::yank {
         setpcmark();
-        Win::current().w_cursor.lnum = excmd.line1;
+        Win::current().cursor().set_lnum(excmd.line1);
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     if visual_active() {
@@ -234,14 +236,12 @@ pub(crate) fn ex_operators(excmd: &mut ExArg) {
         }
         _ => {
             // In a 'rightleft' window the two shift commands swap.
-            oa.op_type = if c_int::from(excmd.cmdidx == CmdIdx::rshift)
-                ^ Win::current().w_onebuf_opt.wo_rl
-                != 0
-            {
-                OpType::Rshift
-            } else {
-                OpType::Lshift
-            };
+            oa.op_type =
+                if c_int::from(excmd.cmdidx == CmdIdx::rshift) ^ Win::current().wo_rl() != 0 {
+                    OpType::Rshift
+                } else {
+                    OpType::Lshift
+                };
         }
     }
     run_ex_operator(&mut oa, excmd.amount);
@@ -265,7 +265,7 @@ fn put_lines(excmd: &mut ExArg, flags: PutFlags) {
         excmd.line2 = LineNr::ONE;
         excmd.forceit = true;
     }
-    Win::current().w_cursor.lnum = excmd.line2;
+    Win::current().cursor().set_lnum(excmd.line2);
     check_cursor_col(Win::current());
     let dir = if excmd.forceit { BACKWARD } else { FORWARD };
     put_at_cursor(excmd.regname, dir, 1, flags);
@@ -320,7 +320,7 @@ pub(crate) fn ex_copymove(excmd: &mut ExArg) {
 pub fn ex_may_print(excmd: &mut ExArg) {
     if excmd.flags != 0 {
         print_line(
-            Win::current().w_cursor.lnum,
+            Win::current().cursor().lnum(),
             excmd.flags & EXFLAG_NR != 0,
             excmd.flags & EXFLAG_LIST != 0,
             true,
@@ -362,7 +362,7 @@ fn force_magic(excmd: &mut ExArg) -> OptMagic {
 
 /// `:join`.
 pub(crate) fn ex_join(excmd: &mut ExArg) {
-    Win::current().w_cursor.lnum = excmd.line1;
+    Win::current().cursor().set_lnum(excmd.line1);
     if excmd.line1 == excmd.line2 {
         // One line: join it with the next, unless a two-address range
         // said exactly one line, or there is no next line.
@@ -393,7 +393,7 @@ pub(crate) fn ex_join(excmd: &mut ExArg) {
 /// "there was already typeahead before this".
 pub(crate) fn ex_at(excmd: &mut ExArg) {
     let prev_len = typeahead().len();
-    Win::current().w_cursor.lnum = excmd.line2;
+    Win::current().cursor().set_lnum(excmd.line2);
     check_cursor_col(Win::current());
 
     let mut c = excmd.line.byte_at(excmd.line.arg);
@@ -545,15 +545,15 @@ pub(crate) fn ex_mark(excmd: &mut ExArg) {
     }
     // The mark is set at the first non-blank of the addressed line, so
     // the cursor goes there and comes back.
-    let pos = Win::current().w_cursor;
-    Win::current().w_cursor.lnum = excmd.line2;
+    let pos = Win::current().w_cursor();
+    Win::current().cursor().set_lnum(excmd.line2);
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     if setmark(excmd.line.byte_at(excmd.line.arg)).is_err() {
         emsg(gettext(
             c"E191: Argument must be a letter or forward/backward quote",
         ));
     }
-    Win::current().w_cursor = pos;
+    Win::current().set_w_cursor(pos);
 }
 
 /// Put the cursor and the window back in agreement after a command that
@@ -561,7 +561,7 @@ pub(crate) fn ex_mark(excmd: &mut ExArg) {
 pub fn update_topline_cursor() {
     check_cursor(Win::current());
     update_topline(Win::current());
-    if Win::current().w_onebuf_opt.wo_wrap == 0 {
+    if Win::current().wo_wrap() == 0 {
         validate_cursor(Win::current());
     }
     update_curswant();

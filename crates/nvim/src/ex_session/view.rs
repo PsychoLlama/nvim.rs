@@ -70,7 +70,7 @@ pub(crate) fn put_view(
     let mut do_cursor = opts.is_session() || opts.has(OPT_SSOP_FLAG_CURSOR);
 
     // The argument list: the global one, or a local copy written out.
-    if window.w_alist == ArgListId::GLOBAL {
+    if window.w_alist() == ArgListId::GLOBAL {
         out.line(c"argglobal")?;
     } else {
         // Full paths unless the session knows where it will be sourced
@@ -79,30 +79,30 @@ pub(crate) fn put_view(
             || !opts.has(OPT_SSOP_FLAG_CURDIR)
             || has_own_dir(DirOwner::TabPage(tabpage))
             || has_own_dir(DirOwner::Window(window));
-        let names = crate::arglist::arg_names(window.w_alist);
+        let names = crate::arglist::arg_names(window.w_alist());
         ses_arglist(out, c"arglocal", &names, fullname)?;
     }
 
     // Restore the argument index, but only as part of a session and only
     // when it still points at something: arguments may have been deleted.
     let mut did_next = false;
-    if window.w_arg_idx != current_arg_idx
-        && window.w_arg_idx < crate::arglist::wargcount(window)
+    if window.w_arg_idx() != current_arg_idx
+        && window.w_arg_idx() < crate::arglist::wargcount(window)
         && opts.is_session()
     {
         out.write(format_args!(
             "{}argu\n",
-            int64_t::from(window.w_arg_idx) + 1
+            int64_t::from(window.w_arg_idx()) + 1
         ))?;
         did_next = true;
     }
 
     // Edit the file, unless the `:next` above already did.
-    if add_edit && (!did_next || window.w_arg_idx_invalid) {
+    if add_edit && (!did_next || window.w_arg_idx_invalid()) {
         do_cursor &= put_edit(out, window, opts)?;
     }
 
-    if window.w_alt_fnum.is_some() {
+    if window.w_alt_fnum().is_some() {
         put_alternate(out, window, opts)?;
     }
 
@@ -183,8 +183,9 @@ fn put_edit(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Result<boo
 /// re-use both it and the window, which sets the options a help buffer needs
 /// even when "options" is not in 'sessionoptions'.
 fn put_help_edit(out: &mut SessionFile, window: Win) -> Written {
-    let curtag = if 0 < window.w_tagstackidx && window.w_tagstackidx <= window.w_tagstacklen {
-        window.w_tagstack[usize::try_from(window.w_tagstackidx - 1)
+    let held = window.read();
+    let curtag = if 0 < window.w_tagstackidx() && window.w_tagstackidx() <= window.w_tagstacklen() {
+        held.w_tagstack[usize::try_from(window.w_tagstackidx() - 1)
             .expect("the tag stack index is in 1..=len, tested above")]
         .tagname
         .as_ref()
@@ -201,7 +202,7 @@ fn put_help_edit(out: &mut SessionFile, window: Win) -> Written {
 /// Write `balt` for the window's alternate file, when a session is being
 /// written and the alternate buffer is one a restore could find again.
 fn put_alternate(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Written {
-    let alt = find_buf(window.w_alt_fnum);
+    let alt = find_buf(window.w_alt_fnum());
     let restorable = alt.is_some_and(|b| {
         !b.read().name.is_unnamed()
             && b.read().name.shown().is_some_and(|name| !name.is_empty())
@@ -244,14 +245,14 @@ fn put_local_options(out: &mut SessionFile, window: Win, opts: SessionOpts) -> W
 /// the window -- and then the column. `G` is deliberately not used: it would
 /// change the jumplist.
 fn put_cursor(out: &mut SessionFile, window: Win) -> Written {
-    let height = window.w_view_height;
-    let lnum = window.w_cursor.lnum;
+    let height = window.w_view_height();
+    let lnum = window.cursor().lnum();
     if height <= 0 {
         out.write(format_args!("let s:l = {lnum}\n"))?;
     } else {
         out.write(format_args!(
             "let s:l = {lnum} - (({} * winheight(0) + {}) / {height})\n",
-            lnum - window.w_topline,
+            lnum - window.w_topline(),
             height / 2,
         ))?;
     }
@@ -260,16 +261,16 @@ fn put_cursor(out: &mut SessionFile, window: Win) -> Written {
     ))?;
 
     // The column, and the left offset when not wrapping.
-    if window.w_cursor.col == ColNr::ZERO {
+    if window.cursor().col() == ColNr::ZERO {
         return out.line(c"normal! 0");
     }
-    let width = window.w_width;
-    if window.w_onebuf_opt.wo_wrap == 0 && window.w_leftcol > ColNr::ZERO && width > 0 {
-        let virtcol = i64::from(window.w_virtcol);
+    let width = window.w_width();
+    if window.wo_wrap() == 0 && window.w_leftcol() > ColNr::ZERO && width > 0 {
+        let virtcol = i64::from(window.w_virtcol());
         out.write(format_args!(
             "let s:c = {} - (({} * winwidth(0) + {}) / {})\nif s:c > 0\n  exe 'normal! ' . s:c . '|zs' . {} . '|'\nelse\n",
             virtcol + 1,
-            int64_t::from(window.w_virtcol - window.w_leftcol),
+            int64_t::from(window.w_virtcol() - window.w_leftcol()),
             int64_t::from(width / 2),
             int64_t::from(width),
             virtcol + 1,
@@ -284,9 +285,12 @@ fn put_cursor(out: &mut SessionFile, window: Win) -> Written {
 /// cursor was at end-of-line ('curswant' is `MAXCOL`), otherwise the virtual
 /// column, one-based.
 fn put_view_curpos(out: &mut SessionFile, window: Win, spaces: &str) -> Written {
-    if window.w_curswant == ColNr::MAX {
+    if window.w_curswant() == ColNr::MAX {
         out.write(format_args!("{spaces}normal! $\n"))
     } else {
-        out.write(format_args!("{spaces}normal! 0{}|\n", window.w_virtcol + 1))
+        out.write(format_args!(
+            "{spaces}normal! 0{}|\n",
+            window.w_virtcol() + 1
+        ))
     }
 }

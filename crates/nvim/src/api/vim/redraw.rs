@@ -26,23 +26,24 @@ type Redraw = KeyDict_redraw;
 
 /// One window's share of the redraw -- its status column, winbar and status
 /// line -- answering what `flush` becomes.
-fn redraw_status(mut window: Win, opts: &Redraw, flush: bool) -> bool {
+fn redraw_status(window: Win, opts: &Redraw, flush: bool) -> bool {
     let (statuscolumn, statusline, winbar) = (
         opts.statuscolumn.unwrap_or(false),
         opts.statusline.unwrap_or(false),
         opts.winbar.unwrap_or(false),
     );
-    let has_statuscolumn = window.w_onebuf_opt.wo_stc.first_byte() != 0;
+    let has_statuscolumn = window.read().w_onebuf_opt.wo_stc.first_byte() != 0;
     if statuscolumn && has_statuscolumn {
-        window.w_nrwidth_line_count = LineNr::ZERO;
+        window.set_w_nrwidth_line_count(LineNr::ZERO);
         changed_window_setting(window);
     }
-    let old_row_offset = window.w_grid.row_offset;
+    let old_row_offset = window.w_grid().row_offset;
     win_grid_alloc(window);
-    let flush = flush || window.w_lines_valid == 0 || window.w_grid.row_offset != old_row_offset;
+    let flush =
+        flush || window.w_lines_valid() == 0 || window.w_grid().row_offset != old_row_offset;
     let status = statusline || winbar;
     if flush && status {
-        window.w_redr_status = true;
+        window.set_w_redr_status(true);
     } else if status {
         win_check_ns_hl(Some(window));
         if winbar {
@@ -129,7 +130,7 @@ pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
     if opts.tabline.unwrap_or(false) {
         // A window that has never been drawn cannot have its tabline drawn
         // on its own; the whole screen has to go first.
-        if REDRAW_TABLINE.get() && first_window().is_some_and(|wp| wp.w_lines_valid == 0) {
+        if REDRAW_TABLINE.get() && first_window().is_some_and(|wp| wp.w_lines_valid() == 0) {
             flush = true;
         } else {
             draw_tabline();
@@ -147,7 +148,7 @@ pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
             flush = redraw_status(wp, opts, flush);
         } else {
             for wp in windows() {
-                if buf.is_none_or(|b| wp.w_buffer == b) {
+                if buf.is_none_or(|b| wp.w_buffer() == b) {
                     flush = redraw_status(wp, opts, flush);
                 }
             }
@@ -155,7 +156,7 @@ pub fn nvim__redraw(opts: &mut KeyDict_redraw) -> Result<(), Error> {
         flush_ui = true;
     }
     let cwin = win.unwrap_or_else(Win::current);
-    let stale_grid = try_grid_of_view(cwin.w_grid).is_none_or(|grid| !grid.valid);
+    let stale_grid = try_grid_of_view(cwin.w_grid()).is_none_or(|grid| !grid.valid);
     let cursor = opts.cursor.unwrap_or(false);
     if cursor && stale_grid {
         flush = true;

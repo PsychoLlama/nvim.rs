@@ -52,15 +52,15 @@ fn spell_check_text(stack: &mut Stack) -> Result<c_int, Raise> {
     }
 
     // spell.c insists 'spell' is on, so turn it on for the duration.
-    let mut win = Win::current();
-    let wo_spell_save = win.w_onebuf_opt.wo_spell;
+    let win = Win::current();
+    let wo_spell_save = win.wo_spell();
     if wo_spell_save == 0 {
         let _ = parse_spelllang(win);
-        win.w_onebuf_opt.wo_spell = 1;
+        win.set_wo_spell(1);
     }
     if win.syn_block().b_p_spl.first_byte() == 0 {
         emsg(gettext(E_NO_SPELL));
-        win.w_onebuf_opt.wo_spell = wo_spell_save;
+        win.set_wo_spell(wo_spell_save);
         return Ok(0);
     }
 
@@ -115,7 +115,7 @@ fn spell_check_text(stack: &mut Stack) -> Result<c_int, Raise> {
     }
 
     // 'spell' goes back to what it was.
-    win.w_onebuf_opt.wo_spell = wo_spell_save;
+    win.set_wo_spell(wo_spell_save);
     Ok(1)
 }
 

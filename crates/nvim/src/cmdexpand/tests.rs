@@ -55,8 +55,8 @@ impl Fixture {
         let buffer = bare_buffer();
         buffer.make_current();
         // The user commands are looked up in the window's buffer.
-        let mut window = bare_window();
-        window.w_buffer = buffer;
+        let window = bare_window();
+        window.set_w_buffer(buffer);
         window.make_current();
         // Compiling a pattern reads 'cpoptions'.
         let cpo = P_CPO.swap(Some(XString::from("aABceFs_")));

@@ -168,12 +168,12 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     }
 
     let (top, bot, mode, curswant) = if let Some(sel) = visual_selection() {
-        let (top, bot) = if lt(sel.anchor, wp.w_cursor) {
-            (sel.anchor, wp.w_cursor)
+        let (top, bot) = if lt(sel.anchor, wp.w_cursor()) {
+            (sel.anchor, wp.w_cursor())
         } else {
-            (wp.w_cursor, sel.anchor)
+            (wp.w_cursor(), sel.anchor)
         };
-        (top, bot, sel.mode, wp.w_curswant)
+        (top, bot, sel.mode, wp.w_curswant())
     } else {
         let buf = Buf::current();
         let (start, end) = (buf.b_visual().vi_start, buf.b_visual().vi_end);

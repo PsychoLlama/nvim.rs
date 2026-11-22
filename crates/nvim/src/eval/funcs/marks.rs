@@ -70,7 +70,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     // window-info list. A buffer this window has never shown reports
     // the end of the list.
     let index = if buf == Win::current().buffer() {
-        Win::current().w_changelistidx
+        Win::current().w_changelistidx()
     } else {
         let here = Win::current_or_none().map(Win::id);
         let changelistlen = buf.b_changelistlen();
@@ -98,11 +98,11 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         return;
     };
     cleanup_jumplist(wp, true);
-    let entries = tv_list_alloc(wp.w_jumplistlen as isize);
+    let entries = tv_list_alloc(wp.w_jumplistlen() as isize);
     out.push_list(Some(entries.clone()));
-    out.push_number(VarNumber::from(wp.w_jumplistidx));
-    for i in 0..wp.w_jumplistlen {
-        let entry = &wp.w_jumplist[as_index(i)];
+    out.push_number(VarNumber::from(wp.w_jumplistidx()));
+    for i in 0..wp.w_jumplistlen() {
+        let entry = &wp.read().w_jumplist[as_index(i)];
         if entry.fmark.mark.lnum == LineNr::ZERO {
             continue;
         }

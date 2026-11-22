@@ -262,7 +262,7 @@ fn do_filter(
         do_in,
         do_out,
         old_curbuf: Buf::current(),
-        cursor_save: Win::current().w_cursor,
+        cursor_save: Win::current().w_cursor(),
         linecount: line2 - line1 + 1,
         shell_flags: ShellOpts::NONE,
         otmp: None,
@@ -275,8 +275,8 @@ fn do_filter(
     let save_cmod_flags = CMDMOD.with(|mods| mods.cmod_flags);
     CMDMOD.with_mut(|mods| mods.cmod_flags -= CmdModFlags::LOCKMARKS);
 
-    Win::current().w_cursor.lnum = line1;
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_lnum(line1);
+    Win::current().cursor().set_col(ColNr::ZERO);
     changed_line_abv_curs();
     invalidate_botline_win(Win::current());
 
@@ -355,7 +355,7 @@ impl Filter {
             }
             if self.do_out {
                 self.shell_flags |= ShellOpts::READ;
-                Win::current().w_cursor.lnum = self.line2;
+                Win::current().cursor().set_lnum(self.line2);
             }
             return true;
         }
@@ -387,7 +387,7 @@ impl Filter {
         }
         if self.shell(args, cmd) == Ran::PutBack {
             // put cursor back in same position for ":w !cmd"
-            Win::current().w_cursor = self.cursor_save;
+            Win::current().set_w_cursor(self.cursor_save);
             drop(self.no_prompt.take());
             wait_return(PromptRedraw::IfScrolled);
         }
@@ -493,7 +493,7 @@ impl Filter {
         let (line1, line2) = (self.line1, self.line2);
         if self.shell_flags.has(ShellOpts::READ) {
             Buf::current().edit().b_op_start.lnum = line2 + 1;
-            Buf::current().edit().b_op_end.lnum = Win::current().w_cursor.lnum;
+            Buf::current().edit().b_op_end.lnum = Win::current().cursor().lnum();
             appended_lines_mark(line2, read_linecount.get());
         }
 
@@ -528,7 +528,7 @@ impl Filter {
 
             // Put cursor on first filtered line for ":range!cmd".
             // Adjust '[ and '] (set by buf_write()).
-            Win::current().w_cursor.lnum = line1;
+            Win::current().cursor().set_lnum(line1);
             del_lines(linecount, true);
             Buf::current().edit().b_op_start.lnum -= linecount;
             Buf::current().edit().b_op_end.lnum -= linecount;
@@ -542,7 +542,9 @@ impl Filter {
         } else {
             // Put cursor on last new line for ":r !cmd".
             self.linecount = Buf::current().b_op_end().lnum - Buf::current().b_op_start().lnum + 1;
-            Win::current().w_cursor.lnum = Buf::current().b_op_end().lnum;
+            Win::current()
+                .cursor()
+                .set_lnum(Buf::current().b_op_end().lnum);
         }
 
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
@@ -766,7 +768,7 @@ fn has_percent_s(opt: &[u8]) -> bool {
 
 /// Print line `lnum`, without the leading newline `:print` puts out.
 pub fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
-    if Win::current().w_onebuf_opt.wo_nu != 0 || use_number {
+    if Win::current().wo_nu() != 0 || use_number {
         // Highlight line nrs, right-aligned in 'numberwidth' columns.
         let width = usize::try_from(number_width(Win::current())).unwrap_or(0);
         msg_bytes(format!("{lnum:>width$} ").as_bytes(), HLF_N + 1, false);

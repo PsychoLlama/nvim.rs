@@ -58,9 +58,8 @@ fn var_scope(stack: &mut Stack) -> Result<Option<DictRef>, Raise> {
         b"v" => Ok(Some(vimvar_dict())),
         b"b" => find_buffer_by_handle(handle)
             .map(|buf| buf.and_then(|buf| scope_dict(&buf.read().b_bufvar))),
-        b"w" => {
-            find_window_by_handle(handle).map(|win| win.and_then(|win| scope_dict(&win.w_winvar)))
-        }
+        b"w" => find_window_by_handle(handle)
+            .map(|win| win.and_then(|win| scope_dict(&win.read().w_winvar))),
         b"t" => find_tab_by_handle(handle)
             .map(|tabpage| tabpage.and_then(|tabpage| scope_dict(&tabpage.read().tp_winvar))),
         _ => return Err(Raise::message("invalid scope")),

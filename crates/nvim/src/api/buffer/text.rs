@@ -225,10 +225,10 @@ impl Replacement {
         );
         changed_lines(b, start_row, self.start_col, end_row + 1, extra, true);
         for win in tab_windows() {
-            if win.w_buffer != b {
+            if win.w_buffer() != b {
                 continue;
             }
-            if (start_row..=end_row).contains(&win.w_cursor.lnum) {
+            if (start_row..=end_row).contains(&win.cursor().lnum()) {
                 fix_cursor_cols(
                     win,
                     start_row,
@@ -277,16 +277,16 @@ impl Replacement {
     }
 }
 
-pub(crate) fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: i32) {
-    if win.w_cursor.lnum >= lo {
-        if win.w_cursor.lnum >= hi {
-            win.w_cursor.lnum += extra;
+pub(crate) fn fix_cursor(win: Win, lo: LineNr, hi: LineNr, extra: i32) {
+    if win.cursor().lnum() >= lo {
+        if win.cursor().lnum() >= hi {
+            win.cursor().set_lnum(win.cursor().lnum() + extra);
         } else if extra < 0 {
             check_cursor_lnum(win);
         }
         check_cursor_col(win);
         changed_cline_bef_curs(win);
-        win.w_valid -= WinValid::BOTLINE_AP;
+        win.set_w_valid(win.w_valid().without(WinValid::BOTLINE_AP));
         update_topline(win);
     } else {
         invalidate_botline_win(win);
@@ -347,7 +347,7 @@ fn fix_pos_col(
 }
 
 fn fix_cursor_cols(
-    mut win: Win,
+    win: Win,
     start_row: LineNr,
     start_col: ColNr,
     end_row: LineNr,
@@ -360,7 +360,7 @@ fn fix_cursor_cols(
     } else {
         1
     };
-    let mut cursor = win.w_cursor;
+    let mut cursor = win.w_cursor();
     fix_pos_col(
         win.buffer(),
         &mut cursor,
@@ -372,7 +372,7 @@ fn fix_cursor_cols(
         new_cols_at_end_row,
         mode_col_adj,
     );
-    win.w_cursor = cursor;
+    win.set_w_cursor(cursor);
     check_cursor_col(win);
     changed_cline_bef_curs(win);
     invalidate_botline_win(win);

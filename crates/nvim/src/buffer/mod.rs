@@ -199,15 +199,15 @@ static TOP_FILE_NUM: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::cor
 
 /// Run `b:undo_ftplugin` with the buffer and the window pinned, so that what
 /// it does cannot close either out from under the caller.
-pub(crate) fn trigger_undo_ftplugin(buffer: Buf, mut win: Win) {
-    let win_was_locked: bool = win.w_locked;
+pub(crate) fn trigger_undo_ftplugin(buffer: Buf, win: Win) {
+    let win_was_locked: bool = win.w_locked();
     layout_lock();
     buffer.set_b_locked(buffer.b_locked() + 1);
-    win.w_locked = true;
+    win.set_w_locked(true);
     // b:undo_ftplugin may be set, undo it
     run_cmdline(c"if exists('b:undo_ftplugin') | exe b:undo_ftplugin | endif");
     buffer.set_b_locked(buffer.b_locked() - 1);
-    win.w_locked = win_was_locked;
+    win.set_w_locked(win_was_locked);
     layout_unlock();
 }
 

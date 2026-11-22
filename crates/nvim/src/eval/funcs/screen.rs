@@ -298,18 +298,18 @@ pub fn f_synconcealed(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         && lnum <= Buf::current().line_count()
         && col >= ColNr::ZERO
         && col <= ml_get_len(lnum)
-        && Win::current().w_onebuf_opt.wo_cole > 0
+        && Win::current().wo_cole() > 0
     {
         // Run the syntax engine for its side effect: `get_syntax_info`
         // reports on the position it last looked at.
         Win::current().syntax_id(lnum, col, false, None, false);
         (syntax_flags, matchid) = get_syntax_info();
-        if syntax_flags.has(SynFlags::CONCEAL) && Win::current().w_onebuf_opt.wo_cole < 3 {
+        if syntax_flags.has(SynFlags::CONCEAL) && Win::current().wo_cole() < 3 {
             let mut cchar = schar_from_char(Codepoint::new(syn_get_sub_char()));
             // At 'conceallevel' 1 a group with no `cchar` falls back to
             // 'listchars' "conceal", and to a space if that is unset.
-            if cchar == 0 && Win::current().w_onebuf_opt.wo_cole == 1 {
-                cchar = match Win::current().w_p_lcs_chars.conceal {
+            if cchar == 0 && Win::current().wo_cole() == 1 {
+                cchar = match Win::current().lcs_conceal() {
                     0 => ' ' as ScreenChar,
                     c => c,
                 };

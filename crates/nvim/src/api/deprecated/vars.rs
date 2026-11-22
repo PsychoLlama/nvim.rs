@@ -46,7 +46,7 @@ pub fn window_set_var(
     let Some(win) = find_window_by_handle(window)? else {
         return Ok(Object::Nil);
     };
-    let vars = scope_vars(&win.w_winvar);
+    let vars = scope_vars(&win.read().w_winvar);
     dict_set_var(&vars, &name, value, false, true)
 }
 
@@ -54,7 +54,7 @@ pub fn window_del_var(window: WindowHandle, name: ApiString) -> Result<Object, E
     let Some(win) = find_window_by_handle(window)? else {
         return Ok(Object::Nil);
     };
-    let vars = scope_vars(&win.w_winvar);
+    let vars = scope_vars(&win.read().w_winvar);
     dict_set_var(&vars, &name, Object::Nil, true, true)
 }
 

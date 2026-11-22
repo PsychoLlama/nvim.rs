@@ -101,7 +101,7 @@ pub fn get_cmd_default_range(excmd: &mut ExArg) -> c_int {
             // Not the cursor line but the *last* line when the cursor is
             // past it, which a buffer shrinking under a command allows.
             Win::current()
-                .w_cursor
+                .w_cursor()
                 .lnum
                 .min(Buf::current().line_count())
                 .get()
@@ -109,8 +109,8 @@ pub fn get_cmd_default_range(excmd: &mut ExArg) -> c_int {
         CmdAddr::Windows => current_win_nr(Win::current_or_none()),
         CmdAddr::Arguments => {
             let len = arglist_len();
-            if Win::current().w_arg_idx + 1 < len {
-                Win::current().w_arg_idx + 1
+            if Win::current().w_arg_idx() + 1 < len {
+                Win::current().w_arg_idx() + 1
             } else {
                 len
             }

@@ -158,7 +158,7 @@ pub(crate) fn command_line_execute(s: &mut CommandLineState, key: Key) -> Step {
         return Step::Again; // get another key
     }
 
-    let display_tick_saved: DispTick = Win::current().w_display_tick;
+    let display_tick_saved: DispTick = Win::current().w_display_tick();
     let cc = Cc::current();
     s.c = key;
 
@@ -290,11 +290,11 @@ fn command_line_handle_event(s: &mut CommandLineState, display_tick_saved: DispT
         map_execute_lua(false, false);
     }
     // If the window changed, the incremental search state is invalid.
-    if s.is_state.winid != Win::current().handle {
+    if s.is_state.winid != Win::current().handle() {
         init_incsearch_state(&mut s.is_state);
     }
     // Re-apply 'incsearch' highlighting in case it was cleared.
-    if Win::current().w_display_tick > display_tick_saved && s.is_state.did_incsearch {
+    if Win::current().w_display_tick() > display_tick_saved && s.is_state.did_incsearch {
         may_do_incsearch_highlighting(s.firstc, s.count, &mut s.is_state);
     }
     // If f_setcmdline() changed the cmdline, treat it as such.
@@ -490,7 +490,7 @@ fn select_last_match(s: &mut CommandLineState) -> Step {
 /// The key cancelled or accepted the wildmenu: only re-apply the search
 /// highlighting.
 fn after_wildmenu_gesture(s: &mut CommandLineState) -> Step {
-    if s.is_state.winid != Win::current().handle {
+    if s.is_state.winid != Win::current().handle() {
         init_incsearch_state(&mut s.is_state);
     }
     if KEY_TYPED.get() || vpeekc().is_nul() {

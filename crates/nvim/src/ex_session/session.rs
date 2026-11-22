@@ -267,7 +267,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
                 need_tabnext = false;
                 out.puts(c"edit ")?;
                 ses_fname(out, buffer, opts, true)?;
-                if !window.w_arg_idx_invalid {
+                if !window.w_arg_idx_invalid() {
                     edited_win = window.raw();
                 }
                 break;
@@ -294,7 +294,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
         for window in windows_in_tab(tab) {
             if ses_do_win(window) {
                 nr += 1;
-            } else if !window.w_floating {
+            } else if !window.w_floating() {
                 restore_size = false;
             }
             if Win::current_raw() == window.raw() {
@@ -343,7 +343,7 @@ fn put_tabs(out: &mut SessionFile, restore_height_width: &mut bool) -> Written {
                 if nr > 1 {
                     out.line(c"wincmd w")?;
                 }
-                next_arg_idx = window.w_arg_idx;
+                next_arg_idx = window.w_arg_idx();
             }
         }
         // The argument index is zero in the first tab page and has to be
@@ -383,19 +383,21 @@ fn ses_winsizes(out: &mut SessionFile, restore_size: bool, tab: TabPage) -> Writ
         if ses_do_win(window) {
             n += 1;
             // Restore the height when the window is not full height.
-            if window.w_height + window.w_hsep_height + window.w_status_height < top.fr_height() {
+            if window.w_height() + window.w_hsep_height() + window.w_status_height()
+                < top.fr_height()
+            {
                 out.write(format_args!(
                     "exe '{n}resize ' . ((&lines * {} + {}) / {})\n",
-                    int64_t::from(window.w_height),
+                    int64_t::from(window.w_height()),
                     int64_t::from(ROWS.get()) / 2,
                     int64_t::from(ROWS.get()),
                 ))?;
             }
             // And the width when it is not full width.
-            if window.w_width < COLUMNS.get() {
+            if window.w_width() < COLUMNS.get() {
                 out.write(format_args!(
                     "exe 'vert {n}resize ' . ((&columns * {} + {}) / {})\n",
-                    int64_t::from(window.w_width),
+                    int64_t::from(window.w_width()),
                     int64_t::from(COLUMNS.get()) / 2,
                     int64_t::from(COLUMNS.get()),
                 ))?;

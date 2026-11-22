@@ -244,11 +244,11 @@ pub fn check_secure() -> bool {
     false
 }
 pub fn prepare_tagpreview(undo_sync: bool) -> bool {
-    if Win::current().w_onebuf_opt.wo_pvw != 0 {
+    if Win::current().wo_pvw() != 0 {
         return false;
     }
     for wp in windows() {
-        if wp.w_onebuf_opt.wo_pvw != 0 {
+        if wp.wo_pvw() != 0 {
             win_enter(wp, undo_sync);
             return false;
         }
@@ -265,11 +265,11 @@ pub fn prepare_tagpreview(undo_sync: bool) -> bool {
     {
         return false;
     }
-    Win::current().w_onebuf_opt.wo_pvw = 1;
-    Win::current().w_onebuf_opt.wo_wfh = 1;
-    Win::current().w_onebuf_opt.wo_scb = 0;
-    Win::current().w_onebuf_opt.wo_crb = 0;
-    Win::current().w_onebuf_opt.wo_diff = 0;
+    Win::current().set_wo_pvw(1);
+    Win::current().set_wo_wfh(1);
+    Win::current().set_wo_scb(0);
+    Win::current().set_wo_crb(0);
+    Win::current().set_wo_diff(0);
     set_option_direct(
         OPT_FOLDCOLUMN,
         OptVal::static_string(c"0"),

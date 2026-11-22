@@ -79,8 +79,8 @@ pub fn nvim_win_get_cursor(win: WindowHandle) -> Result<Array, Error> {
     };
     let mut rv = Vec::with_capacity(2 as size_t);
     let (lnum, col) = (
-        Integer::from(w.w_cursor.lnum),
-        Integer::from(w.w_cursor.col),
+        Integer::from(w.cursor().lnum()),
+        Integer::from(w.cursor().col()),
     );
     rv.push(Object::integer(lnum));
     rv.push(Object::integer(col));
@@ -89,7 +89,7 @@ pub fn nvim_win_get_cursor(win: WindowHandle) -> Result<Array, Error> {
 
 /// Move `win`'s cursor to the `[line, column]` `pos` names.
 pub fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
-    let Some(mut w) = find_window_by_handle(win)? else {
+    let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
     let items = (pos.len() == 2).then(|| (&pos[0], &pos[1]));
@@ -105,11 +105,11 @@ pub fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
     if col > int64_t::from(MAXCOL) || col < 0 {
         return Err(err_out_of_range(c"cursor column"));
     }
-    w.w_cursor.lnum = number_as_lnum(row);
-    w.w_cursor.col = ColNr::new(number_as_int(col));
-    w.w_cursor.coladd = 0;
+    w.cursor().set_lnum(number_as_lnum(row));
+    w.cursor().set_col(ColNr::new(number_as_int(col)));
+    w.cursor().set_coladd(0);
     check_cursor_col(w);
-    w.w_set_curswant = true;
+    w.set_w_set_curswant(true);
     let mut switchwin = SwitchWin::default();
     // `None`: the window may be on any tab page, and the switch stays here.
     let _ = switch_win(&mut switchwin, w, None, true);
@@ -117,7 +117,7 @@ pub fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), Error> {
     validate_cursor(Win::current());
     restore_win(&mut switchwin, true);
     w.redraw_later(UPD_VALID);
-    w.w_redr_status = true;
+    w.set_w_redr_status(true);
     Ok(())
 }
 
@@ -126,7 +126,7 @@ pub fn nvim_win_get_height(win: WindowHandle) -> Result<Integer, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(0 as Integer);
     };
-    Ok(Integer::from(w.w_height))
+    Ok(Integer::from(w.w_height()))
 }
 
 /// Resize `win` to `height` text lines, taking from or giving to its
@@ -144,7 +144,7 @@ pub fn nvim_win_get_width(win: WindowHandle) -> Result<Integer, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(0 as Integer);
     };
-    Ok(Integer::from(w.w_width))
+    Ok(Integer::from(w.w_width()))
 }
 
 /// Resize `win` to `width` screen columns. See [`nvim_win_set_height`].
@@ -161,7 +161,7 @@ pub fn nvim_win_get_var(win: WindowHandle, name: ApiString) -> Result<Object, Er
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(Object::Nil);
     };
-    dict_get_value(&scope_vars(&w.w_winvar), &name)
+    dict_get_value(&scope_vars(&w.read().w_winvar), &name)
 }
 
 /// Set the window-scoped variable `name`.
@@ -169,7 +169,7 @@ pub fn nvim_win_set_var(win: WindowHandle, name: ApiString, value: Object) -> Re
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
-    dict_set_var(&scope_vars(&w.w_winvar), &name, value, false, false).map(|_| ())
+    dict_set_var(&scope_vars(&w.read().w_winvar), &name, value, false, false).map(|_| ())
 }
 
 /// Remove the window-scoped variable `name`.
@@ -177,7 +177,14 @@ pub fn nvim_win_del_var(win: WindowHandle, name: ApiString) -> Result<(), Error>
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
-    dict_set_var(&scope_vars(&w.w_winvar), &name, Object::Nil, true, false).map(|_| ())
+    dict_set_var(
+        &scope_vars(&w.read().w_winvar),
+        &name,
+        Object::Nil,
+        true,
+        false,
+    )
+    .map(|_| ())
 }
 
 /// `win`'s top-left corner, as a `[row, column]` pair of screen cells.
@@ -186,7 +193,7 @@ pub fn nvim_win_get_position(win: WindowHandle) -> Result<Array, Error> {
         return Ok(Array::new());
     };
     let mut rv = Vec::with_capacity(2 as size_t);
-    let (row, col) = (Integer::from(w.w_winrow), Integer::from(w.w_wincol));
+    let (row, col) = (Integer::from(w.w_winrow()), Integer::from(w.w_wincol()));
     rv.push(Object::integer(row));
     rv.push(Object::integer(col));
     Ok(rv.into())
@@ -212,7 +219,7 @@ pub fn nvim_win_get_number(win: WindowHandle) -> Result<Integer, Error> {
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(0 as Integer);
     };
-    let (_, winnr) = win_get_tabwin(w.handle);
+    let (_, winnr) = win_get_tabwin(w.handle());
     Ok(Integer::from(winnr))
 }
 
@@ -284,14 +291,14 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
 
 /// Point `win` at highlight namespace `ns_id`, or at the global one for -1.
 pub fn nvim_win_set_hl_ns(win: WindowHandle, ns_id: Integer) -> Result<(), Error> {
-    let Some(mut w) = find_window_by_handle(win)? else {
+    let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
     if ns_id < -1 {
         return Err(err_invalid(c"namespace", Bad::Unsaid));
     }
-    w.w_ns_hl = handle_arg(c"namespace", ns_id)?;
-    w.w_hl_needs_update = true;
+    w.set_w_ns_hl(handle_arg(c"namespace", ns_id)?);
+    w.set_w_hl_needs_update(true);
     w.redraw_later(UPD_NOT_VALID);
     Ok(())
 }

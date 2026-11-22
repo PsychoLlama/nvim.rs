@@ -80,7 +80,8 @@ pub(crate) fn list_buf_vars(first: &mut bool) {
 
 /// The current window's `w:` scope.
 pub(crate) fn list_win_vars(first: &mut bool) {
-    if let Some(dict) = Win::current().w_winvar.di_tv.dict_handle() {
+    let dict = Win::current().read().w_winvar.di_tv.dict_handle();
+    if let Some(dict) = dict {
         list_dict_vars(&dict, c"w:", true, first);
     }
 }

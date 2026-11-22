@@ -130,7 +130,7 @@ impl Relayout {
         let win_id = win.id();
         let win_tp = win_find_tabpage(win_id);
         if let Some(parent) = parent {
-            if parent.w_floating {
+            if parent.w_floating() {
                 return Err(Error::exception(c"Cannot split a floating window"));
             }
             if win_tp != parent_tp {
@@ -206,7 +206,7 @@ impl Relayout {
             let why = Error::exception(c"Windows to split were closed");
             return Err(Refusal::Restore(why));
         };
-        if self.was_split == self.win.w_floating || parent.w_floating {
+        if self.was_split == self.win.w_floating() || parent.w_floating() {
             let why = Error::exception(c"Floating state of windows to split changed");
             return Err(Refusal::Restore(why));
         }
@@ -236,7 +236,7 @@ impl Relayout {
             let why = Error::exception(c"Cannot move last non-floating window");
             return Err(Refusal::Restore(why));
         };
-        if !self.parent.is_some_and(|p| p.handle == self.win.handle) {
+        if !self.parent.is_some_and(|p| p.handle() == self.win.handle()) {
             self.remove_frame();
             return Ok(());
         }
@@ -357,11 +357,11 @@ impl Relayout {
 /// Safe: every argument is a handle whose construction already carries the
 /// promise that what it names outlives the call.
 fn apply_split(
-    mut win: Win,
+    win: Win,
     config: &KeyDict_win_config,
     fconfig: &mut WinConfig,
 ) -> Result<Applied, Error> {
-    let was_split = !win.w_floating;
+    let was_split = !win.w_floating();
     let has_split = config.split.is_some();
     let has_vertical = config.vertical.is_some();
     let old_split = win_split_dir(win);
@@ -401,7 +401,7 @@ fn apply_split(
         clear_float_config(fconfig, false);
     }
     let merged = (*fconfig).clone();
-    merge_win_config(&mut win.w_config, merged);
+    merge_win_config(&mut win.edit().w_config, merged);
     Ok(applied)
 }
 
@@ -472,7 +472,7 @@ impl Refloat {
         if self.win_tp != self.parent_tp {
             self.leave_tab()?;
         }
-        if !self.win.w_floating && !self.unfloat_to_float(fconfig)? {
+        if !self.win.w_floating() && !self.unfloat_to_float(fconfig)? {
             return Ok(false);
         }
         if self.win_tp != self.parent_tp {
@@ -562,11 +562,11 @@ pub fn nvim_win_set_config(
     let Some(w) = find_window_by_handle(win)? else {
         return Ok(());
     };
-    let was_split = !w.w_floating;
+    let was_split = !w.w_floating();
     let has_split = keys.split.is_some();
     let has_vertical = keys.vertical.is_some();
-    let old_style = w.w_config.style;
-    let mut fconfig = w.w_config.clone();
+    let old_style = w.config_style();
+    let mut fconfig = w.config();
     let external = keys.external.unwrap_or(false);
     let relative_named = keys.relative.as_ref().is_some_and(|r| !r.is_empty());
     let to_split = !relative_named && !external && (has_split || has_vertical || was_split);

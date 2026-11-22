@@ -190,9 +190,9 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
         set_pcmark();
     }
 
-    let mut win = Win::current();
+    let win = Win::current();
     if !cmdmod_has(CmdModFlags::KEEPALT) {
-        win.w_alt_fnum = Some(Buf::current().handle()); // remember alternate file
+        win.set_w_alt_fnum(Some(Buf::current().handle())); // remember alternate file
     }
     remember_altfpos(win); // remember curpos
 
@@ -222,7 +222,7 @@ pub fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     // comparison, the hazard `BufferRef` carries `br_buf_free_count` for.
     let valid = buffer.id().valid();
     if valid && buffer.raw() != Buf::current_raw() && !aborting_now()
-        || Win::current().w_buffer.is_null()
+        || Win::current().w_buffer().is_null()
     {
         // autocommands changed curbuf and we will move to another buffer soon,
         // so decrement curbuf->b_nwindows
@@ -260,7 +260,7 @@ fn leave_prevbuf(
     let prevbuf = prevbufref
         .get()
         .expect("the caller has just revalidated the buffer");
-    if prevbuf == Win::current().w_buffer {
+    if prevbuf == Win::current().w_buffer() {
         reset_syntax(Win::current());
     }
     if unload
@@ -288,7 +288,7 @@ fn leave_prevbuf(
         sync_undo();
     }
     // The window `prevbuf` is leaving, when it is the current one.
-    let window = Win::current_or_none().filter(|win| prevbuf == win.w_buffer);
+    let window = Win::current_or_none().filter(|win| prevbuf == win.w_buffer());
     let how = if unload {
         action
     } else if action == DOBUF_GOTO && !may_hide(prevbuf) && !is_changed(prevbuf) {
@@ -317,8 +317,8 @@ pub(crate) fn enter_buffer(buffer: Buf) {
     }
 
     // Get the buffer in the current window.
-    let mut win = Win::current();
-    win.w_buffer = buffer;
+    let win = Win::current();
+    win.set_w_buffer(buffer);
     buffer.make_current();
     buffer.set_b_nwindows(buffer.b_nwindows() + 1);
 
@@ -332,22 +332,22 @@ pub(crate) fn enter_buffer(buffer: Buf) {
     }
     invalidate_window_folds(win); // update folds (later).
 
-    if win.w_onebuf_opt.wo_diff != 0 {
+    if win.wo_diff() != 0 {
         diff_add(Buf::current());
     }
 
-    win.w_s = buffer.syntax_block();
+    win.set_w_s(buffer.syntax_block());
 
     // Cursor on first line by default.
     let cursor = win.cursor();
     cursor.set_lnum(LineNr::ONE);
     cursor.set_col(ColNr::ZERO);
     cursor.set_coladd(0);
-    win.w_set_curswant = true;
-    win.w_topline_was_set = false;
+    win.set_w_set_curswant(true);
+    win.set_w_topline_was_set(false);
 
     // mark cursor position as being invalid
-    win.w_valid = WinValid::NONE;
+    win.set_w_valid(WinValid::NONE);
 
     // Make sure the buffer is loaded.
     if buffer.ml().ml_mfp.is_none() {
@@ -366,9 +366,9 @@ pub(crate) fn enter_buffer(buffer: Buf) {
         }
         check_timestamp(Buf::current()); // check if file changed
 
-        let mut win = Win::current();
-        win.w_topline = LineNr::ONE;
-        win.w_topfill = 0;
+        let win = Win::current();
+        win.set_w_topline(LineNr::ONE);
+        win.set_w_topfill(0);
         fire(AutoEvent::BufEnter, Buf::current());
         fire(AutoEvent::BufWinEnter, Buf::current());
     }
@@ -383,7 +383,7 @@ pub(crate) fn enter_buffer(buffer: Buf) {
     rebuild_title();
     // when autocmds didn't change it
     let win = Win::current();
-    if win.w_topline == LineNr::ONE && !win.w_topline_was_set {
+    if win.w_topline() == LineNr::ONE && !win.w_topline_was_set() {
         scroll_halfway(win); // redisplay at correct position
     }
 
@@ -396,7 +396,7 @@ pub(crate) fn enter_buffer(buffer: Buf) {
     // May need to set the spell language.  Can only do this after the buffer
     // has been properly setup.
     let (buf, win) = (Buf::current(), Win::current());
-    if !buf.b_help() && win.w_onebuf_opt.wo_spell != 0 && has_spelllang(win) {
+    if !buf.b_help() && win.wo_spell() != 0 && has_spelllang(win) {
         set_spelllang(win);
     }
     Buf::current().set_b_last_used(os_time_raw());

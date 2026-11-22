@@ -105,7 +105,8 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     if let Some(key) = step(&BDONE, bvars) {
         return Some(cat_prefix_varname(b'b', &key));
     }
-    if let Some(key) = step(&WDONE, win.w_winvar.di_tv.dict_handle()) {
+    let wvars = win.read().w_winvar.di_tv.dict_handle();
+    if let Some(key) = step(&WDONE, wvars) {
         return Some(cat_prefix_varname(b'w', &key));
     }
     let tvars = TabPage::current().vars();
@@ -244,7 +245,7 @@ pub(crate) fn with_scope_entry<R>(
         }
         ScopeKind::Compat => None,
         ScopeKind::Buffer => Some(f(&mut Buf::current().edit().b_bufvar)),
-        ScopeKind::Window => Some(f(&mut Win::current().w_winvar)),
+        ScopeKind::Window => Some(f(&mut Win::current().edit().w_winvar)),
         ScopeKind::Tab => Some(f(&mut TabPage::current().edit().tp_winvar)),
         ScopeKind::Script => {
             let sid = CURRENT_SCTX.get().sc_sid;
@@ -266,7 +267,7 @@ pub(crate) fn scope_dict(kind: ScopeKind) -> Option<DictRef> {
         ScopeKind::Global => Some(globvar_dict()),
         ScopeKind::Vim | ScopeKind::Compat => Some(vimvar_dict()),
         ScopeKind::Buffer => Buf::current().read().b_bufvar.di_tv.dict_handle(),
-        ScopeKind::Window => Win::current().w_winvar.di_tv.dict_handle(),
+        ScopeKind::Window => Win::current().read().w_winvar.di_tv.dict_handle(),
         ScopeKind::Tab => TabPage::current().vars(),
         ScopeKind::Script => script_scope_dict(CURRENT_SCTX.get().sc_sid),
         ScopeKind::Local => funccal_scope(true),

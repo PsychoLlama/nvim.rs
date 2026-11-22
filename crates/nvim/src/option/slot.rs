@@ -30,7 +30,8 @@ use crate::memory::XString;
 use crate::option::defs::{OptIndex, OptStr, OptVal};
 use crate::options::vars::{BoolOpt, NumOpt, StrOpt};
 use crate::optionstr::OptString;
-use crate::types::{Buffer, OptInt, SynBlock, WinOpt};
+use crate::slot::EditPart;
+use crate::types::{Buffer, OptInt, SynBlock, WinOpt, Window};
 use crate::winlayer::{Buf, Win};
 
 use super::{option_default, replace_option_default, tristate, with_option_default};
@@ -50,10 +51,10 @@ impl Win {
     /// One of the window's two copies of its window-local options, borrowed
     /// for the caller's one access.
     #[inline(always)]
-    pub(crate) fn options_mut(&mut self, set: WinOptSet) -> &mut WinOpt {
+    pub(crate) fn options_mut<'a>(self, set: WinOptSet) -> EditPart<'a, Window, WinOpt> {
         match set {
-            WinOptSet::One => &mut self.w_onebuf_opt,
-            WinOptSet::All => &mut self.w_allbuf_opt,
+            WinOptSet::One => self.edit().map(|w| &mut w.w_onebuf_opt),
+            WinOptSet::All => self.edit().map(|w| &mut w.w_allbuf_opt),
         }
     }
 }
@@ -106,12 +107,12 @@ impl<T> Local<T> {
     ///
     /// `f` is one read or one write. It must not call back into the editor:
     /// the borrow is of the whole holder, which is what [`Buf`]'s and
-    /// [`Win`]'s `DerefMut` hand out.
+    /// [`Win`]'s `edit()` hand out.
     #[inline]
     fn with<R>(self, f: impl FnOnce(&mut T) -> R) -> R {
         match self {
             Local::Buf(buf, field) => f(field.of(&mut buf.edit())),
-            Local::Win(mut win, set, field) => f(field.of(win.options_mut(set))),
+            Local::Win(win, set, field) => f(field.of(&mut win.options_mut(set))),
             Local::Syn(win, field) => f(field.of(&mut win.syntax().edit())),
         }
     }

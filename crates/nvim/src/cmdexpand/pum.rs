@@ -425,5 +425,5 @@ pub(crate) fn redraw_wildmenu(
 /// Whether the wildmenu has to turn 'laststatus' on to get a line to draw
 /// in: upstream's `lastwin->w_status_height == 0 && global_stl_height() == 0`.
 fn needs_status_line() -> bool {
-    last_window().is_some_and(|wp| wp.w_status_height == 0) && global_stl_height() == 0
+    last_window().is_some_and(|wp| wp.w_status_height() == 0) && global_stl_height() == 0
 }

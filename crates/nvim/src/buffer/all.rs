@@ -50,7 +50,7 @@ use crate::winlayer::{Buf, TabPage, Win, buffers, first_tab, first_window, last_
 /// Where `close_superfluous_windows` starts, and restarts: floats live at
 /// the end of the list and are closed first.
 fn walk_head() -> Option<Win> {
-    match last_win().w_floating {
+    match last_win().w_floating() {
         true => last_window(),
         false => first_window(),
     }
@@ -243,16 +243,16 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
         // Try to close floating windows first.
         let mut wp = walk_head();
         while let Some(w) = wp {
-            let mut wpnext = if w.w_floating {
+            let mut wpnext = if w.w_floating() {
                 // A float always has a predecessor, as upstream's unguarded
                 // `wp->w_prev->w_floating` assumes.
                 let prev = w.prev().expect("a float is never the first window");
-                match prev.w_floating {
+                match prev.w_floating() {
                     true => Some(prev),
                     false => first_window(),
                 }
             } else {
-                w.next().filter(|next| !next.w_floating)
+                w.next().filter(|next| !next.w_floating())
             };
             if should_close(w, had_tab) {
                 if close_win(w, false).is_err() {
@@ -280,16 +280,16 @@ fn close_superfluous_windows(had_tab: c_int, open_wins: &mut c_int) {
 /// Whether `win` is one of the superfluous windows the first stage closes.
 fn should_close(win: Win, had_tab: c_int) -> bool {
     let too_small = if CMDMOD.with(|m| m.cmod_split) & WSP_VERT != 0 {
-        OptInt::from(win.w_height + win.w_hsep_height + win.w_status_height)
+        OptInt::from(win.w_height() + win.w_hsep_height() + win.w_status_height())
             < OptInt::from(ROWS.get())
                 - p_ch()
                 - OptInt::from(tabline_rows())
                 - OptInt::from(global_stl_rows())
     } else {
-        win.w_width != COLUMNS.get()
+        win.w_width() != COLUMNS.get()
     };
     let buf = win.buffer();
-    (buf.b_nwindows() > 1 || win.w_floating || too_small || had_tab > 0 && win != first_win())
+    (buf.b_nwindows() > 1 || win.w_floating() || too_small || had_tab > 0 && win != first_win())
         && first_win() != last_win()
         && !(is_locked(win) || buf.b_locked() > 0)
         && !is_aucmd(win)
@@ -314,7 +314,7 @@ impl Buf {
             (self.b_nwindows() > 0).then(last_win)
         } else {
             // Check whether this buffer already has a window.
-            let wp = windows().find(|win| !win.w_floating && win.w_buffer == self);
+            let wp = windows().find(|win| !win.w_floating() && win.w_buffer() == self);
             // If the buffer already has a window, move it.
             if let Some(win) = wp {
                 move_win_after(win, current_win());

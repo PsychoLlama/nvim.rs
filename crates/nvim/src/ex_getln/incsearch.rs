@@ -61,37 +61,37 @@ pub(crate) fn cmdline_autocmd(evt: AutoEvent, name: &CStr) -> bool {
 /// `Copy`, so answering by value says the same thing in safe code.
 pub(crate) fn save_viewstate(window: Win) -> ViewState {
     ViewState {
-        vs_curswant: window.w_curswant,
-        vs_leftcol: window.w_leftcol,
-        vs_skipcol: window.w_skipcol,
-        vs_topline: window.w_topline,
-        vs_topfill: window.w_topfill,
-        vs_botline: window.w_botline,
-        vs_empty_rows: window.w_empty_rows,
+        vs_curswant: window.w_curswant(),
+        vs_leftcol: window.w_leftcol(),
+        vs_skipcol: window.w_skipcol(),
+        vs_topline: window.w_topline(),
+        vs_topfill: window.w_topfill(),
+        vs_botline: window.w_botline(),
+        vs_empty_rows: window.w_empty_rows(),
     }
 }
 
 /// Put back what [`save_viewstate`] recorded.
-pub(crate) fn restore_viewstate(mut window: Win, vs: &ViewState) {
-    window.w_curswant = vs.vs_curswant;
-    window.w_leftcol = vs.vs_leftcol;
-    window.w_skipcol = vs.vs_skipcol;
-    window.w_topline = vs.vs_topline;
-    window.w_topfill = vs.vs_topfill;
-    window.w_botline = vs.vs_botline;
-    window.w_empty_rows = vs.vs_empty_rows;
+pub(crate) fn restore_viewstate(window: Win, vs: &ViewState) {
+    window.set_w_curswant(vs.vs_curswant);
+    window.set_w_leftcol(vs.vs_leftcol);
+    window.set_w_skipcol(vs.vs_skipcol);
+    window.set_w_topline(vs.vs_topline);
+    window.set_w_topfill(vs.vs_topfill);
+    window.set_w_botline(vs.vs_botline);
+    window.set_w_empty_rows(vs.vs_empty_rows);
 }
 
 /// Start an incremental search from where the cursor and view are now.
 pub(crate) fn init_incsearch_state(s: &mut IncsearchState) {
-    s.winid = Win::current().handle;
-    s.match_start = Win::current().w_cursor;
+    s.winid = Win::current().handle();
+    s.match_start = Win::current().w_cursor();
     s.did_incsearch = false;
     s.incsearch_postponed = false;
     s.magic_overruled_save = MAGIC_OVERRULED.get();
     clearpos(&mut s.match_end);
-    s.save_cursor = Win::current().w_cursor;
-    s.search_start = Win::current().w_cursor;
+    s.save_cursor = Win::current().w_cursor();
+    s.search_start = Win::current().w_cursor();
     s.init_viewstate = save_viewstate(Win::current());
     s.old_viewstate = save_viewstate(Win::current());
 }
@@ -255,8 +255,8 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
     };
 
     // Parse the address range.
-    let save_cursor = Win::current().w_cursor;
-    Win::current().w_cursor = incsearch_start;
+    let save_cursor = Win::current().w_cursor();
+    Win::current().set_w_cursor(incsearch_start);
 
     // A range that does not parse is no range: nothing to say while typing.
     let _ = parse_cmd_address(&mut ea, true);
@@ -267,11 +267,11 @@ pub(crate) fn parse_pattern_and_range(incsearch_start: Pos) -> Option<PatternSpa
         SEARCH_LAST_LINE.set(ea.line2.max(ea.line1));
     } else if ea.line.byte_at(cmd) == b's' && ea.line.byte_at(cmd + 1) != b'o' {
         // :s defaults to the current line.
-        SEARCH_LAST_LINE.set(Win::current().w_cursor.lnum);
+        SEARCH_LAST_LINE.set(Win::current().cursor().lnum());
         SEARCH_FIRST_LINE.set(SEARCH_LAST_LINE.get());
     }
 
-    Win::current().w_cursor = save_cursor;
+    Win::current().set_w_cursor(save_cursor);
     Some(span)
 }
 
@@ -358,15 +358,17 @@ pub(crate) fn may_do_incsearch_highlighting(
 
     if SEARCH_FIRST_LINE.get() == LineNr::ZERO {
         // Start at the original cursor position.
-        Win::current().w_cursor = s.search_start;
+        Win::current().set_w_cursor(s.search_start);
     } else if SEARCH_FIRST_LINE.get() > Buf::current().line_count() {
         // Start after the last line.
-        Win::current().w_cursor.lnum = Buf::current().line_count();
-        Win::current().w_cursor.col = ColNr::MAX;
+        Win::current()
+            .cursor()
+            .set_lnum(Buf::current().line_count());
+        Win::current().cursor().set_col(ColNr::MAX);
     } else {
         // Start at the first line in the range.
-        Win::current().w_cursor.lnum = SEARCH_FIRST_LINE.get();
-        Win::current().w_cursor.col = ColNr::ZERO;
+        Win::current().cursor().set_lnum(SEARCH_FIRST_LINE.get());
+        Win::current().cursor().set_col(ColNr::ZERO);
     }
 
     // The do_search() result.
@@ -396,12 +398,12 @@ pub(crate) fn may_do_incsearch_highlighting(
         found = do_search(None, dir, search_delim, &pat, count, flags, Some(&mut sia)).is_some();
         drop(no_emsg);
 
-        if Win::current().w_cursor.lnum < SEARCH_FIRST_LINE.get()
-            || Win::current().w_cursor.lnum > SEARCH_LAST_LINE.get()
+        if Win::current().cursor().lnum() < SEARCH_FIRST_LINE.get()
+            || Win::current().cursor().lnum() > SEARCH_LAST_LINE.get()
         {
             // The match is outside the address range.
             found = false;
-            Win::current().w_cursor = s.search_start;
+            Win::current().set_w_cursor(s.search_start);
         }
 
         // Interrupted while searching: behave as if it failed.
@@ -430,13 +432,13 @@ pub(crate) fn may_do_incsearch_highlighting(
     restore_viewstate(Win::current(), &s.old_viewstate);
     curwin_cursor_moved();
 
-    let mut end_pos = Win::current().w_cursor;
+    let mut end_pos = Win::current().w_cursor();
     if found {
-        s.match_start = Win::current().w_cursor;
+        s.match_start = Win::current().w_cursor();
         set_cursor_to_search_match();
         validate_curwin_cursor();
-        s.match_end = Win::current().w_cursor;
-        Win::current().w_cursor = end_pos;
+        s.match_end = Win::current().w_cursor();
+        Win::current().set_w_cursor(end_pos);
         end_pos = s.match_end;
     }
 
@@ -453,8 +455,8 @@ pub(crate) fn may_do_incsearch_highlighting(
     validate_curwin_cursor();
 
     // May redraw the status line to show the cursor position.
-    if p_ru() && (Win::current().w_status_height > 0 || global_stl_height() > 0) {
-        Win::current().w_redr_status = true;
+    if p_ru() && (Win::current().w_status_height() > 0 || global_stl_height() > 0) {
+        Win::current().set_w_redr_status(true);
     }
 
     redraw_later(Win::current(), UPD_SOME_VALID);
@@ -465,11 +467,11 @@ pub(crate) fn may_do_incsearch_highlighting(
     // Leave the cursor at the end so CTRL-R CTRL-W works — but not when
     // it is beyond the end of the pattern, as for ":s/pat/".
     if cc.byte_at(skiplen + patlen) != 0 {
-        Win::current().w_cursor = s.search_start;
+        Win::current().set_w_cursor(s.search_start);
     } else if found {
-        Win::current().w_cursor = end_pos;
+        Win::current().set_w_cursor(end_pos);
         // Mark as valid for the cmdline_show redraw.
-        Win::current().w_valid_cursor = end_pos;
+        Win::current().set_w_valid_cursor(end_pos);
     }
 
     msg_starthere();
@@ -502,7 +504,7 @@ pub(crate) fn may_add_char_to_search(
     restore_last_search_pattern();
 
     if s.did_incsearch {
-        Win::current().w_cursor = s.match_end;
+        Win::current().set_w_cursor(s.match_end);
         // The character after the match, which becomes the key typed: a
         // codepoint read from the text, as the C's `int` was.
         let mut ch = gchar_cursor();
@@ -528,7 +530,9 @@ pub(crate) fn may_add_char_to_search(
             if utf_char2len(ch) != cursor_len() {
                 let save_c = ch;
                 while utf_char2len(ch) != cursor_len() {
-                    Win::current().w_cursor.col += utf_char2len(ch);
+                    Win::current()
+                        .cursor()
+                        .set_col(Win::current().cursor().col() + utf_char2len(ch));
                     ch = gchar_cursor();
                     stuff_readbuf_char(Key::from_code(ch));
                 }
@@ -554,14 +558,14 @@ pub(crate) fn finish_incsearch_highlighting(
 
     s.did_incsearch = false;
     if gotesc {
-        Win::current().w_cursor = s.save_cursor;
+        Win::current().set_w_cursor(s.save_cursor);
     } else {
         if !equalpos(s.save_cursor, s.search_start) {
             // Put the previous-context mark at the original position.
-            Win::current().w_cursor = s.save_cursor;
+            Win::current().set_w_cursor(s.save_cursor);
             setpcmark();
         }
-        Win::current().w_cursor = s.search_start;
+        Win::current().set_w_cursor(s.search_start);
     }
     restore_viewstate(Win::current(), &s.old_viewstate);
     HIGHLIGHT_MATCH.set(false);
@@ -688,7 +692,7 @@ pub(crate) fn may_do_command_line_next_incsearch(
         }
 
         set_search_match(&mut s.match_end);
-        Win::current().w_cursor = s.match_start;
+        Win::current().set_w_cursor(s.match_start);
         curwin_cursor_moved();
         validate_curwin_cursor();
         HIGHLIGHT_MATCH.set(true);
@@ -697,7 +701,7 @@ pub(crate) fn may_do_command_line_next_incsearch(
         let _ = update_screen();
         HIGHLIGHT_MATCH.set(false);
         redrawcmdline();
-        Win::current().w_cursor = s.match_end;
+        Win::current().set_w_cursor(s.match_end);
     } else {
         vim_beep(OPT_BO_FLAG_ERROR as ::core::ffi::c_uint);
     }
@@ -766,14 +770,14 @@ fn pattern_of(cc: Cc, start: ::core::ffi::c_int, len: ::core::ffi::c_int) -> Vec
 /// [`set_search_match`] on the window's own cursor: move it to the end of
 /// the match, clamping it to the last line with the column advanced there.
 fn set_cursor_to_search_match() {
-    let mut t = Win::current().w_cursor;
+    let mut t = Win::current().w_cursor();
     t.lnum += SEARCH_MATCH_LINES.get();
     t.col = SEARCH_MATCH_ENDCOL.get();
     let past_end = t.lnum > Buf::current().line_count();
     if past_end {
         t.lnum = Buf::current().line_count();
     }
-    Win::current().w_cursor = t;
+    Win::current().set_w_cursor(t);
     if past_end {
         coladvance(Win::current(), ColNr::MAX);
     }

@@ -301,11 +301,11 @@ fn compare_atom(
 fn cursor_value(kind: u8) -> uint32_t {
     let win = Win::current();
     match kind {
-        b'l' => win.w_cursor.lnum.get().cast_unsigned(),
-        b'c' => win.w_cursor.col.get().cast_unsigned() + 1,
+        b'l' => win.cursor().lnum().get().cast_unsigned(),
+        b'c' => win.cursor().col().get().cast_unsigned() + 1,
         // The last screen column of the character under the cursor.
         _ => {
-            win.virtual_vcol_span_at(win.w_cursor)
+            win.virtual_vcol_span_at(win.w_cursor())
                 .1
                 .get()
                 .cast_unsigned()

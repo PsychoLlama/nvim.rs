@@ -58,7 +58,7 @@ struct Found {
 /// Every buffer name matching `pat`, for command-line completion of
 /// `:buffer` and `:sbuffer`.
 pub(crate) fn buf_name_matches(pat: &CStr, options: WildOpts) -> Option<Vec<XString>> {
-    if options.has(BUF_DIFF_FILTER) && current_win().w_onebuf_opt.wo_diff == 0 {
+    if options.has(BUF_DIFF_FILTER) && current_win().wo_diff() == 0 {
         return None;
     }
 
@@ -223,7 +223,7 @@ fn fname_match(rmp: &mut RegMatch, name: Option<&CStr>, ignore_case: bool) -> bo
 /// upstream's `find_buf` under its Rust name: a number naming no
 /// buffer is `None` rather than a null to test for.
 pub(crate) fn find_buf(handle: Option<Handle>) -> Option<Buf> {
-    winlayer::buffer(handle.or(current_win().w_alt_fnum)?)
+    winlayer::buffer(handle.or(current_win().w_alt_fnum())?)
 }
 
 /// The name of buffer `n`, shortened with `home_replace`; `None` when there

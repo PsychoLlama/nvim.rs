@@ -159,10 +159,10 @@ impl Frame {
 /// 'arabic': a bundle of other settings, plus the Arabic keymap.
 pub(crate) fn did_set_arabic(args: &mut OptSet) -> Result<(), OptError> {
     let (keymap, local) = (OptVal::static_string(c"arabic"), OptionSetFlags::LOCAL);
-    let mut win = Frame::read(args).win;
-    if win.w_onebuf_opt.wo_arab == 0 {
-        if !p_tbidi() && win.w_onebuf_opt.wo_rl != 0 {
-            win.w_onebuf_opt.wo_rl = 0;
+    let win = Frame::read(args).win;
+    if win.wo_arab() == 0 {
+        if !p_tbidi() && win.wo_rl() != 0 {
+            win.set_wo_rl(0);
             changed_window_setting(win);
         }
         // SAFETY: a live window's buffer is live.
@@ -175,8 +175,8 @@ pub(crate) fn did_set_arabic(args: &mut OptSet) -> Result<(), OptError> {
     if !p_tbidi() {
         // Right-to-left mode, and the shaping that is most of what
         // Arabic needs.
-        if win.w_onebuf_opt.wo_rl == 0 {
-            win.w_onebuf_opt.wo_rl = 1;
+        if win.wo_rl() == 0 {
+            win.set_wo_rl(1);
             changed_window_setting(win);
         }
         if !p_arshape() {
@@ -292,7 +292,7 @@ pub(crate) fn did_set_foldnestmax(args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_helpheight(_args: &mut OptSet) -> Result<(), OptError> {
     if FIRSTWIN.get() != LASTWIN.get()
         && Buf::current().b_help()
-        && OptInt::from(Win::current().w_height) < p_hh()
+        && OptInt::from(Win::current().w_height()) < p_hh()
     {
         win_setheight(number_as_int(p_hh()));
     }
@@ -414,11 +414,11 @@ pub(crate) fn did_set_modified(args: &mut OptSet) -> Result<(), OptError> {
 /// 'number'/'relativenumber': both change how wide the number column is, and
 /// a 'signcolumn' of `number` rides on it.
 pub(crate) fn did_set_number_relativenumber(args: &mut OptSet) -> Result<(), OptError> {
-    let mut win = Frame::read(args).win;
+    let win = Frame::read(args).win;
     // A 'statuscolumn' draws the number itself, so the cached width has
     // to be recomputed rather than reused.
-    if !win.w_onebuf_opt.wo_stc.bytes().is_empty() {
-        win.w_nrwidth_line_count = LineNr::ZERO;
+    if !win.read().w_onebuf_opt.wo_stc.bytes().is_empty() {
+        win.set_w_nrwidth_line_count(LineNr::ZERO);
     }
     let _ = check_window_signcolumn(win);
     Ok(())
@@ -426,19 +426,19 @@ pub(crate) fn did_set_number_relativenumber(args: &mut OptSet) -> Result<(), Opt
 
 /// 'numberwidth': the cached number-column width is stale.
 pub(crate) fn did_set_numberwidth(args: &mut OptSet) -> Result<(), OptError> {
-    Frame::read(args).win.w_nrwidth_line_count = LineNr::ZERO;
+    Frame::read(args).win.set_w_nrwidth_line_count(LineNr::ZERO);
     Ok(())
 }
 
 /// 'previewwindow': there can be only one, in the current tab page.
 pub(crate) fn did_set_previewwindow(args: &mut OptSet) -> Result<(), OptError> {
-    let mut win = Frame::read(args).win;
-    if win.w_onebuf_opt.wo_pvw == 0 {
+    let win = Frame::read(args).win;
+    if win.wo_pvw() == 0 {
         return Ok(());
     }
     for wp in winlayer::windows() {
-        if wp.w_onebuf_opt.wo_pvw != 0 && wp != win {
-            win.w_onebuf_opt.wo_pvw = 0;
+        if wp.wo_pvw() != 0 && wp != win {
+            win.set_wo_pvw(0);
             return Err((E_PREVIEW_WINDOW_EXISTS).into());
         }
     }
@@ -479,12 +479,12 @@ pub(crate) fn did_set_scrollback(args: &mut OptSet) -> Result<(), OptError> {
 
 /// 'scrollbind': line the window up with the others straight away.
 pub(crate) fn did_set_scrollbind(args: &mut OptSet) -> Result<(), OptError> {
-    let mut win = Frame::read(args).win;
-    if win.w_onebuf_opt.wo_scb == 0 {
+    let win = Frame::read(args).win;
+    if win.wo_scb() == 0 {
         return Ok(());
     }
     do_check_scrollbind(false);
-    win.w_scbind_pos = get_vtopline(win);
+    win.set_w_scbind_pos(get_vtopline(win));
     Ok(())
 }
 
@@ -511,9 +511,9 @@ pub(crate) fn did_set_showtabline(_args: &mut OptSet) -> Result<(), OptError> {
 
 /// 'smoothscroll': switching it off drops any partial-line scroll.
 pub(crate) fn did_set_smoothscroll(args: &mut OptSet) -> Result<(), OptError> {
-    let mut win = Frame::read(args).win;
-    if win.w_onebuf_opt.wo_sms == 0 {
-        win.w_skipcol = ColNr::ZERO;
+    let win = Frame::read(args).win;
+    if win.wo_sms() == 0 {
+        win.set_w_skipcol(ColNr::ZERO);
     }
     Ok(())
 }
@@ -521,7 +521,7 @@ pub(crate) fn did_set_smoothscroll(args: &mut OptSet) -> Result<(), OptError> {
 /// 'spell': switching it on is what loads the word lists.
 pub(crate) fn did_set_spell(args: &mut OptSet) -> Result<(), OptError> {
     let win = Frame::read(args).win;
-    if win.w_onebuf_opt.wo_spell != 0 {
+    if win.wo_spell() != 0 {
         return parse_spelllang(win);
     }
     Ok(())
@@ -629,9 +629,9 @@ pub(crate) fn did_set_wildchar(args: &mut OptSet) -> Result<(), OptError> {
 pub(crate) fn did_set_winblend(args: &mut OptSet) -> Result<(), OptError> {
     let f = Frame::read(args);
     if f.new_number() != f.old_number() {
-        let mut win = f.win;
-        win.w_onebuf_opt.wo_winbl = win.w_onebuf_opt.wo_winbl.clamp(0, 100);
-        win.w_hl_needs_update = true;
+        let win = f.win;
+        win.set_wo_winbl(win.wo_winbl().clamp(0, 100));
+        win.set_w_hl_needs_update(true);
         check_blending(win);
     }
     Ok(())
@@ -647,7 +647,7 @@ pub(crate) fn did_set_window(_args: &mut OptSet) -> Result<(), OptError> {
 
 /// 'winheight': grow the current window if it is now too short.
 pub(crate) fn did_set_winheight(_args: &mut OptSet) -> Result<(), OptError> {
-    if FIRSTWIN.get() != LASTWIN.get() && OptInt::from(Win::current().w_height) < p_wh() {
+    if FIRSTWIN.get() != LASTWIN.get() && OptInt::from(Win::current().w_height()) < p_wh() {
         win_setheight(number_as_int(p_wh()));
     }
     Ok(())
@@ -655,7 +655,7 @@ pub(crate) fn did_set_winheight(_args: &mut OptSet) -> Result<(), OptError> {
 
 /// 'winwidth': widen the current window if it is now too narrow.
 pub(crate) fn did_set_winwidth(_args: &mut OptSet) -> Result<(), OptError> {
-    if FIRSTWIN.get() != LASTWIN.get() && OptInt::from(Win::current().w_width) < p_wiw() {
+    if FIRSTWIN.get() != LASTWIN.get() && OptInt::from(Win::current().w_width()) < p_wiw() {
         win_setwidth(number_as_int(p_wiw()));
     }
     Ok(())
@@ -664,11 +664,11 @@ pub(crate) fn did_set_winwidth(_args: &mut OptSet) -> Result<(), OptError> {
 /// 'wrap': the two scroll offsets are exclusive — a wrapped window scrolls
 /// within a line, an unwrapped one scrolls sideways.
 pub(crate) fn did_set_wrap(args: &mut OptSet) -> Result<(), OptError> {
-    let mut win = Frame::read(args).win;
-    if win.w_onebuf_opt.wo_wrap != 0 {
-        win.w_leftcol = ColNr::ZERO;
+    let win = Frame::read(args).win;
+    if win.wo_wrap() != 0 {
+        win.set_w_leftcol(ColNr::ZERO);
     } else {
-        win.w_skipcol = ColNr::ZERO;
+        win.set_w_skipcol(ColNr::ZERO);
     }
     Ok(())
 }

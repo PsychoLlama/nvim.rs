@@ -125,16 +125,16 @@ fn select_range(line1: LineNr, line2: LineNr) {
     let visual = with_curbuf(|buf| buf.b_visual);
     let end = if visual.vi_start.lnum == line1 && visual.vi_end.lnum == line2 {
         set_visual_mode(VisualMode::from_raw(visual.vi_mode));
-        let mut win = Win::current();
-        win.w_cursor = visual.vi_start;
-        win.w_curswant = visual.vi_curswant;
+        let win = Win::current();
+        win.set_w_cursor(visual.vi_start);
+        win.set_w_curswant(visual.vi_curswant);
         visual.vi_end
     } else {
         // Line-wise over the range.
         set_visual_mode(VisualMode::LINE);
-        let mut win = Win::current();
-        win.w_cursor.lnum = line1;
-        win.w_cursor.col = ColNr::new(1);
+        let win = Win::current();
+        win.cursor().set_lnum(line1);
+        win.cursor().set_col(ColNr::new(1));
         Pos {
             lnum: line2,
             col: ColNr::MAX,
@@ -145,14 +145,16 @@ fn select_range(line1: LineNr, line2: LineNr) {
     set_visual_active(true);
     V_ISUAL_RESELECT.set(1);
     check_cursor_now();
-    set_visual_anchor(Win::current().w_cursor);
-    Win::current().w_cursor = end;
+    set_visual_anchor(Win::current().w_cursor());
+    Win::current().set_w_cursor(end);
     check_cursor_now();
 
     // With an exclusive selection the cursor sits one past the last
     // selected character.
     if selection_style() == b'e' && char_at_cursor() != 0 {
-        Win::current().w_cursor.col += 1;
+        Win::current()
+            .cursor()
+            .set_col(Win::current().cursor().col() + 1);
     }
 }
 

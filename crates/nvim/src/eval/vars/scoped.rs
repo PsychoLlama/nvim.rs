@@ -98,7 +98,7 @@ fn get_var_from(
                         let buffer = buffer.expect("a `b:` scope");
                         tv_copy(&buffer.read().b_bufvar.di_tv, result);
                     }
-                    Scope::Window => tv_copy(&w.w_winvar.di_tv, result),
+                    Scope::Window => tv_copy(&w.read().w_winvar.di_tv, result),
                     Scope::Tab => tv_copy(&tp.read().tp_winvar.di_tv, result),
                 }
                 done = true;
@@ -110,7 +110,7 @@ fn get_var_from(
                         .b_bufvar
                         .di_tv
                         .dict_handle(),
-                    Scope::Window => w.w_winvar.di_tv.dict_handle(),
+                    Scope::Window => w.read().w_winvar.di_tv.dict_handle(),
                     Scope::Tab => tp.vars(),
                 };
                 let read = dict.as_ref().map(|dict| dict.read());

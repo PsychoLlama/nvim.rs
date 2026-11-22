@@ -53,8 +53,8 @@ use std::ffi::CString;
 /// is what a bare `:g/pat/` does. This re-enters `do_cmdline`, so every
 /// global may change.
 fn global_exe_one(cmd: &[u8], lnum: LineNr) {
-    Win::current().w_cursor.lnum = lnum;
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_lnum(lnum);
+    Win::current().cursor().set_col(ColNr::ZERO);
     let cmd = match cmd.first() {
         None | Some(b'\n') => b"p".as_slice(),
         Some(_) => cmd,
@@ -241,7 +241,7 @@ pub fn ex_global(excmd: &mut ExArg) {
     // The command is read in place: nothing the walk runs can reach this
     // command's own line, and `do_cmdline` copies what it is handed.
     if GLOBAL_BUSY.get() != 0 {
-        let lnum = Win::current().w_cursor.lnum;
+        let lnum = Win::current().cursor().lnum();
         if selects(kind, matches_line(&mut regmatch, lnum)) {
             global_exe_one(excmd.line.rest_of(parsed.cmd_at), lnum);
         }

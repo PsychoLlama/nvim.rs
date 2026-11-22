@@ -115,12 +115,12 @@ pub(crate) fn alist_count(id: ArgListId) -> c_int {
 
 /// `WARGCOUNT(wp)`: how many files `window`'s argument list holds.
 pub(crate) fn wargcount(window: Win) -> c_int {
-    alist_count(window.w_alist)
+    alist_count(window.w_alist())
 }
 
 /// The current window's argument list.
 fn cur_alist() -> ArgListId {
-    Win::current().w_alist
+    Win::current().w_alist()
 }
 
 /// `ARGCOUNT`: how many files the current window's argument list holds.
@@ -137,7 +137,7 @@ fn entry_fnum(id: ArgListId, n: c_int) -> Option<Handle> {
 /// The buffer number of entry `n` of `window`'s argument list, if there is
 /// such an entry.
 pub(crate) fn warg_fnum(window: Win, n: c_int) -> Option<Handle> {
-    entry_fnum(window.w_alist, n)
+    entry_fnum(window.w_alist(), n)
 }
 
 /// `alist_name()`: run `f` over the name `entry` shows -- its buffer's name
@@ -187,11 +187,11 @@ pub(crate) fn with_arg_names(id: ArgListId, mut f: impl FnMut(&CStr)) {
 /// an index into anything in particular — it can point past the end after a
 /// deletion, which is what [`check_arg_idx`] exists to notice.
 fn cur_arg_idx() -> c_int {
-    Win::current().w_arg_idx
+    Win::current().w_arg_idx()
 }
 
 fn set_cur_arg_idx(idx: c_int) {
-    Win::current().w_arg_idx = idx;
+    Win::current().set_w_arg_idx(idx);
 }
 
 /// Do `name` and `fname` resolve to the same file? A buffer with no name of
@@ -262,7 +262,7 @@ fn alist_new() {
         refcount: Refcount::one(),
     };
     ARG_LISTS.with_mut(|lists| lists.insert(id, list));
-    Win::current().w_alist = id;
+    Win::current().set_w_alist(id);
 }
 
 /// Replace list `id`'s entries with `files`. `use_curbuf` lets an added name
@@ -300,16 +300,16 @@ pub(crate) fn alist_add(id: ArgListId, name: XString, set_fnum: c_int) {
     if arglist_is_locked() {
         return;
     }
-    let mut wp = Win::current();
+    let wp = Win::current();
     ARGLIST_LOCKED.set(true);
-    wp.w_locked = true;
+    wp.set_w_locked(true);
     let fnum = if set_fnum > 0 {
         let flags = BLN_LISTED | if set_fnum == 2 { BLN_CURBUF } else { 0 };
         buflist_add_name(Some(name.as_cstr()), LineNr::ZERO, flags).map(|buf| buf.handle())
     } else {
         None
     };
-    wp.w_locked = false;
+    wp.set_w_locked(false);
     ARGLIST_LOCKED.set(false);
     with_list(id, |al| al.entries.push(ArgEntry { name, fnum }));
 }
@@ -409,7 +409,7 @@ pub(crate) fn expand_arglist(text: &[u8], wildignore: bool) -> Result<Vec<XStrin
 /// Re-check `w_arg_idx` in every window sharing the current window's list.
 fn alist_check_arg_idx() {
     let alist = cur_alist();
-    for win in tab_windows().filter(|win| win.w_alist == alist) {
+    for win in tab_windows().filter(|win| win.w_alist() == alist) {
         check_arg_idx(win);
     }
 }
@@ -421,12 +421,12 @@ fn alist_add_list(files: Vec<XString>, after: c_int, will_edit: bool) {
     if arglist_is_locked() {
         return;
     }
-    let mut wp = Win::current();
+    let wp = Win::current();
     let flags = BLN_LISTED | if will_edit { BLN_CURBUF } else { 0 };
     let after = after.clamp(0, argcount());
     let count = count_of(files.len());
     ARGLIST_LOCKED.set(true);
-    wp.w_locked = true;
+    wp.set_w_locked(true);
     // The entries are built before any of them joins the list, so the
     // autocommands `buflist_add` may run see the list they started with.
     let added: Vec<ArgEntry> = files
@@ -438,15 +438,15 @@ fn alist_add_list(files: Vec<XString>, after: c_int, will_edit: bool) {
         })
         .collect();
     ARGLIST_LOCKED.set(false);
-    wp.w_locked = false;
+    wp.set_w_locked(false);
     // The window's list, found again now that the autocommands are done.
     let at = as_count(after);
-    with_list(wp.w_alist, |al| {
+    with_list(wp.w_alist(), |al| {
         let at = at.min(al.entries.len());
         al.entries.splice(at..at, added);
     });
-    if old_argcount > 0 && wp.w_arg_idx >= after {
-        wp.w_arg_idx += count;
+    if old_argcount > 0 && wp.w_arg_idx() >= after {
+        wp.set_w_arg_idx(wp.w_arg_idx() + count);
     }
 }
 
@@ -566,11 +566,11 @@ pub(crate) fn set_arglist(arg: &[u8]) {
 
 /// Is `win` editing the file at its own argument index?
 pub fn editing_arg_idx(win: Win) -> bool {
-    let Ok(idx) = usize::try_from(win.w_arg_idx) else {
+    let Ok(idx) = usize::try_from(win.w_arg_idx()) else {
         return false;
     };
     let buf = win.buffer();
-    with_list(win.w_alist, |al| {
+    with_list(win.w_alist(), |al| {
         al.entries
             .get(idx)
             .is_some_and(|entry| holds_entry(buf, entry))
@@ -581,23 +581,23 @@ pub fn editing_arg_idx(win: Win) -> bool {
 /// Refresh `win`'s "am I on the argument I think I am" state, and remember
 /// when the last argument has been reached — `ARG_HAD_LAST` is how `:next`
 /// knows there is nothing after it.
-pub fn check_arg_idx(mut win: Win) {
-    let (editing, idx) = (editing_arg_idx(win), win.w_arg_idx);
+pub fn check_arg_idx(win: Win) {
+    let (editing, idx) = (editing_arg_idx(win), win.w_arg_idx());
     if wargcount(win) <= 1 || editing {
         // Editing the current entry: `ARG_HAD_LAST` if it is the last.
-        win.w_arg_idx_invalid = false;
-        if idx == wargcount(win) - 1 && win.w_alist == ArgListId::GLOBAL {
+        win.set_w_arg_idx_invalid(false);
+        if idx == wargcount(win) - 1 && win.w_alist() == ArgListId::GLOBAL {
             ARG_HAD_LAST.set(true);
         }
         return;
     }
     // Not editing the current entry, so `ARG_HAD_LAST` only if this buffer
     // is the *last* global argument.
-    win.w_arg_idx_invalid = true;
+    win.set_w_arg_idx_invalid(true);
     let gcount = alist_count(ArgListId::GLOBAL);
     if idx == wargcount(win) - 1
         || ARG_HAD_LAST.get()
-        || win.w_alist != ArgListId::GLOBAL
+        || win.w_alist() != ArgListId::GLOBAL
         || gcount <= 0
         || idx >= gcount
     {

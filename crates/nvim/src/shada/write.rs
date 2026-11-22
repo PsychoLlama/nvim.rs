@@ -470,7 +470,7 @@ impl Writing<'_> {
     fn update_numbered_marks(&mut self) {
         if !self.limits.global_marks
             || ignore_buf(Buf::current_or_none(), &self.removable_bufs)
-            || Win::current().w_cursor.lnum == LineNr::ZERO
+            || Win::current().cursor().lnum() == LineNr::ZERO
         {
             return;
         }
@@ -479,7 +479,7 @@ impl Writing<'_> {
             os_time(),
             ShadaEntryData::GlobalMark(ShadaFileMark {
                 name: b'0'.cast_signed(),
-                mark: Win::current().w_cursor,
+                mark: Win::current().w_cursor(),
                 fname: fname.expect("an ignored buffer has a name"),
             }),
         );

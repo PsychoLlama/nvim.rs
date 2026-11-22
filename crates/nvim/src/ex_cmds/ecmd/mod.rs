@@ -344,8 +344,8 @@ fn edit(
             Switch::Abandon => return Err(Failed),
             Switch::Ready => {}
         }
-        Win::current().w_pcmark.lnum = LineNr::ONE;
-        Win::current().w_pcmark.col = ColNr::ZERO;
+        Win::current().edit().w_pcmark.lnum = LineNr::ONE;
+        Win::current().edit().w_pcmark.col = ColNr::ZERO;
     } else if args.flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) || check_fname().is_err() {
         return Err(Failed);
     } else {
@@ -462,14 +462,14 @@ fn finish_window(command: Option<&CStr>, state: &Ecmd) {
     // Tell the diff stuff that this buffer is new and/or needs updating.
     // Also needed when re-editing the same buffer, because unloading will
     // have removed it as a diff buffer.
-    if Win::current().w_onebuf_opt.wo_diff != 0 {
+    if Win::current().wo_diff() != 0 {
         diff_buf_add(Buf::current());
         diff_invalidate(Buf::current());
     }
     // If the window options were changed we may need to set the spell
     // language.  Can only be done once the buffer is properly set up.
     if state.did_get_winopts
-        && Win::current().w_onebuf_opt.wo_spell != 0
+        && Win::current().wo_spell() != 0
         && c_int::from(Win::current().syntax().read().b_p_spl.first_byte()) != 0
     {
         let _ = parse_spelllang(Win::current());
@@ -550,8 +550,8 @@ fn resolve_target(
 fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     set_last_cursor(Win::current());
     if state.newlnum == newlnum::LAST as LineNr || state.newlnum == newlnum::LASTL as LineNr {
-        state.newlnum = Win::current().w_cursor.lnum;
-        state.solcol = Win::current().w_cursor.col.get();
+        state.newlnum = Win::current().cursor().lnum();
+        state.solcol = Win::current().cursor().col().get();
     }
     let buf = Buf::current();
     // The buffer's own file name; see [`switch`]'s copy for why it is owned
@@ -625,7 +625,7 @@ fn enter_new_buffer(
     // It's possible that all lines in the buffer changed.  Need to update
     // automatic folding for all windows where it's used.
     for win in tab_windows() {
-        if win.w_buffer.is_current() {
+        if win.w_buffer().is_current() {
             fold_update_all(win);
         }
     }
@@ -635,8 +635,8 @@ fn enter_new_buffer(
 
     // Careful: open_buffer() and apply_autocmds() may change the current
     // buffer and window.
-    let orig_pos = Win::current().w_cursor;
-    state.topline = Win::current().w_topline;
+    let orig_pos = Win::current().w_cursor();
+    state.topline = Win::current().w_topline();
     if !state.oldbuf {
         // need to read the file
         SWAP_EXISTS_ACTION.set(SEA_DIALOG);
@@ -673,15 +673,15 @@ fn enter_new_buffer(
     // If autocommands change the cursor position or topline, we should keep
     // it.  Also when it moves within a line.  But not when it moves to the
     // first non-blank.
-    if !equalpos(Win::current().w_cursor, orig_pos) {
-        let cursor = Win::current().w_cursor;
+    if !equalpos(Win::current().w_cursor(), orig_pos) {
+        let cursor = Win::current().w_cursor();
         let first_nonblank = skip::white(Lines::current().line(cursor.lnum));
         if cursor.lnum != orig_pos.lnum || cursor.col != ColNr::from_index(first_nonblank) {
-            state.newlnum = Win::current().w_cursor.lnum;
-            state.newcol = Win::current().w_cursor.col.get();
+            state.newlnum = Win::current().cursor().lnum();
+            state.newcol = Win::current().cursor().col().get();
         }
     }
-    if Win::current().w_topline == state.topline {
+    if Win::current().w_topline() == state.topline {
         state.topline = LineNr::ZERO;
     }
 
@@ -695,26 +695,28 @@ fn enter_new_buffer(
 fn place_cursor(state: &Ecmd) {
     if state.newcol >= 0 {
         // position set by autocommands
-        Win::current().w_cursor.lnum = state.newlnum;
-        Win::current().w_cursor.col = ColNr::new(state.newcol);
+        Win::current().cursor().set_lnum(state.newlnum);
+        Win::current().cursor().set_col(ColNr::new(state.newcol));
         check_cursor(Win::current());
     } else if state.newlnum > LineNr::ZERO {
         // line number from caller or old position
-        Win::current().w_cursor.lnum = state.newlnum;
+        Win::current().cursor().set_lnum(state.newlnum);
         check_cursor_lnum(Win::current());
         if state.solcol >= 0 && !p_sol() {
             // 'sol' is off: use the last known column.
-            Win::current().w_cursor.col = ColNr::new(state.solcol);
+            Win::current().cursor().set_col(ColNr::new(state.solcol));
             check_cursor_col(Win::current());
-            Win::current().w_cursor.coladd = 0;
-            Win::current().w_set_curswant = true;
+            Win::current().cursor().set_coladd(0);
+            Win::current().set_w_set_curswant(true);
         } else {
             beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
         }
     } else {
         // no line number, go to last line in Ex mode
         if EXMODE_ACTIVE.get() {
-            Win::current().w_cursor.lnum = Buf::current().line_count();
+            Win::current()
+                .cursor()
+                .set_lnum(Buf::current().line_count());
         }
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
@@ -756,8 +758,11 @@ fn recenter(so: ScrollOff, topline: LineNr, has_command: bool) {
         so.set(999);
     }
     update_topline(Win::current());
-    Win::current().w_scbind_pos =
-        plines_m_win_fill(Win::current(), LineNr::ONE, Win::current().w_topline);
+    Win::current().set_w_scbind_pos(plines_m_win_fill(
+        Win::current(),
+        LineNr::ONE,
+        Win::current().w_topline(),
+    ));
     so.set(n);
     // redraw this buffer later
     redraw_curbuf_later(UPD_NOT_VALID);

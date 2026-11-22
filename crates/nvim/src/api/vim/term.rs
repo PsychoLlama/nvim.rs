@@ -50,8 +50,8 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
         ChannelStream::Internal(InternalState { cb, closed: false })
     });
     let (view_width, view_height, col_off) = (
-        Win::current().w_view_width,
-        Win::current().w_view_height,
+        Win::current().w_view_width(),
+        Win::current().w_view_height(),
         Win::current().col_off(),
     );
     let topts: TerminalOptions = TerminalOptions {

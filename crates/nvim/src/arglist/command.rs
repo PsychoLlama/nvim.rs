@@ -42,7 +42,7 @@ pub fn ex_args(excmd: &mut ExArg) {
         // list.
         alist_unlink(cur_alist());
         if cmdidx == CmdIdx::argglobal {
-            Win::current().w_alist = ArgListId::GLOBAL;
+            Win::current().set_w_alist(ArgListId::GLOBAL);
         } else {
             alist_new();
         }
@@ -173,8 +173,8 @@ pub fn do_argfile(excmd: &mut ExArg, argn: c_int) {
             return;
         }
         // RESET_BINDING: the new window scrolls and cursors on its own.
-        Win::current().w_onebuf_opt.wo_scb = c_int::from(false);
-        Win::current().w_onebuf_opt.wo_crb = c_int::from(false);
+        Win::current().set_wo_scb(c_int::from(false));
+        Win::current().set_wo_crb(c_int::from(false));
     } else if !can_leave_curbuf(argn, forceit) {
         return;
     }

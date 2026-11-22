@@ -100,7 +100,7 @@ fn last_set(opt_idx: OptIndex, opt_flags: OptionSetFlags, buffer: Buf, win: Win)
     }
     if option_has_scope(opt_idx, OPT_SCOPE_WIN) {
         let idx = opt.scope_idx[OPT_SCOPE_WIN as usize].cast_unsigned();
-        script_ctx = win.w_onebuf_opt.wo_script_ctx[idx];
+        script_ctx = win.read().w_onebuf_opt.wo_script_ctx[idx];
     }
     if opt_flags != OptionSetFlags::LOCAL && script_ctx.sc_sid == 0 {
         script_ctx = option_last_set(opt_idx);

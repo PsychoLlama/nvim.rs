@@ -348,20 +348,20 @@ impl ExArg<'_> {
         } else {
             // A `:split` with no file name: the window is already there.
             run_ecmd_cmd(self);
-            let was_invalid = Win::current().w_arg_idx_invalid;
+            let was_invalid = Win::current().w_arg_idx_invalid();
             check_arg_idx(Win::current());
-            if was_invalid != Win::current().w_arg_idx_invalid {
+            if was_invalid != Win::current().w_arg_idx_invalid() {
                 maketitle();
             }
         }
 
-        if let Some(mut old) = old_curwin.and_then(valid_win)
+        if let Some(old) = old_curwin.and_then(valid_win)
             && self.line.byte_at(self.line.arg) != 0
             && !old.is_current()
-            && !old.w_buffer.is_current()
+            && !old.w_buffer().is_current()
             && !cmdmod_has(CmdModFlags::KEEPALT)
         {
-            old.w_alt_fnum = Some(Buf::current().handle());
+            old.set_w_alt_fnum(Some(Buf::current().handle()));
         }
         EX_NO_REPRINT.set(true);
     }
@@ -442,8 +442,12 @@ pub(crate) fn ex_read(excmd: &mut ExArg) {
         };
         if ml_get_len(lnum) == ColNr::ZERO && u_savedel(lnum, 1).is_ok() {
             let _ = ml_delete(lnum);
-            if Win::current().w_cursor.lnum > LineNr::ONE && Win::current().w_cursor.lnum >= lnum {
-                Win::current().w_cursor.lnum -= 1;
+            if Win::current().cursor().lnum() > LineNr::ONE
+                && Win::current().cursor().lnum() >= lnum
+            {
+                Win::current()
+                    .cursor()
+                    .set_lnum(Win::current().cursor().lnum() - 1);
             }
             deleted_lines_mark(lnum, 1);
         }

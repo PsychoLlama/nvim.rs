@@ -40,7 +40,7 @@ impl SynState {
         self.buffer = buffer;
         self.current.sub_char = 0;
         let changedtick = buf_get_changedtick(buffer);
-        if self.parsed.map(SynBlockRef::raw) != Some(window.w_s)
+        if self.parsed.map(SynBlockRef::raw) != Some(window.w_s())
             || self.buf != buffer.try_id()
             || self.changedtick != changedtick
         {
@@ -365,7 +365,7 @@ pub(crate) fn syntax_end_parsing(window: Win, lnum: LineNr) {
         let Some(block) = parser.parsed else {
             return;
         };
-        if block.raw() != window.w_s {
+        if block.raw() != window.w_s() {
             return; // not the right window
         }
         let mut sp = block.read().b_sst.find(lnum);

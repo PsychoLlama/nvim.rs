@@ -40,14 +40,14 @@ impl Fixture {
     pub(crate) fn new() -> Fixture {
         let held = editor_state_lock();
         GOT_INT.set(false);
-        let mut window = bare_window();
+        let window = bare_window();
         window.make_current();
         let buffer = bare_buffer();
         buffer.make_current();
         // The current window shows the current buffer, as it always does in
         // the editor: a walk that reaches the buffer through the window
         // (`<buffer>`-local tables, `:command -buffer`) finds this one.
-        window.w_buffer = buffer;
+        window.set_w_buffer(buffer);
         P_MFD.set(100);
         // A message starts on a command line of its own rather than
         // scrolling a grid nobody sized.
@@ -204,7 +204,7 @@ impl Drop for Fixture {
         for (option, value) in self.saved.drain(..) {
             option.restore(value);
         }
-        self.window.w_buffer = Buf::NULL;
+        self.window.set_w_buffer(Buf::NULL);
         leave_curbuf();
         free_bare_buffer(self.buffer);
         leave_curwin();

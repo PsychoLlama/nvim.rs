@@ -140,7 +140,7 @@ pub fn did_set_breakindentopt(args: &mut OptSet) -> Result<(), OptError> {
     }
     // A window whose 'breakindentopt' asks for list indenting affects how
     // every other window's shared buffer wraps.
-    if for_window.is_some() && wp.w_briopt_list != 0 {
+    if for_window.is_some() && wp.w_briopt_list() != 0 {
         redraw_all_later(UPD_NOT_VALID);
     }
     Ok(())
@@ -182,7 +182,7 @@ pub fn did_set_guicursor(_args: &mut OptSet) -> Result<(), OptError> {
     parse_shape_opt(SHAPE_CURSOR)?;
     // The Visual-mode cursor shape is drawn as part of the line.
     if visual_active() {
-        redraw_win_line(Win::current(), Win::current().w_cursor.lnum);
+        redraw_win_line(Win::current(), Win::current().cursor().lnum());
     }
     Ok(())
 }
@@ -301,15 +301,15 @@ pub fn did_set_showcmdloc(args: &mut OptSet) -> Result<(), OptError> {
 }
 
 pub fn did_set_signcolumn(args: &mut OptSet) -> Result<(), OptError> {
-    let (mut wp, varp) = (win(args), varp(args));
+    let (wp, varp) = (win(args), varp(args));
     let local = field!(WinOpt, wo_scl);
     if check_signcolumn(Some(new_bytes(args)), local_window(varp, wp, local)).is_err() {
         return invalid();
     }
     // "number" shares the sign column with the number column, so
     // leaving or entering it invalidates the cached number width.
-    if old_bytes(args).starts_with(b"nu") || wp.w_minscwidth == SCL_NUM {
-        wp.w_nrwidth_line_count = LineNr::ZERO;
+    if old_bytes(args).starts_with(b"nu") || wp.w_minscwidth() == SCL_NUM {
+        wp.set_w_nrwidth_line_count(LineNr::ZERO);
     }
     Ok(())
 }
@@ -317,14 +317,14 @@ pub fn did_set_signcolumn(args: &mut OptSet) -> Result<(), OptError> {
 /// 'virtualedit' keeps a mask beside its string, and the window-local one
 /// uses an empty value to mean "no override" rather than "no virtual edit".
 pub fn did_set_virtualedit(args: &mut OptSet) -> Result<(), OptError> {
-    let mut wp = win(args);
+    let wp = win(args);
     let local = args.os_flags.has(OptionSetFlags::LOCAL);
     // The variable being set is the window's own copy for `:setlocal` and
     // the global one otherwise -- which is the value the frame holds.
     let value = new_bytes(args);
-    let mut store = |mask: c_uint| {
+    let store = |mask: c_uint| {
         if local {
-            wp.w_onebuf_opt.wo_ve_flags = mask;
+            wp.set_wo_ve_flags(mask);
         } else {
             VE_FLAGS.set(mask);
         }
@@ -341,7 +341,7 @@ pub fn did_set_virtualedit(args: &mut OptSet) -> Result<(), OptError> {
     if value != old_bytes(args) {
         // What column the cursor may sit in just changed.
         validate_virtcol(wp);
-        coladvance(wp, wp.w_virtcol);
+        coladvance(wp, wp.w_virtcol());
     }
     Ok(())
 }

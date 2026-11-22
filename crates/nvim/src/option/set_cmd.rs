@@ -174,8 +174,7 @@ impl Win {
                 return refuse(E_MODELINE_NEEDS_MODELINEEXPR);
             }
             // A modeline must not undo what `:diffthis` set up.
-            if self.w_onebuf_opt.wo_diff != 0 && (opt_idx == OPT_FOLDMETHOD || opt_idx == OPT_WRAP)
-            {
+            if self.wo_diff() != 0 && (opt_idx == OPT_FOLDMETHOD || opt_idx == OPT_WRAP) {
                 return Err(Refusal::Skipped);
             }
         }
@@ -479,7 +478,8 @@ fn show_one(opt_idx: OptIndex, opt_flags: OptionSetFlags, varp: OptSlot, did_sho
         last_set_msg(option_last_set(opt_idx));
     } else if option_has_scope(opt_idx, OPT_SCOPE_WIN) {
         let at = option_scope_idx(opt_idx, OPT_SCOPE_WIN).cast_unsigned();
-        last_set_msg(Win::current().w_onebuf_opt.wo_script_ctx[at]);
+        let ctx = Win::current().read().w_onebuf_opt.wo_script_ctx[at];
+        last_set_msg(ctx);
     } else if option_has_scope(opt_idx, OPT_SCOPE_BUF) {
         let at = option_scope_idx(opt_idx, OPT_SCOPE_BUF).cast_unsigned();
         let arg = Buf::current().read().b_p_script_ctx[at];

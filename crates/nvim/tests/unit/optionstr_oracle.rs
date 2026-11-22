@@ -549,8 +549,7 @@ fn glyph(sc: ScreenChar) -> String {
 /// [`LIST_LINE`] with them.
 fn glyphs(fx: &Probe) -> Vec<u8> {
     let win = Win::current();
-    let lcs = &win.w_p_lcs_chars;
-    let fcs = &win.w_p_fcs_chars;
+    let (lcs, fcs) = &win.glyph_tables();
     let mut out = String::new();
     for c in [
         lcs.eol,

@@ -600,13 +600,14 @@ impl Win {
     /// When `w_s` names neither (a window between buffers).
     #[track_caller]
     pub(crate) fn syntax(self) -> SynBlockRef {
-        let at = self.w_s;
-        let buffer = self.w_buffer;
+        let at = self.w_s();
+        let buffer = self.w_buffer();
         if !buffer.is_null() && core::ptr::eq(at, buffer.syntax_block()) {
             return buffer.syntax();
         }
         assert!(
-            self.w_own_syntax
+            self.read()
+                .w_own_syntax
                 .as_deref()
                 .is_some_and(|own| core::ptr::eq(own, at)),
             "a window's w_s is its buffer's block or its own"
@@ -686,10 +687,10 @@ mod tests {
     #[test]
     fn a_window_and_its_buffer_share_one_syntax_block() {
         let _held = editor_state_lock();
-        let mut win = bare_window();
+        let win = bare_window();
         let buffer = bare_buffer();
-        win.w_buffer = buffer;
-        win.w_s = buffer.syntax_block();
+        win.set_w_buffer(buffer);
+        win.set_w_s(buffer.syntax_block());
         let through_window = win.syntax();
         let through_buffer = buffer.syntax();
         assert_eq!(through_window, through_buffer);
@@ -698,7 +699,7 @@ mod tests {
         win.set_syn_error();
         assert!(buffer.syntax().read().b_syn_error);
         assert_eq!(win.syn_block().b_syn_ic, 1);
-        win.w_s = ::core::ptr::null_mut();
+        win.set_w_s(::core::ptr::null_mut());
         free_bare_window(win);
         free_bare_buffer(buffer);
     }
@@ -708,21 +709,22 @@ mod tests {
     #[test]
     fn an_ownsyntax_block_is_reached_through_its_window() {
         let _held = editor_state_lock();
-        let mut win = bare_window();
+        let win = bare_window();
         let buffer = bare_buffer();
-        win.w_buffer = buffer;
+        win.set_w_buffer(buffer);
         let own: *mut crate::types::SynBlock = &mut **win
+            .edit()
             .w_own_syntax
             .insert(Box::new(crate::types::SynBlock::new()));
-        win.w_s = own;
+        win.set_w_s(own);
         let block = win.syntax();
         assert_ne!(block, buffer.syntax());
         assert_eq!(block.raw(), own);
         block.edit().b_syn_ic = 1;
         assert_eq!(buffer.syntax().read().b_syn_ic, 0);
         assert_eq!(win.syn_block().b_syn_ic, 1);
-        win.w_s = ::core::ptr::null_mut();
-        win.w_own_syntax = None;
+        win.set_w_s(::core::ptr::null_mut());
+        win.edit().w_own_syntax = None;
         free_bare_window(win);
         free_bare_buffer(buffer);
     }

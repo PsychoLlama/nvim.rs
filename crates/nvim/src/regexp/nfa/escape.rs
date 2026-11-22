@@ -259,11 +259,11 @@ fn position_atom(rc: &mut RegCompiler, cmp: c_int, save_prev_at_start: c_int) ->
 }
 
 fn cursor_lnum() -> i64 {
-    i64::from(Win::current().w_cursor.lnum)
+    i64::from(Win::current().cursor().lnum())
 }
 
 fn cursor_col() -> i64 {
-    i64::from(Win::current().w_cursor.col)
+    i64::from(Win::current().cursor().col())
 }
 
 fn cursor_vcol() -> i64 {

@@ -166,13 +166,13 @@ pub fn garbage_collect(testing: bool) -> bool {
 
     // window-local variables, in every tab page
     for wp in tab_windows() {
-        abort = abort || mark_root(&wp.w_winvar.di_tv, copy_id);
+        abort = abort || mark_root(&wp.read().w_winvar.di_tv, copy_id);
     }
 
     // window-local variables in the autocommand windows
     for i in 0..aucmd_win_count() {
         if let Some(win) = aucmd_window(i) {
-            abort = abort || mark_root(&win.w_winvar.di_tv, copy_id);
+            abort = abort || mark_root(&win.read().w_winvar.di_tv, copy_id);
         }
     }
 

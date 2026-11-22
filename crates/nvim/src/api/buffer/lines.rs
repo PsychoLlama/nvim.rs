@@ -219,7 +219,7 @@ pub fn nvim_buf_set_lines(
         );
         changed_lines(buffer, start, ColNr::ZERO, end, extra, true);
         for win in tab_windows() {
-            if win.w_buffer == buffer {
+            if win.w_buffer() == buffer {
                 fix_cursor(win, start, end, extra);
             }
         }

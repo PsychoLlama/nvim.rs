@@ -328,7 +328,7 @@ fn dbg_parsearg(arg: &[u8], list: BreakList) -> Result<Breakpoint, Failed> {
 
     // An optional line number, which only the debugger's own list accepts.
     let lnum = if here {
-        Win::current().w_cursor.lnum
+        Win::current().cursor().lnum()
     } else if debugger && arg.get(at).is_some_and(u8::is_ascii_digit) {
         let (lnum, len) = digits_saturated(&arg[at..]);
         at = skip::white_from(arg, at + len);

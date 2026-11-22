@@ -114,13 +114,13 @@ impl SynBlock {
 /// The window's own block is dropped even when `w_s` no longer points at
 /// it -- a buffer switch re-points `w_s` without asking -- where upstream
 /// lost track of it.
-pub(crate) fn reset_synblock(mut window: Win) {
+pub(crate) fn reset_synblock(window: Win) {
     let own = window.buffer().syntax_block();
-    if window.w_s != own {
+    if window.w_s() != own {
         syntax_clear(window.syntax());
-        window.w_s = own;
+        window.set_w_s(own);
     }
-    window.w_own_syntax = None;
+    window.edit().w_own_syntax = None;
 }
 
 /// Clear the syncing info for the current window's block.

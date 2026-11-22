@@ -103,7 +103,7 @@ fn call_function_with(
 
     let _nesting = enter_recursive(&RECURSIVE);
     let mut rettv: TypVal = TV_INITIAL_VALUE;
-    let lnum = Win::current().w_cursor.lnum;
+    let lnum = Win::current().cursor().lnum();
     let with = CallWith {
         firstline: lnum,
         lastline: lnum,

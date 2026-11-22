@@ -64,7 +64,7 @@ pub fn nvim_get_hl_ns(opts: &mut KeyDict_get_ns) -> Result<Integer, Error> {
     let Some(win) = find_window_by_handle(winid)? else {
         return Ok(0 as Integer);
     };
-    Ok(Integer::from(win.w_ns_hl))
+    Ok(Integer::from(win.w_ns_hl()))
 }
 
 pub fn nvim_set_hl_ns(ns_id: Integer) -> Result<(), Error> {

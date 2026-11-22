@@ -204,7 +204,9 @@ fn split_carriage_returns(st: &mut Sub, at: usize) {
                 st.lnum += 1;
                 st.line2 += 1;
                 // Move the cursor to the new line, like Vi.
-                Win::current().w_cursor.lnum += 1;
+                Win::current()
+                    .cursor()
+                    .set_lnum(Win::current().cursor().lnum() + 1);
                 // Restart from the beginning of what is left.
                 at = 0;
             } else {
@@ -300,7 +302,7 @@ pub(super) fn build_replacement(
 
     // Move the cursor to the start of the line, to avoid it being beyond the
     // end of the line after the substitution.
-    Win::current().w_cursor.col = ColNr::ZERO;
+    Win::current().cursor().set_col(ColNr::ZERO);
 
     // Remember the next character to be copied.
     st.copied = st.regmatch.endpos[0].col.as_usize();

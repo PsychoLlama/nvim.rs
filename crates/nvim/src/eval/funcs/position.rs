@@ -193,8 +193,7 @@ pub fn f_line(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
                 // and 'splitkeep' decides whether that is allowed to scroll
                 // it. Diff-mode windows are always exempt because their
                 // scroll is bound to this one's.
-                let both_diff =
-                    wp.w_onebuf_opt.wo_diff != 0 && Win::current().w_onebuf_opt.wo_diff != 0;
+                let both_diff = wp.wo_diff() != 0 && Win::current().wo_diff() != 0;
                 if P_SPK.first_byte() != b'c' || both_diff {
                     SKIP_UPDATE_TOPLINE.set(true);
                 }
@@ -242,9 +241,9 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
             // `getcurpos()` on a window that does not exist answers 0
             // for 'curswant' rather than the current window's.
             wp = find_win_by_nr_or_id(&args[0]);
-            wp.map(|wp| wp.w_cursor)
+            wp.map(|wp| wp.w_cursor())
         } else {
-            Some(Win::current().w_cursor)
+            Some(Win::current().w_cursor())
         };
         if let Some(pos) = &mut fp
             && charcol
@@ -283,14 +282,14 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
 /// that recomputation touches are put back, and the cached virtual column
 /// invalidated so the next reader recomputes it properly.
 fn append_curswant(l: &mut List, window: Option<Win>) {
-    let mut cur = Win::current();
-    let saved_set_curswant = cur.w_set_curswant;
-    let saved_curswant = cur.w_curswant;
-    let saved_virtcol = cur.w_virtcol;
+    let cur = Win::current();
+    let saved_set_curswant = cur.w_set_curswant();
+    let saved_curswant = cur.w_curswant();
+    let saved_virtcol = cur.w_virtcol();
     if window == Some(cur) {
         update_curswant();
     }
-    let curswant = match window.map(|w| w.w_curswant) {
+    let curswant = match window.map(|w| w.w_curswant()) {
         None => 0,
         Some(END_OF_LINE) => VarNumber::from(MAXCOL),
         Some(want) => i64::from(want) + 1,
@@ -299,10 +298,10 @@ fn append_curswant(l: &mut List, window: Option<Win>) {
     // Only restored when 'curswant' was due to be recomputed anyway:
     // if it was already valid, `update_curswant` did not change it.
     if window == Some(cur) && saved_set_curswant {
-        cur.w_set_curswant = saved_set_curswant;
-        cur.w_curswant = saved_curswant;
-        cur.w_virtcol = saved_virtcol;
-        cur.w_valid -= WinValid::VIRTCOL;
+        cur.set_w_set_curswant(saved_set_curswant);
+        cur.set_w_curswant(saved_curswant);
+        cur.set_w_virtcol(saved_virtcol);
+        cur.set_w_valid(cur.w_valid().without(WinValid::VIRTCOL));
     }
 }
 
@@ -329,7 +328,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
             return;
         }
         if curswant >= ColNr::ZERO {
-            Win::current().w_curswant = curswant - 1;
+            Win::current().set_w_curswant(curswant - 1);
             set_curswant = false;
         }
         (pos.lnum, pos.col, pos.coladd)
@@ -345,7 +344,7 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
             let what = msg_cstr(numbuf.string(&args[0]));
             semsg!("E475: Invalid argument: {what}");
         } else if lnum == LineNr::ZERO {
-            lnum = Win::current().w_cursor.lnum;
+            lnum = Win::current().cursor().lnum();
         }
         let mut col = number_as_col(arg_number_chk(&args[1], None));
         if charcol {
@@ -366,18 +365,18 @@ fn set_cursorpos(args: &[TypVal], result: &mut TypVal, charcol: bool) {
         return;
     }
     if lnum > LineNr::ZERO {
-        Win::current().w_cursor.lnum = lnum;
+        Win::current().cursor().set_lnum(lnum);
     }
     // The column is one-based on the way in, except for MAXCOL which
     // means "end of line" and is passed through.
     if col != END_OF_LINE {
         col = (col - 1).max(ColNr::ZERO);
     }
-    Win::current().w_cursor.col = col;
-    Win::current().w_cursor.coladd = coladd;
+    Win::current().cursor().set_col(col);
+    Win::current().cursor().set_coladd(coladd);
     check_cursor(Win::current());
     mb_adjust_cursor();
-    Win::current().w_set_curswant = set_curswant;
+    Win::current().set_w_set_curswant(set_curswant);
     result.write_number(0);
 }
 
@@ -409,10 +408,10 @@ fn set_position(args: &[TypVal], result: &mut TypVal, charpos: bool) {
     }
     match name {
         b"." => {
-            Win::current().w_cursor = pos;
+            Win::current().set_w_cursor(pos);
             if curswant >= ColNr::ZERO {
-                Win::current().w_curswant = curswant - 1;
-                Win::current().w_set_curswant = false;
+                Win::current().set_w_curswant(curswant - 1);
+                Win::current().set_w_set_curswant(false);
             }
             check_cursor(Win::current());
             result.write_number(0);

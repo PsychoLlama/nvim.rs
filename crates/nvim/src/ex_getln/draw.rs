@@ -49,7 +49,7 @@ pub fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
     // product, which reads as negative.
     let m = if KEY_TYPED.get() {
         let cells = match cmdline_window() {
-            Some(w) => w.w_view_width * w.w_view_height,
+            Some(w) => w.w_view_width() * w.w_view_height(),
             None => COLUMNS.get() * ROWS.get(),
         };
         if cells < 0 { MAXCOL } else { cells }
@@ -397,7 +397,11 @@ pub fn compute_cmdrow() {
     } else {
         let wp = lastwin_nofloating(None);
         CMDLINE_ROW.set(
-            wp.w_winrow + wp.w_height + wp.w_hsep_height + wp.w_status_height + global_stl_height(),
+            wp.w_winrow()
+                + wp.w_height()
+                + wp.w_hsep_height()
+                + wp.w_status_height()
+                + global_stl_height(),
         );
     }
     if CMDLINE_ROW.get() == ROWS.get() && p_ch() > 0 {

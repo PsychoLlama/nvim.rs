@@ -160,7 +160,7 @@ fn read_pattern(
             sub: Some(previous),
             which_pat,
             has_second_delim: false,
-            endcolumn: Win::current().w_curswant == ColNr::MAX,
+            endcolumn: Win::current().w_curswant() == ColNr::MAX,
             flags_at: at,
         });
     }

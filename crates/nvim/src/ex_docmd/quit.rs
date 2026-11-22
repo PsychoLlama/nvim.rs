@@ -291,7 +291,7 @@ fn numbered_window(nr: i32) -> Win {
 /// `:pclose` — close the preview window, wherever it is.
 pub(crate) fn ex_pclose(excmd: &mut ExArg) {
     for win in windows() {
-        if win.w_onebuf_opt.wo_pvw != 0 {
+        if win.wo_pvw() != 0 {
             ex_win_close(c_int::from(excmd.forceit), win, None);
             return;
         }
@@ -311,7 +311,7 @@ pub(crate) fn ex_win_close(forceit: c_int, win: Win, tabpage: Option<TabPage>) {
     }
     // A floating window is not part of the layout, so a locked layout
     // does not protect it.
-    if !win.w_floating && window_layout_locked(CmdIdx::close) {
+    if !win.w_floating() && window_layout_locked(CmdIdx::close) {
         return;
     }
 
@@ -438,7 +438,7 @@ pub fn tabpage_close(forceit: c_int) {
     // A float that refuses to close (a changed buffer without `!`, the
     // autocommand window) stays current: the tab page stays too. Upstream
     // loops here for good.
-    while Win::current().w_floating {
+    while Win::current().w_floating() {
         let float = Win::current();
         ex_win_close(forceit, float, None);
         if float.is_live() && float.is_current() {
@@ -535,7 +535,7 @@ pub(crate) fn ex_hide(excmd: &mut ExArg) {
     } else {
         numbered_window(excmd.number2)
     };
-    if !win.w_floating && window_layout_locked(CmdIdx::hide) {
+    if !win.w_floating() && window_layout_locked(CmdIdx::hide) {
         return;
     }
     let _ = win_close(win, false, excmd.forceit);

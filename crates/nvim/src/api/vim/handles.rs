@@ -68,14 +68,14 @@ pub fn nvim_list_wins() -> Array {
     let n: size_t = tab_windows().count();
     let mut rv = Vec::with_capacity(n);
     for win in tab_windows() {
-        rv.push(Object::window(win.handle));
+        rv.push(Object::window(win.handle()));
     }
     rv.into()
 }
 
 /// The current window's handle.
 pub fn nvim_get_current_win() -> WindowHandle {
-    Win::current().handle
+    Win::current().handle()
 }
 
 /// Make `win` the current window, entering its tab page if need be.
@@ -84,7 +84,7 @@ pub fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
         return Ok(());
     };
     api_try(|| {
-        if !w.w_buffer.is_current() {
+        if !w.w_buffer().is_current() {
             reset_visual_and_resel();
         }
         // Ending Visual mode fires `ModeChanged`, whose autocommand may

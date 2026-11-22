@@ -327,13 +327,14 @@ pub(crate) fn ex_syntax(excmd: &mut ExArg) {
 ///
 /// Upstream marks this `@deprecated`.
 pub(crate) fn ex_ownsyntax(excmd: &mut ExArg) {
-    if Win::current().w_s == Win::current().buffer().syntax_block() {
+    if Win::current().w_s() == Win::current().buffer().syntax_block() {
         // The window owns the block; `w_s` names it, as it names a buffer's.
-        let mut window = Win::current();
-        let block: *mut SynBlock = &mut **window.w_own_syntax.insert(Box::new(SynBlock::new()));
-        window.w_s = block;
+        let window = Win::current();
+        let block: *mut SynBlock =
+            &mut **window.edit().w_own_syntax.insert(Box::new(SynBlock::new()));
+        window.set_w_s(block);
         // TODO(vim): Keep the spell checking as it was.
-        Win::current().w_onebuf_opt.wo_spell = 0; // No spell checking
+        Win::current().set_wo_spell(0); // No spell checking
         // Upstream replaces the block's five NULL option values with the
         // shared empty string here; a fresh block's are already `None`,
         // which *is* that value.

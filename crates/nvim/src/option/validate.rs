@@ -119,7 +119,7 @@ pub(crate) fn check_num_option_bounds(
             }
         }
         OPT_SCROLL => {
-            let height = Win::current().w_view_height;
+            let height = Win::current().w_view_height();
             if (*newval <= 0 || (*newval > OptInt::from(height) && height > 0)) && FULL_SCREEN.get()
             {
                 // Zero is how `:set scroll=0` asks for the default, so

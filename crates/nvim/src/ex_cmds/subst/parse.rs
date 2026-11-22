@@ -162,7 +162,7 @@ impl ExArg<'_> {
             return true;
         }
 
-        Win::current().w_cursor.lnum = self.line1;
+        Win::current().cursor().set_lnum(self.line1);
         self.flags = match flags.first() {
             Some(b'l') => EXFLAG_LIST,
             Some(b'#') => EXFLAG_NR,

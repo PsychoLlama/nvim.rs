@@ -117,9 +117,9 @@ pub(crate) fn ex_normal(excmd: &mut ExArg) {
             // With a range, the keys are run once per line, from the
             // first column.
             if excmd.addr_count != 0 {
-                Win::current().w_cursor.lnum = excmd.line1;
+                Win::current().cursor().set_lnum(excmd.line1);
                 excmd.line1 += 1;
-                Win::current().w_cursor.col = ColNr::ZERO;
+                Win::current().cursor().set_col(ColNr::ZERO);
                 check_cursor_moved(Win::current());
             }
             exec_normal_cmd(keys, remap, false);
@@ -177,8 +177,8 @@ fn escape_k_special(src: &[u8]) -> Option<Vec<u8>> {
 /// `:startinsert`, `:startreplace` and `:startgreplace`.
 pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
     if excmd.forceit {
-        if Win::current().w_cursor.lnum == LineNr::ZERO {
-            Win::current().w_cursor.lnum = LineNr::ONE;
+        if Win::current().cursor().lnum() == LineNr::ZERO {
+            Win::current().cursor().set_lnum(LineNr::ONE);
         }
         set_cursor_for_append_to_line();
     }
@@ -199,7 +199,7 @@ pub(crate) fn ex_startinsert(excmd: &mut ExArg) {
         if idx == CmdIdx::startinsert {
             RESTART_EDIT.set(Key::ascii(b'i'));
         }
-        Win::current().w_curswant = ColNr::ZERO;
+        Win::current().set_w_curswant(ColNr::ZERO);
     }
     if visual_active() {
         showmode();

@@ -129,6 +129,6 @@ impl Win {
     /// even one of those keeps its number while it is the tab page's current
     /// window, which is the only way the cursor can be inside it.
     pub fn has_winnr(self, tabpage: TabPage) -> bool {
-        self == tabpage.curwin() || !self.w_config.hide && self.w_config.focusable
+        self == tabpage.curwin() || !self.config_hide() && self.read().w_config.focusable
     }
 }

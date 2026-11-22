@@ -259,18 +259,18 @@ pub fn f_soundfold(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// Both spelling builtins open this way, and both must put the window's own
 /// 'spell' back on every path out — including the error one.
 fn with_spell(body: impl FnOnce()) {
-    let mut win = Win::current();
-    let saved = win.w_onebuf_opt.wo_spell;
-    if win.w_onebuf_opt.wo_spell == 0 {
+    let win = Win::current();
+    let saved = win.wo_spell();
+    if win.wo_spell() == 0 {
         let _ = parse_spelllang(win);
-        win.w_onebuf_opt.wo_spell = 1;
+        win.set_wo_spell(1);
     }
     if win.syntax().read().b_p_spl.first_byte() == 0 {
         emsg(gettext(E_NO_SPELL));
     } else {
         body();
     }
-    win.w_onebuf_opt.wo_spell = saved;
+    win.set_wo_spell(saved);
 }
 
 /// `spellbadword([{sentence}])` — the first misspelling and why it is one.
@@ -286,11 +286,11 @@ pub fn f_spellbadword(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
         if args.is_empty() {
             let len = Win::current().spell_move_to(FORWARD, SMT_ALL, true, Some(&mut attr));
             if len != 0 {
-                let cursor = Win::current().w_cursor;
+                let cursor = Win::current().w_cursor();
                 let col = usize::try_from(cursor.col).unwrap_or(0);
                 let line = Lines::current().line(cursor.lnum).to_vec();
                 word = line[col..(col + len).min(line.len())].to_vec();
-                Win::current().w_set_curswant = true;
+                Win::current().set_w_set_curswant(true);
             }
         } else if Buf::current().read().b_s.b_p_spl.first_byte() != 0 {
             let text = numbuf.string_chk(&args[0]).ok();

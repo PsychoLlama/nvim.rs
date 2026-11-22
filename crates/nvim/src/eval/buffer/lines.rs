@@ -130,7 +130,7 @@ impl LinesInto {
                     && ml_replace_buf_text(Buf::current(), lnum, text).is_ok()
                 {
                     inserted_bytes(lnum, ColNr::ZERO, old_len.get(), len_as_int(text.len()));
-                    if is_curbuf && lnum == Win::current().w_cursor.lnum {
+                    if is_curbuf && lnum == Win::current().cursor().lnum() {
                         check_cursor_col(Win::current());
                     }
                     result.write_number(0);
@@ -150,12 +150,12 @@ impl LinesInto {
             appended_lines_mark(append_lnum, added);
             // Only the current window of the current buffer follows the
             // insertion; the others keep looking at the line they were on.
-            for mut wp in tab_windows() {
-                if Some(wp.w_buffer) == buffer
-                    && (!wp.w_buffer.is_current() || wp.is_current())
-                    && wp.w_cursor.lnum > append_lnum
+            for wp in tab_windows() {
+                if Some(wp.w_buffer()) == buffer
+                    && (!wp.w_buffer().is_current() || wp.is_current())
+                    && wp.cursor().lnum() > append_lnum
                 {
-                    wp.w_cursor.lnum += added;
+                    wp.cursor().set_lnum(wp.cursor().lnum() + added);
                 }
             }
             check_cursor_col(Win::current());
@@ -319,15 +319,15 @@ pub fn f_deletebufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
         }
         // Pull every cursor that was inside or after the deleted range
         // back onto a line that still exists.
-        for mut wp in tab_windows().filter(|wp| wp.w_buffer == buf) {
-            if wp.w_cursor.lnum > last {
-                wp.w_cursor.lnum -= count;
-            } else if wp.w_cursor.lnum > first {
-                wp.w_cursor.lnum = first;
+        for wp in tab_windows().filter(|wp| wp.w_buffer() == buf) {
+            if wp.cursor().lnum() > last {
+                wp.cursor().set_lnum(wp.cursor().lnum() - count);
+            } else if wp.cursor().lnum() > first {
+                wp.cursor().set_lnum(first);
             }
             let line_count = wp.buffer().line_count();
-            if wp.w_cursor.lnum > line_count {
-                wp.w_cursor.lnum = line_count;
+            if wp.cursor().lnum() > line_count {
+                wp.cursor().set_lnum(line_count);
             }
         }
         check_cursor_col(Win::current());

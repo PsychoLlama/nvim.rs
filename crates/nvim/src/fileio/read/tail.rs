@@ -50,11 +50,11 @@ pub(crate) fn report_and_place(
 
     // In Ex mode the cursor goes on the last new line, otherwise on the
     // first one.
-    Win::current().w_cursor.lnum = if EXMODE_ACTIVE.get() {
+    Win::current().cursor().set_lnum(if EXMODE_ACTIVE.get() {
         from + out.linecnt
     } else {
         from + 1
-    };
+    });
     check_cursor_lnum(Win::current());
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX); // first non-blank
 

@@ -81,11 +81,11 @@ pub(super) fn switch_to_other_buffer(
         args.flags,
         args.command,
     );
-    let prev_alt_fnum = Win::current().w_alt_fnum;
+    let prev_alt_fnum = Win::current().w_alt_fnum();
 
     if !flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) {
         if !cmdmod_has(CmdModFlags::KEEPALT) {
-            Win::current().w_alt_fnum = Some(Buf::current().handle());
+            Win::current().set_w_alt_fnum(Some(Buf::current().handle()));
         }
         if let Some(old) = oldwin.and_then(WinId::get) {
             buflist_altfpos(old);
@@ -113,7 +113,7 @@ pub(super) fn switch_to_other_buffer(
             BLN_LISTED | BLN_NOCURWIN,
         );
         if let Some(newbuf) = newbuf.filter(|_| flags.has(EcmdFlags::ALTBUF)) {
-            Win::current().w_alt_fnum = Some(newbuf.handle());
+            Win::current().set_w_alt_fnum(Some(newbuf.handle()));
         }
         return Switch::Abandon;
     } else {
@@ -145,20 +145,20 @@ pub(super) fn switch_to_other_buffer(
         // The window was split, but is not editing the new buffer; reset
         // b_nwindows again.
         if oldwin.is_none()
-            && !Win::current().w_buffer.is_null()
-            && Win::current().w_buffer.b_nwindows() > 1
+            && !Win::current().w_buffer().is_null()
+            && Win::current().w_buffer().b_nwindows() > 1
         {
             Win::current()
-                .w_buffer
-                .set_b_nwindows(Win::current().w_buffer.b_nwindows() - 1);
+                .w_buffer()
+                .set_b_nwindows(Win::current().w_buffer().b_nwindows() - 1);
         }
         emsg(gettext(E_CANNOT_SWITCH_TO_A_CLOSING_BUFFER));
         return Switch::Abandon;
     }
 
-    if Win::current().w_alt_fnum == Some(buffer.handle()) && prev_alt_fnum.is_some() {
+    if Win::current().w_alt_fnum() == Some(buffer.handle()) && prev_alt_fnum.is_some() {
         // reusing the buffer, keep the old alternate file
-        Win::current().w_alt_fnum = prev_alt_fnum;
+        Win::current().set_w_alt_fnum(prev_alt_fnum);
     }
 
     if buffer.ml().ml_mfp.is_none() {
@@ -266,7 +266,7 @@ fn leave_for_buffer(
 
     // Set w_locked to avoid that autocommands close the window.  Set
     // b_locked for the same reason.
-    Win::current().w_locked = true;
+    Win::current().set_w_locked(true);
     buffer.set_b_locked(buffer.b_locked() + 1);
 
     if old_curbuf.is(Buf::current_or_none()) {
@@ -284,13 +284,13 @@ fn leave_for_buffer(
     let did_decrement = close_buffer(win, Buf::current(), mode, false, false);
 
     // Autocommands may have closed the window; a stale id answers `None`.
-    if let Some(mut win) = valid_win(the_curwin) {
-        win.w_locked = false;
+    if let Some(win) = valid_win(the_curwin) {
+        win.set_w_locked(false);
     }
     buffer.set_b_locked(buffer.b_locked() - 1);
 
     // autocmds may abort script processing
-    if aborting() && !Win::current().w_buffer.is_null() {
+    if aborting() && !Win::current().w_buffer().is_null() {
         AU_NEW_CURBUF.set(save_au_new_curbuf);
         return Switch::Abandon;
     }
@@ -314,25 +314,25 @@ fn leave_for_buffer(
         {
             buf.set_b_nwindows(buf.b_nwindows() + 1);
         }
-        if let Some(mut old) = oldwin
+        if let Some(old) = oldwin
             .filter(|&w| win_valid_any_tab(w))
             .and_then(WinId::get)
-            && old.w_buffer.is_null()
+            && old.w_buffer().is_null()
             && let Some(buf) = was_curbuf.get()
         {
-            old.w_buffer = buf;
+            old.set_w_buffer(buf);
         }
         state.auto_buf = true;
     } else {
         // <VN> We could instead free the synblock and re-attach to the
         // buffer, perhaps.
-        if Win::current().w_buffer.is_null()
-            || Win::current().w_s == Win::current().buffer().syntax_block()
+        if Win::current().w_buffer().is_null()
+            || Win::current().w_s() == Win::current().buffer().syntax_block()
         {
-            Win::current().w_s = buffer.syntax_block();
+            Win::current().set_w_s(buffer.syntax_block());
         }
 
-        Win::current().w_buffer = buffer;
+        Win::current().set_w_buffer(buffer);
         buffer.make_current();
         Buf::current().set_b_nwindows(Buf::current().b_nwindows() + 1);
 

@@ -117,7 +117,7 @@ impl SavedBufferState {
         buffer.make_current();
         find_win_for_curbuf();
         let current = Win::current();
-        let aco = (current.w_buffer != buffer).then(|| {
+        let aco = (current.w_buffer() != buffer).then(|| {
             // No existing window for this buffer. It is dangerous to have
             // `curwin->w_buffer` differ from `CURBUF`, so use the autocmd
             // window.
@@ -155,7 +155,7 @@ fn find_win_for_curbuf() {
         .b_wininfo
         .iter()
         .filter_map(|entry| entry.window())
-        .find(|win| win.w_buffer.is_current());
+        .find(|win| win.w_buffer().is_current());
     if let Some(win) = found {
         win.make_current();
     }

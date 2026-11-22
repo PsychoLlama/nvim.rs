@@ -58,7 +58,7 @@ pub fn do_ascii(_excmd: &mut ExArg) {
 /// combining character stacked on it. Split from the handler because `ga`
 /// has no Ex command to hand it.
 pub(crate) fn describe_cursor_char() {
-    let cursor = Win::current().w_cursor;
+    let cursor = Win::current().w_cursor();
     let mut lines = Lines::current();
     let line = lines.line(cursor.lnum);
     let data = &line[cursor.col.max(ColNr::ZERO).as_usize().min(line.len())..];
@@ -194,7 +194,7 @@ fn emit_line(line: &[u8], need_clear: &mut bool) {
 pub fn ex_align(excmd: &mut ExArg) {
     let (mut cmdidx, line1, line2) = (excmd.cmdidx, excmd.line1, excmd.line2);
 
-    if Win::current().w_onebuf_opt.wo_rl != 0 {
+    if Win::current().wo_rl() != 0 {
         // Switch left and right aligning.  Upstream rewrites the command
         // itself, and that outlives the call.
         cmdidx = match cmdidx {
@@ -230,21 +230,21 @@ pub fn ex_align(excmd: &mut ExArg) {
             number_as_int(Buf::current().b_p_tw().min(i64::from(TABSTOP_MAX)))
         };
         if width == 0 && Buf::current().b_p_wm() > 0 {
-            width = Win::current().w_view_width - number_as_int(Buf::current().b_p_wm());
+            width = Win::current().w_view_width() - number_as_int(Buf::current().b_p_wm());
         }
         if width <= 0 {
             width = 80;
         }
     }
 
-    let save_curpos = Win::current().w_cursor;
+    let save_curpos = Win::current().w_cursor();
     if u_save(line1 - 1, line2 + 1).is_err() {
         return;
     }
 
     let mut lnum = line1;
     while lnum <= line2 {
-        Win::current().w_cursor.lnum = lnum;
+        Win::current().cursor().set_lnum(lnum);
         if let Some(new_indent) = aligned_indent(cmdidx, indent, width) {
             set_indent(new_indent.max(0), 0);
         }
@@ -252,7 +252,7 @@ pub fn ex_align(excmd: &mut ExArg) {
     }
 
     changed_lines(Buf::current(), line1, ColNr::ZERO, line2 + 1, 0, true);
-    Win::current().w_cursor = save_curpos;
+    Win::current().set_w_cursor(save_curpos);
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
 }
 
@@ -309,7 +309,7 @@ fn linelen() -> (c_int, bool) {
     // Get the line.  If it's empty bail out early (could be the empty string
     // for an unloaded buffer).
     let mut lines = Lines::current();
-    let text = lines.line(Win::current().w_cursor.lnum);
+    let text = lines.line(Win::current().cursor().lnum());
     if text.is_empty() {
         return (0, false);
     }

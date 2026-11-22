@@ -217,9 +217,9 @@ fn vertical_flag(first: u8) -> c_int {
 
 /// `RESET_BINDING()`: a window that has just been given another file is not
 /// bound to the one it was split from.
-fn reset_binding(mut win: Win) {
-    win.w_onebuf_opt.wo_scb = 0;
-    win.w_onebuf_opt.wo_crb = 0;
+fn reset_binding(win: Win) {
+    win.set_wo_scb(0);
+    win.set_wo_crb(0);
 }
 
 /// `:sfind`/`:tabfind`: resolve the argument to a file name.
@@ -251,11 +251,11 @@ fn open_tabpage(excmd: &mut ExArg, old_curwin: Win) {
 
     // The window left behind gets the new buffer as its alternate file.
     if Win::current_raw() != old_curwin.raw()
-        && let Some(mut old) = valid_win(old_curwin.id())
-        && !old.w_buffer.is_current()
+        && let Some(old) = valid_win(old_curwin.id())
+        && !old.w_buffer().is_current()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
-        old.w_alt_fnum = Some(Buf::current().handle());
+        old.set_w_alt_fnum(Some(Buf::current().handle()));
     }
 }
 
@@ -374,7 +374,7 @@ fn list_tab_windows(tabpage: TabPage, lastused_win: Option<Win>) {
             break;
         }
         // A hidden or unfocusable floating window is not listed.
-        if !wp.w_config.focusable || wp.w_config.hide {
+        if !wp.config_focusable() || wp.config_hide() {
             continue;
         }
         msg_char(b'\n');
@@ -469,14 +469,14 @@ fn resize(excmd: &mut ExArg) {
     // there is.
     if CMDMOD.with(|m| m.cmod_split) & WSP_VERT != 0 {
         if relative {
-            n = n.saturating_add(wp.w_width);
+            n = n.saturating_add(wp.w_width());
         } else if n == 0 && empty {
             n = COLUMNS.get();
         }
         setwidth_win(n, wp);
     } else {
         if relative {
-            n = n.saturating_add(wp.w_height);
+            n = n.saturating_add(wp.w_height());
         } else if n == 0 && empty {
             n = ROWS.get() - 1;
         }

@@ -337,13 +337,13 @@ impl Decode<'_> {
     /// Merge the window's own config -- or the defaults, for a window that
     /// does not exist yet -- back over whatever was filled in.
     fn restore(&mut self) {
-        let base = self.window.map_or(WIN_CONFIG_INIT, |w| w.w_config.clone());
+        let base = self.window.map_or(WIN_CONFIG_INIT, |w| w.config());
         merge_win_config(self.fconfig, base);
     }
 
     /// Whether `window` is a float, which several keys read differently.
     fn on_a_float(&self) -> bool {
-        self.window.is_some_and(|w| w.w_floating)
+        self.window.is_some_and(|w| w.w_floating())
     }
 
     /// The `relative`, `external`, `split`, `vertical` and `anchor` keys:
@@ -494,7 +494,7 @@ impl Decode<'_> {
             let why = c"floating window cannot be relative to itself";
             return Err(Error::exception(why));
         }
-        self.fconfig.window = target.handle;
+        self.fconfig.window = target.handle();
         Ok(Parsed::Done)
     }
 
@@ -510,7 +510,7 @@ impl Decode<'_> {
             self.fconfig.window = win_handle;
         }
         if self.fconfig.window == Handle::NONE {
-            self.fconfig.window = Win::current().handle;
+            self.fconfig.window = Win::current().handle();
         }
         Ok(Parsed::Done)
     }
