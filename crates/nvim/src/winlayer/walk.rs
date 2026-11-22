@@ -12,8 +12,8 @@
 //! # When the link is read
 //!
 //! **Every walk here reads the next link *before* the body runs, not after.**
-//! `iter::successors` calls its closure at yield time — `let item =
-//! self.next.take()?; self.next = (self.succ)(&item); Some(item)` — so these
+//! [`Walk`] steps at yield time — `let item = self.next.take()?;
+//! self.next = (self.step)(item); Some(item)`, as `iter::successors` does — so these
 //! are the C's `FOR_ALL_*_SAFE` shape, not `FOR_ALL_*`'s. The macro's
 //! `buf = buf->b_next` increment runs *after* its body.
 //!
@@ -24,6 +24,14 @@
 //! showed in the suites, but a caller that relinks under itself must not use
 //! these — `buffer::info`'s `:ls` walk is the one in the tree that needs the
 //! macro's timing and spells its own `step` out to get it.
+//!
+//! **A body that frees the neighbour read ahead ends the walk.** Running
+//! user code from a body (an autocommand, a `'foldexpr'`, a diff's
+//! `DiffUpdated`) can close any window or wipe any buffer, the one read
+//! ahead included; that element is not yielded, and nothing after it is
+//! reachable (its link went with it), so the walk stops there. The C's
+//! `_SAFE` macros read the freed element's link; upstream's walk after such
+//! a body is a use-after-free.
 //!
 //! # The links are handles
 //!
@@ -49,14 +57,57 @@
     clippy::ptr_as_ptr
 )]
 
-use core::iter;
-
 use super::graph::{
     CMDLINE_WIN, CMDWIN_WIN, FIRST_TABPAGE, FIRSTBUF, FIRSTWIN, LASTBUF, LASTUSED_TABPAGE, LASTWIN,
     PREVWIN,
 };
 use super::{Buf, BufId, FrameId, FrameRef, TabId, TabPage, Win, WinId};
 use crate::types::Window;
+
+/// One of the editor's lists, walked from `next` by `step`: the link is read
+/// as an element is yielded, and an element freed since it was read ahead
+/// ends the walk (module docs).
+struct Walk<H, F> {
+    next: Option<H>,
+    step: F,
+}
+
+/// The handles a [`Walk`] steps through.
+trait Linked: Copy {
+    fn is_live(self) -> bool;
+}
+
+macro_rules! linked {
+    ($($ty:ty),+) => { $(
+        impl Linked for $ty {
+            #[inline(always)]
+            fn is_live(self) -> bool {
+                <$ty>::is_live(self)
+            }
+        }
+    )+ };
+}
+
+linked!(Win, Buf, TabPage, FrameRef);
+
+impl<H: Linked, F: FnMut(H) -> Option<H>> Iterator for Walk<H, F> {
+    type Item = H;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<H> {
+        let item = self.next.take()?;
+        if !item.is_live() {
+            return None;
+        }
+        self.next = (self.step)(item);
+        Some(item)
+    }
+}
+
+#[inline(always)]
+fn walk<H: Linked, F: FnMut(H) -> Option<H>>(first: Option<H>, step: F) -> Walk<H, F> {
+    Walk { next: first, step }
+}
 
 // The one-step links each handle carries, which are what the walks below
 // are made of. Here rather than beside the constructors because a step is
@@ -126,7 +177,7 @@ impl TabPage {
 
 /// `first` and every window after it in its tab page's list.
 pub(crate) fn windows_from(first: Option<Win>) -> impl Iterator<Item = Win> {
-    iter::successors(first, |wp| wp.next())
+    walk(first, Win::next)
 }
 
 /// The head of the current tab page's window list, `None` only before the
@@ -207,7 +258,7 @@ pub(crate) fn window_at(raw: *const Window) -> Option<Win> {
 
 /// Every tab page, in list order: the C's `FOR_ALL_TABS`.
 pub(crate) fn tabs() -> impl Iterator<Item = TabPage> {
-    iter::successors(first_tab(), |tp| tp.next())
+    walk(first_tab(), TabPage::next)
 }
 
 /// The head of the editor's tab page list, `None` only before the first one
@@ -227,18 +278,18 @@ pub(crate) fn tab_windows() -> impl Iterator<Item = Win> {
 /// `first` and every frame after it in its row or column: the C's
 /// `FOR_ALL_FRAMES(frp, first)`, whose head is usually a `fr_child`.
 pub(crate) fn frames(first: Option<FrameRef>) -> impl Iterator<Item = FrameRef> {
-    iter::successors(first, |fr| fr.next())
+    walk(first, FrameRef::next)
 }
 
 /// [`frames`] the other way, following `fr_prev`. The C spells this out as a
 /// `while` loop each time it needs it (`frame_setheight`'s second run, say).
 pub(crate) fn frames_back(first: Option<FrameRef>) -> impl Iterator<Item = FrameRef> {
-    iter::successors(first, |fr| fr.prev())
+    walk(first, FrameRef::prev)
 }
 
 /// Every buffer, in list order: the C's `FOR_ALL_BUFFERS`.
 pub(crate) fn buffers() -> impl Iterator<Item = Buf> {
-    iter::successors(first_buffer(), |buf| buf.next())
+    walk(first_buffer(), Buf::next)
 }
 
 /// The head of the editor's buffer list, `None` before the first buffer is
@@ -256,12 +307,12 @@ pub(crate) fn last_buffer() -> Option<Buf> {
 
 /// Every buffer, last to first: the C's `FOR_ALL_BUFFERS_BACKWARDS`.
 pub(crate) fn buffers_back() -> impl Iterator<Item = Buf> {
-    iter::successors(last_buffer(), |buf| buf.prev())
+    walk(last_buffer(), Buf::prev)
 }
 
 /// Every window of the current tab page, last to first. The C spells this
 /// out as a `while` loop each time it needs it — the float walks in
 /// `winfloat` and `window::size` are the two.
 pub(crate) fn windows_back() -> impl Iterator<Item = Win> {
-    iter::successors(last_window(), |wp| wp.prev())
+    walk(last_window(), Win::prev)
 }
