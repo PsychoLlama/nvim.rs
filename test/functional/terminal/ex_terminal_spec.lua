@@ -74,7 +74,14 @@ describe(':terminal', function()
         [[terminal for /L \\%I in (1,0,2) do ( echo foo & ping -w 100 -n 1 127.0.0.1 > nul )]]
       )
     else
-      command([[terminal while true; do echo foo; sleep .1; done]])
+      -- Exactly the window's three rows and no more: output that keeps
+      -- coming scrolls a line into the scrollback whenever the case runs
+      -- slower than the shell (ASan under sharded load), and the cursor,
+      -- kept on its text, moves down with it.
+      command([[terminal printf 'foo\nfoo\nfoo'; sleep 100]])
+      retry(nil, nil, function()
+        eq('foo', eval('getline(3)'))
+      end)
     end
     feed([[<C-\><C-N>M]]) -- move cursor away from last line
     poke_eventloop()
