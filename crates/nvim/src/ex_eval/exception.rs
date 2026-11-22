@@ -434,7 +434,7 @@ pub(super) fn throw_exception(thrown: Thrown, cmdname: Option<&CStr>) -> Result<
         // The exception owns the stack trace it was thrown with.
         stacktrace: stacktrace_create(),
     };
-    let (id, _) = EXCEPTIONS.with_mut(|table| table.insert((), exception));
+    let (id, _) = EXCEPTIONS.with_mut(|table| table.insert(exception));
 
     verbose_exception(Fate::Thrown, id);
 

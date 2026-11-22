@@ -273,7 +273,7 @@ miri-lib *args:
 # --report-time` or `--skip x`.
 miri-perimeter *args:
   {{ nightly }} MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib -- \
-    allocator::tests:: global_cell::tests:: \
+    allocator::tests:: global_cell::tests:: slot::tests:: \
     memory::tests:: memory::alloc_log::tests:: memory::blocks::tests:: \
     memory::thin_cstring::tests:: memory::xstring::tests:: \
     winlayer::tests:: winlayer::graph::tests:: winlayer::grid::tests:: \

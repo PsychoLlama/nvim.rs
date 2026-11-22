@@ -339,6 +339,21 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   120k-line sequential reads of a pattern that never matches: the
   per-line path and nothing else). The per-match context the copy
   alternative needed (+0.6 % rebench, measured earlier) is not built.
+- **Closed — `IdTable` views (check-always, liveness):** the views a
+  table hands out (the quickfix stacks' `Qi`, the normal-mode frames'
+  `Op`) are no longer `Live<T>`. `IdTable` keeps its values in a
+  `SlotPool` (`slot.rs`): each slot is allocated once and never given back
+  to the allocator, and carries a generation word that moves on whenever
+  its value goes. A view is a `SlotRef` — the slot's address and the
+  generation its value was handed — and every dereference compares the
+  two, so a view kept past its value panics instead of reading freed
+  memory (the slot's memory is still a slot, whatever became of the
+  value). Aliasing is unchanged: two copies still lend overlapping
+  `&mut`. This is the floor the window, buffer and tab page handles move
+  onto. The same check faked on the four graph handles (one load and a
+  compare per dereference, release, codegen-units = 1, cachegrind Ir):
+  mlbench +2.5 %, readbench +2.2 %, spellbench +2.1 %, scrbench +1.9 %,
+  edbench +1.7 %, the rest ≤ 1 %.
 - **Left in this class from these two:** `GridRef`'s `Deref` — a
   `&ScreenGrid` held across a write through another copy
   (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with

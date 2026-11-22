@@ -1168,6 +1168,9 @@ PERIMETER = {
     "owned type in the tree",
     "crates/nvim/src/global_cell.rs": "the checked wrapper over c2rust's "
     "mutable statics; the raw static is touched here so it is nowhere else",
+    "crates/nvim/src/slot.rs": "type-stable slots: values in memory never "
+    "given back, so a handle's generation check reads live memory however "
+    "long it outlives its value",
     "crates/nvim/src/winlayer.rs": "the window/buffer/position handles, the "
     "screen grid handle and the terminal handle: constructing one is the "
     "unsafe step, dereferencing it is not",
@@ -4421,6 +4424,7 @@ MIRI_PERIMETER_FILES = (
     "crates/nvim/src/allocator.rs",
     "crates/nvim/src/memory/",
     "crates/nvim/src/global_cell.rs",
+    "crates/nvim/src/slot.rs",
     "crates/nvim/src/winlayer.rs",
     "crates/nvim/src/winlayer/",
     "crates/nvim/src/eval/typval/handle.rs",

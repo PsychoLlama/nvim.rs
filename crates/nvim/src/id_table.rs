@@ -1,30 +1,26 @@
 //! A table that owns values at fixed addresses and names them by id.
 //!
 //! What the editor used to keep as a raw global pointer to a heap object --
-//! the funccall in progress, the exception being thrown -- is an id into one
-//! of these instead, and the table is the object's one owner:
+//! the exception being thrown, a condition stack, a quickfix stack -- is an
+//! id into one of these instead, and the table is the object's one owner:
 //!
 //! - a [`TableId`] is a slot index plus the slot's generation, which moves
 //!   every time the slot is emptied, so an id kept past its value resolves
 //!   to a panic rather than to freed memory or to the next tenant;
-//! - a slot keeps its value in a `Box` that is filled once and never moved
-//!   until it is emptied, so the value's address is fixed and the editor's
-//!   raw pointers into it (a funccall's `l:` dictionary in a value, a
-//!   closure's scope) stay good; they are derived through the `UnsafeCell`,
-//!   so none of them is a borrow of the box;
-//! - the box holds the value in a [`ManuallyDrop`]: emptying a slot gives
-//!   back the block and drops nothing of the value, as the editor gives back
-//!   what such an object holds by hand;
-//! - a slot can carry a small `M` beside the value, readable without going
-//!   through the value's pointer.
+//! - the values live in a [`SlotPool`]: each in a slot that is never moved
+//!   and never given back to the allocator, so the value's address is fixed
+//!   and a [`SlotRef`] to it ([`IdTable::view`]) checks the slot's
+//!   generation at every dereference -- a view kept past its value panics
+//!   instead of reading freed memory;
+//! - emptying a slot drops nothing of the value unless the owner asks for
+//!   it back ([`IdTable::remove`]): the editor gives back what such an
+//!   object holds by hand.
 //!
 //! The table is not itself a global: an owner keeps one in its own cell.
 //!
 //! It is not [`crate::registry`]'s `SlotTable`, which files objects under
 //! the handle the user sees, in khash's order; nor its `Owned<T>`, which
-//! always runs `T`'s destructor. Here nothing user-visible names the value,
-//! and emptying a slot drops nothing of it unless the owner asks for the
-//! value back ([`IdTable::remove`]).
+//! always runs `T`'s destructor. Here nothing user-visible names the value.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -35,13 +31,14 @@
     clippy::ptr_as_ptr
 )]
 
-use core::cell::UnsafeCell;
 use core::fmt;
 use core::marker::PhantomData;
-use core::mem::ManuallyDrop;
 use core::num::NonZeroU32;
 
-/// A value's place in a [`IdTable<T>`].
+use crate::slot::SlotPool;
+pub(crate) use crate::slot::{Detached, SlotRef};
+
+/// A value's place in a [`IdTable<T>`] (or an [`RcTable<T>`]).
 pub(crate) struct TableId<T> {
     index: u32,
     generation: NonZeroU32,
@@ -70,86 +67,54 @@ impl<T> fmt::Debug for TableId<T> {
     }
 }
 
-/// A value's storage in a slot: boxed so its address is fixed, behind an
-/// `UnsafeCell` so pointers into it are not borrows of the box, and
-/// undropped so the owner decides what of it to give back.
-pub(crate) type Boxed<T> = Box<UnsafeCell<ManuallyDrop<T>>>;
-
+/// Values of type `T`, owned at fixed addresses, named by [`TableId`].
 #[derive(Debug)]
-struct Slot<T, M> {
-    generation: NonZeroU32,
-    value: Option<Boxed<T>>,
-    meta: M,
+pub(crate) struct IdTable<T> {
+    pool: SlotPool<T>,
 }
 
-/// Values of type `T`, each with an `M` beside it, owned at fixed addresses.
-#[derive(Debug)]
-pub(crate) struct IdTable<T, M = ()> {
-    slots: Vec<Slot<T, M>>,
-    /// Empty slots, reused last-emptied first.
-    vacant: Vec<u32>,
-}
-
-impl<T, M: Default> IdTable<T, M> {
+impl<T> IdTable<T> {
     /// An empty table.
     pub(crate) const fn new() -> Self {
         IdTable {
-            slots: Vec::new(),
-            vacant: Vec::new(),
+            pool: SlotPool::new(),
         }
     }
 
-    /// Take ownership of `value` and set `meta` beside it. Answers the id and
-    /// the value's fixed address.
-    pub(crate) fn insert(&mut self, meta: M, value: T) -> (TableId<T>, *mut T) {
-        let value = Box::new(UnsafeCell::new(ManuallyDrop::new(value)));
-        self.insert_boxed(meta, value, |_, _| {})
-    }
-
-    /// Take ownership of `value`, already in its box -- for a value too big
-    /// to build on the stack and move -- and set `meta` beside it; `init`
-    /// finishes the value in place, knowing its id, before anything else can
-    /// reach it. Answers the id and the value's fixed address.
-    pub(crate) fn insert_boxed(
-        &mut self,
-        meta: M,
-        mut value: Boxed<T>,
-        init: impl FnOnce(TableId<T>, &mut T),
-    ) -> (TableId<T>, *mut T) {
-        // One pass: take a vacant slot (or add one), name it, fill it. A
-        // funccall goes through here on every call.
-        let index = self.vacant.pop().unwrap_or_else(|| {
-            let index = u32::try_from(self.slots.len()).expect("fewer than 2^32 slots");
-            self.slots.push(Slot {
-                generation: NonZeroU32::MIN,
-                value: None,
-                meta: M::default(),
-            });
-            index
-        });
-        let slot = &mut self.slots[index as usize];
-        debug_assert!(slot.value.is_none(), "a vacant slot is empty");
-        let id = TableId {
-            index,
-            generation: slot.generation,
+    /// The id of the value `r` names.
+    fn id_of(r: SlotRef<T>) -> TableId<T> {
+        TableId {
+            index: r.index(),
+            generation: NonZeroU32::new(r.generation()).expect("a handed-out generation is odd"),
             kind: PhantomData,
-        };
-        init(id, value.get_mut());
-        slot.meta = meta;
-        let value = slot.value.insert(value);
-        (id, value.get().cast())
+        }
     }
 
-    /// Empty `id`'s slot and give back the value's block, dropping nothing
-    /// of the value: the caller has given back what it held.
+    /// `id`'s value as a handle.
+    ///
+    /// # Panics
+    /// When `id`'s value is gone.
+    #[track_caller]
+    fn live(&self, id: TableId<T>) -> SlotRef<T> {
+        self.pool
+            .lookup(id.index, id.generation.get())
+            .expect("an id outlived its value")
+    }
+
+    /// Take ownership of `value`. Answers its id and its fixed address.
+    pub(crate) fn insert(&mut self, value: T) -> (TableId<T>, *mut T) {
+        let r = self.pool.insert(value);
+        (Self::id_of(r), r.raw())
+    }
+
+    /// Empty `id`'s slot, dropping nothing of the value: the caller has
+    /// given back what it held.
     ///
     /// # Panics
     /// When `id`'s value is gone already.
     pub(crate) fn free(&mut self, id: TableId<T>) {
-        let value = self.empty(id);
-        // Freed in place: moving a large value out only to forget it is a
-        // copy for nothing.
-        drop(value);
+        let r = self.live(id);
+        self.pool.forget(r);
     }
 
     /// Empty `id`'s slot and hand its value back, for the caller to give
@@ -158,45 +123,28 @@ impl<T, M: Default> IdTable<T, M> {
     /// # Panics
     /// When `id`'s value is gone already.
     pub(crate) fn remove(&mut self, id: TableId<T>) -> T {
-        ManuallyDrop::into_inner(UnsafeCell::into_inner(*self.empty(id)))
+        let r = self.live(id);
+        self.pool.remove(r)
     }
 
-    /// Empty `id`'s slot and hand back the value still in its box, for an
-    /// owner that keeps the block to build the next value in.
+    /// Take `id`'s value out with its slot, for an owner that clears it and
+    /// files it again ([`IdTable::attach`]) rather than build the next one.
     ///
     /// # Panics
     /// When `id`'s value is gone already.
-    pub(crate) fn evict(&mut self, id: TableId<T>) -> Boxed<T> {
-        self.empty(id)
+    pub(crate) fn detach(&mut self, id: TableId<T>) -> Detached<T> {
+        let r = self.live(id);
+        self.pool.detach(r)
     }
 
-    fn empty(&mut self, id: TableId<T>) -> Boxed<T> {
-        let slot = self.live_mut(id);
-        slot.generation = slot.generation.checked_add(1).unwrap_or(NonZeroU32::MIN);
-        slot.meta = M::default();
-        let value = slot.value.take().expect("a live slot holds a value");
-        self.vacant.push(id.index);
-        value
-    }
-}
-
-impl<T, M> IdTable<T, M> {
-    fn live(&self, id: TableId<T>) -> &Slot<T, M> {
-        let slot = &self.slots[id.index as usize];
-        assert!(
-            slot.generation == id.generation && slot.value.is_some(),
-            "an id outlived its value"
-        );
-        slot
+    /// File a detached value again, under a new id.
+    pub(crate) fn attach(&mut self, value: Detached<T>) -> TableId<T> {
+        Self::id_of(self.pool.attach(value))
     }
 
-    fn live_mut(&mut self, id: TableId<T>) -> &mut Slot<T, M> {
-        let slot = &mut self.slots[id.index as usize];
-        assert!(
-            slot.generation == id.generation && slot.value.is_some(),
-            "an id outlived its value"
-        );
-        slot
+    /// Give a detached value's slot back, answering the value.
+    pub(crate) fn release(&mut self, value: Detached<T>) -> T {
+        self.pool.release(value)
     }
 
     /// `id`'s value, borrowed for as long as the table is.
@@ -204,28 +152,17 @@ impl<T, M> IdTable<T, M> {
     /// # Panics
     /// When `id`'s value is gone.
     pub(crate) fn get_mut(&mut self, id: TableId<T>) -> &mut T {
-        match &mut self.live_mut(id).value {
-            Some(value) => value.get_mut(),
-            None => unreachable!("`live_mut` checked the slot is full"),
-        }
+        let r = self.live(id);
+        self.pool.get_mut(r)
     }
 
-    /// `id`'s value, by its fixed address.
+    /// A view of `id`'s value: a handle that may be held across code that
+    /// empties the slot, and panics at its next dereference if it was.
     ///
     /// # Panics
     /// When `id`'s value is gone.
-    pub(crate) fn address(&self, id: TableId<T>) -> *mut T {
-        match &self.live(id).value {
-            Some(value) => value.get().cast(),
-            None => unreachable!("`live` checked the slot is full"),
-        }
-    }
-
-    /// What was set beside `id`'s value. Nothing outside the tests reads it
-    /// since the funccalls moved to an [`RcTable`].
-    #[cfg(test)]
-    pub(crate) fn meta(&self, id: TableId<T>) -> &M {
-        &self.live(id).meta
+    pub(crate) fn view(&self, id: TableId<T>) -> SlotRef<T> {
+        self.live(id)
     }
 }
 
@@ -341,44 +278,45 @@ impl<T, M> RcTable<T, M> {
 mod tests {
     use super::*;
 
-    fn boxed<T>(value: T) -> Boxed<T> {
-        Box::new(UnsafeCell::new(ManuallyDrop::new(value)))
-    }
-
     #[test]
     fn an_id_names_its_value_until_it_is_removed() {
-        let mut table: IdTable<u64, u8> = IdTable::new();
-        let (a, pa) = table.insert_boxed(1, boxed(10), |_, _| {});
-        let (b, _) = table.insert_boxed(2, boxed(20), |_, _| {});
+        let mut table: IdTable<u64> = IdTable::new();
+        let (a, pa) = table.insert(10);
+        let (b, _) = table.insert(20);
         assert_ne!(a, b);
-        assert_eq!(table.address(a), pa);
-        assert_eq!(*table.meta(b), 2);
+        assert_eq!(table.view(a).raw(), pa);
+        assert_eq!(*table.get_mut(b), 20);
+        let view = table.view(a);
         table.free(a);
-        assert_eq!(*table.meta(b), 2);
+        assert!(!view.is_live());
         // The slot is reused, under a new generation.
-        let (c, _) = table.insert_boxed(3, boxed(0), |id, v| *v = u64::from(id == a));
+        let (c, pc) = table.insert(0);
+        assert_eq!(pc, pa);
         assert_ne!(c, a);
-        assert_eq!(*table.meta(c), 3);
-        table.free(c);
+        assert_eq!(table.remove(c), 0);
+        assert_eq!(table.remove(b), 20);
     }
 
     #[test]
     #[should_panic(expected = "an id outlived its value")]
     fn a_stale_id_panics() {
         let mut table: IdTable<u64> = IdTable::new();
-        let (a, _) = table.insert_boxed((), boxed(1), |_, _| {});
+        let (a, _) = table.insert(1);
         table.free(a);
-        let _ = table.insert_boxed((), boxed(2), |_, _| {});
-        let _ = table.address(a);
+        let _ = table.insert(2);
+        let _ = table.view(a);
     }
 
     #[test]
-    fn a_value_stays_put_while_the_table_grows() {
-        let mut table: IdTable<[u8; 64]> = IdTable::new();
-        let (first, at) = table.insert_boxed((), boxed([7; 64]), |_, _| {});
-        for _ in 0..100 {
-            let _ = table.insert_boxed((), boxed([0; 64]), |_, _| {});
-        }
-        assert_eq!(table.address(first), at);
+    fn a_detached_value_is_filed_again_under_a_new_id() {
+        let mut table: IdTable<Vec<u8>> = IdTable::new();
+        let (a, pa) = table.insert(vec![1]);
+        let mut value = table.detach(a);
+        value.clear();
+        let b = table.attach(value);
+        assert_ne!(a, b);
+        assert_eq!(table.view(b).raw(), pa);
+        let value = table.detach(b);
+        assert!(table.release(value).is_empty());
     }
 }

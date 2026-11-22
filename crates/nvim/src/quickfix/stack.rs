@@ -39,9 +39,10 @@ use crate::deref::deref_to_field;
 use crate::id_table::IdTable;
 use crate::memory::XString;
 use crate::quickfix::model::QfId;
+use crate::slot::SlotRef;
 use crate::types::Handle;
 use crate::types::{CmdIdx, Failed, Refcount};
-use crate::winlayer::{Buf, Live, Win, windows};
+use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{CStr, c_int, c_uint};
 use core::ops::{Deref, DerefMut};
 
@@ -88,7 +89,7 @@ pub(crate) fn next_list_id() -> c_uint {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct Qi {
     id: QfId,
-    live: Live<QfStack>,
+    live: SlotRef<QfStack>,
 }
 
 deref_to_field!(Qi => mut QfStack, live);
@@ -168,7 +169,7 @@ fn global_id() -> QfId {
     let mut stack = QfStack::new(QFLT_QUICKFIX);
     stack.bufnr = None;
     QF_STACKS.with_mut(|stacks| {
-        let (id, _) = stacks.table.insert((), stack);
+        let (id, _) = stacks.table.insert(stack);
         stacks.global = Some(id);
         id
     })
@@ -436,7 +437,7 @@ pub(crate) fn new_location_stack(kind: QfListType, n: OptInt) -> QfId {
     stack.refcount = Refcount::one();
     stack.bufnr = None;
     stack.lists = new_slots(n);
-    QF_STACKS.with_mut(|stacks| stacks.table.insert((), stack).0)
+    QF_STACKS.with_mut(|stacks| stacks.table.insert(stack).0)
 }
 
 /// Give the quickfix stack its `'chistory'` slots. Called once, during

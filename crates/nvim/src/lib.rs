@@ -113,6 +113,7 @@ pub mod sha256;
 pub mod shada;
 pub mod shell;
 pub(crate) mod sign;
+pub(crate) mod slot;
 pub mod spell;
 pub mod spellfile;
 pub(crate) mod spellsuggest;

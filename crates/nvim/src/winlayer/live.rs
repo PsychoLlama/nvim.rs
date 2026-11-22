@@ -81,7 +81,6 @@
 use core::ops::{Deref, DerefMut};
 
 use crate::ex_getln::state::CmdlineInfo;
-use crate::id_table::{IdTable, TableId};
 
 /// A `*mut T` the caller has promised is live, with checked field access.
 ///
@@ -154,24 +153,6 @@ impl<T> DerefMut for Live<T> {
     }
 }
 
-impl<T, M> IdTable<T, M> {
-    /// A view of `id`'s value, at the fixed address the table keeps it at.
-    ///
-    /// The registries' bargain, for a table: a value the table holds is
-    /// live, so looking one up is safe, and a view kept past the value's
-    /// removal is what the re-entry rule in [`crate::winlayer`]'s docs is
-    /// there to prevent — re-find the value by its id after anything that
-    /// can run user code, as for a [`Win`](crate::winlayer::Win).
-    ///
-    /// # Panics
-    /// When `id`'s value is gone.
-    pub(crate) fn view(&self, id: TableId<T>) -> Live<T> {
-        // SAFETY: the table owns the value at this address until `id`'s slot
-        // is emptied -- see above.
-        unsafe { Live::new(self.address(id)) }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // The shared aliases.
 //
@@ -223,44 +204,9 @@ impl Cc {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::buffer::{bare_buffer, free_bare_buffer};
     use crate::global_cell::editor_state_lock;
     use crate::window::{bare_window, free_bare_window};
-
-    /// A table's views stay good while the table grows and other values come
-    /// and go around them -- the boxes do not move when the slot vector
-    /// does -- and two views of one value see each other's writes.
-    #[test]
-    fn a_view_outlives_the_table_growing_under_it() {
-        let mut table: IdTable<Vec<u32>> = IdTable::new();
-        let (kept, _) = table.insert((), vec![1]);
-        let mut first = table.view(kept);
-        let second = table.view(kept);
-        assert_eq!(first, second);
-        let others: Vec<_> = (0..32).map(|n| table.insert((), vec![n]).0).collect();
-        first.push(2);
-        assert_eq!(*second, [1, 2]);
-        let (freed, held): (Vec<_>, Vec<_>) = others
-            .into_iter()
-            .partition(|id| table.view(*id)[0].is_multiple_of(2));
-        for id in freed {
-            drop(table.remove(id));
-        }
-        let (refilled, _) = table.insert((), vec![99]);
-        first.push(3);
-        assert_eq!(*table.view(kept), [1, 2, 3]);
-        assert_eq!(*table.view(refilled), [99]);
-        // The table's own `&mut` ends what came before it; a view taken
-        // afterwards is the one to use.
-        table.get_mut(kept).push(4);
-        assert_eq!(*table.view(kept), [1, 2, 3, 4]);
-        // A table drops none of its values: their owner takes them back.
-        assert_eq!(table.remove(kept), [1, 2, 3, 4]);
-        for id in held.into_iter().chain([refilled]) {
-            drop(table.remove(id));
-        }
-    }
 
     /// A window that uses its buffer's syntax block: the window's handle and
     /// the buffer's name one block, at the address inside the buffer.

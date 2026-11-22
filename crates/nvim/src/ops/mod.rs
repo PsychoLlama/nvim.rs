@@ -105,7 +105,6 @@ use crate::types::{
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
-use crate::winlayer::Live;
 
 // The carve of the transpiled module; see each child's docs.
 mod addsub;
@@ -154,15 +153,14 @@ pub struct RedoVisual {
     pub rv_arg: ::core::ffi::c_int,
 }
 
-/// An `OpArg` the caller has promised is live: the operator a normal-mode
-/// frame is pending on.
+/// The operator a normal-mode frame is pending on: a handle to its slot in
+/// the frame table, checked at every dereference.
 ///
-/// [`Live`]'s shape, for the one struct every operator is reached through.
 /// Field access goes through `Deref`, so the borrow lasts no longer than the
 /// access that asked for it -- which matters, because `op_pending` reads the
 /// frame's operator from wherever user code runs. The operators themselves
 /// take an `&mut OpArg`, and [`Op::on_copy`] is how a frame hands one over.
-pub(crate) type Op = Live<OpArg>;
+pub(crate) type Op = crate::slot::SlotRef<OpArg>;
 
 impl Op {
     /// Whether an operator is pending on it, which is what every caller means

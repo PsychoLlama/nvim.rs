@@ -9,12 +9,12 @@ have to change for it to go.
 
 Rust checks memory safety at compile time everywhere except inside `unsafe`
 code, where the programmer promises what the compiler cannot verify. In this
-tree that code is confined to **64 files**, holding **1,612 unchecked
+tree that code is confined to **65 files**, holding **1,610 unchecked
 statements** — every one of them on the _perimeter_ ([docs/perimeter.md](perimeter.md)),
 the list of modules where the program meets something it does not own. The
-other 1,284 source files of the editor (`crates/nvim/src`, 1,348 files) contain
-no unsafe code, and 1,274 of them say so with `#![forbid(unsafe_code)]`, which
-the compiler enforces; the remaining ten are module roots that cannot carry
+other 1,287 source files of the editor (`crates/nvim/src`, 1,352 files) contain
+no unsafe code, and 1,280 of them say so with `#![forbid(unsafe_code)]`, which
+the compiler enforces; the remaining seven are module roots that cannot carry
 the attribute because a file beneath them is on the perimeter. The unsafe code
 falls into four classes:
 
@@ -26,9 +26,10 @@ falls into four classes:
   standard library does not offer, or offers with different error text:
   libuv's file-system calls, the environment, locales, the user database,
   clocks, the PTY, signals, `dlopen` and `iconv`.
-- **Raw memory — 12 files, 234 statements.** The few primitives every safe
+- **Raw memory — 13 files, 244 statements.** The few primitives every safe
   type above them is built on: the allocator, the `xmalloc` family and the
-  owned C strings, the checked cell that replaces C's global variables, and
+  owned C strings, the checked cell that replaces C's global variables, the
+  type-stable slots handles check their target's liveness against, and
   the handles through which the editor reaches windows, buffers and
   Vimscript values.
 - **Exported test ABI — 4 files, 98 statements.** C functions and data the
@@ -70,7 +71,7 @@ falls into four classes:
 To check the numbers here: `python3 scripts/ratchet.py --dimension
 unsafe_placement` lists any misplaced attribute (none);
 `metrics/ratchet.json` holds each file's `unsafe_stmts`; `rg -l
-'allow\(unsafe_code\)' crates/nvim/src` lists the 64 files.
+'allow\(unsafe_code\)' crates/nvim/src` lists the 65 files.
 
 ## The rows
 
@@ -86,7 +87,8 @@ unsafe_placement` lists any misplaced attribute (none);
 | `allocator.rs`                              | memory   |     1 |         20 |            4 | the global allocator                             |
 | `memory/`                                   | memory   |     4 |         99 |           36 | `xmalloc`, the block pool, owned C strings       |
 | `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
-| `winlayer.rs`, `winlayer/`                  | memory   |     5 |         51 |           10 | window, buffer, grid and terminal handles        |
+| `slot.rs`                                   | memory   |     1 |         12 |            0 | type-stable slots and their checked handles      |
+| `winlayer.rs`, `winlayer/`                  | memory   |     5 |         50 |           10 | window, buffer, grid and terminal handles        |
 | `eval/typval/handle.rs`                     | memory   |     1 |         50 |            8 | Vimscript value handles                          |
 | `vterm/abi/`                                | test ABI |     3 |         90 |           31 | libvterm's C interface                           |
 | `harness.rs`                                | test ABI |     1 |          8 |            5 | editor symbols the harnesses resolve             |
@@ -271,12 +273,34 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   holds by address, and the cell's own tests).
 - **Retires:** never; it is the replacement.
 
+### `slot.rs` — type-stable slots
+
+- **What:** `SlotPool<T>`, which allocates each slot once and never gives
+  its memory back, and `SlotRef<T>`, a `Copy` handle of the slot's address
+  and the generation its value was handed out under (12): the header reads
+  (generation, index; 2), the value's writes, reads and drop as it enters
+  and leaves a slot (5), and the dereferences of a live handle, a detached
+  slot and the pool's own borrow (5). `IdTable` (`id_table.rs`, forbid) is
+  built on it: its views (the quickfix stacks, the normal-mode frames'
+  operators) are `SlotRef`s.
+- **Contract:** a slot's value is initialised exactly while its generation
+  is odd; every handle is handed an odd generation, and emptying a slot
+  moves it on (to even, or to zero for a slot that reached the limit, which
+  is never reused). Because the memory stays a `Slot<T>` for the rest of the
+  run, reading the generation through any handle ever made is sound, so a
+  dereference is one load and one compare, and a stale one panics. A pool
+  has no destructor: every pool is a field of a static. What it does not
+  hold is exclusivity — two copies may lend overlapping `&mut`, as the
+  `winlayer` handles do ([safe-surface.md](safe-surface.md) S5).
+- **Retires:** never; it is the floor the window, buffer and tab page
+  handles move onto.
+
 ### `winlayer.rs`, `winlayer/` — the window, buffer, grid and terminal handles
 
 - **What:** `Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, `Live<T>`, the
   screen grid handle `GridRef` and the terminal handle `Term` — each a
   `Copy` value over one pointer (`winlayer.rs` 22, `graph.rs` 17, `live.rs`
-  5, `grid.rs` 2, `terminal.rs` 3). Building one from an address is the
+  4, `grid.rs` 2, `terminal.rs` 3). Building one from an address is the
   unsafe step; dereferencing it is not. `curwin`/`CURBUF`/`CURTAB` are cells
   holding a raw pointer (`curwin` is a C symbol a functional spec reads).
 - **Contract:** the constructor's caller promises the object is live for as

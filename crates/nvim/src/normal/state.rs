@@ -119,7 +119,7 @@ static NORMAL_FRAMES: GlobalCell<NormalFrames> = GlobalCell::new(NormalFrames {
 #[inline(never)]
 fn frame_insert(op: OpArg) -> (TableId<OpArg>, Op) {
     NORMAL_FRAMES.with_mut(|frames| {
-        let (id, _) = frames.table.insert((), op);
+        let (id, _) = frames.table.insert(op);
         (id, frames.table.view(id))
     })
 }

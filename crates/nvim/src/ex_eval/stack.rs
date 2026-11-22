@@ -19,9 +19,7 @@
 
 use crate::ex_eval::defs::{CondId, CondStack};
 use crate::global_cell::GlobalCell;
-use crate::id_table::{Boxed, IdTable};
-use core::cell::UnsafeCell;
-use core::mem::ManuallyDrop;
+use crate::id_table::{Detached, IdTable};
 
 /// The condition stack of every running command line, and the emptied ones
 /// kept to build the next one in: a cell of its own, so that a step on a
@@ -34,7 +32,7 @@ static COND_STACKS: GlobalCell<CondStacks> = GlobalCell::new(CondStacks {
 #[derive(Debug)]
 struct CondStacks {
     live: IdTable<CondStack>,
-    spare: Vec<Boxed<CondStack>>,
+    spare: Vec<Detached<CondStack>>,
 }
 
 /// How many emptied stacks are kept: more than a command line nests in
@@ -59,12 +57,9 @@ pub(crate) struct OwnedCondStack(CondId);
 impl OwnedCondStack {
     /// An empty stack, in a spare one when there is one.
     pub(crate) fn open() -> OwnedCondStack {
-        let id = COND_STACKS.with_mut(|stacks| {
-            let boxed = stacks
-                .spare
-                .pop()
-                .unwrap_or_else(|| Box::new(UnsafeCell::new(ManuallyDrop::new(CondStack::new()))));
-            stacks.live.insert_boxed((), boxed, |_, _| {}).0
+        let id = COND_STACKS.with_mut(|stacks| match stacks.spare.pop() {
+            Some(spare) => stacks.live.attach(spare),
+            None => stacks.live.insert(CondStack::new()).0,
         });
         OwnedCondStack(id)
     }
@@ -77,21 +72,19 @@ impl OwnedCondStack {
 
 impl Drop for OwnedCondStack {
     fn drop(&mut self) {
-        let mut boxed = COND_STACKS.with_mut(|stacks| stacks.live.evict(self.0));
+        let mut stack = COND_STACKS.with_mut(|stacks| stacks.live.detach(self.0));
         // Whatever a level still holds -- a `:for`'s list, a pending
         // `:return`'s value -- is released outside the table's borrow.
-        let left = boxed.get_mut().clear();
+        let left = stack.clear();
         let extra = COND_STACKS.with_mut(|stacks| {
             if stacks.spare.len() < SPARES {
-                stacks.spare.push(boxed);
+                stacks.spare.push(stack);
                 None
             } else {
-                Some(boxed)
+                Some(stacks.live.release(stack))
             }
         });
-        if let Some(boxed) = extra {
-            drop(ManuallyDrop::into_inner(UnsafeCell::into_inner(*boxed)));
-        }
+        drop(extra);
         drop(left);
     }
 }

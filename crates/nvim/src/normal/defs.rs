@@ -62,7 +62,7 @@ pub struct CmdArg {
     /// The operator the command is pending on: the normal-mode frame's own,
     /// held in the frame table so `op_pending` can read it from inside
     /// whatever the handler re-enters.
-    pub(crate) oap: crate::winlayer::Live<OpArg>,
+    pub(crate) oap: crate::ops::Op,
     pub cmdchar: Key,
     pub nchar: Key,
     /// `nchar` and its combining characters, encoded, NUL-terminated
@@ -99,7 +99,7 @@ impl CmdArg {
     }
 
     /// A command with nothing read yet, pending on `op`.
-    pub(crate) fn new(op: crate::winlayer::Live<OpArg>) -> Self {
+    pub(crate) fn new(op: crate::ops::Op) -> Self {
         CmdArg {
             oap: op,
             cmdchar: Key::NUL,
