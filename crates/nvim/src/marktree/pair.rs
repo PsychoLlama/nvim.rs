@@ -133,8 +133,8 @@ pub fn marktree_restore_pair(tree: &mut MarkTree, key: MTKey) {
         // The other end is waiting to be restored later; this runs again for it.
         return;
     }
-    tree.key_mut(&iter).flags.clear(MtFlags::ORPHANED);
-    tree.key_mut(&end_iter).flags.clear(MtFlags::ORPHANED);
+    tree.key_mut(&iter).flags -= MtFlags::ORPHANED;
+    tree.key_mut(&end_iter).flags -= MtFlags::ORPHANED;
 
     let id = mt_lookup_key_side(key, false);
     marktree_intersect_pair(tree, id, &mut iter, &end_iter, false);

@@ -692,7 +692,7 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
         free_undo(buf);
     }
     syntax_clear(buf.syntax()); // reset syntax info
-    buf.edit().b_flags.clear(BufFlags::READERR); // a read error is no longer relevant
+    buf.edit().b_flags -= BufFlags::READERR; // a read error is no longer relevant
 }
 
 /// The autocommand half of [`buf_freeall`]: `BufUnload`, then `BufDelete` and

@@ -286,7 +286,7 @@ pub(crate) fn fix_cursor(mut win: Win, lo: LineNr, hi: LineNr, extra: i32) {
         }
         check_cursor_col(win);
         changed_cline_bef_curs(win);
-        win.w_valid.clear(WinValid::BOTLINE_AP);
+        win.w_valid -= WinValid::BOTLINE_AP;
         update_topline(win);
     } else {
         invalidate_botline_win(win);

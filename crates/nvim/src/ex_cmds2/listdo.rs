@@ -115,7 +115,7 @@ pub(crate) fn ex_listdo(excmd: &mut ExArg) {
     if list.changes_buffer() {
         save_ei = Some(au_event_disable(c",Syntax"));
         for buf in buffers() {
-            buf.edit().b_flags.clear(BufFlags::SYN_SET);
+            buf.edit().b_flags -= BufFlags::SYN_SET;
         }
     }
 
@@ -360,7 +360,7 @@ fn restore_syntax_events(save_ei: Option<XString>) {
     while let Some(buf) = cur {
         let mut bnext = buf.next();
         if buf.b_nwindows() > 0 && buf.b_flags().has(BufFlags::SYN_SET) {
-            buf.edit().b_flags.clear(BufFlags::SYN_SET);
+            buf.edit().b_flags -= BufFlags::SYN_SET;
             // Read before the switch: the autocommands may change either.
             let (syn, name) = (
                 Some(buf.read().b_p_syn.get()),

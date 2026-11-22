@@ -273,7 +273,7 @@ fn do_filter(
     // Temporarily disable lockmarks since that's needed to propagate changed
     // regions of the buffer for fold_update(), linecount, etc.
     let save_cmod_flags = CMDMOD.with(|mods| mods.cmod_flags);
-    CMDMOD.with_mut(|mods| mods.cmod_flags.clear(CmdModFlags::LOCKMARKS));
+    CMDMOD.with_mut(|mods| mods.cmod_flags -= CmdModFlags::LOCKMARKS);
 
     Win::current().w_cursor.lnum = line1;
     Win::current().w_cursor.col = ColNr::ZERO;

@@ -550,7 +550,7 @@ impl MemLine {
         self.ml_line.lnum = lnum;
         self.ml_line.text = CachedText::Owned(text);
         self.ml_line.textlen = textlen;
-        self.ml_flags.clear(MlFlags::EMPTY);
+        self.ml_flags -= MlFlags::EMPTY;
     }
 
     /// Say that line `lnum`, `textlen` bytes long with its NUL, is about to
@@ -560,7 +560,7 @@ impl MemLine {
         self.ml_line.lnum = lnum;
         self.ml_line.text = CachedText::None;
         self.ml_line.textlen = textlen;
-        self.ml_flags.clear(MlFlags::EMPTY);
+        self.ml_flags -= MlFlags::EMPTY;
     }
 
     /// Swap the cached line's text for `text` (the line and its NUL), which
@@ -574,7 +574,7 @@ impl MemLine {
         let textlen = ColNr::try_from(text.len()).expect("a line shorter than INT_MAX");
         self.ml_line.text = CachedText::Owned(text);
         self.ml_line.textlen = textlen;
-        self.ml_flags.clear(MlFlags::EMPTY);
+        self.ml_flags -= MlFlags::EMPTY;
     }
 
     /// Whether the cached text is a replacement that has to be written back:

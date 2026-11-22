@@ -450,7 +450,7 @@ impl KeyLoop {
             };
             if flag.has(HlAttrFlags::UNDERLINE_MASK) {
                 // The underline styles share a field.
-                attr.clear(HlAttrFlags::UNDERLINE_MASK);
+                attr -= HlAttrFlags::UNDERLINE_MASK;
             }
             attr |= flag;
             off += name.count_bytes();
@@ -500,7 +500,7 @@ impl KeyLoop {
         // there to reach a light colour.
         if foreground && group(self.id).cterm_bold {
             with_group(self.id, |entry| {
-                entry.cterm.clear(HlAttrFlags::BOLD);
+                entry.cterm -= HlAttrFlags::BOLD;
                 entry.cterm_bold = false;
             });
         }
@@ -535,7 +535,7 @@ impl KeyLoop {
                     entry.cterm_bold = true;
                 });
             } else if bold == Some(false) {
-                with_group(self.id, |entry| entry.cterm.clear(HlAttrFlags::BOLD));
+                with_group(self.id, |entry| entry.cterm -= HlAttrFlags::BOLD);
             }
             color
         };

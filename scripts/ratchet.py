@@ -2695,8 +2695,36 @@ def is_place(ty, deref_mut):
     )
 
 
-def place_writes(tree):
-    """`accessor().field = …` where the accessor answers by value."""
+# A getter `slot_fields!` generates (`winlayer/deref*.rs`): `name, set_name:
+# Type;` or `name: Type;`, each answering a copy of the field. No `fn` is
+# written for them, so `fn_returns` cannot see them; p46's getter sweep
+# shipped `&mut buf.b_ind_level()` and `buf.b_flags().clear(..)` through
+# exactly that gap.
+SLOT_FIELDS_BLOCK = re.compile(r"\bslot_fields!\s*[({]")
+SLOT_FIELD = re.compile(
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:,\s*[A-Za-z_][A-Za-z0-9_]*)?\s*:\s*([^;=]+?)\s*(?:=[^;]*)?;",
+    re.M,
+)
+
+
+def slot_field_returns(masked, out):
+    """name -> {Type} for every getter a `slot_fields!` invocation declares."""
+    for block in SLOT_FIELDS_BLOCK.finditer(masked):
+        opened = block.end() - 1
+        closer = {"(": ")", "{": "}"}[masked[opened]]
+        end = balanced(masked, opened, masked[opened], closer)
+        body = masked[opened + 1 : end]
+        # The macro's own definition matches the name too; its arms are
+        # `$field`-shaped and declare nothing.
+        if "$" in body:
+            continue
+        for field in SLOT_FIELD.finditer(body):
+            out.setdefault(field.group(1), set()).add(field.group(2).strip())
+
+
+def by_value_accessors(tree):
+    """name -> declared return types, for the names no declaration of which
+    answers a place (`&`, `*`, a `DerefMut` newtype)."""
     returns = {}
     deref_mut = set()
     aliases = {}
@@ -2705,17 +2733,28 @@ def place_writes(tree):
         deref_mut.update(DEREF_MUT_MACRO.findall(masked))
         aliases.update(TYPE_ALIAS.findall(masked))
         fn_returns(masked, returns)
+        slot_field_returns(masked, returns)
     # Chase aliases to a fixed point: `Op` is a place because `SlotRef<T>` is.
     for _ in range(len(aliases)):
         grown = {name for name, base in aliases.items() if base in deref_mut}
         if grown <= deref_mut:
             break
         deref_mut |= grown
+    return {
+        name: declared
+        for name, declared in returns.items()
+        if not any(is_place(t, deref_mut) for t in declared)
+    }
+
+
+def place_writes(tree, by_value=None):
+    """`accessor().field = …` where the accessor answers by value."""
+    by_value = by_value_accessors(tree) if by_value is None else by_value
     found = []
     for file, masked in sorted(tree.items()):
         for match in PLACE_WRITE.finditer(masked):
-            declared = returns.get(match.group(1))
-            if declared is None or any(is_place(t, deref_mut) for t in declared):
+            declared = by_value.get(match.group(1))
+            if declared is None:
                 continue
             line = masked.count("\n", 0, match.start()) + 1
             found.append(
@@ -2723,6 +2762,89 @@ def place_writes(tree):
                 f"{' or '.join(sorted(declared))}"
             )
     return found
+
+
+# `accessor().method(..)` and `&mut ….accessor()`: the other two faces of a
+# write into an accessor's by-value answer. A `&mut self` method autorefs
+# the copy; `&mut` of a call is a mutable temporary. Both compile and both
+# change nothing. (A flag word's `-=`/`^=` and every other compound
+# assignment refuse a temporary at compile time, which is why `flag_set!`
+# has no `clear`/`toggle` method.)
+ACCESSOR_METHOD = re.compile(
+    r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:::<[^>]*>\s*)?\("
+)
+ACCESSOR_BORROW = re.compile(
+    r"&\s*mut\s+(?:[A-Za-z_][A-Za-z0-9_:]*\s*(?:\(\s*\))?\s*\.\s*)*"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*\(\)(?!\s*[.(\[?])"
+)
+
+
+def accessor_temporary_mutations(tree):
+    """`buf.b_flags().take()`, `&mut buf.b_ind_level()` -- a write into the
+    copy a `slot_fields!` getter answered.
+
+    Only those getters: elsewhere a by-value answer is as often a handle,
+    a guard or a fresh owner that is meant to be changed (`iter().any(..)`,
+    `inbox().drain(..)`, `&mut options()`), and a name-keyed scan cannot
+    tell them apart."""
+    getters = {}
+    for masked in tree.values():
+        slot_field_returns(masked, getters)
+    declared_elsewhere = set()
+    for masked in tree.values():
+        declared_elsewhere.update(sig.name for sig in fn_signatures(masked))
+    getters = {
+        name: types for name, types in getters.items() if name not in declared_elsewhere
+    }
+    mutating = mutating_methods(tree) | MUTATING_STD
+    found = []
+    for file, masked in sorted(tree.items()):
+        for match in ACCESSOR_METHOD.finditer(masked):
+            if match.group(1) in getters and match.group(2) in mutating:
+                line = masked.count("\n", 0, match.start()) + 1
+                found.append(
+                    f"  {file}:{line}: {match.group(1)}().{match.group(2)}(..)"
+                )
+        for match in ACCESSOR_BORROW.finditer(masked):
+            if match.group(1) in getters:
+                line = masked.count("\n", 0, match.start()) + 1
+                found.append(f"  {file}:{line}: &mut ….{match.group(1)}()")
+    return found
+
+
+# The standard library's `&mut self` methods on what a getter answers (an
+# `Option`, an array), which `mutating_methods` cannot see.
+MUTATING_STD = frozenset(
+    {
+        "take",
+        "take_if",
+        "replace",
+        "insert",
+        "get_or_insert",
+        "get_or_insert_with",
+        "as_mut",
+        "as_deref_mut",
+        "iter_mut",
+        "fill",
+        "swap",
+        "sort",
+        "sort_unstable",
+        "reverse",
+        "as_mut_slice",
+        "copy_from_slice",
+    }
+)
+
+
+def check_accessor_temporary_mutations(tree):
+    if found := accessor_temporary_mutations(tree):
+        sys.exit(
+            "ratchet: a write into the copy a by-value accessor answered is a "
+            "silent no-op:\n"
+            + "\n".join(found)
+            + "\nCopy, change and store back through the setter "
+            "(`x.set_f(…)`), or take the field through `edit()`."
+        )
 
 
 def mutating_methods(tree):
@@ -6298,6 +6420,7 @@ def main():
         breakdown(sites, dimension)
         return
     check_place_writes(tree)
+    check_accessor_temporary_mutations(tree)
     check_borrowed_derefs(tree)
     check_deref_temporary_mutations(tree)
     check_self_projections(tree)

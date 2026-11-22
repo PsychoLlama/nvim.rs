@@ -154,8 +154,8 @@ impl Win {
             || self.w_skipcol != old_skipcol
             || self.w_topfill != old_topfill
         {
-            self.w_valid
-                .clear(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP);
+            self.w_valid -=
+                WinValid::WROW | WinValid::CROW | WinValid::BOTLINE | WinValid::BOTLINE_AP;
         }
         self.w_valid |= WinValid::TOPLINE;
         self.w_viewport_invalid = true;
@@ -217,7 +217,7 @@ impl Win {
                 || self.w_skipcol != old_skipcol
                 || self.w_skipcol != ColNr::ZERO
             {
-                self.w_valid.clear(WinValid::WROW | WinValid::CROW);
+                self.w_valid -= WinValid::WROW | WinValid::CROW;
                 if self.w_skipcol != old_skipcol {
                     self.redraw_later(UPD_NOT_VALID);
                 } else {

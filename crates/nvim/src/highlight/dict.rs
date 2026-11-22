@@ -238,7 +238,7 @@ fn apply_flag(mask: &mut HlAttrFlags, on: bool, flag: HlAttrFlags) {
     if on {
         *mask = mask.without(field) | flag;
     } else if mask.masked(field) == flag {
-        mask.clear(field);
+        *mask -= field;
     }
 }
 
@@ -250,7 +250,7 @@ fn set_flag(mask: &mut HlAttrFlags, on: bool, flag: HlAttrFlags) {
         return;
     }
     if flag.has(HlAttrFlags::UNDERLINE_MASK) {
-        mask.clear(HlAttrFlags::UNDERLINE_MASK);
+        *mask -= HlAttrFlags::UNDERLINE_MASK;
     }
     *mask |= flag;
 }

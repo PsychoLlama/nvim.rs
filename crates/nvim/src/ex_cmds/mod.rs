@@ -316,7 +316,7 @@ pub fn ex_oldfiles(excmd: &mut ExArg) {
     let expanded = expand_env(picked, false);
     excmd.set_arg_text(&expanded);
     excmd.cmdidx = CmdIdx::edit;
-    CMDMOD.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
+    CMDMOD.with_mut(|m| m.cmod_flags -= CmdModFlags::BROWSE);
     excmd.exedit(None);
 }
 

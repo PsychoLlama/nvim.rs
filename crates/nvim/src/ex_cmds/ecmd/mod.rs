@@ -364,7 +364,7 @@ fn edit(
     // If the file name was changed, reset the not-edit flag so that
     // ":write" works.
     if !other_file {
-        Buf::current().edit().b_flags.clear(BufFlags::NOTEDITED);
+        Buf::current().edit().b_flags -= BufFlags::NOTEDITED;
     }
 
     // Check if we are editing the w_arg_idx file in the argument list.

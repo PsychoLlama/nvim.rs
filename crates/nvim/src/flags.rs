@@ -44,7 +44,9 @@
 /// The generated type has `NONE`, the named members, `bits`/`from_bits` for
 /// the boundaries where a raw integer is unavoidable, `has` (any of the
 /// asked-for bits are set), `has_all` (all of them), `masked`,
-/// `without`/`clear`, `is_empty`, and `|`/`|=`.
+/// `without`, `is_empty`, and `|`/`|=`/`-=`/`^=` -- in-place changes are
+/// operators only, which refuse a temporary (a getter's copy) at compile
+/// time where a `&mut self` method would change the copy silently.
 ///
 /// The word is a `c_int` unless the head names another integer:
 ///
@@ -171,21 +173,6 @@ macro_rules! flag_set {
                 Self(self.0 & flags.0)
             }
 
-            /// Drop `flags` in place: C's `opts &= ~FOO`. The `|=`
-            /// counterpart, and the reason the field's own name need not
-            /// appear twice.
-            #[inline]
-            $vis const fn clear(&mut self, flags: Self) {
-                self.0 &= !flags.0;
-            }
-
-            /// Flip `flags` in place: C's `opts ^= FOO`, for the handful of
-            /// words a caller toggles rather than sets or clears.
-            #[inline]
-            $vis const fn toggle(&mut self, flags: Self) {
-                self.0 ^= flags.0;
-            }
-
             /// Every flag of `self` that is not in `flags`: C's `& ~FOO`.
             #[inline]
             $vis const fn without(self, flags: Self) -> Self {
@@ -211,6 +198,26 @@ macro_rules! flag_set {
             #[inline]
             fn bitor_assign(&mut self, rhs: Self) {
                 self.0 |= rhs.0;
+            }
+        }
+
+        /// Drop `rhs`'s flags in place: C's `opts &= ~FOO`. An operator,
+        /// not a `&mut self` method, so that it refuses a temporary: a
+        /// getter's copy (`buf.b_flags() -= F`) does not compile, where
+        /// `buf.b_flags().clear(F)` compiled and cleared nothing.
+        impl ::core::ops::SubAssign for $Name {
+            #[inline]
+            fn sub_assign(&mut self, rhs: Self) {
+                self.0 &= !rhs.0;
+            }
+        }
+
+        /// Flip `rhs`'s flags in place: C's `opts ^= FOO`. An operator for
+        /// the reason `-=` is.
+        impl ::core::ops::BitXorAssign for $Name {
+            #[inline]
+            fn bitxor_assign(&mut self, rhs: Self) {
+                self.0 ^= rhs.0;
             }
         }
 

@@ -116,10 +116,10 @@ pub(crate) fn do_throw(cond: CondId) {
                 } else {
                     // THROWN may be left over from a catchable exception
                     // that was discarded; reset it for the new one.
-                    flags.clear(CsFlags::THROWN);
+                    *flags -= CsFlags::THROWN;
                 }
             }
-            flags.clear(CsFlags::ACTIVE);
+            *flags -= CsFlags::ACTIVE;
             cs.set_pending_exception(at, CURRENT_EXCEPTION.get());
         });
     }

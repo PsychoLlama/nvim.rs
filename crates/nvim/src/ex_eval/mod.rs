@@ -455,9 +455,9 @@ pub(crate) fn ex_while(excmd: &mut ExArg) {
     cond.with(|cs| {
         if !skip && !error && result {
             cs.flags[at] |= CsFlags::ACTIVE | CsFlags::TRUE;
-            cs.loop_flags.toggle(CsLoopFlags::HAD_LOOP);
+            cs.loop_flags ^= CsLoopFlags::HAD_LOOP;
         } else {
-            cs.loop_flags.clear(CsLoopFlags::HAD_LOOP);
+            cs.loop_flags -= CsLoopFlags::HAD_LOOP;
             // The ":while" was FALSE or the ":for" ran off the end of the
             // list: show the debug prompt at the ":endwhile"/":endfor" as
             // if there had been a ":break" in a TRUE loop.
@@ -683,7 +683,7 @@ pub(crate) fn cleanup_conditionals(
             stop = true;
         }
         let leave_silent = cond.with(|cs| {
-            cs.flags[at].clear(CsFlags::ACTIVE);
+            cs.flags[at] -= CsFlags::ACTIVE;
             if stop && searched_cond != CsFlags::TRY | CsFlags::SILENT {
                 return None;
             }
@@ -691,7 +691,7 @@ pub(crate) fn cleanup_conditionals(
             // restore the saved value.
             let flags = cs.flags[at];
             if flags.has(CsFlags::TRY) && flags.has(CsFlags::SILENT) {
-                cs.flags[at].clear(CsFlags::SILENT);
+                cs.flags[at] -= CsFlags::SILENT;
                 let saved = cs.saved_emsg_silent.pop();
                 return Some(Some(saved.expect("a :try that reset it saved emsg_silent")));
             }

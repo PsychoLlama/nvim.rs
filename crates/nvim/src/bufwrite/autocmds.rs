@@ -265,9 +265,9 @@ impl Buf {
                     // Assume the written was written; update the timestamp.
                     ml_timestamp(written);
                     if mode.req.append {
-                        written.edit().b_flags.clear(BufFlags::NEW);
+                        written.edit().b_flags -= BufFlags::NEW;
                     } else {
-                        written.edit().b_flags.clear(BufFlags::WRITE_MASK);
+                        written.edit().b_flags -= BufFlags::WRITE_MASK;
                     }
                 }
                 if mode.req.reset_changed

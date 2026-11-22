@@ -86,7 +86,7 @@ pub fn simplify_key(key: Key, modifiers: &mut ModMask) -> Key {
     }
     // TAB is the one key with a shifted code but no unshifted termcap row.
     if key == Key::TAB && modifiers.has(ModMask::SHIFT) {
-        modifiers.clear(ModMask::SHIFT);
+        *modifiers -= ModMask::SHIFT;
         return SpecialKey::STab.into();
     }
     match simplify(key, *modifiers) {
@@ -470,7 +470,7 @@ fn extract_modifiers(
         key = to_upper_ascii(key);
         // <C-S-a> keeps the shift; <S-a>, <A-S-a> and <S-A> do not.
         if !modifiers.has(ModMask::CTRL) {
-            modifiers.clear(ModMask::SHIFT);
+            *modifiers -= ModMask::SHIFT;
         }
     }
     // <C-H> and <C-h> mean the same thing; always use "H".
@@ -481,7 +481,7 @@ fn extract_modifiers(
     if simplify && modifiers.has(ModMask::CTRL) && (ctrl_able(key) || is_ascii_alpha(key)) {
         let upper = to_upper_ascii(key).as_byte().expect("an ASCII character");
         key = Key::byte(upper ^ 0x40);
-        modifiers.clear(ModMask::CTRL);
+        *modifiers -= ModMask::CTRL;
         if key.is_nul() {
             key = SpecialKey::Zero.into(); // <C-@> is <Nul>
         }

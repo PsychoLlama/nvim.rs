@@ -199,9 +199,7 @@ pub fn reset_lbr() -> bool {
     }
     Win::current().w_onebuf_opt.wo_lbr = 0;
     // Changing 'linebreak' may require w_virtcol to be recomputed.
-    Win::current()
-        .w_valid
-        .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
+    Win::current().w_valid -= WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL;
     true
 }
 
@@ -213,9 +211,7 @@ pub fn restore_lbr(lbr_saved: bool) {
         return;
     }
     Win::current().w_onebuf_opt.wo_lbr = 1;
-    Win::current()
-        .w_valid
-        .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
+    Win::current().w_valid -= WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL;
 }
 
 /// Where the block sits in one line: fill `bd` for `lnum` of the current

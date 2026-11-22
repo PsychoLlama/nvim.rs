@@ -224,7 +224,7 @@ fn qf_getprop_keys2flags(what: &Dict, loclist: bool) -> GetListProps {
     if asked_for(what, "all") {
         flags |= GetListProps::ALL;
         if !loclist {
-            flags.clear(GetListProps::FILEWINID);
+            flags -= GetListProps::FILEWINID;
         }
     }
     for (key, flag) in GETLIST_KEYS {

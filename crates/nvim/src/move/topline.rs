@@ -333,14 +333,12 @@ impl Win {
 
 fn check_cursor_moved_win(mut win: Win) {
     if win.w_cursor.lnum != win.w_valid_cursor.lnum {
-        win.w_valid.clear(
-            WinValid::WROW
-                | WinValid::WCOL
-                | WinValid::VIRTCOL
-                | WinValid::CHEIGHT
-                | WinValid::CROW
-                | WinValid::TOPLINE,
-        );
+        win.w_valid -= WinValid::WROW
+            | WinValid::WCOL
+            | WinValid::VIRTCOL
+            | WinValid::CHEIGHT
+            | WinValid::CROW
+            | WinValid::TOPLINE;
         // Concealed-line visibility toggled.
         if win.is_current()
             && win.w_valid_cursor.lnum > LineNr::ZERO
@@ -356,15 +354,13 @@ fn check_cursor_moved_win(mut win: Win) {
         win.w_valid_skipcol = win.w_skipcol;
         win.w_viewport_invalid = true;
     } else if win.w_skipcol != win.w_valid_skipcol {
-        win.w_valid.clear(
-            WinValid::WROW
-                | WinValid::WCOL
-                | WinValid::VIRTCOL
-                | WinValid::CHEIGHT
-                | WinValid::CROW
-                | WinValid::BOTLINE
-                | WinValid::BOTLINE_AP,
-        );
+        win.w_valid -= WinValid::WROW
+            | WinValid::WCOL
+            | WinValid::VIRTCOL
+            | WinValid::CHEIGHT
+            | WinValid::CROW
+            | WinValid::BOTLINE
+            | WinValid::BOTLINE_AP;
         win.w_valid_cursor = win.w_cursor;
         win.w_valid_leftcol = win.w_leftcol;
         win.w_valid_skipcol = win.w_skipcol;

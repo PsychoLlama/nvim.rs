@@ -101,7 +101,7 @@ pub fn reset_lnums() {
             wp.w_topline = LineNr::new(wp.w_save_cursor.w_topline_save);
         }
         if LineNr::new(wp.w_save_cursor.w_topline_save) > wp.buffer().line_count() {
-            wp.w_valid.clear(WinValid::TOPLINE);
+            wp.w_valid -= WinValid::TOPLINE;
         }
     }
 }

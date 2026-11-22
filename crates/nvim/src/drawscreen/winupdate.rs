@@ -843,7 +843,7 @@ fn finish_botline(mut window: Win, buffer: Buf, old_botline: LineNr, nrwidth_bef
         if window.raw() == Win::current_raw() && window.w_botline != old_botline && !RECURSIVE.get()
         {
             RECURSIVE.set(true);
-            Win::current().w_valid.clear(WinValid::TOPLINE);
+            Win::current().w_valid -= WinValid::TOPLINE;
             update_topline(Win::current()); // may invalidate w_botline again
             // A new redraw, either from a moved topline or a reset skipcol.
             if MUST_REDRAW.get() != 0 {

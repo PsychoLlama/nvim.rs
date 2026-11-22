@@ -78,9 +78,7 @@ impl Buf {
                     if old_mark.pos.row == row && old_mark.pos.col == col.get() {
                         // Not paired: the key can be revised where it lies.
                         if !mt_invalid(old_mark) && mt_decor_any(old_mark) {
-                            itr_rawkey(&mut self.marktree(), &iter)
-                                .flags
-                                .clear(MtFlags::EXTERNAL_MASK);
+                            itr_rawkey(&mut self.marktree(), &iter).flags -= MtFlags::EXTERNAL_MASK;
                             decor_remove(self, row, row, col.get(), mt_decor(old_mark), true);
                         }
                         itr_rawkey(&mut self.marktree(), &iter).flags |= flags;
@@ -165,12 +163,8 @@ pub(crate) fn extmark_setraw(buffer: Buf, mark: uint64_t, row: c_int, col: ColNr
     let alt = tree_get_alt(&mut buffer.marktree(), key, Some(&mut alt_iter));
 
     if invalid {
-        itr_rawkey(&mut buffer.marktree(), &iter)
-            .flags
-            .clear(MtFlags::INVALID);
-        itr_rawkey(&mut buffer.marktree(), &alt_iter)
-            .flags
-            .clear(MtFlags::INVALID);
+        itr_rawkey(&mut buffer.marktree(), &iter).flags -= MtFlags::INVALID;
+        itr_rawkey(&mut buffer.marktree(), &alt_iter).flags -= MtFlags::INVALID;
         let (revised, old) = if mt_end(key) {
             (&mut alt_iter, alt)
         } else {

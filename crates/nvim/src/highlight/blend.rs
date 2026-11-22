@@ -134,9 +134,7 @@ fn blend_through(ratio: c_int, back: &HlAttrs, back_raw: &HlAttrs, front: &HlAtt
     blended.cterm_bg_color = front.cterm_bg_color;
     blended.cterm_fg_color = cterm_blend(ratio, back.cterm_fg_color, front.cterm_bg_color);
     // Both colours are now mixtures, so neither is a palette index.
-    blended
-        .rgb_ae_attr
-        .clear(HlAttrFlags::FG_INDEXED | HlAttrFlags::BG_INDEXED);
+    blended.rgb_ae_attr -= HlAttrFlags::FG_INDEXED | HlAttrFlags::BG_INDEXED;
     blended
 }
 
@@ -150,9 +148,7 @@ fn blend_over(ratio: c_int, back: &HlAttrs, front: &HlAttrs) -> HlAttrs {
     } else {
         -1
     };
-    blended
-        .rgb_ae_attr
-        .clear(HlAttrFlags::FG_INDEXED | HlAttrFlags::BG_INDEXED);
+    blended.rgb_ae_attr -= HlAttrFlags::FG_INDEXED | HlAttrFlags::BG_INDEXED;
     blended
 }
 
@@ -186,7 +182,7 @@ fn get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     // blended has to be the colours the cell would really have shown.
     if attrs.rgb_ae_attr.has(HlAttrFlags::INVERSE) {
         core::mem::swap(&mut attrs.rgb_bg_color, &mut attrs.rgb_fg_color);
-        attrs.rgb_ae_attr.clear(HlAttrFlags::INVERSE);
+        attrs.rgb_ae_attr -= HlAttrFlags::INVERSE;
     }
     attrs
 }

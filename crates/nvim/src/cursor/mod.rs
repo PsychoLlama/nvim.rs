@@ -101,7 +101,7 @@ impl Win {
 
     #[inline(always)]
     fn invalidate_virtcol(mut self) {
-        self.w_valid.clear(WinValid::VIRTCOL);
+        self.w_valid -= WinValid::VIRTCOL;
     }
 
     #[inline(always)]

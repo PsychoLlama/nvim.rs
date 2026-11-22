@@ -631,7 +631,7 @@ fn skip_one_line(
 fn restart_for_statuscol(mut window: Win) {
     window.w_redr_statuscol = false;
     window.w_lines_valid = 0;
-    window.w_valid.clear(WinValid::WCOL);
+    window.w_valid -= WinValid::WCOL;
     window.decor_redraw_reset();
     decor_providers_invoke_win(window);
 }

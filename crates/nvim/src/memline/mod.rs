@@ -485,7 +485,7 @@ pub fn ml_close(buffer: Buf, del_file: ::core::ffi::c_int) {
 
     // Clear the "recovered" flag, so the ATTENTION prompt comes back the
     // next time this buffer is loaded.
-    buffer.edit().b_flags.clear(BufFlags::RECOVERED);
+    buffer.edit().b_flags -= BufFlags::RECOVERED;
 }
 
 /// Close every memline and memfile. Only used when exiting.

@@ -245,7 +245,7 @@ fn wipe_ft_buf(buffer: Buf) {
         wipe_buffer(buffer, false);
     }
     if bufref.valid() {
-        buffer.edit().b_flags.clear(BufFlags::DUMMY);
+        buffer.edit().b_flags -= BufFlags::DUMMY;
     }
     unblock_autocmds();
 }

@@ -322,7 +322,7 @@ fn dump_language(
                 {
                     word[d] = 0;
                     if !do_region {
-                        flags.clear(WordFlags::REGION);
+                        flags -= WordFlags::REGION;
                     }
 
                     // Dump the bare word when it has no prefix, or

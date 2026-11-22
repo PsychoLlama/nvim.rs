@@ -544,7 +544,7 @@ fn combine_attr_uncached(char_attr: c_int, prim_attr: c_int) -> c_int {
     // overriding set had it too.
     let inherit = |mask: &mut HlAttrFlags, flag: HlAttrFlags| {
         if !prim_aep.rgb_ae_attr.has(flag) {
-            mask.clear(flag);
+            *mask -= flag;
         }
     };
     if prim_aep.cterm_fg_color > 0 {

@@ -86,7 +86,7 @@ pub(crate) fn load_dummy_buffer(
 
         // Remove the "dummy" flag, otherwise autocommands may not
         // work.
-        Buf::current().edit().b_flags.clear(BufFlags::DUMMY);
+        Buf::current().edit().b_flags -= BufFlags::DUMMY;
 
         let mut newbuf_to_wipe = BufRef::NONE;
         let read = read_dummy_file(fname);
@@ -148,7 +148,7 @@ impl Buf {
             }
             if !did_one {
                 // The buffer keeps a window; it can only stop being a dummy.
-                self.edit().b_flags.clear(BufFlags::DUMMY);
+                self.edit().b_flags -= BufFlags::DUMMY;
                 return;
             }
         }
@@ -168,7 +168,7 @@ impl Buf {
             return;
         }
 
-        self.edit().b_flags.clear(BufFlags::DUMMY);
+        self.edit().b_flags -= BufFlags::DUMMY;
     }
 }
 

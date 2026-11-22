@@ -58,7 +58,7 @@ pub(crate) fn did_set_titleiconstring(args: &OptSet, flagval: StlSyntax) -> Resu
     if formatted {
         syntax |= flagval;
     } else {
-        syntax.clear(flagval);
+        syntax -= flagval;
     }
     STL_SYNTAX.set(syntax);
     did_set_title();

@@ -299,7 +299,7 @@ fn run_read_cmd(
         // like ":edit", so reset BufFlags::NOTEDITED and let ":write"
         // overwrite the file.
         if how.newfile {
-            Buf::current().edit().b_flags.clear(BufFlags::NOTEDITED);
+            Buf::current().edit().b_flags -= BufFlags::NOTEDITED;
         }
         return Some(Ok(Loaded::Read));
     }
@@ -396,10 +396,7 @@ fn remember_file_time(fname: Option<&CStr>) -> (Option<FileInfo>, c_int) {
         Buf::current().set_b_orig_size(0);
         Buf::current().set_b_orig_mode(0);
     }
-    Buf::current()
-        .edit()
-        .b_flags
-        .clear(BufFlags::NEW | BufFlags::NEW_W);
+    Buf::current().edit().b_flags -= BufFlags::NEW | BufFlags::NEW_W;
     (file_info, swap_mode)
 }
 

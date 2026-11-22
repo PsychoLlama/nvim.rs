@@ -469,14 +469,12 @@ pub fn changed_line_abv_curs_win(window: Win) {
 impl Win {
     /// Forget everything that depends on the cursor line's screen height.
     fn invalidate_above_cursor(mut self) {
-        self.w_valid.clear(
-            WinValid::WROW
-                | WinValid::WCOL
-                | WinValid::VIRTCOL
-                | WinValid::CROW
-                | WinValid::CHEIGHT
-                | WinValid::TOPLINE,
-        );
+        self.w_valid -= WinValid::WROW
+            | WinValid::WCOL
+            | WinValid::VIRTCOL
+            | WinValid::CROW
+            | WinValid::CHEIGHT
+            | WinValid::TOPLINE;
     }
 }
 
@@ -530,7 +528,7 @@ impl Win {
 
 /// Mark `w_botline` as only approximately right.
 pub fn approximate_botline_win(mut win: Win) {
-    win.w_valid.clear(WinValid::BOTLINE);
+    win.w_valid -= WinValid::BOTLINE;
 }
 
 /// Whether `w_wrow` and `w_wcol` are both right.

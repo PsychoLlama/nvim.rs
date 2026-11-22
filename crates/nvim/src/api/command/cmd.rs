@@ -505,7 +505,7 @@ fn apply_magic(
     if cmdinfo.magic.file {
         excmd.argt |= ExArgt::XFILE;
     } else {
-        excmd.argt.clear(ExArgt::XFILE);
+        excmd.argt -= ExArgt::XFILE;
     }
     Ok(())
 }

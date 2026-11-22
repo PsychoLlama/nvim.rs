@@ -98,7 +98,7 @@ pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
     coladvance(win, ColNr::new(i));
     if to_first_non_blank {
         while ascii_iswhite(gchar_cursor()) && oneright().is_ok() {}
-        win.w_valid.clear(WinValid::WCOL);
+        win.w_valid -= WinValid::WCOL;
     }
     win.w_set_curswant = true;
     // Inside a closed fold the wanted column is the one that was asked
@@ -185,7 +185,7 @@ pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
     }
     if to_last_non_blank {
         while ascii_iswhite_or_nul(gchar_cursor()) && oneleft().is_ok() {}
-        win.w_valid.clear(WinValid::WCOL);
+        win.w_valid -= WinValid::WCOL;
     }
 }
 

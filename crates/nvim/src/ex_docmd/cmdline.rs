@@ -298,14 +298,13 @@ fn advance_loop(
         {
             if cs.loop_flags.has(CsLoopFlags::HAD_LOOP) {
                 // A `:while` or `:for` remembers where its body starts.
-                cs.loop_flags.clear(CsLoopFlags::HAD_LOOP);
+                cs.loop_flags -= CsLoopFlags::HAD_LOOP;
                 let top = cs.top().expect("a loop level is open");
                 cs.line[top] = current_line_before;
             }
             return Ok(None);
         }
-        cs.loop_flags
-            .clear(CsLoopFlags::HAD_CONT | CsLoopFlags::HAD_ENDLOOP);
+        cs.loop_flags -= CsLoopFlags::HAD_CONT | CsLoopFlags::HAD_ENDLOOP;
 
         // Only a `:while` or `:for` level has a usable `line`; taking one
         // from any other kind would make `current_line` point outside the
@@ -602,7 +601,7 @@ impl Run {
         // ran made pending, and what the loop asks until the next command.
         let (finally, seen) = cond.with(|cs| {
             let finally = cs.loop_flags.has(CsLoopFlags::HAD_FINA);
-            cs.loop_flags.clear(CsLoopFlags::HAD_FINA);
+            cs.loop_flags -= CsLoopFlags::HAD_FINA;
             let pending = finally.then(|| cs.pending[cs.top().expect("the :try is open")]);
             (pending, cs.summary())
         });

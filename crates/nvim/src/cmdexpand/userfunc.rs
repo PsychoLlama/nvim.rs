@@ -144,7 +144,7 @@ pub(crate) fn expand_shellcmd(filepat: &CStr, flagsarg: ExpandFlags) -> Vec<XStr
                 flags |= ExpandFlags::DIR;
             } else {
                 // Do not match directories inside a $PATH item.
-                flags.clear(ExpandFlags::DIR);
+                flags -= ExpandFlags::DIR;
             }
 
             // Upstream's `after_pathsep`: does the entry already end in one?

@@ -504,7 +504,7 @@ impl Walk<'_> {
             if let Some(tail) = prev_word_tail
                 && spell_iswordp_nmw(&self.preword[tail..], Win::current())
             {
-                caps.clear(WordFlags::ONECAP);
+                caps -= WordFlags::ONECAP;
             }
             make_case_word(good, &mut self.preword[preword_len..], caps);
         }

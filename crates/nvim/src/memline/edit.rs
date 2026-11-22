@@ -124,7 +124,7 @@ pub(crate) fn ml_append_int(
         drop(ml);
         return append_by_walk(buffer, lnum, &new, space_needed);
     }
-    ml.ml_flags.clear(MlFlags::EMPTY);
+    ml.ml_flags -= MlFlags::EMPTY;
     ml.ml_line_count += 1;
     // The line was inserted below `lnum`.
     buffer.update_line_chunks_held(ml, lnum + 1, new.len().cast_signed(), ML_CHNK_ADDLINE);
@@ -203,7 +203,7 @@ fn append_by_walk(
     ) else {
         return Err(LineError::Broken);
     };
-    buffer.ml().ml_flags.clear(MlFlags::EMPTY);
+    buffer.ml().ml_flags -= MlFlags::EMPTY;
 
     // Index of `lnum` within the block. Negative when the block found was
     // line one's rather than `lnum`'s, which is the `lnum == 0` case.

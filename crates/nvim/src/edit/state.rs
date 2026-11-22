@@ -123,9 +123,7 @@ fn insert_enter(s: &mut InsertState) {
     // The cursor needs positioning again when it is on a TAB, and when
     // the line carries inline virtual text.
     if gchar_cursor() == b'\t' || buf_meta_total(Buf::current(), MT_META_INLINE) > 0 {
-        Win::current()
-            .w_valid
-            .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
+        Win::current().w_valid -= WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL;
     }
     if Buf::current().b_p_iminsert() == B_IMODE_LMAP {
         STATE.set(STATE.get() | MODE_LANGMAP);

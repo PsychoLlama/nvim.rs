@@ -316,9 +316,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
             }
         } else {
             Win::current().w_cursor.col -= 1;
-            Win::current()
-                .w_valid
-                .clear(WinValid::WCOL | WinValid::VIRTCOL);
+            Win::current().w_valid -= WinValid::WCOL | WinValid::VIRTCOL;
             // Correct the cursor for a multi-byte character.
             mb_adjust_cursor();
         }
@@ -330,9 +328,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: Key, nomove: bool) -> bool {
     // the line carries inline virtual text.
     if char_at_cursor() == c_int::from(b'\t') || buf_meta_total(Buf::current(), MT_META_INLINE) > 0
     {
-        Win::current()
-            .w_valid
-            .clear(WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL);
+        Win::current().w_valid -= WinValid::WROW | WinValid::WCOL | WinValid::VIRTCOL;
     }
 
     setmouse();

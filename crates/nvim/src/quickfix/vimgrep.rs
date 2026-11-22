@@ -449,13 +449,13 @@ impl Buf {
             {
                 unload_dummy_buffer(self, dirname_start);
                 // Keeping the buffer, remove the dummy flag.
-                self.edit().b_flags.clear(BufFlags::DUMMY);
+                self.edit().b_flags -= BufFlags::DUMMY;
                 return;
             }
         }
 
         // Keeping the buffer, remove the dummy flag.
-        self.edit().b_flags.clear(BufFlags::DUMMY);
+        self.edit().b_flags -= BufFlags::DUMMY;
 
         // The buffer is still loaded, so the jump below has to go to the
         // directory the search left it in.

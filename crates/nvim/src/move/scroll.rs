@@ -99,13 +99,11 @@ impl Win {
         let reached = self.coladvance(self.w_curswant);
         // `validate_virtcol()` marked various things valid; moving the cursor
         // has just invalidated them again.
-        self.w_valid.clear(
-            WinValid::WROW
-                | WinValid::WCOL
-                | WinValid::CHEIGHT
-                | WinValid::CROW
-                | WinValid::VIRTCOL,
-        );
+        self.w_valid -= WinValid::WROW
+            | WinValid::WCOL
+            | WinValid::CHEIGHT
+            | WinValid::CROW
+            | WinValid::VIRTCOL;
         if reached
             || self.w_skipcol == ColNr::ZERO
             || self.w_cursor.lnum >= self.buffer().line_count()
@@ -119,7 +117,7 @@ impl Win {
             self.w_cursor.col = ColNr::ZERO;
             self.w_cursor.coladd = 0;
             self.w_curswant = ColNr::ZERO;
-            self.w_valid.clear(WinValid::VIRTCOL);
+            self.w_valid -= WinValid::VIRTCOL;
         }
     }
 }
@@ -298,13 +296,11 @@ impl Win {
                 self.w_cursor.lnum = lnum - 1;
                 wrow -= self.plines(lnum, true);
             }
-            self.w_valid.clear(
-                WinValid::WROW
-                    | WinValid::WCOL
-                    | WinValid::CHEIGHT
-                    | WinValid::CROW
-                    | WinValid::VIRTCOL,
-            );
+            self.w_valid -= WinValid::WROW
+                | WinValid::WCOL
+                | WinValid::CHEIGHT
+                | WinValid::CROW
+                | WinValid::VIRTCOL;
             moved = true;
         }
         if moved {
@@ -413,13 +409,11 @@ impl Win {
             .without(WinValid::WROW | WinValid::CROW | WinValid::BOTLINE);
         if self.w_cursor.lnum < self.w_topline {
             self.w_cursor.lnum = self.w_topline;
-            self.w_valid.clear(
-                WinValid::WROW
-                    | WinValid::WCOL
-                    | WinValid::CHEIGHT
-                    | WinValid::CROW
-                    | WinValid::VIRTCOL,
-            );
+            self.w_valid -= WinValid::WROW
+                | WinValid::WCOL
+                | WinValid::CHEIGHT
+                | WinValid::CROW
+                | WinValid::VIRTCOL;
             self.coladvance(self.w_curswant);
         }
 

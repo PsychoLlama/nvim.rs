@@ -46,7 +46,7 @@ pub fn merge_modifiers(key: Key, modifiers: &mut ModMask) -> Key {
         c
     };
     if merged != c {
-        modifiers.clear(ModMask::CTRL);
+        *modifiers -= ModMask::CTRL;
     }
     Key::from_raw(merged)
 }

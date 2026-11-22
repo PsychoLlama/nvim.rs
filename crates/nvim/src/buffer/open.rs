@@ -478,10 +478,7 @@ fn open_buffer_inner(
     // Go to the buffer that was opened, make sure it is in a window.
     old.run_in(|| {
         do_modelines(OptionSetFlags::NONE);
-        Buf::current()
-            .edit()
-            .b_flags
-            .clear(BufFlags::CHECK_RO | BufFlags::NEVERLOADED);
+        Buf::current().edit().b_flags -= BufFlags::CHECK_RO | BufFlags::NEVERLOADED;
 
         if !flags.has(ReadFlags::NOWINENTER) {
             fire_autocmds_retval(AutoEvent::BufWinEnter, Buf::current(), &mut retval);

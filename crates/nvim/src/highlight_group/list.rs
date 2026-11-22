@@ -132,7 +132,7 @@ impl ValueBuf {
             }
             self.push(name);
             if !underline {
-                bits.clear(flag);
+                bits -= flag;
             }
         }
         self.finish()

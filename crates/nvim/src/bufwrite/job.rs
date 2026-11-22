@@ -521,9 +521,9 @@ impl WriteJob {
         if self.mode.overwriting {
             ml_timestamp(buf);
             if req.append {
-                buf.edit().b_flags.clear(BufFlags::NEW);
+                buf.edit().b_flags -= BufFlags::NEW;
             } else {
-                buf.edit().b_flags.clear(BufFlags::WRITE_MASK);
+                buf.edit().b_flags -= BufFlags::WRITE_MASK;
             }
         }
 

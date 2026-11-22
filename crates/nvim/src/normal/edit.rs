@@ -447,7 +447,7 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
     if opened {
         if win_cursorline_standout(win) {
             // The cursor line moved, so its highlight has to be redrawn.
-            win.w_valid.clear(WinValid::CROW);
+            win.w_valid -= WinValid::CROW;
         }
         invoke_edit(cmd_arg, false, cmd_arg.cmdchar, true);
     }

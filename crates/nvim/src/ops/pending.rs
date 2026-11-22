@@ -376,7 +376,7 @@ fn order_region(mut op: Op) {
         Win::current().w_cursor = op.start;
         // `w_virtcol` was updated for the old position and is not
         // recomputed automatically when the cursor goes back.
-        Win::current().w_valid.clear(WinValid::VIRTCOL);
+        Win::current().w_valid -= WinValid::VIRTCOL;
     } else {
         if !visual_active() && op.motion_type == MotionType::LineWise {
             if let Some(first) = win.fold_first(Win::current().w_cursor.lnum) {

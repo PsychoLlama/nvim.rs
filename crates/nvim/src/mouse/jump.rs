@@ -402,7 +402,7 @@ fn drag_or_extend(pos: &mut MousePos, flags: c_int, which_button: c_int) -> Opti
         // When dragging the mouse, while the text has been scrolled up as far
         // as it goes, moving the mouse in the top line should scroll the text
         // down (done later when recomputing w_topline).
-        win.w_valid.clear(WinValid::TOPLINE);
+        win.w_valid -= WinValid::TOPLINE;
     }
 
     None

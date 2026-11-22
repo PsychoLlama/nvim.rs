@@ -157,9 +157,9 @@ pub(crate) fn fix_scroll(resize: bool) {
                 wp.w_fraction = FRACTION_MULT;
                 to_fraction(wp, wp.w_prev_height);
                 wp.w_cursor = cursor;
-                wp.w_valid.clear(WinValid::WCOL);
+                wp.w_valid -= WinValid::WCOL;
             } else if wp.is_current() {
-                wp.w_valid.clear(WinValid::CROW);
+                wp.w_valid -= WinValid::CROW;
             }
             invalidate_botline(wp);
             validate_botline(wp);

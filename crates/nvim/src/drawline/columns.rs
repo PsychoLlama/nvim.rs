@@ -578,7 +578,7 @@ impl WinLineVars {
                     return;
                 }
                 stc.width += addwidth;
-                window.w_valid.clear(WinValid::WCOL);
+                window.w_valid -= WinValid::WCOL;
             }
         }
 

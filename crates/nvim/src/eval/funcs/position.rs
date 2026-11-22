@@ -302,7 +302,7 @@ fn append_curswant(l: &mut List, window: Option<Win>) {
         cur.w_set_curswant = saved_set_curswant;
         cur.w_curswant = saved_curswant;
         cur.w_virtcol = saved_virtcol;
-        cur.w_valid.clear(WinValid::VIRTCOL);
+        cur.w_valid -= WinValid::VIRTCOL;
     }
 }
 
