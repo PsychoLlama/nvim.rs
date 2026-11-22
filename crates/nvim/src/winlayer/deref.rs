@@ -688,6 +688,7 @@ mod tests {
     use crate::buffer::{bare_buffer, free_bare_buffer};
     use crate::global_cell::editor_state_lock;
     use crate::window::{alloc_tabpage, bare_window, free_bare_window, free_tab};
+    use crate::winlayer::Buf;
 
     /// A live handle reads and writes its object; once the object is freed
     /// every copy reports it gone and a dereference panics -- even after the
@@ -739,6 +740,34 @@ mod tests {
         tab.set_tp_ch_used(4);
         assert_eq!(copy.tp_ch_used(), 4);
         free_tab(tab);
+    }
+
+    /// A buffer's syntax block lent through the buffer: a read counts as a
+    /// read of the buffer (a setter refuses), an edit as an edit of it (a
+    /// getter refuses), and the in-place spell reads go through the block
+    /// the window uses.
+    #[test]
+    fn a_syntax_block_borrows_its_owner() {
+        let _held = editor_state_lock();
+        let buffer = bare_buffer();
+        let win = bare_window();
+        win.set_w_buffer(buffer);
+        win.set_w_s(buffer.syntax_block());
+        buffer.syn_block_edit().b_spell_ismw[7] = true;
+        assert!(win.spell_ismw(7));
+        assert!(!win.spell_cjk());
+        let read = buffer.syn_block_read();
+        assert!(read.b_spell_ismw[7]);
+        assert!(catch_unwind(AssertUnwindSafe(|| buffer.set_b_changed(1))).is_err());
+        assert!(win.spell_ismw(7), "a place read beside a read");
+        drop(read);
+        let edit = buffer.syn_block_edit();
+        assert!(catch_unwind(AssertUnwindSafe(|| buffer.b_changed())).is_err());
+        assert!(catch_unwind(AssertUnwindSafe(|| win.spell_ismw(7))).is_err());
+        drop(edit);
+        win.set_w_buffer(Buf::NULL);
+        free_bare_window(win);
+        free_bare_buffer(buffer);
     }
 
     /// A buffer handle's mutable dereference checks the slot as well.
