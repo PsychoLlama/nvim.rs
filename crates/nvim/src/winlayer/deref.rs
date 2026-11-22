@@ -1,13 +1,13 @@
 //! Field access through a graph handle, and handle equality — both checked
 //! against the slot the handle names.
 //!
-//! # `Win`: plain `Deref`/`DerefMut`
+//! # The check
 //!
 //! A [`Win`], [`Buf`], [`TabPage`] or [`FrameRef`] holds its object's slot
 //! address and the generation the slot had when the handle was made
 //! ([`crate::slot`]). A slot's memory is never given back, so its generation
-//! word is readable through any handle ever made, and every [`Deref`] and
-//! [`DerefMut`] here reads it and compares: **one load, one compare**, and a
+//! word is readable through any handle ever made, and every access here
+//! reads it and compares: **one load, one compare**, and a
 //! cold panic when the object the handle was made for has gone. That turns
 //! the re-entry rule (`winlayer`'s docs) from a promise into a check: a
 //! handle held across code that freed its object can no longer reach freed
@@ -23,7 +23,7 @@
 //! so the same one compare refuses a read or a write through any copy of a
 //! handle while another copy's edit is held.
 //!
-//! # `Buf`, `TabPage`, `FrameRef` and the cursor: no borrow escapes unguarded
+//! # No borrow escapes unguarded
 //!
 //! These lend no `&mut` and no bare `&` at all. A field is read by value and
 //! written in place through its getter and setter (`slot_fields!` below:
@@ -137,7 +137,7 @@ checked_handles! {
 }
 
 /// `edit()` and `read()` for a handle whose object lends through guards
-/// only. The same two serve `Win` once it gives up `DerefMut`.
+/// only.
 macro_rules! guarded_handles {
     ($($ty:ident => $target:ty;)+) => { $(
         impl $ty {
@@ -572,29 +572,6 @@ impl PosRef {
         unsafe { slot::check_write(self.win.ptr, self.win.stamp.generation()) };
         // SAFETY: as `set`.
         unsafe { (*self.win.ptr).w_cursor.coladd = coladd };
-    }
-}
-
-// Kept while the sites move to getters and guards; removed after.
-impl Deref for Win {
-    type Target = Window;
-
-    #[inline(always)]
-    #[track_caller]
-    fn deref(&self) -> &Window {
-        self.check_live();
-        // SAFETY: the generation matched (`check_live`).
-        unsafe { &*self.ptr }
-    }
-}
-
-impl DerefMut for Win {
-    #[inline(always)]
-    #[track_caller]
-    fn deref_mut(&mut self) -> &mut Window {
-        self.check_live();
-        // SAFETY: as `deref`.
-        unsafe { &mut *self.ptr }
     }
 }
 

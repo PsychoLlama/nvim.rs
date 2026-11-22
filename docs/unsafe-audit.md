@@ -308,10 +308,9 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
   `UnsafeCell` and is reached only through these. `abandon_loans` zeroes
   every guard's mark, for the emergency exits alone (their guards' frames
   never resume). Exclusivity holds
-  only for what is lent through those guards (`TabPage`, `FrameRef`,
-  `PosRef`): a `SlotRef`'s and `Win`/`Buf`'s `DerefMut` through two
-  copies still lend overlapping `&mut` ([safe-surface.md](safe-surface.md)
-  S5).
+  for everything lent through those guards (`Win`, `Buf`, `TabPage`,
+  `FrameRef`, `PosRef`); a `SlotRef`'s `DerefMut` through two copies still
+  lends overlapping `&mut` ([safe-surface.md](safe-surface.md) S5).
 - **Retires:** never; it is the floor the window, buffer and tab page
   handles stand on.
 
@@ -320,8 +319,8 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
 - **What:** `Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, the
   screen grid handle `GridRef` and the terminal handle `Term` — each a
   `Copy` value over one pointer (`winlayer.rs` 10, `graph.rs` 17,
-  `deref.rs` 18 — the checked dereference, and `TabPage`/`FrameRef`/
-  `PosRef`'s place getters and setters and `edit()`/`read()` —, `grid.rs`
+  `deref.rs` 18 — the checked handles, the place getters and setters
+  (`deref/buf_fields.rs`, `deref/win_fields.rs`) and `edit()`/`read()` —, `grid.rs`
   2, `terminal.rs` 2). Building one from an address is the
   unsafe step; dereferencing it is not. `curwin`/`CURBUF`/`CURTAB` are cells
   holding a raw pointer (`curwin` is a C symbol a functional spec reads).
@@ -335,10 +334,9 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
   **The re-entry rule:** a handle held across a call that may fire an
   autocommand or run Lua or Vimscript is re-derived from its id afterwards
   (now checked: the stale use panics), and no `&mut` reached through one is
-  held across such a call (still review for `Win`/`Buf`: two copies alias,
-  S5 in [safe-surface.md](safe-surface.md); `TabPage`, `FrameRef` and
-  `PosRef` lend no reference but through checked guards, so for them a
-  breach panics). A freed window's block is an owned
+  held across such a call (`Win`, `Buf`, `TabPage`, `FrameRef` and
+  `PosRef` lend no reference but through checked guards, so a breach
+  panics; S5 in [safe-surface.md](safe-surface.md)). A freed window's block is an owned
   `ParkedWindow`, freed by dropping it; freeing an unregistered window is
   debug-asserted impossible.
 - **Retires:** only with a different object model (owning registries with

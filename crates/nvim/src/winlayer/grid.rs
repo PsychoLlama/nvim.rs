@@ -210,12 +210,10 @@ impl Win {
     /// The window's own grid, as a handle.
     ///
     /// The address is computed from the window's, as [`Win::cursor`] is:
-    /// `&raw mut self.w_grid_alloc` would go through [`DerefMut`], and the
-    /// handle would carry the provenance of that one `&mut Window` -- which
-    /// the next write to any field of the window ends, leaving the handle
-    /// dangling under the aliasing model (Miri caught it).
-    ///
-    /// [`DerefMut`]: core::ops::DerefMut
+    /// `&raw mut self.edit().w_grid_alloc` would carry the provenance of
+    /// that one `&mut Window` -- which the next write to any field of the
+    /// window ends, leaving the handle dangling under the aliasing model
+    /// (Miri caught it).
     pub(crate) fn grid_alloc(self) -> GridRef {
         let grid = self
             .raw()

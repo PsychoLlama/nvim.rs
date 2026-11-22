@@ -266,7 +266,7 @@ gains a `Cell` or a raw pointer fails to build.
 
 ### S5 — `Copy` object handles lending `&`/`&mut` (sound-by-convention)
 
-`Win`, ~~`Buf`~~, ~~`TabPage`, `FrameRef`, `PosRef`~~, ~~`Live<T>`~~, `GridRef`, `Term`:
+~~`Win`~~, ~~`Buf`~~, ~~`TabPage`, `FrameRef`, `PosRef`~~, ~~`Live<T>`~~, `GridRef`, `Term`:
 `Deref`/`DerefMut` from a `Copy` value. Constructors are `unsafe` (or the
 registries, which check); every dereference after is safe and unchecked.
 Rows: the eight `Deref`/`DerefMut` pairs; `Win::syn_block`/~~`syn_block_mut`~~
@@ -491,6 +491,33 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   (`FileType`, `Syntax`, `SwapExists`, …), `if let` scrutinees, update
   callbacks visited under the channel list's edit; each now copies out
   first.
+- **Closed — `Win` (both halves, checked):** ~~`Deref`~~ and ~~`DerefMut`~~
+  are gone. Each `Copy` field of `Window` has a generated getter and
+  setter (`winlayer/deref/win_fields.rs`), and so does each `Copy`
+  window-local option of the window's own set (`wo_*`, the leaves of
+  `w_onebuf_opt`) and each `Copy` leaf of a field that is not `Copy`
+  itself (the float's `w_config`, the saved view `w_save_cursor`, the
+  'listchars'/'fillchars' glyphs); the cursor is `PosRef`; every other
+  field goes through `Win::read()`/`Win::edit()`, with `Win::config()` and
+  `Win::wline()` copying out the two non-`Copy` values read most. ~6,200
+  sites, rewritten from the compiler's errors (scripted, then by hand
+  where a guard would outlive its statement). What the hand pass and the
+  suites found were guards held across another access to the same window,
+  each a borrow the old `Deref` lent unchecked: `w_lines[a] =
+w_lines[b].clone()` (the right side's read temporary lives to the end of
+  the statement, where the left side's edit refuses it), a
+  `let wl = &mut win.edit().w_lines[i]` held over a later read of the
+  window, `&mut win.w_cursor` lent to a callee that reads the window
+  (now `PosRef::modify`, a copy in and out), a jumplist entry borrowed
+  across `fname2fnum` (whose autocommands edit every window's jumplist),
+  `w:` dict handles taken in an `if let` head whose body runs watchers or
+  prints, and `:tags`/`gettagstack()` printing under the tag stack's
+  borrow (now a copy). The ratchet's `place_writes` and
+  `accessor_temporary_mutations` read the new getters from `slot_fields!`
+  like `Buf`'s (a planted `&mut win.w_topline()`, `win.w_cursor().lnum =`
+  and `win.w_alt_fnum().take()` each failed it). Cost (release,
+  codegen-units = 1, cachegrind Ir) against the build before: every bench
+  within ±0.5 % (edbench +0.43 %, mkspellbench +0.48 %, scrbench +0.12 %).
 - **Open — `SynBlockRef`:** `read()`/`edit()` replaced its `Deref`/
   `DerefMut`, but both are `SynEdit`, checked against the owner's slot
   (live, not lent to an edit) and not counted: the engine holds the
@@ -514,7 +541,7 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   liveness half.
 
 - **Breaks — aliasing:** two copies give two live `&mut`
-  (`let c = &mut w1.w_cursor; w2.w_cursor.lnum = 1; c.col = 0`);
+  ~~(`let c = &mut w1.w_cursor; w2.w_cursor.lnum = 1; c.col = 0`)~~;
   ~~`syn_block_mut()` held while the buffer's block is reached through a
   `Buf`~~;
   `GRID.with(|g| { grid_ref.cols = 0; g.cols })`; ~~`held_line`'s slice
@@ -532,7 +559,7 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   (S1's tracker keyed by object). Order: ~~`GridRef` + `of_cell` (S)~~, ~~`Term`
   (S)~~, ~~`syn_block_mut` (13 sites, S)~~, ~~`held_line` (the matcher's line
   cursor, M)~~, ~~`Live<T>` users (M)~~, ~~`TabPage`/`FrameRef`/`PosRef`
-  (M)~~, then `Win`/~~`Buf`~~ (XL; 553 files name them). **XL** overall.
+  (M)~~, then ~~`Win`/`Buf`~~ (XL; 553 files name them). **XL** overall.
 
 ### ~~S6 — value-handle edits~~ (closed: check-always, and a type for partials)
 

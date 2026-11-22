@@ -9,10 +9,9 @@
 //!
 //! What does not have to stay raw is the *dereference*. [`Win`], [`Buf`],
 //! [`FrameRef`] and [`TabPage`] each wrap one pointer and make its
-//! **construction** the unsafe step; from there `Deref`/[`DerefMut`] (on
-//! `Win` and `Buf`), or field getters, setters and `edit()`/`read()` guards
-//! (on `TabPage` and `FrameRef`, and on [`PosRef`], a window's cursor) give
-//! field access, all of it checked in the child `deref`, and the accessors
+//! **construction** the unsafe step; from there field getters, setters and
+//! `edit()`/`read()` guards (and [`PosRef`], a window's cursor) give field
+//! access, all of it checked in the child `deref`, and the accessors
 //! below give the projections a bare `&`/`&mut` cannot express — the buffer
 //! behind a window, a line of that buffer. Every one rests on the single promise the constructor took, which
 //! each `pub unsafe fn` in a consumer restates in its own `# Safety` section.
@@ -110,19 +109,18 @@
 //! **This is not `win_valid()`.** They answer different questions — see
 //! [`WinId::get`]'s docs and the comment above `window::win_valid`.
 //!
-//! # On [`DerefMut`] and raw pointers into the same object
+//! # On `edit()` and raw pointers into the same object
 //!
-//! **A `&mut` reached through [`DerefMut`] borrows the *whole struct*, not
-//! the field.** `win.w_cursor.lnum = 1` asks for `&mut Window` and projects;
-//! under Stacked and Tree Borrows that borrow pops every raw pointer
-//! previously derived from the same object, so an interior `*mut Pos` taken
-//! earlier is **invalidated by the next write through the handle**. Nothing
-//! warns but Miri, and only if a test walks that path (p23-5). So when a body
-//! holds an interior raw pointer across writes through a `Win`/`Buf`, take
-//! the field by value instead ([`Win::cursor`] reads and writes the cursor in
-//! place), derive the address from the handle's `raw()` plus the field's
-//! offset, which computes it from the base without forming a `&mut`, or
-//! re-derive it after each write.
+//! **A `&mut` lent by `edit()` borrows the *whole struct*, not the
+//! field**: under Stacked and Tree Borrows that borrow pops every raw
+//! pointer previously derived from the same object, so an interior
+//! `*mut Pos` taken earlier is **invalidated by the next edit through the
+//! handle**. Nothing warns but Miri, and only if a test walks that path
+//! (p23-5). So when a body holds an interior raw pointer across writes
+//! through a `Win`/`Buf`, take the field by value instead (the getters and
+//! setters, [`Win::cursor`], access in place), derive the address from the
+//! handle's `raw()` plus the field's offset, which computes it from the base
+//! without forming a `&mut`, or re-derive it after each write.
 //! Retyping a `*mut Window` parameter to `Win` is not by itself enough.
 //!
 //! Nothing here offers a scoped `with_mut` that would stretch a borrow across
@@ -214,8 +212,8 @@ pub struct Win {
     /// The window's handle, read while it was live, and its slot's
     /// generation when this was made, in one word ([`Stamp`]). The handle is
     /// [`Win::handle`], not to be confused with `Window`'s own field of that
-    /// name, which `Deref` still reaches: `win.handle` is a read of the
-    /// *window*, [`Win::handle`] a read of this copy.
+    /// name (`win.read().handle`): that is a read of the *window*,
+    /// [`Win::handle`] a read of this copy.
     ///
     /// A zero handle means "no identity" — a null [`Win`], or a window whose
     /// handle the allocator has not assigned yet — which is what [`Win::id`]
@@ -418,9 +416,8 @@ impl Win {
     /// allocator's, before anything can name it.
     ///
     /// Writes the object **and** the copy, which is why it is a method:
-    /// `win.handle = h` reaches `Window`'s own field through [`DerefMut`]
-    /// and would leave the copy at zero, so the next `win.id()` would name
-    /// nothing.
+    /// `win.edit().handle = h` alone would leave the copy at zero, so the
+    /// next `win.id()` would name nothing.
     #[inline]
     pub(crate) fn set_handle(&mut self, handle: Handle) {
         self.edit().handle = handle;
@@ -592,8 +589,8 @@ impl Buf {
     /// The address of this buffer's own syntax block, `b_s`: what a window's
     /// `w_s` points at unless `:ownsyntax` gave it one of its own. Computed
     /// from the base as [`Win::cursor`] is, so saying where the block is
-    /// forms no borrow of the buffer -- `&raw mut buf.b_s` goes through
-    /// [`DerefMut`] and pops every pointer already taken into it.
+    /// forms no borrow of the buffer -- `&raw mut buf.edit().b_s` would pop
+    /// every pointer already taken into it.
     #[inline(always)]
     pub fn syntax_block(self) -> *mut SynBlock {
         self.ptr.wrapping_byte_add(offset_of!(Buffer, b_s)).cast()
