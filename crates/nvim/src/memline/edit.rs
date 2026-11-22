@@ -99,12 +99,16 @@ pub(crate) fn ml_append_int(
     line: &[u8],
     flags: c_int,
 ) -> Result<(), LineError> {
-    // One loan of the memline for the common case: a file read appends
-    // every line through here. Ended before the walk and the chunk update,
-    // which are handed the buffer.
-    let mut ml = buffer.ml();
-    if lnum > ml.ml_line_count || !ml.is_open() {
+    // Asked without lending the memline, then one loan for the common case
+    // -- a file read appends every line through here -- carried on into the
+    // chunk update.
+    let line_count = buffer.line_count();
+    if lnum > line_count || !buffer.ml_is_open() {
         return Err(LineError::NoSuchLine);
+    }
+    // The buffer holds one more line either way (`count_new_line`).
+    if buffer.b_prev_line_count() == 0 {
+        buffer.set_b_prev_line_count(line_count.get());
     }
 
     if LOWEST_MARKED.get() != LineNr::ZERO && LOWEST_MARKED.get() > lnum {
@@ -115,20 +119,15 @@ pub(crate) fn ml_append_int(
     // Space needed for the text, and then for its index entry too.
     let space_needed = int64_t::from(new.len()) + int64_t::from(INDEX_BYTES);
 
+    let mut ml = buffer.ml();
     if !append_to_locked(&mut ml, lnum, &new, space_needed) {
         drop(ml);
         return append_by_walk(buffer, lnum, &new, space_needed);
     }
     ml.ml_flags.clear(MlFlags::EMPTY);
-    // The buffer holds one more line (`count_new_line`).
-    let before = ml.ml_line_count;
     ml.ml_line_count += 1;
-    drop(ml);
-    if buffer.b_prev_line_count() == 0 {
-        buffer.set_b_prev_line_count(before.get());
-    }
     // The line was inserted below `lnum`.
-    buffer.update_line_chunks(lnum + 1, new.len().cast_signed(), ML_CHNK_ADDLINE);
+    buffer.update_line_chunks_held(ml, lnum + 1, new.len().cast_signed(), ML_CHNK_ADDLINE);
     Ok(())
 }
 

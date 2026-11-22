@@ -47,13 +47,18 @@ impl Buf {
     /// [`ML_CHNK_DELLINE`] (subtract `len`, possibly merging the chunk away) or
     /// [`ML_CHNK_UPDLINE`] (add `len` as a signed quantity).
     pub(crate) fn update_line_chunks(self, line: LineNr, len_arg: c_int, updtype: c_int) {
-        // SAFETY: the caller's buffer, reached through a handle that
-        // borrows it for the one access that asked and no longer.
-        let b = self;
-        // One loan of the memline for the update: this runs once per line a
-        // file read appends. Ended before the calls that are handed the
-        // buffer.
-        let mut held = b.ml();
+        self.update_line_chunks_held(self.ml(), line, len_arg, updtype);
+    }
+
+    /// [`Buf::update_line_chunks`] with the caller's loan of the memline,
+    /// which it carries on until a call that takes the buffer.
+    pub(crate) fn update_line_chunks_held(
+        self,
+        mut held: MlRef<'_>,
+        line: LineNr,
+        len_arg: c_int,
+        updtype: c_int,
+    ) {
         let ml = &mut *held;
         let mut curline = ML_UPD_LASTCURLINE.get();
         let mut curix = ML_UPD_LASTCURIX.get();

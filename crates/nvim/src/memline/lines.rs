@@ -364,14 +364,11 @@ pub fn ml_line_alloced() -> bool {
 /// Insert `line` (its NUL the last byte) after line `lnum` of `buffer`,
 /// whose memline is open, flushing any pending change first.
 fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), LineError> {
-    // One read for both questions: a file read asks them once per line.
-    let held = buffer.ml();
-    let (line_count, cached) = (held.ml_line_count, held.cached_lnum());
-    drop(held);
-    if lnum > line_count {
+    // Asked without lending the memline: a file read asks once per line.
+    if lnum > buffer.line_count() {
         return Err(LineError::NoSuchLine);
     }
-    if cached != LineNr::ZERO {
+    if buffer.ml_cached_lnum() != LineNr::ZERO {
         // This may invoke ml_append_int in turn.
         ml_flush_line(buffer);
     }
@@ -389,7 +386,7 @@ fn ml_append_flush(buffer: Buf, lnum: LineNr, line: &[u8], flags: c_int) -> Resu
 pub(crate) fn ml_append_flags(lnum: LineNr, line: &[u8], flags: c_int) -> Result<(), LineError> {
     debug_assert_eq!(line.last(), Some(&0), "the line carries its NUL");
     // During startup the memfile may still have to be created.
-    if !Buf::current().ml().is_open() {
+    if !Buf::current().ml_is_open() {
         open_buffer(false, None, ReadFlags::NONE)?;
     }
     ml_append_flush(Buf::current(), lnum, line, flags)
@@ -649,7 +646,7 @@ fn clear_marks(first: bool) -> LineNr {
 /// The first line with its [`DB_MARKED`] bit set, clearing the bit. Zero when
 /// there is none left.
 pub fn ml_firstmarked() -> LineNr {
-    if !Buf::current().ml().is_open() {
+    if !Buf::current().ml_is_open() {
         return LineNr::ZERO;
     }
     // Start at lowest_marked: the last line a mark was found at, kept up
@@ -659,7 +656,7 @@ pub fn ml_firstmarked() -> LineNr {
 
 /// Clear every [`DB_MARKED`] bit.
 pub fn ml_clearmarked() {
-    if !Buf::current().ml().is_open() {
+    if !Buf::current().ml_is_open() {
         return; // nothing to do
     }
     let _ = clear_marks(false);

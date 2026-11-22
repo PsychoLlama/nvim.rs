@@ -385,6 +385,21 @@ impl Buf {
         unsafe { &mut *cell.as_ptr() }
     }
 
+    /// Whether the memline is open (has a memfile), asked without lending it.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn ml_is_open(self) -> bool {
+        self.ml_unlent().is_open()
+    }
+
+    /// The line the line cache holds, zero for none, asked without lending
+    /// the memline.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn ml_cached_lnum(self) -> LineNr {
+        self.ml_unlent().cached_lnum()
+    }
+
     /// The buffer's line count: `b_ml.ml_line_count`.
     #[inline(always)]
     #[track_caller]

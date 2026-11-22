@@ -365,16 +365,33 @@ impl<'a, T> SlotEdit<'a, T> {
     #[inline(always)]
     pub(crate) fn map<U>(mut self, part: impl FnOnce(&mut T) -> &mut U) -> EditPart<'a, T, U> {
         let part = NonNull::from(part(&mut self));
-        EditPart { edit: self, part }
+        EditPart { _edit: self, part }
+    }
+}
+
+impl<'a, T> SlotEdit<'a, T> {
+    /// [`SlotEdit::map`] for a part that may be missing: `None` lets the
+    /// edit go.
+    #[inline(always)]
+    pub(crate) fn try_map<U>(
+        mut self,
+        part: impl FnOnce(&mut T) -> Option<&mut U>,
+    ) -> Option<EditPart<'a, T, U>> {
+        let part = NonNull::from(part(&mut self)?);
+        Some(EditPart { _edit: self, part })
     }
 }
 
 impl<'a, T> SlotRead<'a, T> {
-    /// [`SlotEdit::map`] for a read: the part stays counted as the whole.
+    /// Narrow the read to one part of the value, when it has one: the part
+    /// stays counted as the whole; `None` lets the read go.
     #[inline(always)]
-    pub(crate) fn map<U>(self, part: impl FnOnce(&T) -> &U) -> ReadPart<'a, T, U> {
-        let part = NonNull::from(part(&self));
-        ReadPart { read: self, part }
+    pub(crate) fn try_map<U>(
+        self,
+        part: impl FnOnce(&T) -> Option<&U>,
+    ) -> Option<ReadPart<'a, T, U>> {
+        let part = NonNull::from(part(&self)?);
+        Some(ReadPart { _read: self, part })
     }
 }
 
@@ -383,7 +400,7 @@ impl<'a, T> SlotRead<'a, T> {
 /// the guard's own borrow, which nothing else can reach while the edit bit is
 /// set.
 pub(crate) struct EditPart<'a, T, U> {
-    edit: SlotEdit<'a, T>,
+    _edit: SlotEdit<'a, T>,
     part: NonNull<U>,
 }
 
@@ -405,16 +422,10 @@ impl<T, U> DerefMut for EditPart<'_, T, U> {
     }
 }
 
-impl<T, U> fmt::Debug for EditPart<'_, T, U> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EditPart({:?})", self.edit)
-    }
-}
-
-/// A part of a value borrowed by [`read_at`] ([`SlotRead::map`]): counted
+/// A part of a value borrowed by [`read_at`] ([`SlotRead::try_map`]): counted
 /// until dropped.
 pub(crate) struct ReadPart<'a, T, U> {
-    read: SlotRead<'a, T>,
+    _read: SlotRead<'a, T>,
     part: NonNull<U>,
 }
 
@@ -425,12 +436,6 @@ impl<T, U> Deref for ReadPart<'_, T, U> {
     fn deref(&self) -> &U {
         // SAFETY: borrowed from the value `read` counts, which is held.
         unsafe { self.part.as_ref() }
-    }
-}
-
-impl<T, U> fmt::Debug for ReadPart<'_, T, U> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ReadPart({:?})", self.read)
     }
 }
 

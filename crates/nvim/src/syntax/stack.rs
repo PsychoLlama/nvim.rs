@@ -667,7 +667,10 @@ mod tests {
         }
 
         fn cache(&self) -> crate::slot::ReadPart<'static, crate::types::Buffer, StateCache> {
-            self.buffer.read().map(|b| &b.b_s.b_sst)
+            self.buffer
+                .read()
+                .try_map(|b| Some(&b.b_s.b_sst))
+                .expect("a buffer has a state cache")
         }
 
         /// The line numbers of the used entries, in list order.

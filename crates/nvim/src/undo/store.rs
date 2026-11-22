@@ -147,29 +147,15 @@ impl Buf {
     /// `None`. The borrow is the buffer handle's.
     #[inline]
     pub(crate) fn header<'a>(self, link: UndoLink) -> Option<ReadPart<'a, Buffer, UndoHeader>> {
-        let read = self.read();
-        read.b_u_store.as_deref()?.get(link)?;
-        Some(read.map(|buffer| {
-            buffer
-                .b_u_store
-                .as_deref()
-                .and_then(|store| store.get(link))
-                .expect("asked just above")
-        }))
+        self.read()
+            .try_map(|buffer| buffer.b_u_store.as_deref()?.get(link))
     }
 
     /// [`header`](Self::header), for writing.
     #[inline]
     pub(crate) fn header_mut<'a>(self, link: UndoLink) -> Option<EditPart<'a, Buffer, UndoHeader>> {
-        let edit = self.edit();
-        edit.b_u_store.as_deref()?.get(link)?;
-        Some(edit.map(|buffer| {
-            buffer
-                .b_u_store
-                .as_deref_mut()
-                .and_then(|store| store.get_mut(link))
-                .expect("asked just above")
-        }))
+        self.edit()
+            .try_map(|buffer| buffer.b_u_store.as_deref_mut()?.get_mut(link))
     }
 
     /// Whether `link` names a header this buffer holds.
