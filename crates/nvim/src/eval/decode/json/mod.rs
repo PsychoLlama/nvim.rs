@@ -98,7 +98,7 @@ impl Container {
     fn is_empty(&self) -> bool {
         match (&self.special_val, &self.container) {
             (Some(pairs), _) => pairs.read().items().is_empty(),
-            (None, OpenContainer::Dict(d)) => d.read().dv_hashtab.ht_used == 0,
+            (None, OpenContainer::Dict(d)) => d.read().is_empty(),
             (None, OpenContainer::List(l)) => l.read().items().is_empty(),
         }
     }

@@ -1178,8 +1178,10 @@ PERIMETER = {
     "unsafe step, dereferencing it is not",
     "crates/nvim/src/winlayer/": "the same, split out by family",
     "crates/nvim/src/eval/typval/handle.rs": "the value handles (`ListRef`, "
-    "`DictRef`, `BlobRef`, `PartialRef`) and a dictionary's item store: "
-    "constructing a handle is the unsafe step, dereferencing it is not",
+    "`DictRef`, `BlobRef`, `PartialRef`): constructing a handle is the unsafe "
+    "step, dereferencing it is not",
+    "crates/nvim/src/eval/typval/store.rs": "a dictionary's item store: a hash "
+    "table whose slots own boxed items by address",
 }
 
 # The foreign ABIs' *type definitions*: the per-library files c2rust hoisted
@@ -4557,6 +4559,7 @@ MIRI_PERIMETER_FILES = (
     "crates/nvim/src/winlayer.rs",
     "crates/nvim/src/winlayer/",
     "crates/nvim/src/eval/typval/handle.rs",
+    "crates/nvim/src/eval/typval/store.rs",
 )
 JUSTFILE = ROOT / "justfile"
 # The `miri-perimeter` recipe's body: its indented lines up to the next blank

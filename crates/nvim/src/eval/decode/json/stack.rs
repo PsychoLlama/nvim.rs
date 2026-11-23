@@ -191,7 +191,7 @@ impl<'a> Decoder<'a> {
             (None, OpenContainer::Dict(dict)) => Some(dict),
             _ => None,
         };
-        if !obj.didcomma && plain.is_some_and(|dict| dict.read().dv_hashtab.ht_used != 0) {
+        if !obj.didcomma && plain.is_some_and(|dict| !dict.read().is_empty()) {
             tv_clear(&mut obj.val);
             return Err(DecodeError::CommaBeforeKey(self.rest(val_location)));
         }

@@ -102,7 +102,7 @@ fn next_value(owned: &mut Owned) -> Option<TypVal> {
         Owned::Dict { dict, slot } => {
             let mut dict = dict.edit();
             // The table is not resized: only values leave it.
-            while *slot < dict.dv_hashtab.slots().len() {
+            while *slot < dict.dv_hashtab.slot_count() {
                 let at = *slot;
                 *slot += 1;
                 if let Some(item) = dict.item_at_mut(at) {

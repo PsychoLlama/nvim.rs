@@ -31,6 +31,7 @@ use crate::debugger::state::DEBUG_MODE;
 use crate::drawscreen::state::MUST_REDRAW;
 use crate::drawscreen::{setcursor, update_screen};
 use crate::edit::{InsertState, insert_check, insert_execute};
+use crate::eval::typval::DictTab;
 use crate::eval::{get_v_event, restore_v_event};
 use crate::event::r#loop::run_next_main_event;
 use crate::ex_docmd::state::GLOBAL_BUSY;
@@ -43,7 +44,6 @@ use crate::getchar::{
     vpeekc,
 };
 use crate::global_cell::GlobalCell;
-use crate::hashtab::HashTab;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::log::{LOG_DEBUG, LOGLVL_DBG, logmsg};
 use crate::message::state::NEED_WAIT_RETURN;
@@ -523,7 +523,7 @@ pub fn may_trigger_modechanged() {
 
     let mut save_v_event = SaveVEvent {
         sve_did_save: false,
-        sve_hashtab: HashTab::new(),
+        sve_hashtab: DictTab::new(),
     };
     let v_event = get_v_event(&mut save_v_event);
     let new_mode = letters(&curr_mode);

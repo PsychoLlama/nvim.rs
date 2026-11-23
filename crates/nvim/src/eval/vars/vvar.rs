@@ -37,9 +37,9 @@ use core::ffi::{CStr, c_int};
 use core::mem;
 
 use super::*;
+use crate::eval::typval::DictTab;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_dict_free_contents;
-use crate::hashtab::HashTab;
 use crate::types::{Key, SaveVEvent};
 
 /// The `v:` dictionary, built on first use.
@@ -244,10 +244,9 @@ pub fn restore_vimvar(idx: Vv, save_tv: &mut TypVal) {
     let dict = vimvar_dict();
     let removed = dict.edit().remove_key(name);
     match removed {
-        Some(RemovedItem::Allocated(item)) => {
+        Some(item) => {
             OUTSIDE_VIMVARS.with_mut(|outside| outside[outside_index(idx)] = Some(item));
         }
-        Some(RemovedItem::Embedded(_)) => unreachable!("v: owns its rows"),
         None => internal_error(c"restore_vimvar()"),
     }
 }
@@ -781,14 +780,14 @@ pub fn vim_var_bytes(idx: Vv) -> Vec<u8> {
 pub(crate) fn get_v_event(sve: &mut SaveVEvent) -> DictRef {
     let v_event = get_vim_var_dict_handle(Vv::Event).expect("v:event is always a Dict");
     let mut edit = v_event.edit();
-    let did_save = edit.dv_hashtab.ht_used > 0;
+    let did_save = !edit.is_empty();
     sve.sve_did_save = did_save;
     if did_save {
         // A plain move: the table owns its slots, so what the surrounding
         // autocommand put in `v:event` travels to `sve` intact and
         // `v:event` starts the inner one empty. `restore_v_event` moves it
         // back.
-        sve.sve_hashtab = mem::replace(&mut edit.dv_hashtab, HashTab::init());
+        sve.sve_hashtab = mem::replace(&mut edit.dv_hashtab, DictTab::init());
     }
     drop(edit);
     v_event

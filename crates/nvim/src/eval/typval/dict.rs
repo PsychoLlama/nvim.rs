@@ -16,8 +16,8 @@
 //! [`dict_extend`] (the two arguments may be one dictionary, and watchers
 //! are user code), [`dict_copy`] (a cycle is read back through the mark this
 //! call writes), and [`dict_clear`] and [`tv_dict_free_contents`] (the values
-//! they release may name the dictionary they were in). A removal answers a
-//! [`RemovedItem`], dropped once the borrow of the table has ended.
+//! they release may name the dictionary they were in). A removal answers the
+//! item's box, dropped once the borrow of the table has ended.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -38,7 +38,6 @@ use ::core::ffi::CStr;
 
 use super::*;
 use crate::eval::vars::var_wrong_func_name_named;
-use crate::hashtab::{HashValue, hash_bytes};
 use crate::mbyte::CONV_NONE;
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
@@ -278,16 +277,7 @@ pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
                 }
                 let key = ThinCString::from_bytes(item2.key());
                 drop(read2);
-                let moved = match d2.edit().remove_at(slot2) {
-                    RemovedItem::Allocated(item) => item,
-                    // An item embedded in its owner cannot change tables;
-                    // what moves is its value, in an item of its own.
-                    RemovedItem::Embedded(value) => {
-                        let mut item = DictItem::boxed(key.as_bytes());
-                        item.di_tv.overwrite(value);
-                        item
-                    }
-                };
+                let moved = d2.edit().remove_at(slot2);
                 // Note upstream does not gate this on `watched`, unlike the
                 // copying branch below.
                 let new = moved.di_tv.clone();
@@ -523,7 +513,7 @@ pub fn tv_dict_remove(args: &[TypVal], result: &mut TypVal, arg_errmsg: &'static
     // Move the value out rather than copying it: `result` takes the
     // reference the item held.
     let mut removed = dict.edit().remove_at(slot);
-    *result = removed.value_mut().take();
+    *result = removed.di_tv.take();
     drop(removed);
     if dict_is_watched(Some(&dict.read())) {
         dict_watcher_notify(dict, key, None, Some(result));
@@ -540,7 +530,7 @@ pub fn tv_dict_free_contents(dict: &DictRef) {
     // dictionary finds it empty rather than half freed; the items then go
     // in slot order, as the walk upstream did.
     let table = ::core::mem::replace(&mut dict.edit().dv_hashtab, DictTab::init());
-    release_table(table);
+    drop(table);
     let watchers = ::core::mem::take(&mut dict.edit().watchers);
     drop(watchers);
 }
@@ -548,7 +538,7 @@ pub fn tv_dict_free_contents(dict: &DictRef) {
 impl Dict {
     /// How many entries the dictionary holds.
     pub fn len(&self) -> usize {
-        self.dv_hashtab.ht_used
+        self.dv_hashtab.len()
     }
 
     /// Whether the dictionary holds no entries.
@@ -557,27 +547,23 @@ impl Dict {
     }
 }
 
-/// The table's own bookkeeping, through [`Dict::probe_key`]: safe code
-/// over the item store `handle.rs` keeps.
+/// The table's own bookkeeping: safe code over the item store `store.rs`
+/// keeps.
 impl Dict {
     /// The slot holding `key`, if any.
     #[inline]
     pub(crate) fn slot_of(&self, key: &[u8]) -> Option<usize> {
-        let hi = self.probe_key(key, crate::hashtab::hash_bytes_len(key));
-        hi.is_kept().then(|| hi.index())
+        self.dv_hashtab
+            .find(key, crate::hashtab::hash_bytes_len(key))
     }
 
-    /// Where an item keyed `key` goes, with the key's hash. A key already
-    /// there is an internal error (E685), said here.
-    pub(super) fn vacant_slot(&self, key: &DictKey) -> Result<(ItemSlot, HashValue), Failed> {
-        let hash = hash_bytes(key.bytes());
-        let hi = self.probe_key(key.bytes(), hash);
-        if hi.is_kept() {
-            let key = msg_bytes(key.bytes());
-            crate::siemsg!("E685: Internal error: hash_add(): duplicate key \"{key}\"");
-            return Err(Failed);
-        }
-        Ok((hi, hash))
+    /// Put `item` in the table, which takes it over. When its key is
+    /// already there the item comes back, untouched: an internal error
+    /// (E685), said here.
+    pub(crate) fn insert(&mut self, item: Box<DictItem>) -> Result<(), Box<DictItem>> {
+        self.dv_hashtab
+            .insert(item)
+            .inspect_err(|item| duplicate_key(item.key()))
     }
 
     /// Stop the table resizing while a walk removes as it goes.
@@ -591,6 +577,13 @@ impl Dict {
     pub(crate) fn unlock_table(&mut self) {
         self.dv_hashtab.unlock();
     }
+}
+
+/// E685 for a key already in the table.
+#[cold]
+fn duplicate_key(key: &[u8]) {
+    let key = msg_bytes(key);
+    crate::siemsg!("E685: Internal error: hash_add(): duplicate key \"{key}\"");
 }
 
 #[cfg(test)]
@@ -684,7 +677,7 @@ mod tests {
         let d = dict_of(&["first"]);
         let at = |d: &Dict| d.find(b"first").map(::core::ptr::from_ref);
         let before = at(&d.read());
-        let slots_before = d.read().dv_hashtab.size();
+        let slots_before = d.read().dv_hashtab.slot_count();
         for n in 0..40 {
             let key = format!("k{n}");
             d.edit()
@@ -692,7 +685,7 @@ mod tests {
                 .expect("a key used once");
         }
         assert!(
-            d.read().dv_hashtab.size() > slots_before,
+            d.read().dv_hashtab.slot_count() > slots_before,
             "the table never grew"
         );
         assert_eq!(before, at(&d.read()));

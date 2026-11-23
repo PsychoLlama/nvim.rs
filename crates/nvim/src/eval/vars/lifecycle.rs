@@ -318,7 +318,7 @@ pub fn vars_clear(dict: &DictRef) {
         let removed = dict.edit().remove_at(slot);
         drop(removed);
     }
-    hash_reset(&mut dict.edit().dv_hashtab);
+    dict.edit().dv_hashtab.reset();
 }
 
 /// Delete the variable `name`, reporting E108 if it does not exist and

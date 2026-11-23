@@ -369,7 +369,7 @@ fn mark_dict_items(
     mut list_stack: Option<&mut ListStack>,
 ) -> bool {
     let mut slot = 0;
-    while slot < dict.read().dv_hashtab.slots().len() {
+    while slot < dict.read().dv_hashtab.slot_count() {
         // What the item holds, by a reference of its own: marking writes
         // the mark of every container it reaches, this one included.
         let value = dict

@@ -1,7 +1,7 @@
 //! A dictionary's items: the slots that name them, the pair that allocates
 //! and frees one, and reading a value back out.
 //!
-//! The table's slots name the items ([`DictEntry`]), where upstream's named
+//! The table's slots name the items (`store.rs`), where upstream's named
 //! the item's *key* -- an item was over-allocated so its key sat in a
 //! flexible tail, and the item was the key pointer minus a constant. That is
 //! why an item could not own its key. Reading the key out of the item costs
@@ -10,14 +10,10 @@
 //! and the slot every key lands in exactly as they were. That matters: slot order is what `keys()`, `values()` and
 //! `items()` show.
 //!
-//! The table does not free its items. Which of them it owns is
-//! `DI_FLAGS_ALLOC` -- four kinds of item are embedded in something bigger
-//! (a funccall's fixed variables, a scope's own entry, `b:changedtick`, a
-//! `v:` row) and outlive every table they are in. An item off a table is a
+//! The table owns its items ([`DictTab`]). An item off a table is a
 //! `Box<DictItem>` ([`DictItem::boxed`]); [`Dict::add_item`] takes one over,
-//! and a removal hands back what the table held
-//! ([`RemovedItem`](super::RemovedItem)), to be dropped once the borrow of
-//! the dictionary has ended.
+//! and a removal hands the box back, to be dropped once the borrow of the
+//! dictionary has ended.
 //!
 //! [`Dict::find`] is the hashtable lookup every getter goes through, and the
 //! `dict_get_*` family coerces what it finds to one type, answering a
@@ -40,7 +36,6 @@
 use super::*;
 use crate::deref::deref_to_field;
 use crate::eval::vars::var_wrong_func_name_named;
-use crate::hashtab::HashTab;
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
 use crate::memory::handoff::owned_cstr;
@@ -49,12 +44,6 @@ use crate::semsg;
 use crate::types::Failed;
 use core::ffi::CStr;
 use core::mem::ManuallyDrop;
-
-/// A dictionary's hash table.
-pub type DictTab = HashTab<DictEntry>;
-
-/// One slot of a dictionary's hash table.
-pub type ItemSlot = Slot<DictEntry>;
 
 /// The dictionary already has an entry under that key — or, in a scope
 /// dictionary, the key would shadow a builtin function — so nothing was
@@ -82,13 +71,13 @@ impl DictItem {
     /// hash table's slot pointed at the key and found the item by subtracting
     /// an offset; the slot names the item now.
     ///
-    /// The item is `DI_FLAGS_ALLOC`: a dictionary that takes it over
-    /// ([`Dict::add_item`]) owns it, and gives it back on removal.
+    /// A dictionary that takes it over ([`Dict::add_item`]) owns it, and
+    /// gives it back on removal.
     pub fn boxed(key: &[u8]) -> Box<DictItem> {
         Box::new(DictItem {
             di_tv: TypVal::Unknown,
             di_lock: VarLock::Unlocked,
-            di_flags: u8::try_from(DI_FLAGS_ALLOC).expect("a flag byte"),
+            di_flags: 0,
             di_key: DictKey::new(key),
         })
     }
@@ -185,7 +174,7 @@ impl Dict {
     /// Take the item under `key` out of the table, answering what the table
     /// held -- `None` when there is no such key. Dropping the answer is the
     /// release; do it once the borrow of the dictionary has ended.
-    pub(crate) fn remove_key(&mut self, key: &[u8]) -> Option<RemovedItem> {
+    pub(crate) fn remove_key(&mut self, key: &[u8]) -> Option<Box<DictItem>> {
         let slot = self.slot_of(key)?;
         Some(self.remove_at(slot))
     }
@@ -487,27 +476,6 @@ impl Dict {
     }
 }
 
-/// What [`Dict::remove_at`] took out of a table: an allocated item, or the
-/// value of one embedded in a structure that keeps the item itself.
-/// Dropping it releases the value.
-#[derive(Debug)]
-pub(crate) enum RemovedItem {
-    /// An item the dictionary owned.
-    Allocated(Box<DictItem>),
-    /// The value of an embedded item, which stays where it is, emptied.
-    Embedded(TypVal),
-}
-
-impl RemovedItem {
-    /// The value the item held.
-    pub(crate) fn value_mut(&mut self) -> &mut TypVal {
-        match self {
-            RemovedItem::Allocated(item) => &mut item.di_tv,
-            RemovedItem::Embedded(value) => value,
-        }
-    }
-}
-
 /// A walk over a dictionary's occupied slots that holds no borrow of it
 /// between steps: upstream's `TV_DICT_ITER`.
 ///
@@ -526,7 +494,7 @@ impl DictCursor {
     pub(crate) fn new(dict: &Dict) -> DictCursor {
         DictCursor {
             slot: 0,
-            todo: dict.dv_hashtab.ht_used,
+            todo: dict.len(),
         }
     }
 
@@ -535,11 +503,11 @@ impl DictCursor {
     /// The walk also ends at the last slot: a body that ran user code may
     /// have removed entries from an unlocked table, which can shrink it.
     pub(crate) fn next(&mut self, dict: &Dict) -> Option<usize> {
-        let slots = dict.dv_hashtab.slots();
-        while self.todo != 0 && self.slot < slots.len() {
+        let table = &dict.dv_hashtab;
+        while self.todo != 0 && self.slot < table.slot_count() {
             let slot = self.slot;
             self.slot += 1;
-            if slots[slot].is_kept() {
+            if table.is_kept(slot) {
                 self.todo -= 1;
                 return Some(slot);
             }
@@ -796,11 +764,11 @@ impl DictItem {
 /// `di_lock` is the *slot's* lock: `:lockvar` on a variable locks the item it
 /// lives in, not the value it currently holds.
 ///
-/// This is the only item shape there is.  The four kinds that are embedded
-/// in something bigger -- a funccall's fixed variables, a scope dictionary's
-/// own entry ([`ScopeDictItem`]), `b:changedtick` and a `v:` row -- were
-/// separate structs only because each spelled the flexible key member out at
-/// a different length; an owned key makes them all this.
+/// This is the only item shape there is: upstream's embedded kinds (a
+/// funccall's fixed variables, a scope dictionary's own entry
+/// ([`ScopeDictItem`]), `b:changedtick`, a `v:` row) were separate structs
+/// only because each spelled the flexible key member out at a different
+/// length; an owned key makes them all this.
 #[derive(Debug)]
 pub struct DictItem {
     pub di_tv: TypVal,

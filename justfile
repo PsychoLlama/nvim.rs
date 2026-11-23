@@ -282,7 +282,7 @@ miri-perimeter *args:
     eval::typval::blob::tests:: eval::typval::dict::tests:: \
     eval::typval::dictitem::tests:: eval::typval::edit::tests:: \
     eval::typval::list::tests:: eval::typval::partial::tests:: \
-    eval::typval::sort::tests:: eval::typval::string::tests:: \
+    eval::typval::sort::tests:: eval::typval::store::tests:: eval::typval::string::tests:: \
     eval::typval::value::tests:: eval::typval::watcher::tests:: \
     {{ args }}
 

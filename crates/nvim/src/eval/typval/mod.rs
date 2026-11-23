@@ -17,7 +17,6 @@ use crate::eval::vars::is_globvar_dict;
 use crate::eval::{callback_call, callback_from_typval, func_equal, var2fpos};
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::GlobalCell;
-use crate::hashtab::Slot;
 use crate::lua::executor::release_luaref;
 use crate::lua::ffi::LUA_NOREF;
 use crate::mbyte::VimConv;
@@ -74,18 +73,17 @@ pub use self::check::*;
 mod get;
 pub use self::get::*;
 mod release;
+mod store;
+pub use self::store::DictTab;
 mod string;
 /// The refcount an item that must never be freed carries.
 pub const DO_NOT_FREE_CNT: ::core::ffi::c_int = 1073741823;
 /// `DictItem::di_flags` bits: read-only, read-only in the sandbox, fixed
-/// (cannot be deleted), locked, and the item's own allocation.
+/// (cannot be deleted) and locked.
 pub const DI_FLAGS_RO: u8 = 1;
 pub const DI_FLAGS_RO_SBX: u8 = 2;
 pub const DI_FLAGS_FIX: u8 = 4;
 pub const DI_FLAGS_LOCK: u8 = 8;
-/// A `c_uint`, unlike its siblings, for the item store's reader in
-/// `handle.rs`, which widens the field to meet it.
-pub const DI_FLAGS_ALLOC: ::core::ffi::c_uint = 16;
 /// Enough for any number this module formats, plus its NUL.
 pub const NUMBUFLEN: usize = 65;
 pub type DictListType = ::core::ffi::c_uint;

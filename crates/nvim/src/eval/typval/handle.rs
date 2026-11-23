@@ -10,30 +10,26 @@
 //! one reading covers it:
 //!
 //! 1. **The four handles** -- [`ListRef`], [`DictRef`], [`BlobRef`],
-//!    [`PartialRef`]: a `NonNull` plus the reference it owns. `Clone`
-//!    retains, `Drop` releases and frees with the last one. A List, Dict or
-//!    Blob is borrowed only through `read()` ([`Read`]) and `edit()`
-//!    ([`Edit`]), counted in the object's [`Lent`] word as a `RefCell` counts
-//!    its borrows: any number of reads or one edit, every build, so a clone's
-//!    edit under a live read (or a read under an edit) panics where it
-//!    happens instead of reallocating under it. A partial is fixed once
+//!    [`PartialRef`]: a `NonNull` to a [`Counted`] -- the reference count,
+//!    the [`Lent`] word and, for a list or a dictionary, the registry slot
+//!    and the deep copy's memo, beside the value -- plus the reference it
+//!    owns. `Clone` retains, `Drop` releases and frees with the last one. A
+//!    List, Dict or Blob value is borrowed only through `read()` ([`Read`])
+//!    and `edit()` ([`Edit`]), counted in the `Lent` word as a `RefCell`
+//!    counts its borrows, every build. Neither lends the words beside the
+//!    value, so nothing a borrow can do -- `mem::swap` through two edits
+//!    included -- reaches who holds an object. A partial is fixed once
 //!    built: `Deref` only, and [`PartialRef::get_mut`] for its last holder.
-//!    The count is a `Cell`, so cloning and dropping touch no borrow. The raw
-//!    bridges (`owning`, `retained`) stay `unsafe fn`s for the callers
-//!    outside the container model that still hold a pointer.
+//!    The raw bridges (`owning`, `retained`) stay `unsafe fn`s.
 //! 2. **Allocation and release**: the four objects' allocations, the
-//!    reference-count release that frees them, and the collector's
-//!    `TV_IN_FREE_UNREF_ITEMS` gate that makes a release free nothing while
-//!    `free_unref_items` owns the whole graph.
-//! 3. **The dictionary's item store**: a hash table slot names a
-//!    `*mut DictItem`, either a `Box` the dictionary owns (`DI_FLAGS_ALLOC`)
-//!    or an item embedded in a structure that outlives the table (a
-//!    funccall's fixed variables, a scope's own entry, `b:changedtick`, a
-//!    `v:` row). Reading an item out of a slot, and freeing an allocated one,
-//!    happen here.
-//! 4. **The bit copy** ([`TypVal::bit_copy`]): a value duplicated without a
+//!    reference-count release that frees them, the scopes' seeds, and the
+//!    collector's `TV_IN_FREE_UNREF_ITEMS` gate that makes a release free
+//!    nothing while `free_unref_items` owns the whole graph.
+//! 3. **The bit copy** ([`TypVal::bit_copy`]): a value duplicated without a
 //!    reference, so that an argument frame can *name* the caller's values
 //!    for the length of a call.
+//!
+//! The dictionary's item store is `store.rs`'s.
 //!
 //! Every other file of `eval/typval/` reaches these objects through this
 //! API, and this file is a perimeter row under the raw-memory-primitive
@@ -41,7 +37,7 @@
 //! `winlayer`'s are to the window graph.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-// Unsafe perimeter: the `eval/typval/handle.rs` row in docs/perimeter.md.
+// Unsafe perimeter: the `eval/typval/{handle,store}.rs` row in docs/perimeter.md.
 #![allow(unsafe_code)]
 #![deny(
     clippy::cast_lossless,
@@ -58,7 +54,6 @@ use ::core::sync::atomic::{AtomicU64, Ordering};
 
 use super::edit::{Lent, Read};
 use super::*;
-use crate::hashtab::{HashValue, SlotEntry};
 use crate::types::Refcount;
 
 /// What a value handle points at: the words the handle model keeps, beside
@@ -383,43 +378,6 @@ pub unsafe fn list_free_list(l: *mut ListBox) {
     drop(list);
     // SAFETY: the `xcalloc` `tv_list_alloc` made, its contents moved out.
     unsafe { xfree(l.cast()) };
-}
-
-impl Dict {
-    /// Every entry, in slot order -- which is the order Vim shows.
-    ///
-    /// The walk borrows the dictionary, so nothing can add to or remove from
-    /// it while the walk is live. A body that edits the table wants
-    /// [`DictCursor`], which is a slot index.
-    pub fn items(&self) -> impl Iterator<Item = &DictItem> {
-        // Not `item_at` per index: the walk over the slots themselves skips
-        // a bounds check and a slot copy per slot, which `tvequal` reads as
-        // +0.3 % Ir.
-        // SAFETY: a kept slot of a live dictionary names a live item, and
-        // the borrow of the dictionary keeps it alive for the walk.
-        self.dv_hashtab
-            .items()
-            .map(|hi| unsafe { &*hi.hi_key.item() })
-    }
-
-    /// Every entry, writable, in slot order.
-    ///
-    /// The items are not in the table's storage, so handing out `&mut` to
-    /// each of them in turn does not alias the table itself; what the
-    /// exclusive borrow of the dictionary rules out is a body that adds or
-    /// removes entries, which is the same rule the table has always had.
-    pub fn items_mut(&mut self) -> impl Iterator<Item = &mut DictItem> {
-        self.dv_hashtab
-            .slots()
-            .iter()
-            .filter(|hi| hi.is_kept())
-            .map(|hi| hi.hi_key.item())
-            .collect::<Vec<_>>()
-            .into_iter()
-            // SAFETY: a kept slot names a live item, no two slots name the
-            // same one, and the exclusive borrow keeps the set fixed.
-            .map(|di| unsafe { &mut *di })
-    }
 }
 
 /// An owning reference to a heap-allocated [`Dict`]: [`ListRef`]'s
@@ -1009,125 +967,6 @@ fn share<T, H>(at: &NonNull<Counted<T, H>>) -> Read<'_, T> {
     let target = unsafe { &(*at.as_ptr()).value };
     let share = Some(share);
     Read { target, share }
-}
-
-/// What a dictionary's hash table holds in an occupied slot: the item.
-///
-/// `Copy`, and a raw pointer, for the same reason the slots of every other
-/// table are: the table names its items, and which of them it is responsible
-/// for freeing is the item's own `DI_FLAGS_ALLOC`.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct DictEntry(*mut DictItem);
-
-impl DictEntry {
-    /// The item this entry names. Meaningless for an empty or removed slot.
-    pub fn item(self) -> *mut DictItem {
-        self.0
-    }
-}
-
-/// The tombstone: `NonNull::dangling()`'s address, the item type's
-/// alignment, which no allocation can be at and nothing dereferences.
-impl SlotEntry for DictEntry {
-    const EMPTY: Self = DictEntry(::core::ptr::null_mut());
-
-    fn is_empty(self) -> bool {
-        self.0.is_null()
-    }
-
-    fn is_removed(self) -> bool {
-        self.0 == NonNull::<DictItem>::dangling().as_ptr()
-    }
-
-    fn removed() -> Self {
-        DictEntry(NonNull::dangling().as_ptr())
-    }
-}
-
-/// Release every item of a table already taken out of its dictionary, in
-/// slot order: the whole-dictionary free, without a removal per slot. An
-/// embedded item (not `DI_FLAGS_ALLOC`) is only emptied.
-pub(crate) fn release_table(table: DictTab) {
-    for hi in table.items() {
-        // SAFETY: a kept slot of a table nothing else can reach any more
-        // names a live item, released once here.
-        drop(unsafe { take_item(hi.hi_key.item()) });
-    }
-}
-
-/// What `item` holds comes out: an allocated item whole, an embedded one's
-/// value.
-///
-/// # Safety
-///
-/// `item` is a live item that no table holds any more, and nothing else
-/// takes it. An allocated one (`DI_FLAGS_ALLOC`) is the `Box`
-/// `DictItem::boxed` made; an embedded one belongs to the structure it
-/// lives in, which keeps it.
-unsafe fn take_item(item: *mut DictItem) -> RemovedItem {
-    // SAFETY: the caller's promise above.
-    unsafe {
-        if ::core::ffi::c_uint::from((*item).di_flags) & DI_FLAGS_ALLOC != 0 {
-            RemovedItem::Allocated(Box::from_raw(item))
-        } else {
-            RemovedItem::Embedded((*item).di_tv.take())
-        }
-    }
-}
-
-impl Dict {
-    /// The item in slot `slot`, or `None` when the slot holds none.
-    #[inline]
-    pub(crate) fn item_at(&self, slot: usize) -> Option<&DictItem> {
-        let hi = self.dv_hashtab.slot(slot);
-        // SAFETY: a kept slot of this dictionary names a live item, which the
-        // borrow of the dictionary keeps alive.
-        hi.is_kept().then(|| unsafe { &*hi.hi_key.item() })
-    }
-
-    /// [`Dict::item_at`] with the item writable.
-    #[inline]
-    pub(crate) fn item_at_mut(&mut self, slot: usize) -> Option<&mut DictItem> {
-        let hi = self.dv_hashtab.slot(slot);
-        // SAFETY: as `item_at`; no two slots name one item, and the exclusive
-        // borrow keeps the set of them fixed.
-        hi.is_kept().then(|| unsafe { &mut *hi.hi_key.item() })
-    }
-
-    /// The slot `key` (hashing to `hash`) occupies, or the one it belongs in.
-    #[inline]
-    pub(super) fn probe_key(&self, key: &[u8], hash: HashValue) -> ItemSlot {
-        // SAFETY: the probe hands the test only this dictionary's kept
-        // entries, each naming a live item -- which owns its key -- that the
-        // borrow of the dictionary keeps alive for the walk.
-        self.dv_hashtab
-            .probe(hash, |entry| unsafe { (*entry.0).di_key.bytes() } == key)
-    }
-
-    /// Put `item` in the table, which takes it over. When its key is
-    /// already there the item comes back, untouched.
-    pub(crate) fn insert(&mut self, item: Box<DictItem>) -> Result<(), Box<DictItem>> {
-        let Ok((hi, hash)) = self.vacant_slot(&item.di_key) else {
-            return Err(item);
-        };
-        self.dv_hashtab
-            .insert_at(hi, DictEntry(Box::into_raw(item)), hash);
-        Ok(())
-    }
-
-    /// Take the item in slot `slot` out of the table.
-    ///
-    /// Nothing is released here: the answer owns what the item held, and
-    /// dropping it after the borrow of the dictionary has ended is the
-    /// release -- which matters, because a value can name the dictionary it
-    /// was in, and releasing it reads that dictionary again.
-    pub(crate) fn remove_at(&mut self, slot: usize) -> RemovedItem {
-        let hi = self.dv_hashtab.slot(slot);
-        debug_assert!(hi.is_kept());
-        self.dv_hashtab.remove_at(hi);
-        // SAFETY: the item the slot named, out of the table now.
-        unsafe { take_item(hi.hi_key.item()) }
-    }
 }
 
 impl TypVal {

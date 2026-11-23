@@ -272,7 +272,7 @@ pub fn do_autocmd_textyankpost(op: &OpArg, reg: Reg) {
 
     let mut save_v_event = SaveVEvent {
         sve_did_save: false,
-        sve_hashtab: HashTab::new(),
+        sve_hashtab: DictTab::new(),
     };
     let dict = get_v_event(&mut save_v_event);
 

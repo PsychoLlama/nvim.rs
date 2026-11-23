@@ -229,7 +229,7 @@ impl Iterator for VarWalk {
 
     fn next(&mut self) -> Option<(XString, TypVal)> {
         let globals = globvar_dict();
-        let count = globals.read().dv_hashtab.size();
+        let count = globals.read().dv_hashtab.slot_count();
         while self.next < count {
             let idx = self.next;
             self.next += 1;

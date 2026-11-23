@@ -534,7 +534,7 @@ pub fn encode_check_json_key(tv: &TypVal) -> bool {
     let Some(spdict) = tv.dict_ref() else {
         return false;
     };
-    if spdict.dv_hashtab.ht_used != 2 {
+    if spdict.len() != 2 {
         return false;
     }
     let (Some(type_di), Some(val_di)) = (

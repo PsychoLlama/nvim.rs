@@ -1770,7 +1770,6 @@ static const int DIFF_VERTICAL = 128;
 static const int DIFF_WORD_GAP = 5;
 static const int DIFF_YES = 1;
 static const int DISCARD_CHUNK = 200;
-static const int DI_FLAGS_ALLOC = 16;
 static const int DI_FLAGS_FIX = 4;
 static const int DI_FLAGS_LOCK = 8;
 static const int DI_FLAGS_RO = 1;

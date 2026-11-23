@@ -191,10 +191,7 @@ fn convert_one_value<'a, S: TypvalSink>(
                 sink.conv_nil();
             }
         }
-        VAR_DICT => match tv
-            .dict_in(reads)
-            .filter(|dict| dict.dv_hashtab.ht_used != 0)
-        {
+        VAR_DICT => match tv.dict_in(reads).filter(|dict| !dict.is_empty()) {
             None => sink.conv_empty_dict(),
             Some(dict) => {
                 if S::ALLOW_SPECIALS
@@ -211,7 +208,7 @@ fn convert_one_value<'a, S: TypvalSink>(
                     ConvType::Dict,
                     objname
                 ));
-                let used = dict.dv_hashtab.ht_used;
+                let used = dict.len();
                 item_hook!(sink.conv_dict_start(used));
                 stack.push(Frame::Dict {
                     dict,
@@ -442,7 +439,7 @@ fn walk<'a, S: TypvalSink>(
                     sink.conv_dict_end();
                     continue;
                 }
-                if todo != dict.dv_hashtab.ht_used {
+                if todo != dict.len() {
                     sink.conv_dict_between_items();
                 }
                 let mut slot = slot;
@@ -527,7 +524,7 @@ fn walk<'a, S: TypvalSink>(
                             sink.conv_func_before_self(None);
                             continue;
                         };
-                        let used = dict.dv_hashtab.ht_used;
+                        let used = dict.len();
                         sink.conv_func_before_self(Some(used));
                         if used == 0 {
                             sink.conv_empty_dict();

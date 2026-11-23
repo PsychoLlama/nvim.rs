@@ -5,9 +5,9 @@ count	callee	no_raw	defs	def
 17	zeroed	0	0	
 16	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 15	.as_ref	0	0	
+11	Box::from_raw	0	6	
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 10	notify	0	0	
-9	Box::from_raw	0	6	
 8	Conn::new	0	1	crates/nvim/src/event/stream.rs
 8	process_events_until	0	1	crates/nvim/src/event/loop.rs
 8	xfree	0	1	crates/nvim/src/memory/mod.rs
@@ -112,7 +112,6 @@ count	callee	no_raw	defs	def
 2	seam_realloc	0	1	crates/nvim/src/memory/mod.rs
 2	socket_connect	0	1	crates/nvim/src/event/socket/mod.rs
 2	stream_init	0	1	crates/nvim/src/event/stream.rs
-2	take_item	0	1	crates/nvim/src/eval/typval/handle.rs
 2	ts_node_child_with_descendant	0	0	
 2	ts_node_is_null	0	0	
 2	ts_tree_delete	0	0	

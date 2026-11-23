@@ -147,7 +147,7 @@ fn map_value(mut pairs: Vec<TypVal>) -> TypVal {
                 pairs[added + 1] = refused.di_tv.take();
                 for at in (0..added).step_by(2) {
                     let back = dict.edit().remove_key(pairs[at].string_bytes());
-                    pairs[at + 1] = back.expect("a key just added").value_mut().take();
+                    pairs[at + 1] = back.expect("a key just added").di_tv.take();
                 }
                 break;
             }

@@ -74,7 +74,7 @@ pub fn get_user_var_name(expand: &Expand, idx: usize) -> Option<Candidate> {
     let step = |done: &GlobalCell<size_t>, dict: Option<DictRef>| -> Option<CString> {
         let dict = dict?;
         let n = done.get();
-        if n >= dict.read().dv_hashtab.ht_used {
+        if n >= dict.read().len() {
             return None;
         }
         done.set(n + 1);

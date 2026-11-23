@@ -19,7 +19,7 @@ use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER, OPT_VAL_TYP
 use crate::runtime::{SID_LUA, SID_STR};
 use core::ffi::CStr;
 
-use crate::eval::typval::{DictCursor, ListRef, RemovedItem};
+use crate::eval::typval::{DictCursor, ListRef};
 
 use crate::ascii::ascii_iswhite;
 use crate::charset::skip;
@@ -51,7 +51,6 @@ use crate::ex_eval::aborting;
 use crate::getchar::state::GOT_INT;
 use crate::global_cell::{GlobalCell, state_record};
 use crate::guard::SANDBOX;
-use crate::hashtab::hash_reset;
 use crate::lua::executor::nlua_set_sctx;
 use crate::memory::XString;
 use crate::message::state::EMSG_SEVERE;

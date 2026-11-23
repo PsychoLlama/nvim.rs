@@ -27,11 +27,9 @@ use core::ptr;
 use std::rc::{Rc, Weak};
 
 use super::*;
-use crate::eval::typval::{CallFrame, DictRef, ListRef, RemovedItem, tv_dict_alloc, tv_list_alloc};
+use crate::eval::typval::{CallFrame, DictRef, ListRef, tv_dict_alloc, tv_list_alloc};
 use crate::eval::typval::{DictKey, DictSeed, ListSeed, ScopeDictItem};
 use crate::eval::vars::list_dict_vars;
-use crate::hashtab::HashItem;
-use crate::hashtab::{HT_INIT_SIZE, hash_reset};
 use crate::types::ScopeType;
 
 /// A funccall's three scopes: `l:`, `a:` and `a:000`, with the entries that
@@ -163,8 +161,7 @@ impl FrameScopes {
     /// An entry for one of the scopes: read-only, holding `value` under
     /// `key`, built in an emptied one when there is one.
     pub(crate) fn entry(&self, key: &[u8], value: TypVal, lock: VarLock) -> Box<DictItem> {
-        let alloc = u8::try_from(crate::eval::typval::DI_FLAGS_ALLOC).expect("a flag byte");
-        let flags = alloc | DI_FLAGS_RO | DI_FLAGS_FIX;
+        let flags = DI_FLAGS_RO | DI_FLAGS_FIX;
         match self.spare.borrow_mut().pop() {
             Some(mut item) => {
                 item.di_key = DictKey::new(key);
@@ -199,45 +196,29 @@ impl Drop for FrameScopes {
 /// call's entries.
 #[allow(clippy::vec_box)] // the boxes a dictionary hands back, kept
 fn clear_scope(dict: &DictRef, spare: &RefCell<Vec<Box<DictItem>>>) {
-    if dict.read().dv_hashtab.ht_used == 0 {
+    if dict.read().is_empty() {
         return;
     }
     dict.edit().lock_table();
     let mut slot = 0;
-    while dict.read().dv_hashtab.ht_used > 0 && slot < dict.read().dv_hashtab.size() {
-        if dict.read().dv_hashtab.slots()[slot].is_kept() {
-            let removed = dict.edit().remove_at(slot);
+    while !dict.read().is_empty() && slot < dict.read().dv_hashtab.slot_count() {
+        if dict.read().dv_hashtab.is_kept(slot) {
+            let mut item = dict.edit().remove_at(slot);
             // Released with the borrow of the dictionary over: a value can
             // name the dictionary it was in.
-            let value = match removed {
-                RemovedItem::Allocated(mut item) => {
-                    let value = item.di_tv.take();
-                    let mut spare = spare.borrow_mut();
-                    if spare.len() < SPARE_ITEMS {
-                        spare.push(item);
-                    }
-                    value
-                }
-                RemovedItem::Embedded(value) => value,
-            };
+            let value = item.di_tv.take();
+            let mut spare = spare.borrow_mut();
+            if spare.len() < SPARE_ITEMS {
+                spare.push(item);
+            }
+            drop(spare);
             drop(value);
         }
         slot += 1;
     }
-    // Not unlocked first: the table is replaced or emptied whole, which
-    // undoes the lock, and unlocking would only resize what is about to go.
-    let table = &mut dict.edit().dv_hashtab;
-    if table.size() == HT_INIT_SIZE {
-        // Upstream's `hash_clear` + `hash_init`, without building a new
-        // table to move over this one: the initial slots, emptied.
-        table.slots_mut().fill(HashItem::EMPTY);
-        table.ht_used = 0;
-        table.ht_filled = 0;
-        table.ht_changed = 0;
-        table.ht_locked = 0;
-    } else {
-        hash_reset(table);
-    }
+    // Not unlocked first: the table is emptied whole, which undoes the
+    // lock, and unlocking would only resize what is about to go.
+    dict.edit().dv_hashtab.reset();
 }
 
 /// How many emptied entries a set of scopes keeps for its next call.

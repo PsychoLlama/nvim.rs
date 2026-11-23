@@ -426,5 +426,5 @@ pub const VAR_FLAVOUR_SHADA: VarFlavour = 4;
 /// A zeroed `SaveVEvent`, which `get_v_event` fills in.
 pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
     sve_did_save: false,
-    sve_hashtab: crate::hashtab::HashTab::new(),
+    sve_hashtab: DictTab::new(),
 };

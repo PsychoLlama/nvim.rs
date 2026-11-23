@@ -75,7 +75,7 @@ fn stuff_yank(regname: RegName, p: XString) -> Result<(), Failed> {
 fn fire_recording_leave(regname: RegName, contents: &XString) {
     let mut save_v_event = SaveVEvent {
         sve_did_save: false,
-        sve_hashtab: HashTab::new(),
+        sve_hashtab: DictTab::new(),
     };
     let dict = get_v_event(&mut save_v_event);
     let _ = dict

@@ -44,6 +44,7 @@ use crate::cursor::{coladvance_force, gchar_cursor, get_cursor_line_len, getvisc
 use crate::drawscreen::state::MUST_REDRAW;
 use crate::drawscreen::{showmode, update_screen};
 use crate::edit::{beginline, get_last_insert, get_last_insert_save, oneright, stuff_inserted};
+use crate::eval::typval::DictTab;
 use crate::eval::typval::{list_set_lock, tv_list_alloc};
 use crate::eval::{eval_to_string, get_v_event, restore_v_event};
 use crate::ex_cmds2::check_fname;
@@ -60,7 +61,6 @@ use crate::getchar::{
     stuff_readbuf_char, stuffescaped,
 };
 use crate::global_cell::GlobalCell;
-use crate::hashtab::HashTab;
 use crate::highlight_group::HLF_8;
 use crate::indent::{get_indent, preprocs_left, set_indent};
 use crate::insexpand::{ins_compl_delete, ins_compl_preinsert_effect};

@@ -247,7 +247,7 @@ pub fn tv2bool(tv: &TypVal) -> bool {
         VAR_PARTIAL => tv.partial_shared().is_some(),
         VAR_FUNC | VAR_STRING => tv.text_or_name().is_some_and(|text| !text.is_empty()),
         VAR_LIST => list_len(tv.list_ref().as_deref()) > 0,
-        VAR_DICT => tv.dict_ref().is_some_and(|d| d.dv_hashtab.ht_used > 0),
+        VAR_DICT => tv.dict_ref().is_some_and(|d| !d.is_empty()),
         VAR_BOOL => tv.as_bool() == Some(BOOL_VAR_TRUE),
         VAR_SPECIAL => tv.as_special().is_some_and(|s| s != SPECIAL_VAR_NULL),
         VAR_BLOB => tv.blob_ref().is_some_and(|b| !b.is_empty()),

@@ -645,13 +645,11 @@ pub(crate) fn item_ptr(item: Option<&mut ListItem>) -> *mut ListItem {
 /// # Safety
 /// `d` points at a live dict.
 pub(crate) unsafe fn dict_items(d: *const Dict) -> Vec<(Vec<u8>, *mut DictItem)> {
-    let ht = unsafe { &(*d).dv_hashtab };
-    let mut out = Vec::new();
-    for hi in ht.items() {
-        let di = hi.hi_key.item();
-        out.push((unsafe { (*di).key() }.to_vec(), di));
-    }
-    out
+    // Writable, as the case may write an item through the answer.
+    let dict = unsafe { &mut *d.cast_mut() };
+    dict.items_mut()
+        .map(|di| (di.key().to_vec(), ptr::from_mut(di)))
+        .collect()
 }
 
 /// The item `d` holds under `key`. Panics if there is none — a case that
