@@ -102,11 +102,11 @@ impl Pooled for Frame {
 /// `edit()`, a `read()`, a memline walk -- as if each had been dropped
 /// ([`SlotPool::abandon_loans`]). Only for the emergency exits, whose
 /// frames holding those guards never resume.
-pub(crate) fn abandon_loans() {
-    WINDOW_SLOTS.with(SlotPool::abandon_loans);
-    BUFFER_SLOTS.with(SlotPool::abandon_loans);
-    TABPAGE_SLOTS.with(SlotPool::abandon_loans);
-    FRAME_SLOTS.with(SlotPool::abandon_loans);
+pub(crate) fn abandon_loans(emergency: &crate::global_cell::Emergency) {
+    WINDOW_SLOTS.with(|pool| pool.abandon_loans(emergency));
+    BUFFER_SLOTS.with(|pool| pool.abandon_loans(emergency));
+    TABPAGE_SLOTS.with(|pool| pool.abandon_loans(emergency));
+    FRAME_SLOTS.with(|pool| pool.abandon_loans(emergency));
 }
 
 /// Every live window, by handle.

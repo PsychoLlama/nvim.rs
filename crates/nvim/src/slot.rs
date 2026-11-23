@@ -74,7 +74,7 @@ use core::mem::{ManuallyDrop, MaybeUninit, offset_of};
 use core::ops::{Deref, DerefMut};
 use core::ptr::{self, NonNull};
 
-use crate::global_cell::GlobalCell;
+use crate::global_cell::{Emergency, GlobalCell};
 
 mod guards;
 pub(crate) mod id_table;
@@ -634,9 +634,9 @@ impl<T> SlotPool<T> {
     ///
     /// Only for the emergency exits (the panic hook, a failed allocation),
     /// which end the process: the frames that hold those guards never
-    /// resume, and the swap-file cleanup must reach every buffer whatever
-    /// its owner held when the process stopped.
-    pub(crate) fn abandon_loans(&self) {
+    /// resume ([`Emergency`] proves it), and the swap-file cleanup must
+    /// reach every buffer whatever its owner held when the process stopped.
+    pub(crate) fn abandon_loans(&self, _: &Emergency) {
         for &slot in &self.slots {
             let word = header(slot);
             word.set(word.get() & !SLOT_EDIT_BIT);

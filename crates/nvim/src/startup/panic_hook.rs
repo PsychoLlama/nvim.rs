@@ -37,6 +37,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use super::UI_CLIENT_CHANNEL_ID;
 use super::exit::{abandon_loans, begin_emergency_exit, preserve_swap_files, restore_stdin};
 use crate::event::r#loop::schedule_fast_job;
+use crate::global_cell::emergency;
 use crate::ui_client::ui_client_stop;
 
 /// The thread that installed the hook: the main thread, the only one that
@@ -103,16 +104,17 @@ fn on_panic(info: &PanicHookInfo<'_>, report: &(dyn Fn(&PanicHookInfo<'_>) + Syn
     // with a buffer's `edit()` or memline walk held. Their owner never runs
     // again, so they are dead; abandon them, or the first cell or buffer the
     // cleanup touches would panic on its borrow check.
-    abandon_loans();
-
-    if !begin_emergency_exit() {
-        // The panic fired on a way out that has already started preserving
-        // (a deadly signal, out of memory, or a panic during one of them):
-        // going round again would only repeat what broke.
-        report(info);
-        std::process::abort();
-    }
-    clean_up_and_abort(|| report(info));
+    emergency(|emergency| {
+        abandon_loans(emergency);
+        if !begin_emergency_exit() {
+            // The panic fired on a way out that has already started
+            // preserving (a deadly signal, out of memory, or a panic during
+            // one of them): going round again would only repeat what broke.
+            report(info);
+            std::process::abort();
+        }
+        clean_up_and_abort(|| report(info))
+    })
 }
 
 /// Whether this is the main thread, the only one that may touch editor
@@ -154,14 +156,17 @@ pub(super) fn hand_off_to_main(text: String, cleanup: fn()) -> ! {
 /// The main thread's half of [`hand_off_to_main`], run from its loop's fast
 /// queue.
 fn clean_up_after_another_thread() {
-    // Whatever the loop was inside of never resumes: see `on_panic`.
-    abandon_loans();
     if !begin_emergency_exit() {
         // A deadly signal or an out-of-memory exit is already preserving,
-        // and ends the process itself.
+        // and ends the process itself. Back to the loop, so nothing it was
+        // inside of is abandoned.
         return;
     }
-    clean_up_and_abort(print_off_thread_report);
+    // Whatever the loop was inside of never resumes: see `on_panic`.
+    emergency(|emergency| {
+        abandon_loans(emergency);
+        clean_up_and_abort(print_off_thread_report)
+    })
 }
 
 /// Tell a thread waiting in [`hand_off_to_main`] that the main thread has

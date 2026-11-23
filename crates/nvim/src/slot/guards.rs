@@ -554,7 +554,7 @@ mod tests {
         assert!(catch_unwind(AssertUnwindSafe(|| drop(read_of(a)))).is_err());
         assert!(catch_unwind(AssertUnwindSafe(|| write_check_of(b))).is_err());
         assert!(catch_unwind(AssertUnwindSafe(|| drop(part_of(c)))).is_err());
-        POOL.with(SlotPool::abandon_loans);
+        POOL.with(|pool| pool.abandon_loans(&crate::global_cell::Emergency::for_test()));
         assert!(a.is_live() && b.is_live() && c.is_live());
         edit_of(a).head = 10;
         write_check_of(b);

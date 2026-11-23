@@ -310,7 +310,7 @@ impl Buf {
     /// refuse it. The abandon then zeroes the count
     /// ([`MemFile::abandon_pins`](crate::memfile::MemFile::abandon_pins)).
     #[track_caller]
-    pub(crate) fn ml_abandoning<'a>(self) -> MlRef<'a> {
+    pub(crate) fn ml_abandoning<'a>(self, _: &crate::global_cell::Emergency) -> MlRef<'a> {
         // SAFETY: as `ml`.
         unsafe { slot::lend_part_at(self.ptr, self.stamp.generation(), self.ml_place()) }
     }

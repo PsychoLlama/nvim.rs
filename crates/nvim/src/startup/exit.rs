@@ -18,6 +18,7 @@
 
 use crate::autocmd::defs::AutoEvent;
 use crate::autocmd::{fire_autocmds, fire_autocmds_for};
+use crate::global_cell::Emergency;
 use crate::memory::XString;
 use crate::types::ApiString;
 use core::ffi::CStr;
@@ -296,13 +297,12 @@ pub(super) fn restore_stdin() {
 /// tab page guard (an `edit()`, a `read()`, a memline walk) or a match's
 /// memfile pin is dead, and [`preserve_swap_files`] must not trip over one
 /// on its way to every buffer.
-pub(super) fn abandon_loans() {
-    crate::global_cell::abandon_borrows();
-    crate::winlayer::abandon_loans();
-    crate::winlayer::abandon_terminal_loans();
+pub(super) fn abandon_loans(emergency: &Emergency) {
+    crate::winlayer::abandon_loans(emergency);
+    crate::winlayer::abandon_terminal_loans(emergency);
     for buf in buffers() {
-        if let Some(memfile) = buf.ml_abandoning().ml_mfp.as_deref_mut() {
-            memfile.abandon_pins();
+        if let Some(memfile) = buf.ml_abandoning(emergency).ml_mfp.as_deref_mut() {
+            memfile.abandon_pins(emergency);
         }
     }
 }

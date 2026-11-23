@@ -307,8 +307,9 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
   counts one reader and sets the reader word's top bit, so a second part
   loan and a part read (`check_part_unlent`) refuse; the part lives in an
   `UnsafeCell` and is reached only through these. `abandon_loans` zeroes
-  every guard's mark, for the emergency exits alone (their guards' frames
-  never resume). A `SlotRef` lends only through
+  every guard's mark, and takes the `Emergency` token only
+  `global_cell::emergency` makes, which never returns (their guards'
+  frames never resume). A `SlotRef` lends only through
   those guards (no `Deref`), and `get_mut` (the pool's uncounted borrow) is
   private to `slot/`, used only by `IdTable`, which hands out no handle.
 - **Retires:** never; it is the floor the window, buffer and tab page

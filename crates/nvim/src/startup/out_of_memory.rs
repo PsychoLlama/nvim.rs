@@ -50,6 +50,7 @@ use super::panic_hook::{
     append_to_log, clean_up, hand_off_to_main, log_line_start, main_thread_is_current,
     print_off_thread_report,
 };
+use crate::global_cell::emergency;
 use crate::message::E_OUTOFMEM;
 use crate::os::cshim::write_c_stderr;
 
@@ -128,25 +129,30 @@ pub(crate) fn allocation_failed(size: usize) {
     // Whatever the main thread was inside of never resumes, and may have
     // held a `GlobalCell` borrow or a buffer guard: abandon them, as the
     // panic hook does, so the cleanup does not trip a borrow check.
-    abandon_loans();
-    if !begin_emergency_exit() {
-        // A deadly signal or a panic is already on its way out, and this
-        // allocation cannot be answered.
-        std::process::abort();
-    }
-    exit_out_of_memory(report_out_of_memory);
+    emergency(|emergency| {
+        abandon_loans(emergency);
+        if !begin_emergency_exit() {
+            // A deadly signal or a panic is already on its way out, and this
+            // allocation cannot be answered.
+            std::process::abort();
+        }
+        exit_out_of_memory(report_out_of_memory)
+    })
 }
 
 /// The main thread's half of an allocation failure on another thread, run
 /// from its loop's fast queue.
 fn exit_after_another_thread() {
-    abandon_loans();
     if !begin_emergency_exit() {
         // A deadly signal or a panic is already on its way out, and ends
-        // the process itself.
+        // the process itself. Back to the loop, so nothing it was inside of
+        // is abandoned.
         return;
     }
-    exit_out_of_memory(print_off_thread_report);
+    emergency(|emergency| {
+        abandon_loans(emergency);
+        exit_out_of_memory(print_off_thread_report)
+    })
 }
 
 /// Say `E41` on the terminal the way `preserve_exit` does.

@@ -1014,6 +1014,25 @@ keeps by address — `write_loop`, `output_handle`, `winch_handle`,
   `Handles::new()` against the new shape, all fail to compile (E0609,
   E0277, E0616, E0624).
 
+### ~~S15 — the emergency abandons~~ (closed: a type, the `Emergency` token)
+
+Found by the exit re-audit. The emergency exits forget every loan as if
+it had been given back — `global_cell::abandon_borrows`,
+`SlotPool::abandon_loans` (windows, buffers, tab pages, frames,
+terminals), `MemFile::abandon_pins` — so the swap-file cleanup can reach
+every buffer. All were safe `pub(crate)` functions: called anywhere else,
+each turns a live guard's borrow into one the next edit writes under. And
+two callers did return into the loop after abandoning (the off-thread
+hand-offs, when another exit was already preserving).
+
+- **Closed:** `global_cell::emergency(exit)` is the one way in: it marks
+  borrows abandoned and hands `exit` a `&Emergency`, and `exit` must
+  return `Infallible` — it diverges, so no frame that held a loan resumes.
+  Every abandon (and the memline lend that skips the lent-line count,
+  `Buf::ml_abandoning`) asks for the token, which nothing else makes. The
+  hand-offs that may go back to the loop check `begin_emergency_exit`
+  first and abandon nothing when they return.
+
 ## Closed before the survey
 
 - A flag a libuv callback writes through an address it was handed, read

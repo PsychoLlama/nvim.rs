@@ -554,7 +554,7 @@ impl MemFile {
     /// Drop every pin, as if each holder had let go: only for the emergency
     /// exits, whose frames holding a [`HeldLines`](crate::memline::HeldLines)
     /// never resume, so the swap-file sync may write the blocks they lent.
-    pub(crate) fn abandon_pins(&mut self) {
+    pub(crate) fn abandon_pins(&mut self, _: &crate::global_cell::Emergency) {
         self.pins = 0;
         self.lent_texts.set(0);
         self.lend_epoch += 1;

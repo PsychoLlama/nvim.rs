@@ -724,7 +724,7 @@ impl<T> RawStatic<T> {
 /// `cargo test`), which keeps the thread check inert there.
 static ARMED: AtomicBool = AtomicBool::new(false);
 
-/// Set by [`abandon_borrows`]: a conflict no longer panics.
+/// Set by [`emergency`]: a conflict no longer panics.
 static ABANDONED: AtomicBool = AtomicBool::new(false);
 
 /// Record the calling thread as the main thread and arm the main-thread
@@ -735,20 +735,45 @@ pub fn init_main_thread() {
     ARMED.store(true, Ordering::Relaxed);
 }
 
-/// Stop treating a borrow conflict as an error, for good.
-///
-/// Only for the emergency exits (the panic hook, a failed allocation),
-/// which end the process: the frames that hold the open borrows never
-/// resume, and the swap-file cleanup must not trip over a borrow their
-/// owner can no longer give back. The thread check stays.
+/// Proof that an emergency exit is under way: made only by [`emergency`],
+/// which never returns, so no frame that held a borrow, guard or pin when
+/// it began ever runs again. Everything that forgets such a loan as if it
+/// had been given back -- the slot pools' `abandon_loans`, the memfile's
+/// `abandon_pins` -- asks for one, which is what makes forgetting sound.
+#[derive(Debug)]
+pub(crate) struct Emergency {
+    _made_by_emergency: (),
+}
+
+impl Emergency {
+    /// A token for a test that abandons loans and then drops nothing they
+    /// lent.
+    #[cfg(test)]
+    pub(crate) fn for_test() -> Self {
+        Self {
+            _made_by_emergency: (),
+        }
+    }
+}
+
+/// End the process through `exit`, every open borrow abandoned first: a
+/// borrow conflict stops being an error for good (the thread check stays),
+/// and `exit` gets the [`Emergency`] the other abandons ask for. It never
+/// returns -- its type says so -- which is the whole contract: the frames
+/// that hold the open borrows and guards never resume, so forgetting them
+/// lets the swap-file cleanup reach everything without tripping over a
+/// loan whose owner can no longer give it back.
 ///
 /// Only the conflict paths read the flag, so it costs the access paths
 /// nothing.
-pub(crate) fn abandon_borrows() {
+pub(crate) fn emergency(exit: impl FnOnce(&Emergency) -> core::convert::Infallible) -> ! {
     ABANDONED.store(true, Ordering::Relaxed);
+    match exit(&Emergency {
+        _made_by_emergency: (),
+    }) {}
 }
 
-/// Whether [`abandon_borrows`] ran.
+/// Whether [`emergency`] began.
 fn abandoned() -> bool {
     ABANDONED.load(Ordering::Relaxed)
 }
@@ -868,7 +893,7 @@ unsafe fn loans<'a>(borrowed: State) -> impl Iterator<Item = &'a Loan> {
         // a local of a frame still inside the borrow that opened it, and
         // that borrow's `Restore` takes it off the chain before the frame
         // ends. Only a conflict path walks the chain, and none does once
-        // `abandon_borrows` has run (the one way a frame is left without
+        // `emergency` has begun (the one way a frame is left without
         // its `Restore`).
         let loan = unsafe { &*next };
         next = loan.outer;

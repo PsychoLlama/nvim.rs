@@ -92,8 +92,8 @@ impl Term {
 
 /// Forget every read guard out on a terminal, as if each had been dropped.
 /// Only for the emergency exits ([`SlotPool::abandon_loans`]).
-pub(crate) fn abandon_terminal_loans() {
-    TERMINAL_SLOTS.with(SlotPool::abandon_loans);
+pub(crate) fn abandon_terminal_loans(emergency: &crate::global_cell::Emergency) {
+    TERMINAL_SLOTS.with(|pool| pool.abandon_loans(emergency));
 }
 
 impl Buf {
