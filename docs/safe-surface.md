@@ -1032,6 +1032,10 @@ hand-offs, when another exit was already preserving).
   `Buf::ml_abandoning`) asks for the token, which nothing else makes. The
   hand-offs that may go back to the loop check `begin_emergency_exit`
   first and abandon nothing when they return.
+  `preserve_exit` (a deadly signal, the channel's end) goes through it
+  too: the suites caught it running `ml_close` under a read of the
+  buffer that a dialog inside `unload_buffer` held when the channel
+  went.
 
 ## The exit re-audit
 

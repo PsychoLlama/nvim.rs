@@ -247,26 +247,32 @@ pub fn preserve_exit(errmsg: Option<&CStr>) -> ! {
         std::process::exit(2);
     }
 
-    if UI_CLIENT_CHANNEL_ID.get() != 0 {
-        // Leave the alternate screen so the message below can be read.
-        ui_client_stop();
-    }
-
-    if let Some(text) = errmsg.map(CStr::to_bytes).filter(|text| !text.is_empty()) {
-        write_c_stderr(text);
-        if !text.ends_with(b"\n") {
-            write_c_stderr(b"\n");
+    // Whatever the exit interrupted -- a dialog inside a buffer unload,
+    // holding a read of the buffer, when the channel goes -- never resumes,
+    // and the cleanup below must not trip over what it held.
+    crate::global_cell::emergency(|emergency| {
+        abandon_loans(emergency);
+        if UI_CLIENT_CHANNEL_ID.get() != 0 {
+            // Leave the alternate screen so the message below can be read.
+            ui_client_stop();
         }
-    }
 
-    if UI_CLIENT_CHANNEL_ID.get() != 0 {
-        // A UI client has no buffers to preserve.
-        os_exit(1);
-    }
+        if let Some(text) = errmsg.map(CStr::to_bytes).filter(|text| !text.is_empty()) {
+            write_c_stderr(text);
+            if !text.ends_with(b"\n") {
+                write_c_stderr(b"\n");
+            }
+        }
 
-    preserve_swap_files(errmsg.is_some());
+        if UI_CLIENT_CHANNEL_ID.get() != 0 {
+            // A UI client has no buffers to preserve.
+            os_exit(1);
+        }
 
-    getout(1);
+        preserve_swap_files(errmsg.is_some());
+
+        getout(1)
+    })
 }
 
 /// The first step of every emergency exit ([`preserve_exit`] and the panic
