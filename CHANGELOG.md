@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Windows, buffers, tab pages and frames live in type-stable slots, and every dereference of a handle checks the slot's generation: a handle that outlived its object panics where it is used instead of reading freed memory or the slot's next tenant. They, lists, dictionaries, blobs, buffer lines and terminals are lent only through counted guards (any number of reads or one edit, checked in every build), so a borrow held across user code that changes the object is caught where it happens.
+
+### Fixed
+
+- A `DiffUpdated` handler that closed a window freed it under the redraw, option setter or `:diffget` that fired the event; window closes are now refused there (E1312).
+- `:tabclose` looped forever when the current window was a float that refused to close (a modified buffer with 'nohidden', or the autocommand window).
+- `spellsuggest()` that hit its 'spellsuggest' `timeout:` raised `Vim:Interrupt` instead of answering the suggestions found so far.
+- A timer started after a long stretch without an event-loop iteration fired early by the length of that stretch.
+- After `:restart`, the new server kept running with no UI once its client died; and a server whose client died at a startup `-- More --` prompt waited forever for a key.
+
 ## [2026.11.17-3c323fb9b5]
 
 ### Changed
