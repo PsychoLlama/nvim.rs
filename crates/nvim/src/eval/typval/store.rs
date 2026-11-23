@@ -199,6 +199,11 @@ impl DictTab {
 /// upstream walked them.
 impl Drop for DictTab {
     fn drop(&mut self) {
+        // The common drop is of a table already emptied (a freed
+        // dictionary's fresh one): no slot walk for it.
+        if self.is_empty() {
+            return;
+        }
         for hi in self.0.items() {
             // SAFETY: each kept slot's box, freed once here; the table is
             // being dropped, so nothing reaches the slot again.
