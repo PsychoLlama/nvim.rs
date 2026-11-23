@@ -800,45 +800,152 @@ hold a bit copy of a value it does not own, or a handle with no reference:
 Cost (cgu1 release, cachegrind Ir against the open state): evalbench at
 +0.11 %, its parser phase at +0.19 %, rpcbench at −0.06 %.
 
-### S11 — container header words through `&mut` (sound-by-convention: open)
+### ~~S11 — container header words through `&mut`~~ (closed: type holds it)
 
-Found by S10's sweep. A List, Dict or Blob carries its reference count and
-its `Lent` word inline (`lv_refcount`/`lv_lent` …, `types/typval.rs`), and
-`Edit` lends `&mut List` — the whole struct, header included:
+Found by S10's sweep. A List, Dict or Blob carried its reference count and
+its `Lent` word inline, and `Edit` lent `&mut List` — the whole struct,
+header included:
 
-- **Breaks:** `mem::swap(&mut *a.edit(), &mut *b.edit())` swaps two
-  objects' counts (A's last handle then frees it under B's holders);
-  `mem::replace(&mut *l.edit(), List::empty())` writes a count of 0 and a
-  free `Lent` word under a live edit, so a second `edit()` succeeds. The
-  count's mutators (`Refcount::retain`/`release`/`reset`/`release_many`)
-  are `pub` and take `&self`, so `l.read().lv_refcount.release()` is safe
-  code; the funccall and script scopes seed `DO_NOT_FREE_CNT` by assigning
-  the field.
-- **Closure:** a type. The header out of the lent region — `Rc`'s shape:
-  the handle points at `{count, lent, value}` and `edit()`/`read()` lend
-  the value only — or `Edit` dereferencing to a body struct without the
-  header; the count's mutators private to `eval/typval/`; the scope seeds
-  a counted token (`retain_many` answering a guard that releases them)
-  instead of a field write. Touches every `*_refcount` read (≈80, mostly
-  tests) and the C layout ffigen emits.
+- **Broke:** `mem::swap(&mut *a.edit(), &mut *b.edit())` swapped two
+  objects' counts (A's last handle then freed it under B's holders);
+  `mem::replace(&mut *l.edit(), List::empty())` wrote a count of 0 and a
+  free `Lent` word under a live edit. The count's mutators were `pub` over
+  `&self` (`l.read().lv_refcount.release()`), the scopes seeded
+  `DO_NOT_FREE_CNT` by assigning the field, and the registry slot
+  (`lv_root`) and the deep copy's memo (`lv_copylist`) sat in the same lent
+  region — a swapped root unregisters the wrong container and leaves the
+  registry naming a freed one.
+- **Closed:** a handle points at a `Counted<T, H>` (`eval/typval/handle.rs`,
+  `Rc`'s shape): the count, the `Lent` word and a per-kind head (`Node`:
+  the registry slot and the memo, for lists and dictionaries) beside the
+  value. `read()`/`edit()` lend the value only and every header field is
+  `handle.rs`'s, so a swap through two edits moves two values and each
+  object keeps its count and word (`dict.rs`'s
+  `swapping_two_edited_bodies_moves_values_not_counts`). `PartialRef::
+get_mut` lends the value without its count the same way. Counts are read
+  through `refcount()`; `Refcount::release_many` is gone and no
+  container's `Refcount` is reachable outside `handle.rs`. The scope seeds
+  are counted tokens (`DictSeed`/`ListSeed`: a handle plus the rest, given
+  back on drop) — a scope entry holds its own, a funccall holds its three
+  while a call runs. The memo pairs a `CopyWalk`'s id with the copy, and
+  the walk holds a reference to every copy until it ends (64-bit ids, never
+  reused); the registry is entered and left only with `handle.rs`'s
+  `RootKey`. A `forbid(unsafe_code)` probe in `tests/unit` reaching the
+  count through a `Read`/`Edit` (`release()`, a swap of two counts, a take
+  of the `Lent` word) no longer compiles (E0609); S10's sweep had it
+  compiling. (The remaining `Refcount`s — channels, argument lists,
+  quickfix stacks, child processes, user functions — free through id tables
+  or `Rc`, so a wrong count there is a lifetime error the table catches.)
 
-### S12 — the dictionary item store's raw slots (sound-by-convention: open)
+### ~~S12 — the dictionary item store's raw slots~~ (closed: type holds it)
 
-Found by S10's sweep. `DictEntry` (`handle.rs`) is a `Copy` raw pointer, and
-`HashTab`'s slot API (`slot`, `insert_at`, `slots_mut`) is safe and `pub`,
-over a `pub` `dv_hashtab`; which slots own their item is `DI_FLAGS_ALLOC`
-in the item's `pub` `di_flags`.
+Found by S10's sweep. `DictEntry` (`handle.rs`) was a `Copy` raw pointer,
+`HashTab`'s slot API (`slot`, `insert_at`, `slots_mut`) was safe and `pub`
+over a `pub` `dv_hashtab`, and which slots owned their item was
+`DI_FLAGS_ALLOC` in the item's `pub` `di_flags`.
 
-- **Breaks:** copying a slot's entry into a second dictionary's table
-  (`b.edit().dv_hashtab.insert_at(hi, a.read().dv_hashtab.slot(i)…)`)
-  makes two tables free one `Box`; setting `DI_FLAGS_ALLOC` on
-  `b:changedtick` (the one embedded item), or swapping it with a boxed
-  item through two `items_mut`, makes `take_item` `Box::from_raw` the
-  buffer's own bytes.
-- **Closure:** a type. Ownership in the entry, not the item (a tag bit in
-  `DictEntry` for the embedded `b:changedtick`, set only by
-  `link_buf_changedtick`), `DictEntry` not `Copy` outside `handle.rs`, and
-  `dv_hashtab` reachable only through `Dict`'s own insert/remove/probe API.
+- **Broke:** copying a slot's entry into a second dictionary's table made
+  two tables free one `Box`; setting `DI_FLAGS_ALLOC` on `b:changedtick`
+  (the one embedded item), or moving `b:`'s table into `g:` through a swap
+  of two edited bodies, made `take_item` `Box::from_raw` the buffer's own
+  bytes or outlive the buffer.
+- **Closed:** `b:changedtick` is an ordinary item `b:` owns (the counter is
+  the buffer's `b_changedtick`, written into the item by
+  `buf_set_changedtick`), so no table names an item it does not own. The
+  store is `eval/typval/store.rs`: `DictTab` wraps the hash table, its
+  entry type is private, and every kept slot owns a box — items go in as
+  boxes (`insert`), come out as boxes (`remove`) or with the table (`Drop`).
+  No slot is reachable outside the file, so a table moved, swapped or
+  replaced whole keeps one owner per item. `DI_FLAGS_ALLOC` and
+  `RemovedItem` are gone. A probe copying an entry between two tables or
+  setting the flag no longer compiles.
+
+## The swap audit
+
+S11 was a hole the survey's classing could not see: it classed handle
+methods, not what a guard lends. So every guard or handle that lends a
+`&mut T` was asked what swapping or replacing the whole `T`, or a lent
+field, can break — header or bookkeeping words inside the lent region,
+self-handles, owner generations, intrusive links, and anything unsafe code
+trusts. Only perimeter code can turn a wrong value into undefined
+behaviour, so each answer is about what the perimeter reads back out of the
+lent region.
+
+- **`SlotEdit`/`EditPart` of a `Window`, `Buffer`, `Tabpage`, `Frame`:**
+  safe — the slot's generation word and reader count are outside the value
+  (`slot.rs`); every handle stored inside (`b_next`, `w_buffer`, frame
+  links, the API number `handle`) is checked against its slot's generation
+  at each dereference, so a swapped one is a wrong answer, never a dangling
+  one; `w_s` is compared, never dereferenced (`Win::syntax` asserts it is
+  the buffer's block or the window's own).
+- **`OwnedGrid` (inside a window):** safe — its `lent` count is raised only
+  under `GridRef::with_cells`, which holds a counted read of the owning
+  window, so no edit (and no swap) is out while it is up; a `GridRef`
+  carries its owner's generation outside the grid.
+- **`Term`:** safe — `Deref` lends `&Terminal` only; the emulator in its
+  `RefCell` reports through its callbacks' `Term` handle, checked.
+- **`GridRef`:** lends no `&mut` (in-place writers only).
+- **The `SlotRef` tables (`Qi`, `Qfl` views, `Op`):** safe — generation
+  outside the value; a quickfix stack's `refcount` frees through its table,
+  so a swapped count frees a slot whose next access panics.
+- **`GlobalCell::with_mut`:** safe — `set`/`replace` already write any
+  value, so a cell's contents carry no invariant a swap could break, and
+  the cells whose contents unsafe code trusts (the raw-pointer cells, the
+  libuv-held statics) are private to their perimeter files
+  (`cell_raw_ptr`/`cell_ptr`).
+- **The value `Edit`s and `PartialRef::get_mut`:** safe since S11/S12 — the
+  lent value holds no count, borrow word, registry slot or memo, and the
+  dictionary's table owns its items; what is left inside (`lv_watch`
+  cursors, the collector's mark, `lua_table_ref`, `dv_scope`) is logic,
+  whose wrong value is a wrong answer.
+- **The memline part loan (`Buf::ml`) and `HeldLines`:** found a hole,
+  closed (check-always): two loans (or two buffer edits) could swap two
+  buffers' memlines under a `HeldLines`, which then read out of a memfile
+  nobody pinned and unpinned another's. The hold now remembers the pinned
+  memfile's address — a pinned memfile cannot be dropped, so the address is
+  its alone — and every read and the unpin compare it (`memline/lines.rs`).
+  The loan itself is otherwise safe to swap: the part bit is in the slot,
+  and the memfile's pins and lend epoch move with it.
+- **The line cache's slices:** found a hole, open — S13.
+- **The TUI's state (`&mut TUIData`):** found a hole, open — S14.
+
+### S13 — the line cache's slices (sound-by-convention: open)
+
+Found by the swap audit. `Buf::lend_cached_line*` (`winlayer/deref.rs`)
+answer `&'a [u8]` of the buffer's one-line cache for any `'a`, and
+`Lines::line` (`memline/lines.rs`) bounds that by its own `&mut self` —
+but nothing stops a second reader filling the same buffer's cache meanwhile
+(the `Lines` docs leave "the borrow ends before the call" to the caller).
+
+- **Breaks:** `let x = a.line(1); let _ = b.line(2); x.len()` with two
+  `Lines` of one buffer (or any `ml_*` call or redraw between) refills the
+  cache under `x`: the second fill forms a `&mut MemLine` while `x`
+  borrows it, and frees a pending replacement's text or moves to another
+  block. A `forbid(unsafe_code)` probe in `tests/unit` compiles.
+- **Closure (sketched):** a type: `Lines::line` answers a guard holding the
+  memline loan (another fill panics while it lives, as a second walk does),
+  with `line_copy` for the shapes that hold text across a call; or the
+  cache keeps every text it lent alive until the `Lines` that lent it ends
+  (a per-reader epoch, as `HeldLines` pins). Either touches every line
+  reader (~hundreds of sites) and the per-line cost of the hot walks, and
+  the `lend_cached_line*` family becomes `unsafe fn` with the contract.
+
+### S14 — the TUI's libuv handles under `&mut TUIData` (sound-by-convention: open)
+
+Found by the swap audit. `TUIData` (`tui/state.rs`) holds handles libuv
+keeps by address — `write_loop`, `output_handle`, `winch_handle`,
+`startup_delay_timer`, and the input's `timer_handle`, `bg_query_timer` and
+`read_stream` — as `pub` fields, and every painting module takes
+`&mut TUIData` (S8 closed the same shape in `event/`, not here).
+
+- **Breaks:** `t.startup_delay_timer.loop_0 = ptr::null_mut()` or
+  `mem::swap(&mut t.input.timer_handle, &mut t.input.bg_query_timer)` in
+  any function handed `&mut TUIData` rewrites memory libuv's loop links
+  through. A `forbid(unsafe_code)` probe compiles.
+- **Closure (sketched):** a type: the handles out of the lent region —
+  into a perimeter-private block the TUI files reach by address (or
+  `Pin`ned, behind field writers as `event/stream.rs`'s
+  `field_writers!`), so `&mut TUIData` lends only the painting state.
 
 ## Closed before the survey
 

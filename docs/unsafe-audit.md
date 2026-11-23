@@ -71,7 +71,7 @@ falls into four classes:
 To check the numbers here: `python3 scripts/ratchet.py --dimension
 unsafe_placement` lists any misplaced attribute (none);
 `metrics/ratchet.json` holds each file's `unsafe_stmts`; `rg -l
-'allow\(unsafe_code\)' crates/nvim/src` lists the 65 files.
+'allow\(unsafe_code\)' crates/nvim/src` lists the 66 files.
 
 ## The rows
 
@@ -89,7 +89,7 @@ unsafe_placement` lists any misplaced attribute (none);
 | `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
 | `slot.rs`, `slot/`                          | memory   |     2 |         41 |            7 | type-stable slots and their checked handles      |
 | `winlayer.rs`, `winlayer/`                  | memory   |     6 |         49 |            9 | window, buffer, grid and terminal handles        |
-| `eval/typval/handle.rs`                     | memory   |     1 |         50 |            8 | Vimscript value handles                          |
+| `eval/typval/{handle,store}.rs`             | memory   |     2 |         43 |            7 | Vimscript value handles                          |
 | `vterm/abi/`                                | test ABI |     3 |         90 |           31 | libvterm's C interface                           |
 | `harness.rs`                                | test ABI |     1 |          8 |            5 | editor symbols the harnesses resolve             |
 
@@ -345,27 +345,36 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
   ids end to end). Not planned; the settled verdict is that re-entry handles
   stay handles.
 
-### `eval/typval/handle.rs` — Vimscript value handles
+### `eval/typval/{handle,store}.rs` — Vimscript value handles
 
-- **What:** `ListRef`, `DictRef`, `BlobRef` and `PartialRef`, and a
-  dictionary's item store (51): the dereference core (13), the borrow word
-  each object carries, reached through its own bytes (2), allocation and
-  release (16), the item slots that name a boxed or an embedded `DictItem`
-  (10), `TypVal::bit_copy` and its one user (2), the deep copy's memo (2),
-  two raw bridges for callers that still hold a pointer (2) and four test
-  cases.
+- **What:** `ListRef`, `DictRef`, `BlobRef` and `PartialRef` (`handle.rs`,
+  35, four of them test cases): the `Counted` each points at -- the
+  reference count, the borrow word and, for a list or a dictionary, the
+  registry slot and the deep copy's memo, beside the value -- reached field
+  by field through the handle's pointer, the lending of the value,
+  allocation and release, the collector's registry views, the deep copy's
+  memo, `TypVal::bit_copy` and its one user, and the raw bridges for callers
+  that still hold a pointer; and a dictionary's item store (`store.rs`, 8):
+  a hash table whose kept slots own boxed `DictItem`s by address.
 - **Contract:** a value is reached from many holders at once and the
-  evaluator re-enters at every call, so a List, Dict or Blob is borrowed
-  only through `read()` and `edit()` from a shared handle. **Every build
-  counts both:** any number of reads or one edit, as a `RefCell` (the
+  evaluator re-enters at every call, so a List, Dict or Blob value is
+  borrowed only through `read()` and `edit()` from a shared handle. **Every
+  build counts both:** any number of reads or one edit, as a `RefCell` (the
   object's `Lent` word, `typval/edit.rs`); a partial is never written once
-  built, except by its last holder (`PartialRef::get_mut`). The reference
-  count and the word are `Cell`s, each reached through its own bytes, so
-  neither forms a borrow of the whole object. `bit_copy` duplicates a value without its reference:
-  exactly one of the two may be released (`docs/unsafe-fn-allowlist.md`);
-  its one user is `CallFrame::push_borrowed`, whose frame borrows the value
-  for its own lifetime. The collector's registry views take a reference,
-  and a structure is freed only when the view's is the last.
+  built, except by its last holder (`PartialRef::get_mut`). Neither borrow
+  reaches the words beside the value, whose fields are `handle.rs`'s alone:
+  the count is written only by a handle's clone and drop and by a scope's
+  counted seed (`DictSeed`/`ListSeed`), the registry is entered and left
+  only with `handle.rs`'s `RootKey`, and a memo names a copy only under the
+  `CopyWalk` that holds it. `bit_copy` duplicates a value without its
+  reference: exactly one of the two may be released
+  (`docs/unsafe-fn-allowlist.md`); its one user is
+  `CallFrame::push_borrowed`, whose frame borrows the value for its own
+  lifetime. The collector's registry views take a reference, and a
+  structure is freed only when the view's is the last. The item table's
+  entry type is `store.rs`'s and no slot is reachable outside it: an item
+  enters as a box and leaves as one, so a table moved, swapped or replaced
+  whole still owns each of its items once.
 - **Retires:** only with a different value model. Two cuts are listed: Lists
   and Dictionaries in a `Box` (needs the unit suite's allocation log
   rewritten) and one generic handle type (needs ffigen to emit the C
@@ -404,20 +413,22 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
 ## Soundness by contract
 
 What is still sound by a rule the type system does not hold. (The Lua
-stack's consuming operations, the handle borrow model and the value bit
-copies were here; all three closed: an always-on check,
-[safe-surface.md](safe-surface.md) S7, guards on every handle, S5, and a
-lifetime on the argument frame with copies elsewhere, S10.)
+stack's consuming operations, the handle borrow model, the value bit
+copies, the container header words and the dictionary item store were
+here; all closed: an always-on check, [safe-surface.md](safe-surface.md)
+S7, guards on every handle, S5, a lifetime on the argument frame with
+copies elsewhere, S10, the header beside the value it lends, S11, and a
+table that owns its items, S12.)
 
-- **The value containers' header words** ([safe-surface.md](safe-surface.md)
-  S11, open) (`types/typval.rs`, `eval/typval/handle.rs`): a List, Dict or
-  Blob's reference count and `Lent` word sit inside the struct `edit()`
-  lends as `&mut`, and the count's mutators are `pub`; sound only while no
-  safe code swaps, replaces or writes them.
-- **The dictionary item store's slots** ([safe-surface.md](safe-surface.md)
-  S12, open) (`eval/typval/handle.rs`, `hashtab.rs`): a slot's `Copy` entry
-  and the item's `DI_FLAGS_ALLOC` decide which table frees an item; sound
-  only while no safe code copies an entry or sets the flag.
+- **The line cache's slices** ([safe-surface.md](safe-surface.md) S13,
+  open) (`winlayer/deref.rs`'s `lend_cached_line*`, `memline/lines.rs`'s
+  `Lines`): a slice of the cached line is valid until the next fill of the
+  buffer's cache, and nothing but the reader's convention keeps a second
+  reader from filling it while the first slice lives.
+- **The TUI's libuv handles** ([safe-surface.md](safe-surface.md) S14,
+  open) (`tui/state.rs`, used by `tui/{tui,input,output}.rs`): the handles
+  libuv holds by address are `pub` fields of the `TUIData` every painting
+  module borrows `&mut`, so safe code can overwrite or swap them.
 - **The emulator's offset keepers** (`vterm/types.rs`, `vterm/internal.rs`): `_lineinfo_slots`
   and `_buffer_slot` exist only so that C declarations the battery and the
   fixture compile keep reading the right offsets. Not unsafe in Rust, but a
