@@ -2474,8 +2474,12 @@ describe('TUI', function()
 
   it('paste: split "start paste" code', function()
     t.skip(is_os('win'), 'FIXME: wrong behavior on Windows')
+    -- The two halves arrive in two writes: on a loaded machine the gap can
+    -- pass the default 'ttimeoutlen' and the first half is flushed as keys.
+    -- The option reaches the TUI before the mode change it then draws.
+    child_exec_lua('vim.o.ttimeoutlen = 10000')
     feed_data('i')
-    wait_for_mode('i')
+    screen:expect({ any = '%-%- INSERT %-%-' })
     -- Send split "start paste" sequence.
     feed_data('\027[2')
     feed_data('00~pasted from terminal\027[201~')
@@ -2490,8 +2494,12 @@ describe('TUI', function()
 
   it('paste: split "stop paste" code', function()
     t.skip(is_os('win'), 'FIXME: wrong behavior on Windows')
+    -- The two halves arrive in two writes: on a loaded machine the gap can
+    -- pass the default 'ttimeoutlen' and the first half is flushed as keys.
+    -- The option reaches the TUI before the mode change it then draws.
+    child_exec_lua('vim.o.ttimeoutlen = 10000')
     feed_data('i')
-    wait_for_mode('i')
+    screen:expect({ any = '%-%- INSERT %-%-' })
     -- Send split "stop paste" sequence.
     feed_data('\027[200~pasted from terminal\027[20')
     feed_data('1~')

@@ -124,6 +124,10 @@ end
 -- Fake LSP server.
 M.fake_lsp_code = 'test/functional/fixtures/fake-lsp-server.lua'
 M.fake_lsp_logfile = 'Xtest-fake-lsp.log'
+-- How long a fake server lives before it gives up on the test (exit 100). A
+-- safety net for a hung conversation, not a deadline: under ASan on a loaded
+-- machine a whole conversation takes seconds.
+local FAKE_LSP_TIMEOUT_MS = 1e4
 
 local function fake_lsp_server_setup(test_name, timeout_ms, options, settings)
   exec_lua(function(fake_lsp_code, fake_lsp_logfile, timeout)
@@ -174,7 +178,7 @@ local function fake_lsp_server_setup(test_name, timeout_ms, options, settings)
         vim.rpcnotify(1, 'exit', ...)
       end,
     }
-  end, M.fake_lsp_code, M.fake_lsp_logfile, timeout_ms or 1e3)
+  end, M.fake_lsp_code, M.fake_lsp_logfile, timeout_ms or FAKE_LSP_TIMEOUT_MS)
 end
 
 --- @class test.lsp.Config
@@ -194,7 +198,7 @@ function M.test_rpc_server(config)
     M.clear_notrace()
     fake_lsp_server_setup(
       config.test_name,
-      config.timeout_ms or 1e3,
+      config.timeout_ms or FAKE_LSP_TIMEOUT_MS,
       config.options,
       config.settings
     )
