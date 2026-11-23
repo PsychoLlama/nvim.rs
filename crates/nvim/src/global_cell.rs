@@ -59,7 +59,7 @@
 )]
 
 use core::cell::{Cell, UnsafeCell};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// A global editor-state cell. See the module docs for the contract.
 #[repr(C)]
@@ -724,8 +724,15 @@ impl<T> RawStatic<T> {
 /// `cargo test`), which keeps the thread check inert there.
 static ARMED: AtomicBool = AtomicBool::new(false);
 
-/// Set by [`emergency`]: a conflict no longer panics.
+/// Set by [`emergency`]: a conflict with a borrow that may be an
+/// interrupted frame's no longer panics.
 static ABANDONED: AtomicBool = AtomicBool::new(false);
+
+/// The address of a local of [`emergency`]'s own frame, once it began: a
+/// shared [`Loan`] above it (the stack grows down on every target the
+/// editor builds for) is a local of a frame the emergency interrupted, and
+/// one below it a frame the exit has run since.
+static EMERGENCY_FRAME: AtomicUsize = AtomicUsize::new(0);
 
 /// Record the calling thread as the main thread and arm the main-thread
 /// assertion of a checked build. Called from the binary entry point before
@@ -756,17 +763,28 @@ impl Emergency {
     }
 }
 
-/// End the process through `exit`, every open borrow abandoned first: a
-/// borrow conflict stops being an error for good (the thread check stays),
-/// and `exit` gets the [`Emergency`] the other abandons ask for. It never
+/// End the process through `exit`, every open borrow abandoned first, and
+/// `exit` gets the [`Emergency`] the other abandons ask for. It never
 /// returns -- its type says so -- which is the whole contract: the frames
 /// that hold the open borrows and guards never resume, so forgetting them
 /// lets the swap-file cleanup reach everything without tripping over a
 /// loan whose owner can no longer give it back.
 ///
-/// Only the conflict paths read the flag, so it costs the access paths
-/// nothing.
+/// What is forgotten is bounded by what can be told apart. A shared loan
+/// (`with`, `with_field`) lives in its borrower's frame, so a write that
+/// meets one still panics when the loan is below this frame -- `exit`'s own
+/// borrow -- and goes on only past the interrupted frames' loans. An
+/// exclusive borrow (`with_mut`) is one state word with no owner in it, so a
+/// conflict with one goes on for the rest of the exit, `exit`'s own nested
+/// `with_mut`s included (docs/unsafe-audit.md, `global_cell.rs`).
+///
+/// Only the conflict paths read the flag and the mark, so they cost the
+/// access paths nothing. Never inlined: the mark must be this frame's, below
+/// every local of the caller.
+#[inline(never)]
 pub(crate) fn emergency(exit: impl FnOnce(&Emergency) -> core::convert::Infallible) -> ! {
+    let frame = 0u8;
+    EMERGENCY_FRAME.store(core::ptr::from_ref(&frame).addr(), Ordering::Relaxed);
     ABANDONED.store(true, Ordering::Relaxed);
     match exit(&Emergency {
         _made_by_emergency: (),
@@ -776,6 +794,17 @@ pub(crate) fn emergency(exit: impl FnOnce(&Emergency) -> core::convert::Infallib
 /// Whether [`emergency`] began.
 fn abandoned() -> bool {
     ABANDONED.load(Ordering::Relaxed)
+}
+
+/// Whether `loan` is a local of a frame [`emergency`] interrupted, which
+/// never runs again: false before one began.
+fn interrupted(loan: &Loan) -> bool {
+    abandoned() && above(loan, EMERGENCY_FRAME.load(Ordering::Relaxed))
+}
+
+/// Whether `loan` lives in a frame older than the one holding `mark`.
+fn above(loan: &Loan, mark: usize) -> bool {
+    core::ptr::from_ref(loan).addr() > mark
 }
 
 #[inline(always)]
@@ -843,12 +872,21 @@ fn shared_conflict(cell: usize) {
 #[cold]
 #[inline(never)]
 fn whole_write_conflict(borrowed: State, (start, end): (usize, usize), what: &str) {
-    if abandoned() {
+    // SAFETY: the cell's state, read just now; the walk ends here.
+    let mut live = unsafe { loans(borrowed) }
+        .filter(|loan| !interrupted(loan))
+        .peekable();
+    // An exclusive borrow has no owner to ask after; shared loans do.
+    let forgiven = if borrowed == EXCLUSIVE {
+        abandoned()
+    } else {
+        live.peek().is_none()
+    };
+    if forgiven {
         return;
     }
-    // SAFETY: the cell's state, read just now; the walk ends here.
-    let whole_lent = borrowed == EXCLUSIVE
-        || unsafe { loans(borrowed) }.any(|loan| loan.start == start && loan.end == end);
+    let whole_lent =
+        borrowed == EXCLUSIVE || live.any(|loan| loan.start == start && loan.end == end);
     if whole_lent {
         panic!(
             "GlobalCell::{what} while already borrowed (cell @ {start:#x}) — \
@@ -863,12 +901,10 @@ fn whole_write_conflict(borrowed: State, (start, end): (usize, usize), what: &st
 #[cold]
 #[inline(never)]
 fn field_write_conflict(borrowed: State, field: usize, size: usize, whole: (usize, usize)) {
-    if abandoned() {
-        return;
-    }
     let end = field + size.max(1);
     // SAFETY: the cell's state, read just now; the walk ends here.
-    let conflict = unsafe { loans(borrowed) }.find(|loan| field < loan.end && loan.start < end);
+    let conflict = unsafe { loans(borrowed) }
+        .find(|loan| !interrupted(loan) && field < loan.end && loan.start < end);
     if let Some(loan) = conflict {
         if (loan.start, loan.end) == whole {
             panic!("GlobalCell field written during an active with borrow (field @ {field:#x})");
@@ -892,9 +928,9 @@ unsafe fn loans<'a>(borrowed: State) -> impl Iterator<Item = &'a Loan> {
         // SAFETY: every loan reachable from a cell's state is live: each is
         // a local of a frame still inside the borrow that opened it, and
         // that borrow's `Restore` takes it off the chain before the frame
-        // ends. Only a conflict path walks the chain, and none does once
-        // `emergency` has begun (the one way a frame is left without
-        // its `Restore`).
+        // ends. The one way a frame is left without its `Restore` is
+        // `emergency`, which never returns to it: the frame is suspended,
+        // not popped, so its locals stay where they were, unwritten.
         let loan = unsafe { &*next };
         next = loan.outer;
         Some(loan)
@@ -1172,6 +1208,35 @@ mod tests {
     fn a_set_inside_with_panics() {
         let cell = GlobalCell::new(0);
         cell.with(|_| cell.set(1));
+    }
+
+    /// The emergency's mark tells loans apart by frame: one made by a frame
+    /// the mark's frame was called from is above it, one made by a frame
+    /// called since is below.
+    #[test]
+    fn a_loan_of_an_older_frame_is_above_the_mark() {
+        #[inline(never)]
+        fn middle(outer: &Loan) {
+            let frame = 0u8;
+            let mark = core::ptr::from_ref(&frame).addr();
+            assert!(above(outer, mark));
+            inner(mark);
+        }
+        #[inline(never)]
+        fn inner(mark: usize) {
+            let loan = Loan {
+                start: 0,
+                end: 1,
+                outer: FREE,
+            };
+            assert!(!above(core::hint::black_box(&loan), mark));
+        }
+        let outer = Loan {
+            start: 0,
+            end: 1,
+            outer: FREE,
+        };
+        middle(core::hint::black_box(&outer));
     }
 
     #[test]

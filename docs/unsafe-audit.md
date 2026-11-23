@@ -271,6 +271,16 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   so the exported cells keep their C address. `ptr()`, the raw
   escape hatch, is used only on the perimeter (22 sites: the globals libuv
   holds by address, and the cell's own tests).
+- **After an emergency** (`emergency`, every exit that abandons) the
+  interrupted frames' borrows stay recorded, as nothing can give them back.
+  A write that meets a shared loan goes on only past the loans above
+  `emergency`'s own frame (the interrupted ones); one below it, made by the
+  exit itself, still panics. An exclusive borrow is one state word with no
+  owner in it, so a conflict with one goes on for the rest of the exit --
+  `getout` too, on `preserve_exit`. Narrowing that further would cost every
+  `with_mut` a store of its frame; clearing the flag after the swap files
+  instead would turn an `E41` inside a `with_mut` into an abort in
+  `getout`, losing `VimLeave` and the ShaDa write.
 - **Retires:** never; it is the replacement.
 
 ### `slot.rs`, `slot/` — type-stable slots

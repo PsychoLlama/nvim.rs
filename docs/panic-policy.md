@@ -73,8 +73,9 @@ at <file>:<line>:<col>:`. In a release binary the backtrace has function
 2. **On the main thread:**
    - Every borrow and loan the interrupted code held is abandoned
      (`startup::exit::abandon_loans`): the `GlobalCell` borrow tracker stops
-     treating a conflict as an error, every buffer, window, tab page and
-     frame slot drops its edit bit, read count and memline loan
+     treating a conflict with them as an error (unsafe-audit.md,
+     `global_cell.rs`, says how far that goes), every buffer, window, tab
+     page and frame slot drops its edit bit, read count and memline loan
      (`SlotPool::abandon_loans`), and every memfile drops its matches' pins.
      The panic may have fired inside a `with_mut`, under a buffer's `edit()`
      or in a memline walk, and the swap-file sync below goes through all of
