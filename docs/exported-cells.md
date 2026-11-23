@@ -21,10 +21,6 @@ cell), a cell that was a constant in disguise becoming a `const`, or the
 access moving into a body that is not a leaf. Check a `codegen-units = 1`
 binary as well as the default one.
 
-## `ex_getln`
-
-- `neovim::ex_getln::CCLINE`
-
 ## `getchar`
 
 - `neovim::getchar::typeahead::TYPEBUF`
