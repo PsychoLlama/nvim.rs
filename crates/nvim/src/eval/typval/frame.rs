@@ -15,6 +15,7 @@
 )]
 
 use super::{TV_INITIAL_VALUE, TypVal};
+use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 
 /// One call's argument list, assembled where the caller's own array had no
@@ -23,8 +24,9 @@ use core::mem::ManuallyDrop;
 /// A slot is one of two things. Either the frame *owns* the value -- a
 /// partial's bound argument, copied because the call may free the partial --
 /// and releases it when the frame goes out of scope, or the slot is a bit
-/// copy of a value the caller owns for the length of the call and the frame
-/// releases nothing. That is the whole reason the slots are `ManuallyDrop`
+/// copy of a value the caller keeps and the frame releases nothing. The
+/// frame's lifetime `'a` is the borrow of every value it names that way, so
+/// it cannot outlive one, and nothing turns a named slot into an owned one. That is the whole reason the slots are `ManuallyDrop`
 /// and the ownership rides beside them in a bitmask rather than in the type:
 /// splicing a base in front of the caller's arguments must not duplicate a
 /// string or take a reference, and a `Vec<TypVal>` built by `clone()` would
@@ -35,14 +37,16 @@ use core::mem::ManuallyDrop;
 /// twenty-one tag tests on every call the interpreter makes, whatever the
 /// arity.
 #[derive(Debug)]
-pub(crate) struct CallFrame<const N: usize> {
+pub(crate) struct CallFrame<'a, const N: usize> {
     slots: ManuallyDrop<[TypVal; N]>,
     len: usize,
     /// Bit `i` set: slot `i` is this frame's to release.
     owned: u32,
+    /// The values the named slots borrow.
+    named: PhantomData<&'a TypVal>,
 }
 
-impl<const N: usize> CallFrame<N> {
+impl<const N: usize> CallFrame<'_, N> {
     /// An empty frame.
     pub(crate) const fn new() -> Self {
         const { assert!(N <= 32, "the ownership mask is a u32") };
@@ -50,6 +54,7 @@ impl<const N: usize> CallFrame<N> {
             slots: ManuallyDrop::new([TV_INITIAL_VALUE; N]),
             len: 0,
             owned: 0,
+            named: PhantomData,
         }
     }
 
@@ -65,10 +70,10 @@ impl<const N: usize> CallFrame<N> {
         self.len == N
     }
 
-    /// Append a value that *names* what it does not own -- a caller's
-    /// string, a container somebody else gives the reference back for, a
-    /// static message.  The frame releases nothing for this slot.
-    pub(crate) fn push_naming(&mut self, tv: TypVal) {
+    /// Append a value the frame gives up unreleased.  Only
+    /// [`push_borrowed`](Self::push_borrowed) calls it, with a bit copy;
+    /// anything else handed here would only leak.
+    pub(super) fn push_naming(&mut self, tv: TypVal) {
         self.slots[self.len] = tv;
         self.len += 1;
     }
@@ -80,18 +85,16 @@ impl<const N: usize> CallFrame<N> {
     }
 
     /// Move the last slot to the front, taking the ownership bits with it.
-    pub(super) fn rotate_last_to_front(&mut self) {
+    fn rotate_last_to_front(&mut self) {
+        let Some(last) = self.len.checked_sub(1) else {
+            return;
+        };
         self.slots[..self.len].rotate_right(1);
-        // The slot that moved to the front carries a clear bit, so shifting
-        // the whole mask up one is what the rotation did to the values.
-        self.owned <<= 1;
-    }
-
-    /// Claim slot `idx`: the callee took the value over, or handed one back
-    /// that nothing else names, so the frame releases it after all.
-    pub(crate) fn own(&mut self, idx: usize) {
-        assert!(idx < self.len, "no such argument");
-        self.owned |= 1 << idx;
+        // The mask rotates with the values: the last slot's bit comes round
+        // to the front, and the others shift up one.
+        let last_bit = 1 << last;
+        let last_owned = self.owned & last_bit != 0;
+        self.owned = ((self.owned & !last_bit) << 1) | u32::from(last_owned);
     }
 
     /// Drop the arguments past `n`: the ones the frame owns are released,
@@ -149,15 +152,15 @@ impl<const N: usize> CallFrame<N> {
     }
 }
 
-impl<const N: usize> Drop for CallFrame<N> {
+impl<const N: usize> Drop for CallFrame<'_, N> {
     fn drop(&mut self) {
         self.truncate(0);
     }
 }
 
-impl<const N: usize> CallFrame<N> {
+impl<'a, const N: usize> CallFrame<'a, N> {
     /// Append a bit copy of each of the caller's values.
-    pub(crate) fn extend_borrowed(&mut self, tvs: &[TypVal]) {
+    pub(crate) fn extend_borrowed(&mut self, tvs: &'a [TypVal]) {
         for tv in tvs {
             self.push_borrowed(tv);
         }
@@ -165,7 +168,7 @@ impl<const N: usize> CallFrame<N> {
 
     /// Put a bit copy of `tv` in front of everything already in the frame,
     /// which is what makes `base->Method(a)` a call of `Method(base, a)`.
-    pub(crate) fn insert_borrowed_front(&mut self, tv: &TypVal) {
+    pub(crate) fn insert_borrowed_front(&mut self, tv: &'a TypVal) {
         self.push_borrowed(tv);
         self.rotate_last_to_front();
     }

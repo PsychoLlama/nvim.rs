@@ -452,34 +452,57 @@ pub unsafe fn tv_dict_free_dict(d: *mut Dict) {
 // views and frees the pass works with, so that `eval/collect.rs` holds no
 // pointer of its own.
 
-/// A view of the dictionary in the collector's registry slot `idx`, taking
-/// no reference: `None` for a hole or a slot past the end.
-pub(crate) fn registered_dict(idx: usize) -> Option<::core::mem::ManuallyDrop<DictRef>> {
+/// The dictionary in the collector's registry slot `idx`, with a reference
+/// of its own: `None` for a hole or a slot past the end.
+pub(crate) fn registered_dict(idx: usize) -> Option<DictRef> {
     let at = crate::eval::gc::dict_at(idx)?;
-    // A registered dictionary is live until it leaves the registry, and the
-    // view takes no reference, so dropping it changes nothing.
-    Some(::core::mem::ManuallyDrop::new(DictRef(at)))
+    // SAFETY: a registered dictionary is live until it leaves the registry,
+    // which only `free_registered_dict` and the last release do.
+    unsafe { DictRef::retained(at.as_ptr()) }
 }
 
 /// [`registered_dict`] for the list registry.
-pub(crate) fn registered_list(idx: usize) -> Option<::core::mem::ManuallyDrop<ListRef>> {
+pub(crate) fn registered_list(idx: usize) -> Option<ListRef> {
     let at = crate::eval::gc::list_at(idx)?;
-    // As above.
-    Some(::core::mem::ManuallyDrop::new(ListRef(at)))
+    // SAFETY: as above.
+    unsafe { ListRef::retained(at.as_ptr()) }
 }
 
-/// Free the structure of a dictionary the pass has already emptied, taking
-/// it out of the registry.
-pub(crate) fn free_registered_dict(view: ::core::mem::ManuallyDrop<DictRef>) {
-    // SAFETY: an emptied, registered dictionary; the pass owns the registry
-    // and the view is the last thing naming it.
-    unsafe { tv_dict_free_dict(view.as_ptr()) };
+/// Free the structure of the dictionary in registry slot `idx`, taking it
+/// out of the registry -- when nothing holds a reference to it any more.
+/// Answers whether it did.
+///
+/// The collector's free pass empties every unreachable container first, so
+/// what is left of a reference is a holder the marking never saw. Freeing
+/// under it would leave that holder dangling; the dictionary stays (empty)
+/// instead, and its last release frees it the ordinary way.
+pub(crate) fn free_registered_dict(idx: usize) -> bool {
+    let Some(dict) = registered_dict(idx) else {
+        return false;
+    };
+    // The view's own reference is the only one left.
+    if dict.count().get() > 1 {
+        return false;
+    }
+    // SAFETY: registered, so `tv_dict_alloc` made it and the registry holds
+    // it; no handle but the view names it (every handle owns a count), and
+    // the view is given up unreleased here, so no borrow of it is out.
+    unsafe { tv_dict_free_dict(dict.into_raw()) };
+    true
 }
 
 /// [`free_registered_dict`] for a list.
-pub(crate) fn free_registered_list(view: ::core::mem::ManuallyDrop<ListRef>) {
+pub(crate) fn free_registered_list(idx: usize) -> bool {
+    let Some(list) = registered_list(idx) else {
+        return false;
+    };
+    // As above.
+    if list.count().get() > 1 {
+        return false;
+    }
     // SAFETY: as above.
-    unsafe { list_free_list(view.as_ptr()) };
+    unsafe { list_free_list(list.into_raw()) };
+    true
 }
 
 /// One reference to a [`Blob`], given back when the handle goes: the blob
@@ -944,19 +967,10 @@ impl TypVal {
     /// may, and it is the original. In practice the duplicate goes into a
     /// [`ManuallyDrop`](core::mem::ManuallyDrop) frame that outlives nothing.
     #[inline(always)]
-    pub(crate) unsafe fn bit_copy(&self) -> TypVal {
+    unsafe fn bit_copy(&self) -> TypVal {
         // SAFETY: the caller's promise above -- the duplicate is not released,
         // so the payload keeps its one owner.
         unsafe { ::core::ptr::read(self) }
-    }
-
-    /// The [`bit_copy`](TypVal::bit_copy) an `a:` or `a:000` item holds: it
-    /// *names* the caller's argument for the call. Contract: the caller keeps
-    /// `self` until the frame gives the duplicate up unreleased (or upgrades
-    /// it to a copy when the scope outlives the call).
-    pub(crate) fn named_for_call(&self) -> TypVal {
-        // SAFETY: the contract above -- the payload keeps its one owner.
-        unsafe { self.bit_copy() }
     }
 }
 
@@ -965,11 +979,15 @@ impl TypVal {
 ///
 /// It lives here rather than beside the type because `bit_copy` is this
 /// module's, and a frame that never takes one is safe code end to end.
-impl<const N: usize> CallFrame<N> {
-    /// Append a bit copy of a value the caller keeps.
-    pub(crate) fn push_borrowed(&mut self, tv: &TypVal) {
+impl<'a, const N: usize> CallFrame<'a, N> {
+    /// Append a bit copy of a value the caller keeps for the frame's life.
+    pub(crate) fn push_borrowed(&mut self, tv: &'a TypVal) {
         // SAFETY: the duplicate is never released -- the slot's bit is
-        // clear, so `truncate` disowns it rather than clearing it.
+        // clear, nothing sets it again (the frame has no way to claim a
+        // slot after the push), so `truncate` disowns it rather than
+        // clearing it -- and it is never read after `tv` is gone: `'a` is
+        // the frame's own lifetime, and the frame hands its slots out only
+        // as shared borrows of itself.
         self.push_naming(unsafe { tv.bit_copy() });
     }
 }

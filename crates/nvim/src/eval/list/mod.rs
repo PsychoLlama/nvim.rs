@@ -818,14 +818,14 @@ pub(crate) fn err_not_countable(func_name: &CStr) {
     semsg!("E706: Argument of {arg0} must be a List, String or Dictionary");
 }
 
-/// Name the `v:` variable `idx` in the argument frame `filter_map_one`
+/// Copy the `v:` variable `idx` into the argument frame `filter_map_one`
 /// calls with.
 ///
-/// A *borrowed* slot: the value is the `v:` variable's, which keeps it, so
-/// the frame releases nothing.
+/// A copy, not a name: the call is the user's, and a nested `map()` sets
+/// the variable again while this frame still holds its value.
 #[inline(always)]
-pub(crate) fn push_vim_var(argv: &mut CallFrame<2>, idx: Vv) {
-    with_vim_var(idx, |value| argv.push_borrowed(value));
+pub(crate) fn push_vim_var(argv: &mut CallFrame<'_, 2>, idx: Vv) {
+    argv.push_owned(with_vim_var(idx, TypVal::copy_for_call));
 }
 
 /// Release whatever the `v:` variable `idx` holds.
@@ -881,7 +881,7 @@ pub(crate) fn restore_vim_var(idx: Vv, save: &mut TypVal) {
 /// family re-enters the evaluator, and so where anything may happen to the
 /// container being walked.
 #[inline(always)]
-pub(crate) fn eval_expr(expr: &TypVal, argv: &CallFrame<2>, newtv: &mut TypVal) -> bool {
+pub(crate) fn eval_expr(expr: &TypVal, argv: &CallFrame<'_, 2>, newtv: &mut TypVal) -> bool {
     eval_expr_typval(expr, false, argv.args(), newtv).is_ok()
 }
 

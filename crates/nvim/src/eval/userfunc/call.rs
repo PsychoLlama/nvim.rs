@@ -32,7 +32,7 @@ use super::*;
 use crate::eval::typval::DictRef;
 use crate::lua::executor::typval_call_lua;
 use crate::runtime::sourcing_name_bytes;
-use crate::types::{Failed, ProfTime, Refcount};
+use crate::types::{Failed, ProfTime};
 
 /// The function of the call `frame` was made from, if it was made from one.
 fn caller_func(frame: &FuncCall) -> Option<Rc<UserFunc>> {
@@ -248,13 +248,13 @@ fn set_fixed_vars(
     }
     scopes.a_vars.edit().dv_lock = VarLock::Fixed;
     if has_args {
-        // Set a:000 to the list of the extra arguments. The entry *names*
-        // the funccall's own list without counting a reference, as
-        // upstream's did: `cleanup_function_call` compares the count
-        // against the seed to find out whether the list escaped.
+        // Set a:000 to the list of the extra arguments. The entry holds a
+        // reference of its own (upstream's named the list uncounted):
+        // `cleanup_function_call` empties `a:` before it compares the
+        // list's count against the seed, so the entry is gone by then
+        // unless `a:` itself outlives the call.
         let a000 = TypVal::list(Some(scopes.a_list.clone()));
         add_fixed(&scopes.a_vars, scopes.entry(b"000", a000, VarLock::Fixed));
-        scopes.a_list.edit().lv_refcount = Refcount::new(DO_NOT_FREE_CNT);
         // Set a:firstline and a:lastline.
         let first = TypVal::Number(VarNumber::from(firstline));
         add_fixed(
@@ -332,38 +332,30 @@ fn bind_arguments(
             name = (ai + 1).to_string().into_bytes();
         }
 
-        // Note: the argument is not copied, so its value is shared with the
-        // caller's -- the `a:` item *names* it for the length of the call,
-        // and gives it up unreleased at the end. A default's value is this
-        // call's own and moves in; it is cleared before the tear-down.
+        // The `a:` item holds a copy of its own: a default's value moves
+        // in, an argument is copied (a container takes a reference, a
+        // string is duplicated), so the scope can outlive the call.
         let value = if isdefault {
             def_rettv.take()
         } else {
-            // The caller keeps the value for the length of the call, and
-            // the `a:` item releases nothing: `cleanup_function_call` gives
-            // it up, or upgrades it to a copy of its own when the scope
-            // outlives the call.
-            args[at].named_for_call()
+            args[at].copy_for_call()
         };
-        let mut item = scopes.entry(&name, value, VarLock::Fixed);
+        let item = scopes.entry(&name, value, VarLock::Fixed);
         if isdefault {
             bound.defaults.push((addlocal, name));
         }
 
         if addlocal {
-            // A lambda sees its arguments as l: variables, each a value of
-            // its own.
-            let owned = item.di_tv.clone();
-            item.di_tv.overwrite(owned);
+            // A lambda sees its arguments as l: variables.
             add_fixed(&scopes.l_vars, item);
         } else {
             add_fixed(&scopes.a_vars, item);
         }
 
         if (0..MAX_FUNC_ARGS).contains(&ai) {
-            // Add the extra argument to a:000. As `a:name` above, the item
-            // *names* the caller's value; `List::disown_items` gives it up.
-            let value = args[at].named_for_call();
+            // Add the extra argument to a:000, a copy of its own as
+            // `a:name` above.
+            let value = args[at].copy_for_call();
             scopes.a_list.edit().lv_items.push(ListItem {
                 li_tv: value,
                 li_lock: VarLock::Fixed,

@@ -343,32 +343,6 @@ impl List {
         let moved = self.take_range(first, last);
         target.lv_items.extend(moved);
     }
-
-    /// Empty the list without releasing anything its items name.
-    ///
-    /// The one caller is a funccall's `a:000`, whose items *borrow* the
-    /// caller's arguments for the length of the call and own nothing.
-    /// Upstream spelled this `lv_first = NULL`, which threw away an array of
-    /// values it had never owned; this is the same statement about an array
-    /// that would otherwise release them.
-    pub(crate) fn disown_items(&mut self) {
-        for mut item in ::core::mem::take(&mut self.lv_items) {
-            item.li_tv.disown();
-        }
-    }
-
-    /// Upgrade every item to a value of its own.
-    ///
-    /// The counterpart of [`List::disown_items`]: a funccall that has to
-    /// outlive the call that made it cannot keep naming the caller's
-    /// arguments, so each item takes a real copy -- written over the
-    /// borrowed bits, which were never this list's to release.
-    pub(crate) fn own_items(&mut self) {
-        for item in &mut self.lv_items {
-            let copy = item.li_tv.clone();
-            item.li_tv.overwrite(copy);
-        }
-    }
 }
 
 /// The removals that release what they take: on the handle, because the

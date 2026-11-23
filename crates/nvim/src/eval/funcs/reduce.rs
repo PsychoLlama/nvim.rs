@@ -27,11 +27,9 @@ use crate::message::state::CALLED_EMSG;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber,
+    TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VarLock, VarNumber,
 };
 use core::ffi::c_int;
-use core::mem::ManuallyDrop;
 
 /// A Number typval.
 const fn number_tv(n: VarNumber) -> TypVal {
@@ -96,38 +94,21 @@ pub fn f_min(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     max_min(&args[0], result, false)
 }
 
-/// What a fold arm owns, which the three arms genuinely disagree about.
+/// What a fold arm does with the accumulator it hands the callee.
 ///
 /// This is a quirk, not a simplification waiting to happen: upstream's
-/// three loops differ here and the difference is observable. The List arm
-/// blanks the return value's tag before the call and frees the previous
-/// accumulator; the String arm frees the accumulator *and* the character it
-/// allocated, but does not blank the tag; the Blob arm frees neither, so a
-/// fold whose accumulator is a String or a container leaks one value per
-/// byte. Left as it is — it is a leak, not a crash, and the answer is the
-/// same either way.
-#[derive(Debug)]
-struct Cleanup {
-    blank_rettv: bool,
-    clear_acc: bool,
-    clear_item: bool,
+/// three loops differ here. The List and String arms hand the previous
+/// accumulator over and free it after the call; the Blob arm hands the call
+/// a copy and leaves the accumulator in place, so a fold whose call fails
+/// keeps the value it had.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Accumulator {
+    /// Moved into the call's frame, which releases it.
+    Handed,
+    /// Copied into the call's frame; the accumulator keeps its value until
+    /// the call writes a new one.
+    Kept,
 }
-
-const LIST_CLEANUP: Cleanup = Cleanup {
-    blank_rettv: true,
-    clear_acc: true,
-    clear_item: false,
-};
-const STRING_CLEANUP: Cleanup = Cleanup {
-    blank_rettv: false,
-    clear_acc: true,
-    clear_item: true,
-};
-const BLOB_CLEANUP: Cleanup = Cleanup {
-    blank_rettv: false,
-    clear_acc: false,
-    clear_item: false,
-};
 
 /// Call `expr` with the accumulator and the next item, leaving the result in
 /// `result`.
@@ -137,29 +118,22 @@ const BLOB_CLEANUP: Cleanup = Cleanup {
 fn fold_step(
     expr: &TypVal,
     result: &mut TypVal,
-    item: &TypVal,
-    cleanup: Cleanup,
+    item: TypVal,
+    accumulator: Accumulator,
     called_emsg_start: c_int,
 ) -> bool {
-    // `argv` outlives the call. The accumulator and the item are *named* by the frame; `cleanup` says
-    // which of the two the callee is expected to have taken over, and the
-    // caller owns whatever the frame is not told to claim.  Upstream's
-    // shape: the List fold blanks `rettv` so that only `argv[0]` holds the
-    // old accumulator, the String fold owns the character it just measured,
-    // and the Blob fold's accumulator starts as a Number that owns nothing.
+    // The frame owns both of its values and releases them after the call:
+    // the item is this step's own, and the accumulator is either moved out
+    // of `result` or copied from it, so the callee can write `result`
+    // while the frame holds the old value.
     let mut argv = CallFrame::<2>::new();
-    argv.push_borrowed(result);
-    argv.push_borrowed(item);
-    if cleanup.blank_rettv {
-        result.write_empty(VAR_UNKNOWN);
-    }
+    argv.push_owned(match accumulator {
+        Accumulator::Handed => result.take(),
+        Accumulator::Kept => result.copy_for_call(),
+    });
+    argv.push_owned(item);
     let r = eval_expr_typval(expr, true, argv.args(), result);
-    if cleanup.clear_acc {
-        argv.own(0);
-    }
-    if cleanup.clear_item {
-        argv.own(1);
-    }
+    drop(argv);
     r.is_ok() && CALLED_EMSG.get() == called_emsg_start
 }
 
@@ -196,7 +170,7 @@ fn reduce_list(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // is the user's function, and the lock above stops it editing the list
     // but not a `:for` on the same list from doing so.
     while let Some(item) = { list.read().items().get(at).map(|li| li.li_tv.clone()) } {
-        if !fold_step(expr, result, &item, LIST_CLEANUP, called_emsg_start) {
+        if !fold_step(expr, result, item, Accumulator::Handed, called_emsg_start) {
             break;
         }
         at += 1;
@@ -229,10 +203,8 @@ fn reduce_string(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     }
     while at < text.len() {
         let len = cluster_len(&text[at..]);
-        // The fold takes the character over -- `STRING_CLEANUP` clears
-        // `argv[1]` -- so this must not release it a second time.
-        let item = ManuallyDrop::new(TypVal::string_from(&text[at..at + len]));
-        if !fold_step(expr, result, &item, STRING_CLEANUP, called_emsg_start) {
+        let item = TypVal::string_from(&text[at..at + len]);
+        if !fold_step(expr, result, item, Accumulator::Handed, called_emsg_start) {
             break;
         }
         at += len;
@@ -262,7 +234,7 @@ fn reduce_blob(args: &[TypVal], expr: &TypVal, result: &mut TypVal) {
     // can grow or free the blob under the walk.
     while at < args[0].blob_bytes().len() {
         let item = number_tv(VarNumber::from(args[0].blob_bytes()[at]));
-        if !fold_step(expr, result, &item, BLOB_CLEANUP, called_emsg_start) {
+        if !fold_step(expr, result, item, Accumulator::Kept, called_emsg_start) {
             return;
         }
         at += 1;

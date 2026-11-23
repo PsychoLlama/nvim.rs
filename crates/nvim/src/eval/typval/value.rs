@@ -98,6 +98,19 @@ impl Clone for TypVal {
     }
 }
 
+impl TypVal {
+    /// [`Clone`], save that an unset value copies to an unset one without
+    /// the internal error: for a caller that hands a call a copy of what
+    /// the caller has, which may be a slot a parse left unset.
+    pub(crate) fn copy_for_call(&self) -> TypVal {
+        if self.v_type() == VAR_UNKNOWN {
+            TypVal::Unknown
+        } else {
+            self.clone()
+        }
+    }
+}
+
 impl Drop for TypVal {
     /// Release whatever this value holds; this *is* `tv_clear`.
     ///

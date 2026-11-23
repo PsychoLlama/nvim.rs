@@ -42,7 +42,7 @@ pub(crate) fn eval_func(
     name: &[u8],
     result: &mut TypVal,
     evaluate: bool,
-    basetv: Option<&mut TypVal>,
+    basetv: Option<&TypVal>,
 ) -> Result<(), Failed> {
     if !evaluate {
         check_vars(name);
@@ -85,7 +85,7 @@ pub(crate) fn call_func_rettv(
     result: &mut TypVal,
     evaluate: bool,
     selfdict: Option<&DictRef>,
-    basetv: Option<&mut TypVal>,
+    basetv: Option<&TypVal>,
     lua_name: Option<usize>,
 ) -> Result<(), Failed> {
     // The callee moves out of `result` so the call can fill it. It is
@@ -178,7 +178,7 @@ pub(crate) fn eval_lambda(
         tv_clear(result);
         Err(Failed)
     } else {
-        call_func_rettv(cursor, result, evaluate, None, Some(&mut base), None)
+        call_func_rettv(cursor, result, evaluate, None, Some(&base), None)
     };
 
     if evaluate {
@@ -292,7 +292,7 @@ pub(crate) fn eval_method(
         }
 
         if ret.is_ok() {
-            let mut basep = Some(&mut base);
+            let base = &base;
             if cursor.byte() != b'(' {
                 if verbose {
                     let shown = alias.as_ref().map_or(&text[start..], |alias| &alias[..]);
@@ -309,11 +309,9 @@ pub(crate) fn eval_method(
                 if evaluate {
                     result.write_partial(lua_partial());
                 }
-                let base = basep.take();
-                ret = call_func_rettv(cursor, result, evaluate, None, base, lua_name);
+                ret = call_func_rettv(cursor, result, evaluate, None, Some(base), lua_name);
             } else {
-                let base = basep.take();
-                ret = eval_func(cursor, &name, result, evaluate, base);
+                ret = eval_func(cursor, &name, result, evaluate, Some(base));
             }
         }
     }

@@ -48,7 +48,7 @@ pub(crate) struct CallWith<'a> {
     /// The dictionary a `dict.Func()` call is a method of.
     pub(crate) selfdict: Option<&'a DictRef>,
     /// The `expr` of `expr->method()`, passed as the first argument.
-    pub(crate) basetv: Option<&'a mut TypVal>,
+    pub(crate) basetv: Option<&'a TypVal>,
     /// Told whether the function handled the range itself (`:call`).
     pub(crate) doesrange: Option<&'a mut bool>,
     /// The name was found as a variable: a missing function is not then
@@ -175,7 +175,7 @@ pub fn callback_call_retnr(callback: &Callback, args: &[TypVal]) -> VarNumber {
 
 /// The argument frame one call is spliced into: `MAX_FUNC_ARGS` values plus
 /// the slot a `base->Method()` base is put in front of them.
-type Argv = CallFrame<{ MAX_FUNC_ARGS as usize + 1 }>;
+type Argv<'a> = CallFrame<'a, { MAX_FUNC_ARGS as usize + 1 }>;
 
 /// The argument list as it stands: the frame, once something has been put in
 /// front of the caller's values; the caller's own slice until then.
@@ -184,7 +184,7 @@ type Argv = CallFrame<{ MAX_FUNC_ARGS as usize + 1 }>;
 /// the caller's values -- never builds one: a `CallFrame` has a destructor,
 /// so a local of one cannot have its initialisation sunk into the branch
 /// that needs it, and 21 slots is `MAX_FUNC_ARGS + 1`.
-fn spliced_args<'a>(argv: &'a Option<Argv>, args: &'a [TypVal], n: usize) -> &'a [TypVal] {
+fn spliced_args<'a>(argv: &'a Option<Argv<'_>>, args: &'a [TypVal], n: usize) -> &'a [TypVal] {
     match argv {
         Some(argv) => argv.args(),
         None => &args[..n],
@@ -196,7 +196,7 @@ fn spliced_args<'a>(argv: &'a Option<Argv>, args: &'a [TypVal], n: usize) -> &'a
 /// The bound values are *copied*: the call may free the partial, and the
 /// frame outlives it either way.  Answers `Err` when the two lists together
 /// are more arguments than a call can take.
-fn splice_bound(argv: &mut Argv, partial: &Partial, args: &[TypVal]) -> Result<(), ()> {
+fn splice_bound<'a>(argv: &mut Argv<'a>, partial: &Partial, args: &'a [TypVal]) -> Result<(), ()> {
     let bound = &partial.pt_argv;
     if bound.len() + args.len() > MAX_FUNC_ARGS as usize {
         return Err(());
@@ -212,7 +212,11 @@ fn splice_bound(argv: &mut Argv, partial: &Partial, args: &[TypVal]) -> Result<(
 /// moving the caller's own values into the frame when nothing has yet.
 ///
 /// Answers `Err` when there is no room for it.
-fn splice_base(argv: &mut Option<Argv>, args: &[TypVal], base: &TypVal) -> Result<(), ()> {
+fn splice_base<'a>(
+    argv: &mut Option<Argv<'a>>,
+    args: &'a [TypVal],
+    base: &'a TypVal,
+) -> Result<(), ()> {
     let argv = argv.get_or_insert_with(|| {
         let mut frame = Argv::new();
         frame.extend_borrowed(args);
@@ -265,11 +269,11 @@ struct TooManyArgs;
 
 /// Call the `v:lua` function `name`, with the method base (if any) spliced
 /// in front of the arguments.
-fn call_lua(
-    argv: &mut Option<Argv>,
-    args_in: &[TypVal],
+fn call_lua<'a>(
+    argv: &mut Option<Argv<'a>>,
+    args_in: &'a [TypVal],
     nargs: usize,
-    base: Option<&TypVal>,
+    base: Option<&'a TypVal>,
     name: &[u8],
     result: &mut TypVal,
 ) -> Result<c_int, TooManyArgs> {
@@ -312,12 +316,12 @@ fn find_or_load_func(rfname: &[u8], rfname_c: &CStr) -> Option<Rc<UserFunc>> {
 /// Call the user function `func`: fill in postponed arguments
 /// (`argv_func`), splice the method base in front, and make the call.
 /// Answers the call's `FCERR_*` code.
-fn call_user(
+fn call_user<'a, 'w: 'a>(
     func: &Rc<UserFunc>,
-    argv: &mut Option<Argv>,
-    args_in: &[TypVal],
+    argv: &mut Option<Argv<'a>>,
+    args_in: &'a [TypVal],
     mut nargs: usize,
-    with: &mut CallWith<'_>,
+    with: &mut CallWith<'w>,
     selfdict: Option<&DictRef>,
     result: &mut TypVal,
 ) -> Result<c_int, TooManyArgs> {
@@ -335,7 +339,7 @@ fn call_user(
             None => nargs = n,
         }
     }
-    if let Some(base) = with.basetv.as_deref() {
+    if let Some(base) = with.basetv {
         splice_base(argv, &args_in[..nargs], base).map_err(|()| TooManyArgs)?;
     }
     let args = spliced_args(argv, args_in, nargs);
@@ -433,7 +437,7 @@ pub(crate) fn call_func_with(
         let called = if is_luafunc(partial) {
             if len > 0 {
                 let name = &text[..len.min(text.len())];
-                let base = with.basetv.as_deref();
+                let base = with.basetv;
                 call_lua(&mut argv, args_in, nargs, base, name, result)
             } else {
                 // v:lua was called directly; show its name in the
@@ -455,7 +459,7 @@ pub(crate) fn call_func_with(
         } else {
             let args = spliced_args(&argv, args_in, nargs);
             let builtin = CStr::from_bytes_until_nul(fname).expect("a terminated name");
-            Ok(match with.basetv.as_deref_mut() {
+            Ok(match with.basetv {
                 None => call_internal_func_named(builtin, args, result),
                 Some(base) => call_internal_method_named(builtin, args, result, base),
             })

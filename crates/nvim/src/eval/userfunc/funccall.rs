@@ -203,12 +203,11 @@ impl Drop for FrameScopes {
     }
 }
 
-/// Empty `dict`, slot by slot, releasing each value -- or, when the values
-/// are only named (an `a:` item names the caller's argument), giving each up
-/// unreleased. Upstream's `vars_clear_ext`. The emptied items are kept in
-/// `spare` for the next call's entries.
+/// Empty `dict`, slot by slot, releasing each value. Upstream's
+/// `vars_clear_ext`. The emptied items are kept in `spare` for the next
+/// call's entries.
 #[allow(clippy::vec_box)] // the boxes a dictionary hands back, kept
-fn clear_scope(dict: &DictRef, release_values: bool, spare: &RefCell<Vec<Box<DictItem>>>) {
+fn clear_scope(dict: &DictRef, spare: &RefCell<Vec<Box<DictItem>>>) {
     if dict.read().dv_hashtab.ht_used == 0 {
         return;
     }
@@ -230,12 +229,7 @@ fn clear_scope(dict: &DictRef, release_values: bool, spare: &RefCell<Vec<Box<Dic
                 }
                 RemovedItem::Embedded(value) => value,
             };
-            if release_values {
-                drop(value);
-            } else {
-                // Named, not owned: given up unreleased.
-                core::mem::forget(value);
-            }
+            drop(value);
         }
         slot += 1;
     }
@@ -258,11 +252,6 @@ fn clear_scope(dict: &DictRef, release_values: bool, spare: &RefCell<Vec<Box<Dic
 /// How many emptied entries a set of scopes keeps for its next call.
 const SPARE_ITEMS: usize = 24;
 
-/// Empty `a:000`, giving the named items up unreleased.
-fn disown_list(list: &ListRef) {
-    list.edit().disown_items();
-}
-
 /// Free the funccall itself, having already dealt with what its scopes hold.
 fn free_funccal(frame: &FuncCall) {
     // When garbage collecting, a funccall may be freed before the function
@@ -282,13 +271,20 @@ fn free_funccal(frame: &FuncCall) {
     drop(release_funccal(frame.id));
 }
 
+/// Empty `a:000`, releasing its items -- with the borrow of the list over,
+/// since an item can name the list it was in.
+fn clear_list(list: &ListRef) {
+    let items = ::core::mem::take(&mut list.edit().lv_items);
+    drop(items);
+}
+
 /// Free a parked funccall and everything in it, once it is off the parked
 /// list.
 fn free_funccal_contents(frame: &FuncCall) {
     // All l: variables, then all a: variables, then the a:000 items.
-    clear_scope(&frame.scopes.l_vars, true, &frame.scopes.spare);
-    clear_scope(&frame.scopes.a_vars, true, &frame.scopes.spare);
-    frame.scopes.a_list.edit().lv_items.clear();
+    clear_scope(&frame.scopes.l_vars, &frame.scopes.spare);
+    clear_scope(&frame.scopes.a_vars, &frame.scopes.spare);
+    clear_list(&frame.scopes.a_list);
     free_funccal(frame);
 }
 
@@ -303,31 +299,25 @@ pub(crate) fn cleanup_function_call(frame: Rc<FuncCall>) {
     let mut free_fc = true;
     // Free all l: variables if not referred to.
     if may_free_fc && scopes.l_vars.read().dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
-        clear_scope(&scopes.l_vars, true, &scopes.spare);
+        clear_scope(&scopes.l_vars, &scopes.spare);
     } else {
         free_fc = false;
     }
 
     // If the a:000 list and the l: and a: dicts are not referenced and no
     // closure is using them, the funccall and what is in it can go.
+    // The a: variables and the a:000 items are copies of their own, so a
+    // scope that outlives the call keeps them as they are.
     if may_free_fc && scopes.a_vars.read().dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
-        clear_scope(&scopes.a_vars, false, &scopes.spare);
+        clear_scope(&scopes.a_vars, &scopes.spare);
     } else {
         free_fc = false;
-        // Make a copy of the a: variables, since that was not done above.
-        let mut d = scopes.a_vars.edit();
-        for item in d.items_mut() {
-            let owned = item.di_tv.clone();
-            item.di_tv.overwrite(owned);
-        }
     }
 
     if may_free_fc && scopes.a_list.read().lv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
-        disown_list(&scopes.a_list);
+        clear_list(&scopes.a_list);
     } else {
         free_fc = false;
-        // Make a copy of the a:000 items, since that was not done above.
-        scopes.a_list.edit().own_items();
     }
 
     if free_fc {
@@ -755,8 +745,12 @@ pub(crate) fn push_func_args(args: &[TypVal]) -> usize {
     if !testing_enabled() {
         return 0;
     }
+    // Copies, not names: the stack outlives any borrow of `args`. (A call
+    // being parsed and not made has unset arguments.)
     let mut frame = CallFrame::new();
-    frame.extend_borrowed(args);
+    for arg in args {
+        frame.push_owned(arg.copy_for_call());
+    }
     FUNCARGS.with_mut(|kept| kept.push(frame));
     1
 }

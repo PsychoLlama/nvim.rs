@@ -167,7 +167,7 @@ pub(crate) fn call_internal_method_named(
     name: &CStr,
     args: &[TypVal],
     result: &mut TypVal,
-    base: &mut TypVal,
+    base: &TypVal,
 ) -> c_int {
     let Some(fdef) = find_builtin(name.to_bytes()) else {
         return FCERR_UNKNOWN;
@@ -188,7 +188,7 @@ pub(crate) fn call_internal_method_named(
     let mut frame = CallFrame::<{ MAX_FUNC_ARGS as usize + 1 }>::new();
     let (before, after) = args.split_at(base_index);
     frame.extend_borrowed(before);
-    frame.push_borrowed(&*base);
+    frame.push_borrowed(base);
     frame.extend_borrowed(after);
 
     let func = fdef

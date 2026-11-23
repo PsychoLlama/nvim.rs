@@ -150,11 +150,11 @@ pub const E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER: &CStr =
 ///
 /// Only kept while `v:testing` is set: `test_garbagecollect_now()` marks
 /// through it so that a value living only in a caller's argument array is not
-/// collected. Each frame *names* a caller's arguments, releasing none: the
-/// caller holds them by shared borrow for the whole call, and marking only
-/// reads them.
-static FUNCARGS: GlobalCell<Vec<crate::eval::typval::CallFrame<{ MAX_FUNC_ARGS as usize + 1 }>>> =
-    GlobalCell::new(Vec::new());
+/// collected. Each frame holds copies of a caller's arguments, so it may
+/// outlive them (a call that unwinds without popping only leaks).
+static FUNCARGS: GlobalCell<
+    Vec<crate::eval::typval::CallFrame<'static, { MAX_FUNC_ARGS as usize + 1 }>>,
+> = GlobalCell::new(Vec::new());
 
 crate::flag_set! {
     /// `UserFunc::uf_flags`: how a user function was defined and what has

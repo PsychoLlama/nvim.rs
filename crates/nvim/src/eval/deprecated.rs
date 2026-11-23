@@ -152,5 +152,6 @@ pub fn f_termopen(args: &[TypVal], result: &mut TypVal, fptr: EvalFuncData) {
         let _ = dict.edit().add_bool(b"term", BOOL_VAR_TRUE);
     }
     f_jobstart(frame.args(), result, fptr);
+    drop(frame);
     drop(made);
 }

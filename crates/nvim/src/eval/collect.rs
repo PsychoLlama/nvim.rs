@@ -294,20 +294,28 @@ pub(crate) fn free_unref_items(copy_id: c_int) -> c_int {
     // Pass 2: take the structures themselves out of the registry and free
     // them. The walk reads each slot afresh, so a slot this pass vacates is
     // simply skipped when the index reaches it.
+    // A container something still holds a reference to (a holder the
+    // marking never saw) is left in place, emptied, rather than freed under
+    // that holder.
     for idx in 0..dict_slots() {
         let Some(dict) = registered_dict(idx) else {
             continue;
         };
-        if stale(dict.read().dv_copy_id, copy_id) {
-            free_registered_dict(dict);
+        let stale = stale(dict.read().dv_copy_id, copy_id);
+        drop(dict);
+        if stale {
+            free_registered_dict(idx);
         }
     }
     for idx in 0..list_slots() {
         let Some(list) = registered_list(idx) else {
             continue;
         };
-        if stale(list.read().lv_copy_id, copy_id) && !list_has_watchers(Some(&list.read())) {
-            free_registered_list(list);
+        let stale =
+            stale(list.read().lv_copy_id, copy_id) && !list_has_watchers(Some(&list.read()));
+        drop(list);
+        if stale {
+            free_registered_list(idx);
         }
     }
 

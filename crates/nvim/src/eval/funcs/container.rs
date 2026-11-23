@@ -462,11 +462,11 @@ pub fn f_indexof(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// place. A failed evaluation, and a result that is not coercible to a
 /// Bool, both read as "no match".
 fn indexof_matches(expr: &TypVal) -> bool {
-    // `argv` and `newtv` are locals that outlive the evaluation, and `newtv`
-    // is cleared before returning. A frame naming the two `v:` slots for the length of the call.
+    // The frame holds copies of `v:key` and `v:val`: the call is the
+    // user's, and may set either (a nested `indexof()` does).
     let mut argv = CallFrame::<2>::new();
-    with_vim_var(Vv::Key, |key| argv.push_borrowed(key));
-    with_vim_var(Vv::Val, |val| argv.push_borrowed(val));
+    argv.push_owned(with_vim_var(Vv::Key, TypVal::copy_for_call));
+    argv.push_owned(with_vim_var(Vv::Val, TypVal::copy_for_call));
     let mut newtv = TV_INITIAL_VALUE;
     if eval_expr_typval(expr, false, argv.args(), &mut newtv).is_err() {
         return false;
