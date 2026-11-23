@@ -1267,7 +1267,9 @@ describe('TUI', function()
 
   it("split sequences work within 'ttimeoutlen' time", function()
     poke_both_eventloop() -- Make sure startup requests have finished.
-    child_session:request('nvim_set_option_value', 'ttimeoutlen', 250, {})
+    -- Wide enough that a loaded machine's gaps between the writes below
+    -- (each `expect_unchanged` waits 25 ms, plus scheduling) stay inside it.
+    child_session:request('nvim_set_option_value', 'ttimeoutlen', 1000, {})
     feed_data('i')
     screen:expect([[
       ^                                                  |
@@ -1307,7 +1309,7 @@ describe('TUI', function()
     -- <Esc> is sent after 'ttimeoutlen' exceeds.
     feed_data('\027')
     screen:expect_unchanged(false, 25)
-    vim.uv.sleep(225)
+    vim.uv.sleep(975)
     screen:expect([[
       ^⌂                                                 |
       {100:~                                                 }|*3
