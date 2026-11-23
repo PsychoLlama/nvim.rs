@@ -1214,6 +1214,10 @@ mod tests {
     /// the mark's frame was called from is above it, one made by a frame
     /// called since is below.
     #[test]
+    #[cfg_attr(
+        miri,
+        ignore = "Miri places locals anywhere: the mark is a property of the machine stack"
+    )]
     fn a_loan_of_an_older_frame_is_above_the_mark() {
         #[inline(never)]
         fn middle(outer: &Loan) {
