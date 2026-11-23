@@ -3299,6 +3299,11 @@ describe('TUI', function()
         '--clean',
         '--cmd',
         'set ' .. guicolors,
+        -- What the detection answers, set up front: the OSC 11 reply is only
+        -- waited for 100 ms, and a loaded host answers later -- the screen
+        -- below (drawn during the sleep) then has the dark default.
+        '--cmd',
+        is_os('win') and 'set background=dark' or 'set background=light',
         '--cmd',
         'echo "foo"',
         '--cmd',
