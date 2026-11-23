@@ -849,7 +849,7 @@
     "crates/nvim/src/vterm/pen.rs": {"pub_items": 5},
     "crates/nvim/src/vterm/screen/mod.rs": {"pub_items": 3},
     "crates/nvim/src/vterm/state/mod.rs": {"pub_items": 4},
-    "crates/nvim/src/vterm/types.rs": {"pub_items": 40},
+    "crates/nvim/src/vterm/types.rs": {"pub_items": 42},
     "crates/nvim/src/vterm/vterm.rs": {"pub_items": 119},
     "crates/nvim/src/window/alloc.rs": {"pub_items": 5},
     "crates/nvim/src/window/close.rs": {"pub_items": 7},

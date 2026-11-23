@@ -139,6 +139,7 @@ typedef bool Boolean;
 typedef unsigned int BorderTextType;
 typedef int Handle;
 typedef Handle BufferHandle;
+typedef size_t BufferSlot;
 typedef struct Candidate Candidate;
 typedef struct Capability Capability;
 typedef int CdCause;
@@ -214,6 +215,7 @@ typedef unsigned int KeyEncoding;
 typedef uint8_t KeyExtra;
 typedef key_value_pair KeyValuePair;
 typedef int LineFlags;
+typedef size_t LineInfoSlots[3];
 typedef int32_t LineNr;
 typedef struct ListBox ListBox;
 typedef int ListLenSpecials;
@@ -846,7 +848,7 @@ struct VTermState_saved {
 struct VTermState_selection {
   const VTermSelectionCallbacks *callbacks;
   void *user;
-  size_t _buffer_slot;
+  BufferSlot _buffer_slot;
   size_t buflen;
 };
 struct VTermState_tmp_selection {
@@ -873,7 +875,7 @@ struct VTermState {
   int scrollregion_left;
   int scrollregion_right;
   StateOwned *owned;
-  size_t _lineinfo_slots[3];
+  LineInfoSlots _lineinfo_slots;
   int mouse_col;
   int mouse_row;
   int mouse_buttons;

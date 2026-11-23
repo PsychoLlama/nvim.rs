@@ -31,8 +31,9 @@ use crate::vterm::internal::{
 };
 use crate::vterm::pen::init_pen;
 use crate::vterm::types::{
-    VTerm, VTermPos, VTermProp, VTermRect, VTermState, VTermState_mode, VTermState_saved,
-    VTermState_saved_mode, VTermState_selection, VTermState_tmp, VTermState_tmp_selection,
+    BufferSlot, LineInfoSlots, VTerm, VTermPos, VTermProp, VTermRect, VTermState, VTermState_mode,
+    VTermState_saved, VTermState_saved_mode, VTermState_selection, VTermState_tmp,
+    VTermState_tmp_selection,
 };
 use crate::vterm::vterm::{
     MOUSE_X10, VTERM_PROP_ALTSCREEN, VTERM_PROP_CURSORBLINK, VTERM_PROP_CURSORSHAPE,
@@ -94,7 +95,7 @@ impl VTermState {
             scrollregion_left: 0,
             scrollregion_right: 0,
             owned: Box::new(StateOwned::new(rows, cols)),
-            _lineinfo_slots: [0; 3],
+            _lineinfo_slots: LineInfoSlots::EMPTY,
             mouse_col: 0,
             mouse_row: 0,
             mouse_buttons: 0,
@@ -145,7 +146,7 @@ impl VTermState {
             selection: VTermState_selection {
                 callbacks: core::ptr::null(),
                 user: core::ptr::null_mut(),
-                _buffer_slot: 0,
+                _buffer_slot: BufferSlot::EMPTY,
                 buflen: 0,
             },
             key_encoding_stacks: [(); 2].map(|()| VTermKeyEncodingStack {

@@ -390,7 +390,7 @@ pub struct VTermState {
     /// Where libvterm kept its two line-mark arrays and the live one; they
     /// are in `owned` now, and the slots stay so that every field after them
     /// is where C reads it.
-    pub _lineinfo_slots: [usize; 3],
+    pub _lineinfo_slots: LineInfoSlots,
     pub mouse_col: ::core::ffi::c_int,
     pub mouse_row: ::core::ffi::c_int,
     pub mouse_buttons: ::core::ffi::c_int,
@@ -593,6 +593,28 @@ crate::bitfield_accessors! {
         2..=3 => cursor_shape, set_cursor_shape: ::core::ffi::c_uint;
     }
 }
+/// Where libvterm kept its two line-mark arrays and the live one, kept so
+/// the fields after them stay where C reads them. Always zero: the words are
+/// private and [`LineInfoSlots::EMPTY`] is the only value, so no Rust code can
+/// leave a pointer here for a C reader of the old layout to follow.
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct LineInfoSlots([usize; 3]);
+
+impl LineInfoSlots {
+    pub(crate) const EMPTY: Self = Self([0; 3]);
+}
+
+/// Where libvterm kept the selection's staging buffer; as
+/// [`LineInfoSlots`], one zero word holding `buflen`'s offset.
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct BufferSlot(usize);
+
+impl BufferSlot {
+    pub(crate) const EMPTY: Self = Self(0);
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct VTermState_selection {
@@ -601,7 +623,7 @@ pub struct VTermState_selection {
     pub user: *mut ::core::ffi::c_void,
     /// Where libvterm kept the staging buffer; it is in the state's `owned`
     /// now, and the slot stays so that `buflen` is where C reads it.
-    pub _buffer_slot: usize,
+    pub _buffer_slot: BufferSlot,
     pub buflen: size_t,
 }
 /// What a control string being read in pieces has got to: an OSC 52's

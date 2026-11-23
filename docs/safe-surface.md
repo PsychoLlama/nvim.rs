@@ -1033,6 +1033,15 @@ hand-offs, when another exit was already preserving).
   hand-offs that may go back to the loop check `begin_emergency_exit`
   first and abandon nothing when they return.
 
+## The exit re-audit
+
+S1–S14 were re-read against the rule (a type, an always-on check, or an
+`unsafe fn` with a real contract) and against what this phase added since
+each closed. It found S15 (the emergency abandons, above) and closed it,
+and turned the contract list's last row — the emulator's offset keepers —
+into a type. Every row is closed: the table is in
+[unsafe-audit.md](unsafe-audit.md) § Every row closed.
+
 ## Closed before the survey
 
 - A flag a libuv callback writes through an address it was handed, read

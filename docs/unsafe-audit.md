@@ -423,10 +423,38 @@ table that owns its items, S12, and the TUI's libuv handles pinned out of
 the `&mut TUIData` the painters borrow, S14, and a lent buffer line
 counted in its memfile, which refuses every walk while it is out, S13.)
 
-- **The emulator's offset keepers** (`vterm/types.rs`, `vterm/internal.rs`): `_lineinfo_slots`
-  and `_buffer_slot` exist only so that C declarations the battery and the
-  fixture compile keep reading the right offsets. Not unsafe in Rust, but a
-  layout contract with C; re-cutting `vtsweep`'s declarations would drop them.
+Nothing is left on this list: the emulator's offset keepers, the last
+row, are a type now (`LineInfoSlots`/`BufferSlot` in `vterm/types.rs`:
+private words whose one value is zero, so no Rust code can leave a pointer
+where a C reader of libvterm's layout would look; the offsets themselves
+are compile-time asserts).
+
+## Every row closed
+
+Each class [safe-surface.md](safe-surface.md) found in the safe surface,
+and each row this file listed as sound by contract, is closed one of three
+ways -- a type that holds the invariant, a check that is always on, or an
+`unsafe fn` with a real contract. There is no fourth state; the detail of
+each is its section in [safe-surface.md](safe-surface.md).
+
+| row     | what it was                       | closed by                          | where                                                                                         |
+| ------- | --------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| S1      | `GlobalCell` re-entrant borrows   | always-on check                    | `global_cell.rs` loan word                                                                    |
+| S2      | main-thread confinement           | `unsafe fn` contract               | the ways off the main thread (`nlua_init`'s thread states, libuv work)                        |
+| S3      | `SharedCell<T>`                   | type                               | `global_cell.rs`                                                                              |
+| S4      | `ConstTable<T>`                   | type                               | `global_cell.rs`                                                                              |
+| S5      | `Copy` handles lending `&`/`&mut` | type (checked guards)              | `slot.rs`, `slot/`, `winlayer/`                                                               |
+| S6      | value-handle edits                | always-on check, type for partials | `eval/typval/handle.rs`                                                                       |
+| S7      | Lua stack consuming operations    | always-on check                    | `lua/stack/`                                                                                  |
+| S8      | event handles' `DerefMut`         | type                               | `event/stream.rs` field writers, `Incoming`                                                   |
+| S9      | a safe fn adopting a raw pointer  | `unsafe fn` contract               | `treesitter::push_tree`                                                                       |
+| S10     | value bit copies                  | type                               | `CallFrame`, copies                                                                           |
+| S11     | container header words            | type                               | `Counted<T, H>` (`handle.rs`)                                                                 |
+| S12     | dictionary item store slots       | type                               | `DictTab` (`store.rs`)                                                                        |
+| S13     | line cache slices                 | always-on check                    | `LineText` + `MemFile::lend_text` (`winlayer/deref.rs`, `memfile/`); `MemPin` for `HeldLines` |
+| S14     | TUI libuv handles under `&mut`    | type                               | `tui::tui::Handles`                                                                           |
+| S15     | emergency abandons                | type                               | `global_cell::Emergency`                                                                      |
+| keepers | emulator offset keepers           | type                               | `vterm/types.rs`                                                                              |
 
 ## Listed for later
 
