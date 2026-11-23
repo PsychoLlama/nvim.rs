@@ -211,6 +211,12 @@ impl Lines {
 /// - no replacement line can be cached ([`MemLine::cache_replacement`]
 ///   panics), and the memfile cannot be dropped.
 ///
+/// - the pinned memfile is remembered by address, and every read and the
+///   unpin check that the buffer still has it: a memline swapped or
+///   replaced under the hold (two edits of two buffers, `mem::swap` over
+///   two memline loans) would otherwise lend from a memfile nobody pinned,
+///   and unpin another's (a panic, always on: one compare per read).
+///
 /// Reading other lines meanwhile is fine — through here, through
 /// [`Lines`], from anywhere: the memline's cache moves, the lent bytes do
 /// not. *Changing* the buffer's text while this lives is what panics,
@@ -225,9 +231,11 @@ impl Lines {
 #[derive(Debug)]
 pub(crate) struct HeldLines {
     buffer: Buf,
-    /// Whether this holds a pin on the buffer's memfile; taken at the first
-    /// read that finds one, so a match that reads no line pays nothing.
-    pinned: Cell<bool>,
+    /// The address of the memfile this holds a pin on (compared, never
+    /// read), or 0; taken at the first read that finds one, so a match that
+    /// reads no line pays nothing. A pinned memfile cannot be dropped (its
+    /// `Drop` panics), so while this holds it the address is its alone.
+    pinned: Cell<usize>,
 }
 
 impl HeldLines {
@@ -237,7 +245,7 @@ impl HeldLines {
     pub(crate) fn new(buffer: Buf) -> HeldLines {
         HeldLines {
             buffer,
-            pinned: Cell::new(false),
+            pinned: Cell::new(0),
         }
     }
 
@@ -247,10 +255,14 @@ impl HeldLines {
     /// position: `$` matches there and a character step stops there.
     #[inline(always)]
     pub(crate) fn line(&self, lnum: LineNr) -> &[u8] {
-        if !self.pinned.get() {
+        let pinned = self.pinned.get();
+        if pinned == 0 {
             self.pin();
         }
         let walk = fetch_line_lent(self.buffer, lnum);
+        if pinned != 0 {
+            same_memfile(&walk, pinned);
+        }
         self.buffer.lend_pinned_line_from(walk)
     }
 
@@ -267,18 +279,49 @@ impl HeldLines {
         if buffer.ml().line_is_dirty() {
             ml_flush_line(buffer);
         }
-        buffer.ml().memfile().pin();
-        self.pinned.set(true);
+        let mut ml = buffer.ml();
+        let memfile = ml.memfile();
+        memfile.pin();
+        self.pinned.set(core::ptr::from_mut(memfile).addr());
     }
+}
+
+/// The address of `ml`'s memfile, or 0.
+#[inline(always)]
+fn memfile_addr(ml: &state::MemLine) -> usize {
+    ml.ml_mfp
+        .as_deref()
+        .map_or(0, |memfile| core::ptr::from_ref(memfile).addr())
+}
+
+/// Panic unless `ml`'s memfile is the one at address `pinned`.
+#[inline(always)]
+#[track_caller]
+fn same_memfile(ml: &state::MemLine, pinned: usize) {
+    if memfile_addr(ml) != pinned {
+        memfile_moved();
+    }
+}
+
+#[cold]
+#[inline(never)]
+#[track_caller]
+fn memfile_moved() -> ! {
+    panic!("a held buffer's memfile was swapped or replaced under the match holding its lines")
 }
 
 impl Drop for HeldLines {
     #[inline]
     fn drop(&mut self) {
-        if self.pinned.get() {
-            self.buffer
-                .ml()
-                .ml_mfp
+        let pinned = self.pinned.get();
+        if pinned != 0 {
+            let mut ml = self.buffer.ml();
+            if std::thread::panicking() && memfile_addr(&ml) != pinned {
+                // The panic that is unwinding already ends the process.
+                return;
+            }
+            same_memfile(&ml, pinned);
+            ml.ml_mfp
                 .as_deref_mut()
                 .expect("a pinned memfile is not dropped")
                 .unpin();
