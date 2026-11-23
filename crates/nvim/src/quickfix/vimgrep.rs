@@ -217,7 +217,8 @@ fn match_buflines(
                 let end = regmatch.endpos[0];
                 // A copy: adding the entry lists the file, which runs
                 // autocommands, and those can change the buffer.
-                let text = XString::from_cstr(buffer.lines().line_cstr(start.lnum + lnum.get(), 0));
+                let text =
+                    XString::from_cstr(&buffer.lines().line_cstr(start.lnum + lnum.get(), 0));
                 qf_add_entry(
                     qfl,
                     &NewEntry {
@@ -250,7 +251,7 @@ fn match_buflines(
                 }
             }
         } else {
-            let line = XString::from_cstr(buffer.lines().line_cstr(lnum, 0));
+            let line = XString::from_cstr(&buffer.lines().line_cstr(lnum, 0));
             let linelen = ml_get_buf_len(buffer, lnum);
             // The pattern length is in bytes while the matcher fills one
             // position per *character*, so for a multibyte pattern the

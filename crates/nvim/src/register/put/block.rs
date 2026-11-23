@@ -208,13 +208,14 @@ impl Put {
 
         let mut lines = Buf::current().lines();
         let old = lines.line(lnum);
-        let land = land_block(old, col);
+        let land = land_block(&old, col);
         *textcol = land.textcol;
 
         // The whole insert is `count` copies of the line plus its padding.
         if yanklen + spaces != 0
             && self.count > (c_int::MAX - (land.startspaces + land.endspaces)) / (yanklen + spaces)
         {
+            drop(old);
             emsg(gettext(E_RESULTING_TEXT_TOO_LONG));
             return Err(Stopped::TooLong);
         }
@@ -245,6 +246,7 @@ impl Put {
         newline.resize(newline.len() + pad(land.endspaces), b' ');
         // The rest of the old line.
         newline.extend_from_slice(&old[textcol + pad(land.delcount)..]);
+        drop(old);
         // Neither the buffer's line nor the register's holds a NUL.
         let _ = ml_replace_owned(lnum, XString::from_vec(newline));
 

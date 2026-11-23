@@ -273,8 +273,9 @@ pub fn mark_adjust_buf(
         // shifting that would invent a position the user never visited — and,
         // for a terminal buffer, while it names the last line, which the
         // terminal is about to rewrite anyway.
+        let line_count = b.memline().ml_line_count;
         if !equalpos(b.b_last_cursor.mark, INIT_POS)
-            && (!by_term || b.b_last_cursor.mark.lnum < b.b_ml.get_mut().ml_line_count)
+            && (!by_term || b.b_last_cursor.mark.lnum < line_count)
         {
             shift.mark(&mut b.b_last_cursor);
         }

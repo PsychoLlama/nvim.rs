@@ -408,7 +408,7 @@ pub fn f_nextnonblank(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
             lnum = LineNr::ZERO;
             break;
         }
-        if !is_blank(lines.line(lnum)) {
+        if !is_blank(&lines.line(lnum)) {
             break;
         }
         lnum += 1;
@@ -424,7 +424,7 @@ pub fn f_prevnonblank(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     if lnum < LineNr::ONE || lnum > lines.count() {
         lnum = LineNr::ZERO;
     } else {
-        while lnum >= LineNr::ONE && is_blank(lines.line(lnum)) {
+        while lnum >= LineNr::ONE && is_blank(&lines.line(lnum)) {
             lnum -= 1;
         }
     }

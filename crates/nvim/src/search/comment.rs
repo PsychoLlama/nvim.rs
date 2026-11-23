@@ -55,7 +55,7 @@ pub(crate) fn find_rawstring_end(lines: &mut Lines, startpos: &Pos, endpos: &Pos
         while at < stop {
             if line[at] == b')'
                 && line[at + 1..].starts_with(&delim)
-                && byte_at(line, at + 1 + delim.len()) == b'"'
+                && byte_at(&line, at + 1 + delim.len()) == b'"'
             {
                 return true;
             }
@@ -129,5 +129,5 @@ pub fn check_linecomment(line: &[u8]) -> Option<usize> {
 pub fn linewhite(lnum: LineNr) -> bool {
     let mut lines = Lines::current();
     let line = lines.line(lnum);
-    skip::white(line) == line.len()
+    skip::white(&line) == line.len()
 }

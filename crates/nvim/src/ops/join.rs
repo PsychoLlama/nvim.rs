@@ -168,15 +168,15 @@ fn measure_join(
             // The leader is only noise when the line before was a comment
             // too; otherwise just ask whether *this* line is one.
             if t > 0 && prev_was_comment {
-                (curr, prev_was_comment) = skip_comment(line, true, insert_space);
+                (curr, prev_was_comment) = skip_comment(&line, true, insert_space);
             } else {
-                prev_was_comment = skip_comment(line, false, insert_space).1;
+                prev_was_comment = skip_comment(&line, false, insert_space).1;
             }
         }
 
         if insert_space && t > 0 {
             curr += skip::white(&line[curr..]);
-            let at = c_int::from(byte_at(line, curr));
+            let at = c_int::from(byte_at(&line, curr));
             let first = || char_at(&line[curr..]);
             if at != 0
                 && at != c_int::from(b')')
@@ -205,24 +205,9 @@ fn measure_join(
         }
 
         let added = spaces;
-        if t > 0 && CURBUF_SPLICE_PENDING.get() == 0 {
-            let removed = ColNr::from_index(curr);
-            let row = Win::current().cursor().lnum().get() - 1;
-            let (old, new) = ((removed + 1).get() as isize, added as BCount);
-            let op = EXTMARK_UNDO;
-            extmark_splice(
-                Buf::current(),
-                row,
-                ColNr::new(plan.sumsize),
-                1,
-                removed,
-                old,
-                0,
-                ColNr::new(added),
-                new,
-                op,
-            );
-        }
+        // The seam's extmark splice, made once this line is let go: it
+        // reads other lines' offsets, which refills the line cache.
+        let seam = (t > 0 && CURBUF_SPLICE_PENDING.get() == 0).then_some(plan.sumsize);
 
         let text = &line[curr..];
         if t == 0 {
@@ -255,6 +240,26 @@ fn measure_join(
                 cend = back(cend);
                 endcurr2 = char_at(&text[cend..]);
             }
+        }
+        drop(line);
+
+        if let Some(seam) = seam {
+            let removed = ColNr::from_index(curr);
+            let row = Win::current().cursor().lnum().get() - 1;
+            let (old, new) = ((removed + 1).get() as isize, added as BCount);
+            let op = EXTMARK_UNDO;
+            extmark_splice(
+                Buf::current(),
+                row,
+                ColNr::new(seam),
+                1,
+                removed,
+                old,
+                0,
+                ColNr::new(added),
+                new,
+                op,
+            );
         }
 
         line_breakcheck();

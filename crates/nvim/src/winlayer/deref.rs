@@ -45,11 +45,13 @@
     clippy::ptr_as_ptr
 )]
 
-use core::cell::UnsafeCell;
+use core::cell::{Cell, UnsafeCell};
 use core::ffi::{c_char, c_int};
+use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 use core::ptr::{self, NonNull};
 
+use crate::memfile::{MemFile, MemPin};
 use crate::memline::MlFlags;
 use crate::memline::state::MemLine;
 use crate::slot::{self, SlotEdit, SlotRead};
@@ -278,25 +280,38 @@ slot_fields! {
 pub(crate) type MlRef<'a> = slot::SlotPart<'a, Buffer, MemLine>;
 
 /// The memline: [`Buf::ml`] for a walk, the line count and flags by value,
-/// and the line text a memline cache holds, lent past the check that
-/// reached it. The text is not the buffer's borrow but the line cache's
-/// loan, whose bound is the reader's own -- [`crate::memline::Lines`]'
-/// `&mut self` (the next read through it refills the cache) and
-/// [`crate::memline::HeldLines`]' memfile pin (a write or free of a lent
-/// block panics).
+/// and the line text a memline cache holds, lent past the walk that filled
+/// it: as a [`LineText`] the slot counts (no fill, write or edit while it
+/// lives), or under a [`MemPin`] (a write or free of a lent block panics).
 impl Buf {
     /// Lend the memline for a walk: [`MlRef`].
     ///
     /// # Panics
-    /// When the buffer is gone or lent to an edit, or the memline is
-    /// already lent.
+    /// When the buffer is gone or lent to an edit, the memline is already
+    /// lent, or one of its lines is lent out as a [`LineText`].
     #[inline(always)]
     #[track_caller]
     pub(crate) fn ml<'a>(self) -> MlRef<'a> {
         // SAFETY: `ptr` is the slot's value address (as `edit`), and the
         // memline is the buffer's one part in an `UnsafeCell`, reached only
         // through this loan, `ml_unlent`/`ml_unlent_mut` (which ask the part
-        // bit and the reader count first) and an edit of the whole buffer.
+        // bit and the reader count first) and an edit of the whole buffer
+        // (which reaches no memline: `Buffer::b_ml` is private).
+        let walk =
+            unsafe { slot::lend_part_at(self.ptr, self.stamp.generation(), self.ml_place()) };
+        if walk.ml_mfp.as_deref().is_some_and(MemFile::has_lent_text) {
+            line_lent_out();
+        }
+        walk
+    }
+
+    /// [`Buf::ml`] for the emergency exits' abandon, after the slot loans
+    /// are abandoned: a line lent out (whose holder never resumes) does not
+    /// refuse it. The abandon then zeroes the count
+    /// ([`MemFile::abandon_pins`](crate::memfile::MemFile::abandon_pins)).
+    #[track_caller]
+    pub(crate) fn ml_abandoning<'a>(self) -> MlRef<'a> {
+        // SAFETY: as `ml`.
         unsafe { slot::lend_part_at(self.ptr, self.stamp.generation(), self.ml_place()) }
     }
 
@@ -307,35 +322,46 @@ impl Buf {
         // A place projection through the slot's address (in bounds of the
         // slot's memory, which is never given back) and the cell's own
         // address-to-content step: no read, no reference formed.
-        let cell = self
-            .ptr
-            .wrapping_byte_add(core::mem::offset_of!(Buffer, b_ml));
+        let cell = self.ptr.wrapping_byte_add(Buffer::memline_offset());
         let place = UnsafeCell::raw_get(cell.cast::<UnsafeCell<MemLine>>());
         // SAFETY: an offset into a slot, which is never at address zero.
         unsafe { NonNull::new_unchecked(place) }
     }
 
     /// The memline, for a copy out of it while nothing holds it.
+    ///
+    /// # Safety
+    /// The answer is used before anything else reaches the memline: one
+    /// read of a field, or of the cached text a [`LineText`] then counts out
+    /// (`lend_line_if_cached`).
     #[inline(always)]
     #[track_caller]
-    fn ml_unlent<'a>(self) -> &'a MemLine {
+    unsafe fn ml_unlent<'a>(self) -> &'a MemLine {
         // SAFETY: as `ml`.
         unsafe { slot::check_part_unlent(self.ptr, self.stamp.generation()) };
         // SAFETY: live, lent to no edit and no walk (just asked). The
         // reference lives as long as the caller's one read of a field (the
-        // getters below) or the line cache's loan (the `lend_` family).
+        // getters below) or of the cached text it lends (`lend_line_if_cached`,
+        // which counts the text out before it answers).
         unsafe { self.ml_place().as_ref() }
     }
 
     /// The memline, writable in place while nothing holds it.
+    ///
+    /// # Safety
+    /// The answer is used for one write of a field before anything else
+    /// reaches the memline.
     #[inline(always)]
     #[track_caller]
-    fn ml_unlent_mut<'a>(self) -> &'a mut MemLine {
+    unsafe fn ml_unlent_mut<'a>(self) -> &'a mut MemLine {
         // SAFETY: as `edit`: the slot's value address. No reader out means
         // no walk either (a walk counts as one).
         unsafe { slot::check_write(self.ptr, self.stamp.generation()) };
         // SAFETY: live, lent to no edit, no read guard and no walk (just
         // asked), and the reference lives as long as the caller's one write.
+        // A line lent out (`LineText`) points into the cached text's own
+        // allocation or a page's, never into the `MemLine` itself, and the
+        // one write here touches neither.
         unsafe { self.ml_place().as_mut() }
     }
 
@@ -343,92 +369,312 @@ impl Buf {
     #[inline(always)]
     #[track_caller]
     pub(crate) fn ml_is_open(self) -> bool {
-        self.ml_unlent().is_open()
+        // SAFETY: one read.
+        unsafe { self.ml_unlent() }.is_open()
     }
 
     /// The buffer's line count: `b_ml.ml_line_count`.
     #[inline(always)]
     #[track_caller]
     pub fn line_count(self) -> LineNr {
-        self.ml_unlent().ml_line_count
+        // SAFETY: one read.
+        unsafe { self.ml_unlent() }.ml_line_count
     }
 
     /// Store the line count in place.
     #[inline(always)]
     #[track_caller]
     pub(crate) fn set_line_count(self, count: LineNr) {
-        self.ml_unlent_mut().ml_line_count = count;
+        // SAFETY: one write.
+        let ml = unsafe { self.ml_unlent_mut() };
+        ml.ml_line_count = count;
     }
 
     /// The memline's flags: `b_ml.ml_flags`.
     #[inline(always)]
     #[track_caller]
     pub(crate) fn ml_flags(self) -> MlFlags {
-        self.ml_unlent().ml_flags
+        // SAFETY: one read.
+        unsafe { self.ml_unlent() }.ml_flags
     }
 
     /// Store the memline's flags in place.
     #[inline(always)]
     #[track_caller]
     pub(crate) fn set_ml_flags(self, flags: MlFlags) {
-        self.ml_unlent_mut().ml_flags = flags;
+        // SAFETY: one write.
+        let ml = unsafe { self.ml_unlent_mut() };
+        ml.ml_flags = flags;
     }
 
-    /// The memline a walk of it just filled the cache through, the walk let
-    /// go: what [`Buf::ml_unlent`] answers, without asking again.
+    /// The cached line, lent out of the walk that just filled the cache
+    /// (`fetch_line_lent`): the memfile counts it out
+    /// ([`MemFile::lend_text`](crate::memfile::MemFile::lend_text)) before the walk is let go, so no walk -- no
+    /// fill, no write, no close -- reaches the memline while the answer
+    /// lives. With `nul`, the slice takes the terminator after the line.
     ///
     /// # Panics
     /// When `walk` is another buffer's.
     #[inline(always)]
     #[track_caller]
-    fn unlent_from<'a>(self, walk: MlRef<'_>) -> &'a MemLine {
+    pub(crate) fn lend_line<'a>(self, walk: MlRef<'a>, nul: bool) -> LineText<'a> {
         assert!(
             ptr::eq(walk.part_ptr(), self.ml_place().as_ptr()),
             "a walk of another buffer's memline"
         );
+        let text = NonNull::from(cached_text(&walk, nul));
+        // A `match`, not `map`: a closure would hide the lender from
+        // `#[track_caller]`, which names it in debug builds.
+        #[allow(clippy::manual_map)]
+        let lent = match walk.ml_mfp.as_deref() {
+            Some(memfile) => Some(lent_at::record(memfile.lend_text())),
+            None => None,
+        };
+        LineText {
+            text,
+            lent,
+            _walk: PhantomData,
+        }
+    }
+
+    /// The cached line, lent without a walk when it is line `lnum` already
+    /// (a valid line of an open memline): what a second reader of the line
+    /// the cache holds asks, which a lent text does not refuse. `None` for
+    /// any other line.
+    ///
+    /// # Panics
+    /// When the buffer is gone or lent to an edit, or the memline is lent.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn lend_line_if_cached<'a>(self, lnum: LineNr, nul: bool) -> Option<LineText<'a>> {
+        // SAFETY: read here, the text counted out before the answer goes.
+        let ml = unsafe { self.ml_unlent() };
+        let lnum = lnum.max(LineNr::ONE);
+        if ml.cached_lnum() != lnum || !ml.is_open() || lnum > ml.ml_line_count {
+            return None;
+        }
+        let text = NonNull::from(cached_text(ml, nul));
+        // A `match`, not `map`: a closure would hide the lender from
+        // `#[track_caller]`, which names it in debug builds.
+        #[allow(clippy::manual_map)]
+        let lent = match ml.ml_mfp.as_deref() {
+            Some(memfile) => Some(lent_at::record(memfile.lend_text())),
+            None => None,
+        };
+        Some(LineText {
+            text,
+            lent,
+            _walk: PhantomData,
+        })
+    }
+
+    /// The cached line, writable in place (its length fixed), out of the
+    /// walk that filled the cache: the walk's loan is held for as long as
+    /// the answer lives, so nothing else reaches the memline meanwhile.
+    ///
+    /// # Panics
+    /// When `walk` is another buffer's.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn lend_line_mut<'a>(self, mut walk: MlRef<'a>) -> LineTextMut<'a> {
+        assert!(
+            ptr::eq(walk.part_ptr(), self.ml_place().as_ptr()),
+            "a walk of another buffer's memline"
+        );
+        let text = NonNull::from(walk.cached_bytes_mut());
+        LineTextMut { text, _walk: walk }
+    }
+
+    /// The cached line with its NUL, out of a block lent under `pin`
+    /// ([`MemFile::lend_page`]): its bytes stay put for as long as `pin`
+    /// is held, whatever the memline does meanwhile.
+    ///
+    /// [`MemFile::lend_page`]: crate::memfile::MemFile::lend_page
+    ///
+    /// # Panics
+    /// When `walk` is another buffer's, or `pin` is not on the memfile the
+    /// buffer has now.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn lend_pinned_line<'a>(self, walk: MlRef<'_>, pin: &'a MemPin) -> &'a [u8] {
+        assert!(
+            ptr::eq(walk.part_ptr(), self.ml_place().as_ptr()),
+            "a walk of another buffer's memline"
+        );
+        let text = NonNull::from(walk.lend_cached_bytes_with_nul(pin));
         drop(walk);
-        // SAFETY: the walk was this memline's loan (just compared), which
-        // `lend_part_at` granted live, unedited and lent to nothing else;
-        // with it dropped nothing holds the memline. The reference lives as
-        // the `lend_` family's does (the impl's docs).
-        unsafe { self.ml_place().as_ref() }
+        // SAFETY: a placeholder is static; a block's page is lent under
+        // `pin` (`lend_cached_bytes_with_nul` asked that it is this
+        // memfile's), and a lent page is neither written, resized nor freed
+        // while a pin is out -- nor is a pinned memfile dropped -- and `pin`
+        // is borrowed for `'a`. No pending replacement is ever lent here
+        // (that call refuses one).
+        unsafe { text.as_ref() }
+    }
+}
+
+/// The cached line's bytes, with or without the NUL after them.
+#[inline(always)]
+fn cached_text(ml: &MemLine, nul: bool) -> &[u8] {
+    if nul {
+        ml.cached_bytes_with_nul()
+    } else {
+        ml.cached_bytes()
+    }
+}
+
+/// A buffer line, lent out of its memline's one-line cache
+/// ([`crate::memline::Lines::line`]): the memfile counts it out for as long
+/// as this lives ([`MemFile::lend_text`](crate::memfile::MemFile::lend_text)), so the memline is lent to no walk
+/// -- the cache cannot be refilled, the line written, or the memfile closed
+/// or dropped under it; each panics instead. Other reads of the same line,
+/// of the line count and of the rest of the buffer, and edits of the rest
+/// of the buffer, go on. A memline with no memfile caches only static
+/// stand-ins, which need no count.
+#[clippy::has_significant_drop]
+pub struct LineText<'a, T: ?Sized = [u8]> {
+    text: NonNull<T>,
+    /// The memfile's count of lent lines, given back on drop.
+    lent: Option<NonNull<Cell<u32>>>,
+    _walk: PhantomData<&'a ()>,
+}
+
+impl<T: ?Sized> Drop for LineText<'_, T> {
+    #[inline(always)]
+    fn drop(&mut self) {
+        if let Some(count) = self.lent {
+            lent_at::forget(count);
+            // SAFETY: the count in a memfile's box, which is not dropped
+            // while it is not zero (its `Drop` panics), and this
+            // guard's line is one of those it counts.
+            let count = unsafe { count.as_ref() };
+            count.set(count.get() - 1);
+        }
+    }
+}
+
+/// Where each line still out was lent, in debug builds: the refusal's
+/// message names the holders.
+mod lent_at {
+    use core::cell::Cell;
+    #[cfg(debug_assertions)]
+    use core::cell::RefCell;
+    #[cfg(debug_assertions)]
+    use core::panic::Location;
+    use core::ptr::NonNull;
+
+    #[cfg(debug_assertions)]
+    std::thread_local! {
+        static OUT: RefCell<Vec<(usize, &'static Location<'static>)>> = const { RefCell::new(Vec::new()) };
     }
 
-    /// [`Buf::lend_cached_line`] out of the walk that filled the cache
-    /// (`fetch_line_lent`).
     #[inline(always)]
     #[track_caller]
-    pub(crate) fn lend_cached_line_from<'a>(self, walk: MlRef<'_>) -> &'a [u8] {
-        self.unlent_from(walk).cached_bytes()
+    pub(super) fn record(count: NonNull<Cell<u32>>) -> NonNull<Cell<u32>> {
+        #[cfg(debug_assertions)]
+        {
+            let at = Location::caller();
+            OUT.with_borrow_mut(|out| out.push((count.as_ptr().addr(), at)));
+        }
+        count
     }
 
-    /// The cached line with its NUL, as a block-pinned reader lends it, out
-    /// of the walk that filled the cache.
     #[inline(always)]
-    #[track_caller]
-    pub(crate) fn lend_pinned_line_from<'a>(self, walk: MlRef<'_>) -> &'a [u8] {
-        self.unlent_from(walk).lend_cached_bytes_with_nul()
+    pub(super) fn forget(count: NonNull<Cell<u32>>) {
+        #[cfg(debug_assertions)]
+        OUT.with_borrow_mut(|out| {
+            if let Some(i) = out.iter().rposition(|&(at, _)| at == count.as_ptr().addr()) {
+                out.remove(i);
+            }
+        });
+        let _ = count;
     }
 
-    /// The cached line, without its NUL.
-    #[inline(always)]
-    #[track_caller]
-    pub(crate) fn lend_cached_line<'a>(self) -> &'a [u8] {
-        self.ml_unlent().cached_bytes()
+    pub(super) fn list() -> String {
+        #[cfg(debug_assertions)]
+        return OUT.with_borrow(|out| {
+            out.iter()
+                .map(|(_, at)| format!(" (lent at {at})"))
+                .collect()
+        });
+        #[cfg(not(debug_assertions))]
+        String::new()
     }
+}
 
-    /// The cached line, with its NUL.
+/// A walk of a memline one of whose lines is lent out.
+#[cold]
+#[inline(never)]
+#[track_caller]
+fn line_lent_out() -> ! {
+    let at = lent_at::list();
+    panic!(
+        "a buffer's memline was reached while a line of it was lent out{at}: a `LineText` keeps \
+         the line cache as it is until it is dropped"
+    )
+}
+
+impl<T: ?Sized> Deref for LineText<'_, T> {
+    type Target = T;
+
     #[inline(always)]
-    #[track_caller]
-    pub(crate) fn lend_cached_line_with_nul<'a>(self) -> &'a [u8] {
-        self.ml_unlent().cached_bytes_with_nul()
+    fn deref(&self) -> &T {
+        // SAFETY: the cached text the slot counts as out, which nothing
+        // can change, move or free until `_lent` is dropped.
+        unsafe { self.text.as_ref() }
     }
+}
 
-    /// The cached line, writable in place (its length fixed).
+impl<'a, T: ?Sized> LineText<'a, T> {
+    /// Narrow the text to a part of it, still lent.
     #[inline(always)]
-    #[track_caller]
-    pub(crate) fn lend_cached_line_mut<'a>(self) -> &'a mut [u8] {
-        self.ml_unlent_mut().cached_bytes_mut()
+    pub fn map<U: ?Sized>(self, part: impl FnOnce(&T) -> &U) -> LineText<'a, U> {
+        let text = NonNull::from(part(&self));
+        let lent = self.lent;
+        core::mem::forget(self);
+        LineText {
+            text,
+            lent,
+            _walk: PhantomData,
+        }
+    }
+}
+
+impl<T: ?Sized + core::fmt::Debug> core::fmt::Debug for LineText<'_, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Debug::fmt(&**self, f)
+    }
+}
+
+/// A buffer line, lent writable ([`crate::memline::Lines::line_mut`]): the
+/// memline's loan is held while this lives, so nothing else reaches it.
+#[clippy::has_significant_drop]
+pub struct LineTextMut<'a> {
+    text: NonNull<[u8]>,
+    _walk: MlRef<'a>,
+}
+
+impl Deref for LineTextMut<'_> {
+    type Target = [u8];
+
+    #[inline(always)]
+    fn deref(&self) -> &[u8] {
+        // SAFETY: the cached text inside the loan held in `_walk`.
+        unsafe { self.text.as_ref() }
+    }
+}
+
+impl DerefMut for LineTextMut<'_> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut [u8] {
+        // SAFETY: as `deref`; `&mut self` is the one way in.
+        unsafe { self.text.as_mut() }
+    }
+}
+
+impl core::fmt::Debug for LineTextMut<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Debug::fmt(&**self, f)
     }
 }
 

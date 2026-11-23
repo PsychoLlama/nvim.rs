@@ -363,7 +363,8 @@ impl HeldLine {
         let line = lines.line(lnum);
         self.0.clear();
         self.0.reserve(line.len() + 1);
-        self.0.extend_from_slice(line);
+        self.0.extend_from_slice(&line);
+        drop(line);
         self.0.push(b'\0');
     }
 

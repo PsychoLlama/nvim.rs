@@ -471,10 +471,11 @@ impl SynState {
             }
         } else {
             while left < 0 && at > 0 {
-                at -= head_off(line, at - 1) + 1;
+                at -= head_off(&line, at - 1) + 1;
                 left += 1;
             }
         }
+        drop(line);
         ColNr::from_index(at)
     }
 

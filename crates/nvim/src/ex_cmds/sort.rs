@@ -427,7 +427,7 @@ fn match_range(
     let Some(regmatch) = regmatch.as_mut() else {
         return (ColNr::ZERO, len);
     };
-    if !vim_regexec(regmatch, lines.line_cstr(lnum, 0), 0) {
+    if !vim_regexec(regmatch, &lines.line_cstr(lnum, 0), 0) {
         return (ColNr::ZERO, ColNr::ZERO);
     }
     let (start, end) = match regmatch.group(0) {
@@ -495,10 +495,11 @@ fn collect_sort_keys(
         let text = lines.line(lnum);
         let key = if spec.numeric || spec.float {
             // `match_range` answers offsets into `text`.
-            number_key(text, start, end, spec)
+            number_key(&text, start, end, spec)
         } else {
             SortKey::Text(Key::new(&text[start.as_usize()..end.as_usize()]))
         };
+        drop(text);
         sorted.push(SortLine { lnum, key });
 
         if regmatch.is_some() {

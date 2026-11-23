@@ -507,7 +507,7 @@ fn diff_check_unchanged(slots: &DiffSlots, dp: &mut DiffBlock) {
                     }
                     let mut other = Lines::in_buffer(used_slot(slots, i_new));
                     let lnum = dp.df_lnum[i_new] + off_new;
-                    if !lines_equal(&line_org, other.line(lnum)) {
+                    if !lines_equal(&line_org, &other.line(lnum)) {
                         break;
                     }
                 }

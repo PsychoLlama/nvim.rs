@@ -204,7 +204,7 @@ fn get_buffer_lines(
     let mut text = Lines::in_buffer(buffer);
     if !retlist {
         let line = (start >= LineNr::ONE && start <= buffer.line_count())
-            .then(|| ThinCString::from_bytes(text.line(start)));
+            .then(|| ThinCString::from_bytes(&text.line(start)));
         result.write_string(line);
         return;
     }
@@ -212,7 +212,7 @@ fn get_buffer_lines(
     end = end.min(buffer.line_count());
     let mut list = tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t);
     for lnum in start.through(end) {
-        list.push_bytes(Some(text.line(lnum)));
+        list.push_bytes(Some(&text.line(lnum)));
     }
 }
 

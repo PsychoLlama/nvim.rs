@@ -240,7 +240,7 @@ pub(crate) fn display_dollar(col_arg: ColNr) {
     let back = {
         let mut lines = Lines::current();
         let line = lines.line(win.cursor().lnum());
-        head_off(line, usize::try_from(col).unwrap_or(0).min(line.len()))
+        head_off(&line, usize::try_from(col).unwrap_or(0).min(line.len()))
     };
     win.cursor()
         .set_col(win.cursor().col() - ColNr::try_from(back).unwrap_or(ColNr::ZERO).get());

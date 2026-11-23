@@ -301,7 +301,7 @@ pub(super) fn abandon_loans() {
     crate::winlayer::abandon_loans();
     crate::winlayer::abandon_terminal_loans();
     for buf in buffers() {
-        if let Some(memfile) = buf.ml().ml_mfp.as_deref_mut() {
+        if let Some(memfile) = buf.ml_abandoning().ml_mfp.as_deref_mut() {
             memfile.abandon_pins();
         }
     }

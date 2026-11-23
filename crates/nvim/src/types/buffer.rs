@@ -422,7 +422,12 @@ pub struct Buffer {
     /// line cache, which a read of the buffer (another field held across it)
     /// must not refuse. [`crate::winlayer::Buf::ml`] lends it for a walk,
     /// marked in the buffer's slot (`slot::lend_part_at`).
-    pub b_ml: core::cell::UnsafeCell<MemLine>,
+    ///
+    /// Private, so an edit of the buffer reaches no memline: a line lent
+    /// out of the cache ([`crate::winlayer::LineText`]) refuses walks, not
+    /// edits, and an edit that could rewrite the cache would free the text
+    /// under it. [`Buffer::memline`] reads it under an edit.
+    b_ml: core::cell::UnsafeCell<MemLine>,
     /// The buffer list, `FIRSTBUF`..`LASTBUF`. A handle rather than an
     /// address: the registry resolves it, so a link can never outlive what
     /// it names, and the buffer stays movable. `winlayer::Buf::next`/`prev`
@@ -874,6 +879,20 @@ pub struct Taggy {
     pub cur_fnum: Option<Handle>,
     /// What `'tagfunc'` attached to the match, if anything.
     pub user_data: Option<ThinCString>,
+}
+
+impl Buffer {
+    /// Where the memline sits in the buffer, for the slot code that lends
+    /// it ([`crate::winlayer::Buf::ml`]) and builds it.
+    pub(crate) const fn memline_offset() -> usize {
+        core::mem::offset_of!(Buffer, b_ml)
+    }
+
+    /// The memline, read under an edit of the buffer -- which no walk and
+    /// no read is out beside, so nothing writes it meanwhile.
+    pub(crate) fn memline(&mut self) -> &MemLine {
+        self.b_ml.get_mut()
+    }
 }
 
 impl BufferRef {

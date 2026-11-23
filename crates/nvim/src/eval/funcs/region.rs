@@ -247,7 +247,7 @@ fn resolve(args: &[TypVal], result: &mut TypVal) -> Result<Region, Unresolved> {
 /// The byte at `pos` of the current buffer, NUL at the end of its line.
 fn byte_at(pos: Pos) -> u8 {
     let mut lines = Buf::current().lines();
-    cstr::byte_at(lines.line(pos.lnum), usize::try_from(pos.col).unwrap_or(0))
+    cstr::byte_at(&lines.line(pos.lnum), usize::try_from(pos.col).unwrap_or(0))
 }
 
 /// How many bytes the grapheme cluster at `pos` takes, 0 at the end of the
@@ -376,9 +376,10 @@ pub fn f_getregion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let mut lines = Lines::current();
         let line = lines.line(lnum);
         let text = match bd {
-            Some(bd) => block_def2str(&bd, line),
-            None => ThinCString::from_bytes(line),
+            Some(bd) => block_def2str(&bd, &line),
+            None => ThinCString::from_bytes(&line),
         };
+        drop(line);
         let mut list = result.list_mut().expect("the list `resolve` allocated");
         list.push(TypVal::string(Some(text)));
     }
@@ -431,12 +432,13 @@ fn line_corners(r: &Region, lnum: LineNr) -> (Pos, Pos) {
     let before_text = |bd: &BlockDef| {
         let mut lines = Lines::current();
         let line = lines.line(lnum);
-        let at = text_start(bd, line);
+        let at = text_start(bd, &line);
         let prev = if at == 0 {
             0
         } else {
-            at - head_off(line, at - 1) - 1
+            at - head_off(&line, at - 1) - 1
         };
+        drop(line);
         ColNr::from_index(prev) + 1
     };
 

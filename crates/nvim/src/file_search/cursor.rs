@@ -94,7 +94,7 @@ pub(crate) fn file_name_at_cursor(
         let mut lines = Lines::current();
         let line = lines.line(cursor.lnum);
         name_in_line(
-            line,
+            &line,
             usize::try_from(cursor.col).unwrap_or(0),
             options,
             file_lnum,

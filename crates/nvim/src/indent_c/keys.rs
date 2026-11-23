@@ -138,7 +138,8 @@ pub fn in_cinkeys(keytyped: Key, when: u8, line_is_empty: bool) -> bool {
                 let mut lines = Lines::current();
                 let text = lines.line(cursor_lnum);
                 let is_else =
-                    skip::white(text) == back && text[back.min(text.len())..].starts_with(b"else");
+                    skip::white(&text) == back && text[back.min(text.len())..].starts_with(b"else");
+                drop(text);
                 if is_else {
                     return true;
                 }
@@ -219,7 +220,7 @@ fn colon_reindents() -> bool {
         let claimed = {
             let mut lines = Lines::current();
             let line = lines.line(lnum);
-            is_case_label(line, 0, false) || is_scope_decl(line, 0)
+            is_case_label(&line, 0, false) || is_scope_decl(&line, 0)
         };
         claimed || is_jump_label()
     };
@@ -231,7 +232,7 @@ fn colon_reindents() -> bool {
     let double_colon = col > 2 && {
         let mut lines = Lines::current();
         let line = lines.line(lnum);
-        byte_at(line, col - 1) == b':' && byte_at(line, col - 2) == b':'
+        byte_at(&line, col - 1) == b':' && byte_at(&line, col - 2) == b':'
     };
     if !double_colon {
         return false;
@@ -290,7 +291,7 @@ fn word_matches(
         let col = col.min(line.len());
         let mut s = col;
         while s > 0 {
-            let n = s - 1 - head_off(line, s - 1);
+            let n = s - 1 - head_off(&line, s - 1);
             if !is_word_at(&line[n..], Buf::current()) {
                 break;
             }
@@ -316,7 +317,7 @@ fn word_matches(
         // which the `||` keeps in front of the read.
         let mut lines = Lines::current();
         let line = lines.line(cursor.lnum);
-        (col == len || !vim_iswordc(Codepoint::from(byte_at(line, col - len - 1))))
+        (col == len || !vim_iswordc(Codepoint::from(byte_at(&line, col - len - 1))))
             && same(line.get(col - len..).unwrap_or_default())
     };
 

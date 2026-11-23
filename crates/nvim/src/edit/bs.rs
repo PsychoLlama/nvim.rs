@@ -584,7 +584,7 @@ fn with_cursor_line<R>(f: impl FnOnce(&[u8], usize) -> R) -> R {
     let cursor = Win::current().w_cursor();
     let mut lines = Lines::current();
     f(
-        lines.line(cursor.lnum),
+        &lines.line(cursor.lnum),
         usize::try_from(cursor.col).unwrap_or(usize::MAX),
     )
 }

@@ -99,7 +99,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
         && STATE.get() & MODE_INSERT != 0
     {
         let before = byte_at(
-            Lines::current().line(pos.lnum),
+            &Lines::current().line(pos.lnum),
             usize::try_from(pos.col - 1).unwrap_or(0),
         );
         // Note the argument: `WHITECHAR` tests `ascii_iswhite` on what it
@@ -154,7 +154,7 @@ pub fn auto_format(trailblank: bool, prev_line: bool) {
         let lnum = Win::current().cursor().lnum();
         let len = get_cursor_line_len();
         if Win::current().cursor().col() == len {
-            let mut spaced = XString::from_bytes(Lines::current().line(lnum));
+            let mut spaced = XString::from_bytes(&Lines::current().line(lnum));
             spaced.push_byte(b' ');
             let _ = ml_replace_owned(lnum, spaced);
             // Remove the space later.

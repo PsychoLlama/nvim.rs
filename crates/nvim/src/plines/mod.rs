@@ -178,14 +178,14 @@ fn win_linetabsize_col(
 /// 'listchars' "eol".
 pub(crate) fn linetabsize(window: Win, lnum: LineNr) -> c_int {
     let mut lines = window.buffer().lines();
-    win_linetabsize(window, lnum, lines.line(lnum), ColNr::MAX)
+    win_linetabsize(window, lnum, &lines.line(lnum), ColNr::MAX)
 }
 
 /// Cells the first `len` bytes of line `lnum` take in `window`, counting
 /// inline virtual text: the virtual column `len` starts at.
 pub(crate) fn win_line_prefix_cells(window: Win, lnum: LineNr, len: ColNr) -> ColNr {
     let mut lines = window.buffer().lines();
-    ColNr::new(win_linetabsize(window, lnum, lines.line(lnum), len))
+    ColNr::new(win_linetabsize(window, lnum, &lines.line(lnum), len))
 }
 
 /// Like [`linetabsize`], but counts the 'listchars' "eol".

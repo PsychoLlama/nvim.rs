@@ -63,8 +63,8 @@ pub(crate) fn beginline(flags: BeginlineOpts) {
             let mut at = 0;
             // `line[at + 1] == NUL` under `FIX` is what keeps an all-white
             // line from ending with the cursor on the NUL.
-            while ascii_iswhite(c_int::from(byte_at(line, at)))
-                && !(flags.has(BeginlineOpts::FIX) && byte_at(line, at + 1) == b'\0')
+            while ascii_iswhite(c_int::from(byte_at(&line, at)))
+                && !(flags.has(BeginlineOpts::FIX) && byte_at(&line, at + 1) == b'\0')
             {
                 win.cursor().set_col(win.cursor().col() + 1);
                 at += 1;

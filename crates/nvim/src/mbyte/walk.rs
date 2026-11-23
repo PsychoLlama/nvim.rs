@@ -116,7 +116,7 @@ pub(crate) fn snap_pos_to_char(buffer: Buf, pos: Pos) -> Pos {
     if line.is_empty() || line.len() < col {
         adjusted.col = ColNr::ZERO;
     } else {
-        adjusted.col -= ColNr::try_from(head_off(line, col))
+        adjusted.col -= ColNr::try_from(head_off(&line, col))
             .expect("a short step back")
             .get();
     }
@@ -124,6 +124,7 @@ pub(crate) fn snap_pos_to_char(buffer: Buf, pos: Pos) -> Pos {
     if adjusted.coladd == 1 && coladd_drops(&line[at.min(line.len())..]) {
         adjusted.coladd = 0;
     }
+    drop(line);
     adjusted
 }
 
@@ -152,7 +153,7 @@ impl Win {
                 self.cursor().set_col(len - 1);
             }
             let col = usize::try_from(self.cursor().col()).unwrap_or(0);
-            let back = ColNr::try_from(head_off(line, col)).expect("a short step back");
+            let back = ColNr::try_from(head_off(&line, col)).expect("a short step back");
             self.cursor().set_col(self.cursor().col() - back.get());
         }
         let at = usize::try_from(self.cursor().col()).unwrap_or(0);

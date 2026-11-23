@@ -396,6 +396,7 @@ pub(crate) fn get_visual_text(cmd_arg: Option<&mut CmdArg>) -> Option<VisualText
         line: XString::from_bytes(tail),
         len,
     };
+    drop(line);
     reset_visual_and_resel();
     Some(text)
 }

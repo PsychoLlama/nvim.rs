@@ -120,7 +120,7 @@ impl Searcher<'_, '_> {
         if lnum > self.buf.line_count() {
             return b'\0';
         }
-        cstr::byte_at(self.lines().line(lnum), usize::try_from(col).unwrap_or(0))
+        cstr::byte_at(&self.lines().line(lnum), usize::try_from(col).unwrap_or(0))
     }
 
     /// Whether an error was reported or the timeout was passed — either
@@ -529,7 +529,7 @@ impl Searcher<'_, '_> {
                     // Step back off a trail byte onto the character's own
                     // first byte.
                     let col = usize::try_from(pos.col).unwrap_or(0);
-                    let back = head_off(self.lines().line(pos.lnum), col);
+                    let back = head_off(&self.lines().line(pos.lnum), col);
                     pos.col -= len_as_int(back);
                 }
             }
@@ -860,7 +860,7 @@ pub(crate) fn search_for_exact_line(
 
         let mut lines = buffer.lines();
         let line = lines.line(pos.lnum);
-        let at = skip::white(line);
+        let at = skip::white(&line);
         pos.col = ColNr::from_index(at);
         let text = cstr::until_nul(&line[at..]);
 

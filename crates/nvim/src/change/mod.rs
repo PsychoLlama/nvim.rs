@@ -61,8 +61,8 @@ use crate::mbyte::{GRAPHEME_STATE_INIT, GraphemeState};
 use crate::mbyte::{mb_adjust_cursor, utf_iscomposing_first};
 use crate::memline::ML_DEL_MESSAGE;
 use crate::memline::{
-    ml_add_deleted_len, ml_delete_flags, ml_line_alloced, ml_open_file, ml_replace_buf_text,
-    ml_replace_owned, ml_setflags,
+    ml_delete_flags, ml_line_alloced, ml_open_file, ml_replace_buf_text, ml_replace_owned,
+    ml_setflags,
 };
 use crate::message::state::{
     EMSG_SILENT, IN_ASSERT_FAILS, MSG_COL, MSG_ROW, MSG_SCROLL, MSG_SILENT, NEED_WAIT_RETURN,

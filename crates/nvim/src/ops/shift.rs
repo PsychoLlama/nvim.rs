@@ -57,7 +57,7 @@ pub fn op_shift(op: &OpArg, curs_top: bool, amount: c_int) {
 
     for _ in 0..op.line_count {
         let lnum = Win::current().cursor().lnum();
-        let first_char = c_int::from(byte_at(Lines::current().line(lnum), 0));
+        let first_char = c_int::from(byte_at(&Lines::current().line(lnum), 0));
         if first_char == 0 {
             // Empty line: nothing to indent, but the cursor still has to
             // land somewhere legal.
@@ -332,9 +332,9 @@ fn shift_block(op: &OpArg, amount: c_int) {
         let mut lines = Lines::current();
         let line = lines.line(lnum);
         if left {
-            shift_block_left(op, &mut bd, line, total)
+            shift_block_left(op, &mut bd, &line, total)
         } else {
-            shift_block_right(&mut bd, line, total)
+            shift_block_right(&mut bd, &line, total)
         }
     };
 

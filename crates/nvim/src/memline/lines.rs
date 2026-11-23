@@ -12,18 +12,20 @@
 //!
 //! ```ignore
 //! let mut lines = buffer.lines();
-//! let text = lines.line(lnum); // &[u8], the line without its NUL
+//! let text = lines.line(lnum); // a LineText: derefs to the line without its NUL
 //! ```
 //!
 //! A single read fits in one expression — `buffer.lines().line(lnum)`, whose
 //! temporary handle lives to the end of the statement; a walk binds the
-//! handle, and every slice it hands out is bounded by it.
+//! handle, and every line it hands out borrows it.
 //!
 //! [`Lines`]'s own documentation carries the borrow story — how long the
-//! slice is valid, what invalidates it, and what to do about the two shapes
-//! the borrow cannot express. In one sentence: the slice lives exactly as
-//! long as the `&mut Lines` it came from, so the next line, any `ml_*`
-//! mutation and any re-entry into the editor all need it dropped first.
+//! line is valid, what refuses while it is out, and what to do about the
+//! two shapes the borrow cannot express. In one sentence: the line is a
+//! guard ([`LineText`]) that keeps the cache as it is while it lives, so the
+//! next line through the same handle does not compile and any other walk
+//! of the memline -- another line, an `ml_*` mutation, a redraw that reads
+//! one -- panics until it is dropped.
 //!
 //! # No pointer form
 //!
@@ -48,10 +50,12 @@ use super::*;
 use crate::cstr;
 use crate::fileio::ReadFlags;
 use crate::mbyte::Codepoint;
+use crate::memfile::MemPin;
 use crate::memory::XString;
 use crate::types::Failed;
 use crate::winlayer::{Buf, MlRef};
-use core::cell::Cell;
+pub use crate::winlayer::{LineText, LineTextMut};
+use core::cell::OnceCell;
 use core::ffi::{CStr, c_int};
 
 /// A buffer's one-line cache, borrowed.
@@ -63,27 +67,32 @@ use core::ffi::{CStr, c_int};
 /// may have moved or been freed. Upstream's rule is "use the line before you
 /// ask for another one", and until now it was written down nowhere.
 ///
-/// This is where it is written down, and as much of it as the compiler can
-/// hold is held: [`line`](Self::line) borrows the handle **mutably** and the
-/// slice it answers keeps that borrow alive, so holding one line while
-/// asking for the next does not compile. That is the whole of the cache's
-/// one-line limit, expressed as a lifetime.
+/// This is where it is written down, and all of it is held. Half by the
+/// compiler: [`line`](Self::line) borrows the handle **mutably** and the
+/// [`LineText`] it answers keeps that borrow alive, so holding one line
+/// while asking for the next through the same handle does not compile.
 ///
-/// What the compiler still cannot see is a call *out* of here that reads
-/// another line behind the handle's back — `ml_replace`, `ml_append`,
-/// `ml_delete`, or anything that redraws or runs user code. Not one of them
-/// takes a borrow this handle could conflict with, so that half of the
-/// contract is the caller's, and it is one rule: **the borrow ends before
-/// the call**. A walk that has to re-enter the editor takes the line, does
-/// its indexing, drops the slice, and calls; a walk that has to hold text
-/// across the call takes [`line_copy`](Self::line_copy).
+/// The other half is a call *out* of here that reads another line behind
+/// the handle's back — another `Lines`, `ml_replace`, `ml_append`,
+/// `ml_delete`, or anything that redraws or runs user code. None of them
+/// takes a borrow this handle could conflict with, so the guard holds it at
+/// run time: while a [`LineText`] lives, its memfile counts it out and every
+/// walk of the memline panics -- the cache cannot be refilled or the line
+/// changed under it. Reads of the *same* line (it is cached already), of
+/// the line count, of the rest of the buffer, and edits of the rest of the
+/// buffer go on. The rule left to the caller is the one that keeps that
+/// panic away: **drop the line before the call**. A guard lives to the end
+/// of its scope, not to its last use, so a walk that re-enters the editor
+/// takes the line, does its indexing, drops it (`drop(line)` or a block),
+/// and calls; a walk that has to hold text across the call takes
+/// [`line_copy`](Self::line_copy).
 ///
 /// A caller that genuinely needs two lines of the *same* buffer at once —
 /// `:diffget`'s comparison, `'foldmarker'`'s start-and-end scan — is asking
 /// for something the cache cannot give, and copies one of them. That is not
 /// a limitation of this type; it is the memline's, made visible.
 ///
-/// The slices are the line's bytes **without** the terminating NUL, which is
+/// The lines are the line's bytes **without** the terminating NUL, which is
 /// the length `ml_get_len` reports and the length every caller wants. A
 /// memline line stores a NUL byte as an `NL`, so the bytes may hold either
 /// and never hold a terminator — which is exactly why the answer is `&[u8]`
@@ -119,9 +128,13 @@ impl Lines {
     ///
     /// Out-of-range line numbers answer the `???` placeholder, after the
     /// E315 complaint upstream's `ml_get` gives.
-    pub fn line(&mut self, lnum: LineNr) -> &[u8] {
-        let walk = fetch_line_lent(self.0, lnum);
-        self.0.lend_cached_line_from(walk)
+    #[inline(always)]
+    #[track_caller]
+    pub fn line(&mut self, lnum: LineNr) -> LineText<'_> {
+        match self.0.lend_line_if_cached(lnum, false) {
+            Some(text) => text,
+            None => line_by_walk(self.0, lnum),
+        }
     }
 
     /// Line `lnum`, writable in place.
@@ -129,9 +142,9 @@ impl Lines {
     /// The bytes already there can be rewritten and nothing else, which is
     /// what a slice of the line's own length says; the old text is booked as
     /// deleted. Use `ml_replace` to change a line's length.
-    pub fn line_mut(&mut self, lnum: LineNr) -> &mut [u8] {
+    pub fn line_mut(&mut self, lnum: LineNr) -> LineTextMut<'_> {
         fetch_line(self.0, lnum, true);
-        self.0.lend_cached_line_mut()
+        self.0.lend_line_mut(self.0.ml())
     }
 
     /// Overwrite byte `at` of line `lnum` in place, answering the byte that
@@ -169,11 +182,14 @@ impl Lines {
     ///
     /// # Panics
     /// When `at` is past the end of the line.
-    pub fn line_cstr(&mut self, lnum: LineNr, at: usize) -> &CStr {
-        fetch_line(self.0, lnum, false);
-        let bytes = self.0.lend_cached_line_with_nul();
+    #[track_caller]
+    pub fn line_cstr(&mut self, lnum: LineNr, at: usize) -> LineText<'_, CStr> {
+        let bytes = match self.0.lend_line_if_cached(lnum, true) {
+            Some(text) => text,
+            None => self.0.lend_line(fetch_line_lent(self.0, lnum), true),
+        };
         assert!(at < bytes.len(), "column past the end of the line");
-        cstr::in_bytes(&bytes[at..])
+        bytes.map(|bytes| cstr::in_bytes(&bytes[at..]))
     }
 
     /// Line `lnum`, copied out of the cache.
@@ -186,10 +202,19 @@ impl Lines {
     pub fn line_copy(&mut self, lnum: LineNr) -> LineCopy {
         let line = self.line(lnum);
         let mut bytes = Vec::with_capacity(line.len() + 1);
-        bytes.extend_from_slice(line);
+        bytes.extend_from_slice(&line);
+        drop(line);
         bytes.push(0);
         LineCopy(bytes)
     }
+}
+
+/// [`Lines::line`] past the line the cache holds: fill it, then lend it.
+#[inline(never)]
+#[track_caller]
+fn line_by_walk<'a>(buffer: Buf, lnum: LineNr) -> LineText<'a> {
+    let walk = fetch_line_lent(buffer, lnum);
+    buffer.lend_line(walk, false)
 }
 
 /// A buffer's lines held for one running match: the regexp matcher's line
@@ -203,19 +228,20 @@ impl Lines {
 /// put**:
 ///
 /// - the first read flushes a pending replacement back into its block and
-///   pins the buffer's memfile ([`MemFile::pin`]);
-/// - a line read out of a data block lends that block
+///   pins the buffer's memfile ([`MemFile::pin`]), holding the pin
+///   ([`MemPin`]) for as long as this lives;
+/// - a line read out of a data block lends that block under the pin
 ///   ([`MemFile::lend_page`]), and a lent block refuses to be written,
 ///   freed or resized (a panic, always on: one compare while nothing is
-///   pinned) and is kept when memory runs short;
+///   pinned) and is kept when memory runs short; the slice is borrowed from
+///   the pin, so it cannot outlive it;
 /// - no replacement line can be cached ([`MemLine::cache_replacement`]
-///   panics), and the memfile cannot be dropped.
-///
-/// - the pinned memfile is remembered by address, and every read and the
-///   unpin check that the buffer still has it: a memline swapped or
-///   replaced under the hold (two edits of two buffers, `mem::swap` over
-///   two memline loans) would otherwise lend from a memfile nobody pinned,
-///   and unpin another's (a panic, always on: one compare per read).
+///   panics), and the memfile cannot be dropped;
+/// - the pin knows its memfile, and every read and the unpin check that
+///   the buffer still has it: a memline or memfile swapped or replaced
+///   under the hold (`mem::swap` over two edits, or over two memline loans)
+///   would otherwise lend from a memfile nobody pinned, and unpin another's
+///   (a panic, always on: one compare per read).
 ///
 /// Reading other lines meanwhile is fine — through here, through
 /// [`Lines`], from anywhere: the memline's cache moves, the lent bytes do
@@ -231,11 +257,11 @@ impl Lines {
 #[derive(Debug)]
 pub(crate) struct HeldLines {
     buffer: Buf,
-    /// The address of the memfile this holds a pin on (compared, never
-    /// read), or 0; taken at the first read that finds one, so a match that
-    /// reads no line pays nothing. A pinned memfile cannot be dropped (its
-    /// `Drop` panics), so while this holds it the address is its alone.
-    pinned: Cell<usize>,
+    /// The pin on the buffer's memfile, taken at the first read that finds
+    /// one, so a match that reads no line pays nothing. The pin knows its
+    /// memfile, and every read and the unpin check that the buffer still
+    /// has it.
+    pin: OnceCell<MemPin>,
 }
 
 impl HeldLines {
@@ -245,7 +271,7 @@ impl HeldLines {
     pub(crate) fn new(buffer: Buf) -> HeldLines {
         HeldLines {
             buffer,
-            pinned: Cell::new(0),
+            pin: OnceCell::new(),
         }
     }
 
@@ -254,77 +280,51 @@ impl HeldLines {
     /// The NUL is part of the slice because the matcher reads it as a
     /// position: `$` matches there and a character step stops there.
     #[inline(always)]
+    #[track_caller]
     pub(crate) fn line(&self, lnum: LineNr) -> &[u8] {
-        let pinned = self.pinned.get();
-        if pinned == 0 {
-            self.pin();
-        }
+        let pin = match self.pin.get() {
+            Some(pin) => Some(pin),
+            None => self.pin(),
+        };
         let walk = fetch_line_lent(self.buffer, lnum);
-        if pinned != 0 {
-            same_memfile(&walk, pinned);
+        match pin {
+            Some(pin) => self.buffer.lend_pinned_line(walk, pin),
+            // No memfile: the memline answers a static stand-in.
+            None => walk
+                .static_cached_bytes_with_nul()
+                .expect("a memline with no memfile caches only stand-ins"),
         }
-        self.buffer.lend_pinned_line_from(walk)
     }
 
     /// Pin the memfile, if the buffer has one yet (a memline that is not
     /// open answers static stand-ins, which need none).
     #[inline(never)]
-    fn pin(&self) {
+    fn pin(&self) -> Option<&MemPin> {
         let buffer = self.buffer;
         if !buffer.ml().is_open() {
-            return;
+            return None;
         }
         // A pending replacement goes back into its block first: once
         // pinned, nothing may cache one, nor write it back.
         if buffer.ml().line_is_dirty() {
             ml_flush_line(buffer);
         }
-        let mut ml = buffer.ml();
-        let memfile = ml.memfile();
-        memfile.pin();
-        self.pinned.set(core::ptr::from_mut(memfile).addr());
+        let pin = buffer.ml().memfile().pin();
+        Some(self.pin.get_or_init(|| pin))
     }
-}
-
-/// The address of `ml`'s memfile, or 0.
-#[inline(always)]
-fn memfile_addr(ml: &state::MemLine) -> usize {
-    ml.ml_mfp
-        .as_deref()
-        .map_or(0, |memfile| core::ptr::from_ref(memfile).addr())
-}
-
-/// Panic unless `ml`'s memfile is the one at address `pinned`.
-#[inline(always)]
-#[track_caller]
-fn same_memfile(ml: &state::MemLine, pinned: usize) {
-    if memfile_addr(ml) != pinned {
-        memfile_moved();
-    }
-}
-
-#[cold]
-#[inline(never)]
-#[track_caller]
-fn memfile_moved() -> ! {
-    panic!("a held buffer's memfile was swapped or replaced under the match holding its lines")
 }
 
 impl Drop for HeldLines {
     #[inline]
     fn drop(&mut self) {
-        let pinned = self.pinned.get();
-        if pinned != 0 {
+        if let Some(pin) = self.pin.take() {
             let mut ml = self.buffer.ml();
-            if std::thread::panicking() && memfile_addr(&ml) != pinned {
+            let memfile = ml.ml_mfp.as_deref_mut();
+            if std::thread::panicking() && !memfile.as_ref().is_some_and(|m| m.is_pinned_by(&pin)) {
                 // The panic that is unwinding already ends the process.
                 return;
             }
-            same_memfile(&ml, pinned);
-            ml.ml_mfp
-                .as_deref_mut()
-                .expect("a pinned memfile is not dropped")
-                .unpin();
+            memfile.expect("a pinned memfile is not dropped").unpin(pin);
         }
     }
 }
@@ -569,9 +569,11 @@ fn begin_replace(buffer: Buf, lnum: LineNr) -> Result<(), Failed> {
         ml_flush_line(buffer); // another line is buffered, flush it
     }
     if crate::buffer_updates::has_callbacks(buffer) {
-        fetch_line(buffer, lnum, false);
-        let text = buffer.lend_cached_line();
-        ml_add_deleted_len_buf(buffer, text, text.len());
+        let mut lines = Lines(buffer);
+        let text = lines.line(lnum);
+        let counts = deleted_counts(buffer, &text, text.len());
+        drop(text);
+        book_deleted(buffer, counts);
     }
     Ok(())
 }
@@ -822,7 +824,7 @@ pub(crate) fn dec(pos: &mut Pos) -> Moved {
             pos.col = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
         }
         let at = usize::try_from(pos.col).unwrap_or(0);
-        pos.col -= ColNr::try_from(head_off(line, at))
+        pos.col -= ColNr::try_from(head_off(&line, at))
             .unwrap_or(ColNr::ZERO)
             .get();
     };

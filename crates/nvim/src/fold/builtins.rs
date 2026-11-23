@@ -98,23 +98,24 @@ pub fn f_foldtext(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     let mut which = lnum;
     let mut at = {
         let text = lines.line(lnum);
-        let mut at = skip::white(text);
+        let mut at = skip::white(&text);
         // A comment opener is skipped, and an empty one takes the next line.
-        if byte_at(text, at) == b'/'
-            && (byte_at(text, at + 1) == b'*' || byte_at(text, at + 1) == b'/')
+        if byte_at(&text, at) == b'/'
+            && (byte_at(&text, at + 1) == b'*' || byte_at(&text, at + 1) == b'/')
         {
             at = (at + 2).min(text.len());
             at += skip::white(&text[at..]);
-            if byte_at(text, at) == 0 && (lnum + 1) < foldend {
+            if byte_at(&text, at) == 0 && (lnum + 1) < foldend {
                 which = lnum + 1;
             }
         }
+        drop(text);
         at
     };
     if which != lnum {
         let text = lines.line(which);
-        at = skip::white(text);
-        if byte_at(text, at) == b'*' {
+        at = skip::white(&text);
+        if byte_at(&text, at) == b'*' {
             at += 1;
             at += skip::white(&text[at..]);
         }

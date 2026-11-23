@@ -78,7 +78,7 @@ fn insert_enter(s: &mut InsertState) {
     }
     let mut lines = Lines::current();
     INSSTART_TEXTLEN.set(ColNr::new(linetabsize_str(
-        lines.line(Win::current().cursor().lnum()),
+        &lines.line(Win::current().cursor().lnum()),
     )));
     INSSTART_BLANK_VCOL.set(ColNr::MAX);
     if !DID_AI.get() {

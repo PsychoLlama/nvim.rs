@@ -124,7 +124,7 @@ pub(crate) fn nv_g_underscore_cmd(cmd_arg: &mut CmdArg) {
     }
     let mut lines = Lines::current();
     let line = lines.line(win.cursor().lnum());
-    let byte_at = |col: ColNr| cstr::byte_at(line, usize::try_from(col).unwrap_or(0));
+    let byte_at = |col: ColNr| cstr::byte_at(&line, usize::try_from(col).unwrap_or(0));
     // 'virtualedit' can leave the cursor on the terminator.
     if win.cursor().col() > ColNr::ZERO && byte_at(win.cursor().col()) == 0 {
         win.cursor().set_col(win.cursor().col() - 1);

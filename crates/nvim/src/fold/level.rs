@@ -860,7 +860,8 @@ pub(super) fn foldlevel_indent(line: &mut FoldLine) {
     let buf = win.buffer();
     let mut lines = buf.lines();
     let text = lines.line(lnum);
-    let first = byte_at(text, skip::white(text));
+    let first = byte_at(&text, skip::white(&text));
+    drop(text);
     // A blank line, or one starting with a 'foldignore' character, takes
     // its level from its neighbours.
     if first == 0

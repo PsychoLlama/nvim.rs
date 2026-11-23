@@ -168,7 +168,7 @@ pub(super) fn add_sound_suggest(
     let mut orgnr = 0;
 
     while pos < deltas.len() {
-        orgnr += bytes2offset(deltas, &mut pos);
+        orgnr += bytes2offset(&deltas, &mut pos);
         let (theword, n, i) = word_number_to_letters(slang, orgnr);
         emit_word(su, langp, slang, &theword, n, i, score);
     }

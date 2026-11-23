@@ -202,7 +202,7 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
         .min(curline.len());
     // Back up to before the start of the word...
     while p > 0 && spell_iswordp_nmw(&curline[p..], Win::current()) {
-        p -= head_off(curline, p - 1) + 1;
+        p -= head_off(&curline, p - 1) + 1;
     }
     // ...then forward to its start.
     while p < curline.len() && !spell_iswordp_nmw(&curline[p..], Win::current()) {
@@ -212,6 +212,7 @@ fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
         beep_flush(); // no word at all
         return None;
     }
+    drop(curline);
     Win::current().cursor().set_col(ColNr::from_index(p));
     Some(0)
 }

@@ -39,27 +39,27 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
     let line = lines.line(pos.lnum);
     let end_col = pos.col;
 
-    let (mut csarg, cstype) = CharsizeArg::new(window, pos.lnum, line);
+    let (mut csarg, cstype) = CharsizeArg::new(window, pos.lnum, &line);
     csarg.max_head_vcol = -1;
 
     let mut on_nul = false;
     let mut vcol: ColNr = ColNr::ZERO;
     let mut char_size;
     let mut at = 0;
-    let mut chr = c_char_info(line, 0);
+    let mut chr = c_char_info(&line, 0);
 
     if cstype == CharsizeKind::Fast {
         let use_tabstop = csarg.use_tabstop;
         char_size = with_byte_cells(|cells| {
             loop {
-                if ends_at(line, at, chr) {
+                if ends_at(&line, at, chr) {
                     // The cursor on a NUL is treated like a one-cell char.
                     break CharSize { width: 1, head: 0 };
                 }
                 let byte_width = |byte| cells.of(byte);
                 let size =
-                    charsize_fast_impl(window, line, at, use_tabstop, vcol, chr.value, byte_width);
-                let (next, next_chr) = c_next_cluster(line, at, chr);
+                    charsize_fast_impl(window, &line, at, use_tabstop, vcol, chr.value, byte_width);
+                let (next, next_chr) = c_next_cluster(&line, at, chr);
                 if past_end(next, end_col) {
                     break size;
                 }
@@ -71,14 +71,14 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
         loop {
             char_size = charsize_regular(&mut csarg, at, vcol, chr.value);
             // Don't go past the end of the line.
-            if ends_at(line, at, chr) {
+            if ends_at(&line, at, chr) {
                 // A NUL at the end of the line takes one column, unless
                 // there is virtual text.
                 char_size.width = 1 + csarg.cur_text_width_left + csarg.cur_text_width_right;
                 on_nul = true;
                 break;
             }
-            let (next, next_chr) = c_next_cluster(line, at, chr);
+            let (next, next_chr) = c_next_cluster(&line, at, chr);
             if past_end(next, end_col) {
                 break;
             }
@@ -87,7 +87,7 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
         }
     }
 
-    if byte_at(line, at) == b'\0'
+    if byte_at(&line, at) == b'\0'
         && end_col < ColNr::MAX
         && !past_end(at, end_col)
         && usize::try_from(end_col) != Ok(at)

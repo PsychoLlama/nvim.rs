@@ -115,7 +115,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
 
             if spaces > 0 {
                 // Do not copy part of a multi-byte character.
-                offset -= len_as_int(head_off(oldp, offset.as_usize()));
+                offset -= len_as_int(head_off(&oldp, offset.as_usize()));
             }
             // Can go negative when the cursor was moved.
             spaces = spaces.max(0);
@@ -131,7 +131,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
             offset += len_as_int(s.len());
             let mut tail = at;
             if spaces > 0 && !bdp.is_short {
-                if byte_at(oldp, at) == b'\t' {
+                if byte_at(&oldp, at) == b'\t' {
                     // Post-padding: the rest of the TAB being split, which
                     // is then dropped rather than copied.
                     line.resize(line.len() + width(ts_val - spaces), b' ');
@@ -147,6 +147,7 @@ pub(crate) fn block_insert(op: &OpArg, s: &[u8], b_insert: bool, bdp: &mut Block
                 offset += count;
             }
             line.extend_from_slice(&oldp[tail.min(oldp.len())..]);
+            drop(oldp);
             (line, startcol)
         };
 
@@ -232,7 +233,7 @@ pub fn restore_lbr(lbr_saved: bool) {
 /// like a partly selected TAB.
 pub fn block_prep(bd: &mut BlockDef, op: &OpArg, lnum: LineNr, is_del: bool) {
     let mut lines = Lines::current();
-    block_prep_line(bd, op, lnum, lines.line(lnum), is_del);
+    block_prep_line(bd, op, lnum, &lines.line(lnum), is_del);
 }
 
 /// [`block_prep`] of `line`, which is line `lnum` of the current buffer, for
@@ -419,7 +420,7 @@ fn charwise_block_prep(
             let at = usize::try_from(endcol).unwrap_or(0);
             // No padding for a double-width character: `endcol` is then on
             // the last byte of the character, not past it.
-            if byte_at(p, at) == 0 || (cs + end.coladd < ce && head_off(p, at) == 0) {
+            if byte_at(&p, at) == 0 || (cs + end.coladd < ce && head_off(&p, at) == 0) {
                 if start.lnum == end.lnum && start.col == end.col {
                     // The whole region is inside one character.
                     bd.is_one_char = true;

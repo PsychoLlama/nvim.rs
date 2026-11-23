@@ -356,7 +356,8 @@ pub(crate) fn op_change(op: &mut OpArg) -> c_int {
         let mut lines = Lines::current();
         let firstline = lines.line(op.start.lnum);
         pre_textlen = ColNr::try_from(firstline.len()).unwrap_or(ColNr::MAX).get();
-        pre_indent = len_as_int(skip::white(firstline));
+        pre_indent = len_as_int(skip::white(&firstline));
+        drop(firstline);
         bd.textcol = Win::current().cursor().col();
     }
 
@@ -394,7 +395,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
         // Auto-indenting may have changed the indent. If the cursor was past
         // the indent, that change is not part of the inserted text.
         if bd.textcol > ColNr::new(pre_indent) {
-            let new_indent = len_as_int(skip::white(firstline));
+            let new_indent = len_as_int(skip::white(&firstline));
             pre_textlen += new_indent - pre_indent;
             bd.textcol += new_indent - pre_indent;
         }
@@ -409,6 +410,7 @@ fn replay_change(op: &OpArg, bd: &mut BlockDef, mut pre_textlen: c_int, pre_inde
             .min(firstline.len());
         let end = (at + width(ins_len)).min(firstline.len());
         let text = firstline[at..end].to_vec();
+        drop(firstline);
         (len_as_int(text.len()), text)
     };
 

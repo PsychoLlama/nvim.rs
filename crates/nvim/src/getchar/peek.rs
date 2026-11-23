@@ -105,7 +105,7 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
                 // that is not white starts.
                 let start = {
                     let mut lines = Lines::current();
-                    last_non_white_start(lines.line(lnum), cursor_col)
+                    last_non_white_start(&lines.line(lnum), cursor_col)
                 };
                 win.set_w_wcol(start.map_or(0, |start| {
                     let len =
@@ -132,7 +132,7 @@ fn esc_leaves_insert(at: &mut CursorAt) -> bool {
             let mut lines = Lines::current();
             let line = lines.line(lnum);
             let at = usize::try_from(col).expect("the cursor column is never negative");
-            let start = at - head_off(line, at);
+            let start = at - head_off(&line, at);
             if cells_at(line.get(start..).unwrap_or_default()) > 1 {
                 win.set_w_wcol(win.w_wcol() - 1);
             }

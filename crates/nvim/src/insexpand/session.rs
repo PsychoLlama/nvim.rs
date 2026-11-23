@@ -159,7 +159,7 @@ pub(crate) fn get_normal_compl_info(mut startcol: c_int, curs_col: ColNr) -> Res
 pub(crate) fn get_wholeline_compl_info(curs_col: ColNr) -> Result<(), Failed> {
     let mut lines = Lines::current();
     let line = lines.line(Win::current().cursor().lnum());
-    COMPL_COL.set(ColNr::try_from(skip::white(line)).unwrap_or(ColNr::ZERO));
+    COMPL_COL.set(ColNr::try_from(skip::white(&line)).unwrap_or(ColNr::ZERO));
     COMPL_LENGTH.set(curs_col - COMPL_COL.get());
     if COMPL_LENGTH.get() < 0 {
         // Cursor in indent: empty pattern.
@@ -176,7 +176,7 @@ pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> R
     // Go back to just before the first filename character.
     if startcol > 0 {
         // C's MB_PTR_BACK: step back over one whole character.
-        let back = |p: usize| p - (head_off(line, p - 1) + 1);
+        let back = |p: usize| p - (head_off(&line, p - 1) + 1);
         let is_filec = |p: usize| vim_isfilec(char_at(line.get(p..).unwrap_or_default()));
         let mut p = back(usize::try_from(startcol).unwrap_or(0));
         while p > 0 && is_filec(p) {
@@ -423,7 +423,7 @@ pub(crate) fn ins_compl_continue_search() {
             // the "\\<" prefix — checked below.
             let mut lines = Lines::current();
             let line = lines.line(Win::current().cursor().lnum());
-            COMPL_COL.set(ColNr::try_from(skip::white(line)).unwrap_or(ColNr::ZERO));
+            COMPL_COL.set(ColNr::try_from(skip::white(&line)).unwrap_or(ColNr::ZERO));
             set_compl_startpos_here(COMPL_COL.get());
             COMPL_CONT_STATUS.set(COMPL_CONT_STATUS.get() & !CONT_SOL); // clear SOL if present
         } else {
@@ -438,6 +438,7 @@ pub(crate) fn ins_compl_continue_search() {
                 let line = lines.line(Win::current().cursor().lnum());
                 let from = skip.min(line.len());
                 let col = ColNr::try_from(from + skip::white(&line[from..])).unwrap_or(ColNr::ZERO);
+                drop(line);
                 COMPL_STARTPOS.set(COMPL_STARTPOS.get().with_col(col));
             }
             COMPL_COL.set(COMPL_STARTPOS.get().col);
@@ -716,7 +717,8 @@ pub(crate) fn spell_back_to_badword() {
 /// `compl_pattern`.
 pub(crate) fn compl_pattern_from_line() -> ApiString {
     let mut lines = Lines::current();
-    let text = compl_range(lines.line(Win::current().cursor().lnum()));
+    let line = lines.line(Win::current().cursor().lnum());
+    let text = compl_range(&line);
     if p_ic() {
         ApiString::from_bytes(&foldcase(text, None))
     } else {
@@ -728,7 +730,7 @@ pub(crate) fn compl_pattern_from_line() -> ApiString {
 /// command-line pattern want.
 pub(crate) fn compl_text_from_line() -> ApiString {
     let mut lines = Lines::current();
-    ApiString::from_bytes(compl_range(lines.line(Win::current().cursor().lnum())))
+    ApiString::from_bytes(compl_range(&lines.line(Win::current().cursor().lnum())))
 }
 
 /// `COMPL_COL .. COMPL_COL + COMPL_LENGTH` of `line`, clamped to it.

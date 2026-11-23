@@ -120,7 +120,7 @@ pub(crate) fn stop_arrow() -> Result<(), Failed> {
         }
         let mut lines = Lines::current();
         INSSTART_TEXTLEN.set(ColNr::new(linetabsize_str(
-            lines.line(Win::current().cursor().lnum()),
+            &lines.line(Win::current().cursor().lnum()),
         )));
 
         if save_cursor_line().is_ok() {

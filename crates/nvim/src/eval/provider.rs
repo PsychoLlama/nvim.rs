@@ -303,9 +303,10 @@ pub fn prompt_get_input(buffer: Option<Buf>) -> Option<ThinCString> {
     // recorded column.
     let skip = usize::try_from(col).ok().filter(|&col| col <= first.len());
     let mut text = first[skip.unwrap_or(0)..].to_vec();
+    drop(first);
     for lnum in (lnum_start + 1).through(lnum_last) {
         text.push(b'\n');
-        text.extend_from_slice(lines.line(lnum));
+        text.extend_from_slice(&lines.line(lnum));
     }
     Some(ThinCString::from_vec(text))
 }

@@ -236,11 +236,11 @@ impl SpellScan {
         }
 
         if self.capcol == ColNr::ZERO {
-            self.capcol = ColNr::from_index(skip::white(lines.line(lnum)));
+            self.capcol = ColNr::from_index(skip::white(&lines.line(lnum)));
         } else if self.curline && window == Win::current() {
             // For spellbadword(): does the first word need a capital?
             // The borrow ends before the call, which reads the line above.
-            let col = ColNr::from_index(skip::white(lines.line(lnum)));
+            let col = ColNr::from_index(skip::white(&lines.line(lnum)));
             if check_need_cap(Win::current(), lnum, col) {
                 self.capcol = col;
             }
@@ -249,13 +249,13 @@ impl SpellScan {
         // Copy the line and append the start of the next one.
         let blank = {
             let line = lines.line(lnum);
-            self.buf[..line_len].copy_from_slice(line);
+            self.buf[..line_len].copy_from_slice(&line);
             self.buf[line_len] = 0;
-            skip::white(line) == line.len()
+            skip::white(&line) == line.len()
         };
         if lnum < window.w_buffer().line_count() {
             let next = lines.line(lnum + 1);
-            spell_cat_line(&mut self.buf[line_len..], next, MAXWLEN);
+            spell_cat_line(&mut self.buf[line_len..], &next, MAXWLEN);
         }
         (line_len, blank)
     }

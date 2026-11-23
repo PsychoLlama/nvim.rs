@@ -423,16 +423,18 @@ impl MemLine {
     }
 
     /// [`Self::cached_bytes_with_nul`] for a [`HeldLines`]: a line in a
-    /// block is lent ([`MemFile::lend_page`]), so its bytes stay put until
-    /// the memfile's pin goes; the stand-ins are static.
+    /// block is lent under `pin` ([`MemFile::lend_page`]), so its bytes stay
+    /// put until the pin goes; the stand-ins are static.
     ///
     /// [`HeldLines`]: crate::memline::HeldLines
     ///
     /// # Panics
     /// When the cached line is a pending replacement, which the pin flushed
     /// and which no write may cache while it lasts
-    /// ([`Self::cache_replacement`]).
-    pub(crate) fn lend_cached_bytes_with_nul(&self) -> &[u8] {
+    /// ([`Self::cache_replacement`]), or `pin` is not on this memline's
+    /// memfile.
+    #[track_caller]
+    pub(crate) fn lend_cached_bytes_with_nul(&self, pin: &crate::memfile::MemPin) -> &[u8] {
         let len = usize::try_from(self.ml_line.textlen).unwrap_or(0).max(1);
         match &self.ml_line.text {
             CachedText::None => b"\0",
@@ -443,9 +445,19 @@ impl MemLine {
                     .ml_mfp
                     .as_deref()
                     .expect("an open memline")
-                    .lend_page(id);
+                    .lend_page(id, pin);
                 &page[start as usize..start as usize + len]
             }
+        }
+    }
+
+    /// [`Self::cached_bytes_with_nul`] when they are static -- a stand-in,
+    /// or nothing cached -- as they are while the memline has no memfile.
+    pub(crate) fn static_cached_bytes_with_nul(&self) -> Option<&'static [u8]> {
+        match self.ml_line.text {
+            CachedText::None => Some(b"\0"),
+            CachedText::Placeholder(text) => Some(text.to_bytes_with_nul()),
+            CachedText::Owned(_) | CachedText::Block { .. } => None,
         }
     }
 

@@ -297,8 +297,8 @@ pub(crate) fn find_common_prefix(curbuf_only: bool) -> Option<(XString, usize)> 
         let mut lines = Lines::current();
         let line = lines.line(cursor.lnum);
         let p = usize::try_from(cursor.col).unwrap_or(0);
-        if !ascii_iswhite_or_nul(c_int::from(byte_at(line, p))) {
-            let text_len = word_end(line, p) - p;
+        if !ascii_iswhite_or_nul(c_int::from(byte_at(&line, p))) {
+            let text_len = word_end(&line, p) - p;
             let word = &line[p..p + text_len];
             if text_len > 0
                 && text_len < len - typed.len()

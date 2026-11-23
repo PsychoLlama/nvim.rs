@@ -422,7 +422,7 @@ fn take_cmdwin_line(histtype: HistoryType) {
         Cc::current().close();
     } else {
         let lnum = Win::current().cursor().lnum();
-        Cc::current().set_text(Buf::current().lines().line(lnum));
+        Cc::current().set_text(&Buf::current().lines().line(lnum));
     }
 
     let cc = Cc::current();

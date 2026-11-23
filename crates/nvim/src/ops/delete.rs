@@ -114,7 +114,7 @@ pub fn op_delete(op: &mut OpArg) -> Result<(), NotDeleted> {
             let mut lines = Lines::current();
             let line = lines.line(op.end.lnum);
             let mut at = usize::try_from(op.end.col).unwrap_or(0);
-            if byte_at(line, at) != 0 {
+            if byte_at(&line, at) != 0 {
                 at += usize::from(op.inclusive);
             }
             let at = at.min(line.len());
@@ -524,8 +524,8 @@ pub(crate) fn mb_adjust_opend(op: &mut OpArg) {
     let mut lines = Lines::current();
     let line = lines.line(op.end.lnum);
     let at = usize::try_from(op.end.col).unwrap_or(0);
-    if byte_at(line, at) != 0 {
-        let at = at - head_off(line, at);
+    if byte_at(&line, at) != 0 {
+        let at = at - head_off(&line, at);
         let at = at + cluster_len(&line[at..]) - 1;
         op.end.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
     }

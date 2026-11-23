@@ -112,7 +112,7 @@ impl BufferMatch {
         if lnum > self.maxline {
             read(&[]);
         } else {
-            read(Lines::in_buffer(self.buf).line(self.firstlnum + lnum.get()));
+            read(&Lines::in_buffer(self.buf).line(self.firstlnum + lnum.get()));
         }
         Some(())
     }

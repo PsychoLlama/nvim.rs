@@ -69,8 +69,12 @@ pub(crate) use table::BlockId;
 use table::BlockTable;
 
 use crate::winlayer::{Buf, buffers};
+use core::cell::Cell;
 use core::ffi::{CStr, c_int, c_uint};
 use core::hash::{BuildHasherDefault, Hasher};
+use core::num::NonZeroU64;
+use core::ptr::NonNull;
+use core::sync::atomic::{AtomicU64, Ordering};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs::File;
@@ -212,10 +216,24 @@ pub struct MemFile {
     pub mf_infile_count: BlockNr,
     pub mf_page_size: c_uint,
     pub mf_dirty: MfDirty,
-    /// How many [`HeldLines`](crate::memline::HeldLines) have the memfile
-    /// pinned. While any does, a block a line was lent from is neither
-    /// written, nor freed, nor released, and the memfile is not dropped.
+    /// How many [`MemPin`]s are out on the memfile. While any is, a block a
+    /// line was lent from is neither written, nor freed, nor released, and
+    /// the memfile is not dropped.
     pins: u32,
+    /// How many lines of this memfile's memline are lent out as
+    /// [`LineText`](crate::winlayer::LineText)s. While any is, the memline
+    /// is lent to no walk (each refuses: `Buf::ml`), so its line cache --
+    /// the text the guards point into -- neither refills nor changes, and
+    /// the memfile is not dropped. Counted here, in the memfile's own box,
+    /// rather than beside the buffer: a buffer's whole value can be swapped
+    /// with another's under two edits, and the count has to go wherever the
+    /// lent text goes.
+    lent_texts: Cell<u32>,
+    /// Which memfile this is, for a [`MemPin`] to be checked against: unique
+    /// for the run, and moved with the rest of the value, so a memfile
+    /// swapped or replaced under a pin is told apart from the pinned one
+    /// even at the same address.
+    id: NonZeroU64,
     /// The current pin: a block whose `lent_in` equals it is lent. Moves on
     /// each time the last pin goes, which un-lends every block at once.
     lend_epoch: u64,
@@ -225,7 +243,7 @@ impl Drop for MemFile {
     fn drop(&mut self) {
         // Not a second panic while one unwinds: that one already ends the
         // process.
-        if self.pins != 0 && !std::thread::panicking() {
+        if (self.pins != 0 || self.lent_texts.get() != 0) && !std::thread::panicking() {
             lent_page_changed();
         }
     }
@@ -237,6 +255,32 @@ impl Drop for MemFile {
 #[track_caller]
 fn lent_page_changed() -> ! {
     panic!("a buffer line a running match holds is changed or freed under it");
+}
+
+/// One pin on one memfile ([`MemFile::pin`]), given back by
+/// [`MemFile::unpin`]: not `Clone`, and made nowhere else, so the memfile's
+/// pin count is at least the number of these alive -- what makes a page
+/// lent under one ([`MemFile::lend_page`]) stay put for as long as it is
+/// borrowed. One dropped without being given back leaves its memfile pinned
+/// for good: lent pages are then never changed, and dropping the memfile
+/// panics.
+#[derive(Debug)]
+pub(crate) struct MemPin {
+    memfile: NonZeroU64,
+}
+
+/// A memfile id no memfile has had.
+fn next_memfile_id() -> NonZeroU64 {
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    NonZeroU64::new(NEXT.fetch_add(1, Ordering::Relaxed)).expect("fewer than 2^64 memfiles")
+}
+
+/// A pin used on a memfile other than the one it was taken on.
+#[cold]
+#[inline(never)]
+#[track_caller]
+fn pin_of_another_memfile() -> ! {
+    panic!("a memfile pin was used on another memfile: the pinned one was swapped or replaced")
 }
 
 impl MemFile {
@@ -260,6 +304,8 @@ impl MemFile {
             mf_dirty: MfDirty::No,
             pins: 0,
             lend_epoch: 1,
+            lent_texts: Cell::new(0),
+            id: next_memfile_id(),
         })
     }
 
@@ -442,37 +488,67 @@ impl MemFile {
     /// [`MemFile::resize_page`] and [`MemFile::free_block`] refuse it,
     /// [`MemFile::release_unlocked`] keeps it, and dropping the memfile
     /// panics. So the bytes answered stay where they are, unchanged, for as
-    /// long as the pin.
+    /// long as `pin` is out: the bytes are a boxed allocation of their own
+    /// (`table.rs`), so the memline's lender
+    /// ([`Buf::lend_pinned_line`](crate::winlayer::Buf::lend_pinned_line))
+    /// hands them out for `pin`'s borrow rather than this memfile's.
     ///
-    /// Lending with nothing pinned lends nothing (a lent block is one whose
-    /// mark is the *pinned* epoch's), so the one caller,
-    /// [`HeldLines`](crate::memline::HeldLines), pins first; the bytes
-    /// answered are then [`MemFile::page`]'s, borrowed from `self`. Checked
-    /// in debug builds only: this is on the per-line path of every search.
+    /// # Panics
+    /// When `pin` is another memfile's (one compare, always on: this is on
+    /// the per-line path of every search).
     #[inline]
-    pub(crate) fn lend_page(&self, id: BlockId) -> &[u8] {
-        debug_assert!(self.pins != 0, "a page is lent only under a pin");
+    #[track_caller]
+    pub(crate) fn lend_page(&self, id: BlockId, pin: &MemPin) -> &[u8] {
+        if pin.memfile != self.id {
+            pin_of_another_memfile();
+        }
         let block = self.used.block(id);
         block.lent_in.set(self.lend_epoch);
         &block.data
     }
 
-    /// Pin the memfile for a [`HeldLines`](crate::memline::HeldLines):
-    /// pages lent from here on stay put until the matching
-    /// [`MemFile::unpin`].
-    pub(crate) fn pin(&mut self) {
+    /// Pin the memfile: pages lent under the answer stay put until it is
+    /// given back ([`MemFile::unpin`]).
+    pub(crate) fn pin(&mut self) -> MemPin {
         self.pins = self.pins.checked_add(1).expect("fewer than 2^32 pins");
+        MemPin { memfile: self.id }
     }
 
-    /// Let go of one [`MemFile::pin`]. The last one un-lends every page.
+    /// Give back one [`MemFile::pin`]. The last one un-lends every page.
     ///
     /// # Panics
-    /// When the memfile is not pinned.
-    pub(crate) fn unpin(&mut self) {
+    /// When `pin` is another memfile's.
+    #[track_caller]
+    pub(crate) fn unpin(&mut self, pin: MemPin) {
+        if pin.memfile != self.id {
+            pin_of_another_memfile();
+        }
         self.pins = self.pins.checked_sub(1).expect("an unpin has its pin");
         if self.pins == 0 {
             self.lend_epoch += 1;
         }
+    }
+
+    /// Count one more line lent out ([`MemFile::lent_texts`]), answering
+    /// the count for the lender to give back when the line is returned.
+    #[inline(always)]
+    #[track_caller]
+    pub(crate) fn lend_text(&self) -> NonNull<Cell<u32>> {
+        let count = self.lent_texts.get();
+        self.lent_texts
+            .set(count.checked_add(1).expect("fewer than 2^32 lent lines"));
+        NonNull::from(&self.lent_texts)
+    }
+
+    /// Whether a line of this memfile's memline is lent out.
+    #[inline(always)]
+    pub(crate) fn has_lent_text(&self) -> bool {
+        self.lent_texts.get() != 0
+    }
+
+    /// Whether `pin` is on this memfile.
+    pub(crate) fn is_pinned_by(&self, pin: &MemPin) -> bool {
+        pin.memfile == self.id
     }
 
     /// Drop every pin, as if each holder had let go: only for the emergency
@@ -480,6 +556,7 @@ impl MemFile {
     /// never resume, so the swap-file sync may write the blocks they lent.
     pub(crate) fn abandon_pins(&mut self) {
         self.pins = 0;
+        self.lent_texts.set(0);
         self.lend_epoch += 1;
     }
 
@@ -970,16 +1047,16 @@ mod tests {
         let lent = memfile.new_block(false, 1);
         let other = memfile.new_block(false, 1);
         memfile.page_mut(lent)[0] = 7;
-        memfile.pin();
-        memfile.pin();
-        assert_eq!(memfile.lend_page(lent)[0], 7);
+        let first = memfile.pin();
+        let second = memfile.pin();
+        assert_eq!(memfile.lend_page(lent, &first)[0], 7);
         // A block nobody was lent a line of is still written freely ...
         memfile.page_mut(other)[0] = 1;
         // ... and the lent one is lent until the *last* pin goes.
         assert!(memfile.is_lent(lent) && !memfile.is_lent(other));
-        memfile.unpin();
+        memfile.unpin(first);
         assert!(memfile.is_lent(lent));
-        memfile.unpin();
+        memfile.unpin(second);
         assert!(!memfile.is_lent(lent));
         memfile.page_mut(lent)[0] = 8;
         memfile.free_block(lent);
@@ -988,12 +1065,25 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "used on another memfile")]
+    fn a_pin_lends_only_from_its_own_memfile() {
+        let mut pinned = MemFile::in_memory();
+        let mut other = MemFile::in_memory();
+        let id = other.new_block(false, 1);
+        let pin = pinned.pin();
+        // Swapping the two values moves the pin count with the memfile, so
+        // the pin must not lend from whatever now sits at its address.
+        core::mem::swap(&mut *pinned, &mut *other);
+        let _ = pinned.lend_page(id, &pin);
+    }
+
+    #[test]
     #[should_panic(expected = "a running match holds")]
     fn writing_a_lent_page_panics() {
         let mut memfile = MemFile::in_memory();
         let id = memfile.new_block(false, 1);
-        memfile.pin();
-        let _ = memfile.lend_page(id);
+        let pin = memfile.pin();
+        let _ = memfile.lend_page(id, &pin);
         memfile.page_mut(id)[0] = 1;
     }
 
@@ -1002,8 +1092,8 @@ mod tests {
     fn freeing_a_lent_page_panics() {
         let mut memfile = MemFile::in_memory();
         let id = memfile.new_block(false, 1);
-        memfile.pin();
-        let _ = memfile.lend_page(id);
+        let pin = memfile.pin();
+        let _ = memfile.lend_page(id, &pin);
         memfile.free_block(id);
     }
 

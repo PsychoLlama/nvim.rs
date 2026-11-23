@@ -53,7 +53,7 @@ pub fn find_start_comment(ind_maxcomment: c_int) -> Option<Pos> {
         let pos = findmatchlimit(None, Codepoint::byte(b'*'), FM_BACKWARD, cur_maxcomment)?;
         // `findmatchlimit` found `pos` in the current buffer, so the cache
         // answers with the line it sits on.
-        if !is_pos_in_string(Lines::current().line(pos.lnum), pos.col) {
+        if !is_pos_in_string(&Lines::current().line(pos.lnum), pos.col) {
             return Some(pos);
         }
         cur_maxcomment = int64_t::from(Win::current().cursor().lnum() - pos.lnum - 1);
@@ -75,7 +75,7 @@ pub(crate) fn find_start_rawstring(ind_maxcomment: c_int) -> Option<Pos> {
         )?;
         // `findmatchlimit` found `pos` in the current buffer, so the cache
         // answers with the line it sits on.
-        if !is_pos_in_string(Lines::current().line(pos.lnum), pos.col) {
+        if !is_pos_in_string(&Lines::current().line(pos.lnum), pos.col) {
             return Some(pos);
         }
         cur_maxcomment = (Win::current().cursor().lnum() - pos.lnum - 1) as c_int;
@@ -273,8 +273,8 @@ pub(crate) fn find_line_comment() -> Option<Pos> {
             return None;
         }
         let line = lines.line(pos.lnum);
-        let col = skip::white(line);
-        if starts_line_comment(line, col) {
+        let col = skip::white(&line);
+        if starts_line_comment(&line, col) {
             return Some(pos.with_col(ColNr::try_from(col).unwrap_or(ColNr::MAX)));
         }
         if col < line.len() {

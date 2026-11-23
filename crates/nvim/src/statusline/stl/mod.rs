@@ -701,6 +701,7 @@ impl Win {
         } else {
             char_at(&line[win.cursor().col().as_usize()..]).get()
         };
+        drop(line);
 
         let env = Env {
             win,

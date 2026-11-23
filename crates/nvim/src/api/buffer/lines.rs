@@ -368,7 +368,7 @@ impl Buf {
         let mut text = self.lines();
         for i in 0..n {
             let offset = len_as_int(i);
-            lines.push(text.line(start + offset), start_idx + offset, replace_nl);
+            lines.push(&text.line(start + offset), start_idx + offset, replace_nl);
         }
     }
 }

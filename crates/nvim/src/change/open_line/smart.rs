@@ -50,7 +50,7 @@ fn indent_here() -> c_int {
 /// `findmatch` searches, `get_indent` reads another line -- while it is still
 /// looking at the text.
 fn line_copy(lnum: LineNr) -> XString {
-    XString::from_bytes(Buf::current().lines().line(lnum))
+    XString::from_bytes(&Buf::current().lines().line(lnum))
 }
 
 /// `findmatch` from the cursor, for `initc`.

@@ -160,6 +160,7 @@ fn claimed_slow(name: &'static CStr, ours: TypeId, stake: bool) -> bool {
         let claimants: Vec<TypeId> = claims.iter().map(|&(_, owner)| owner).collect();
         HELD.store(Box::into_raw(Box::new(claimants)), Ordering::Release);
     }
+    drop(claims);
     held
 }
 

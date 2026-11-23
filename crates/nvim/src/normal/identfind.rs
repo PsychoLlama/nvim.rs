@@ -167,7 +167,7 @@ pub(crate) fn find_ident_at_pos(
 ) -> Option<(ColNr, usize)> {
     let eval = find_type & FIND_EVAL != 0;
     let mut lines = window.buffer().lines();
-    let mut line = ScanLine(lines.line(lnum));
+    let mut line = ScanLine(&lines.line(lnum));
     let mut col: c_int = 0;
     let mut this_class: c_int = 0;
     // Pass 0 wants a word character; pass 1 will take punctuation too.
@@ -401,7 +401,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
             break;
         }
         let lnum = Win::current().cursor().lnum();
-        let leader = get_leader_len(Lines::current().line(lnum), false, true).0;
+        let leader = get_leader_len(&Lines::current().line(lnum), false, true).0;
         if leader > 0 {
             // The whole line is a comment; skip past it.
             Win::current()
@@ -411,7 +411,7 @@ pub(crate) fn find_decl(word: &[u8], locally: bool, thisblock: bool, flags_arg: 
             continue;
         }
         let cursor = Win::current().w_cursor();
-        let valid = is_ident(Lines::current().line(cursor.lnum), cursor.col.get());
+        let valid = is_ident(&Lines::current().line(cursor.lnum), cursor.col.get());
         if !valid && found_pos.lnum != LineNr::ZERO {
             // Nothing better than what was already found.
             Win::current().set_w_cursor(found_pos);

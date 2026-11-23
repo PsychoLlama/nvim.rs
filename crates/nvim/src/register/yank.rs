@@ -180,11 +180,11 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
             MotionType::BlockWise => {
                 let mut text = Buf::current().lines();
                 let line = text.line(lnum);
-                let bd = block_def_of(op, lnum, line);
-                lines.push(yank_copy_line(line, &bd, region.excl_tr_ws));
+                let bd = block_def_of(op, lnum, &line);
+                lines.push(yank_copy_line(&line, &bd, region.excl_tr_ws));
             }
             MotionType::LineWise => {
-                lines.push(XString::from_bytes(Buf::current().lines().line(lnum)))
+                lines.push(XString::from_bytes(&Buf::current().lines().line(lnum)))
             }
             MotionType::CharWise => {
                 let mut bd = charwise_block_def(region.start, region.end, lnum, region.inclusive);
@@ -196,7 +196,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
                     .expect("charwise_block_def clamps the start column onto the line");
                 let rest = line.len() - textcol;
                 bd.textlen = bd.textlen.min(c_int::try_from(rest).unwrap_or(c_int::MAX));
-                lines.push(yank_copy_line(line, &bd, false));
+                lines.push(yank_copy_line(&line, &bd, false));
             }
             _ => ::std::process::abort(),
         }

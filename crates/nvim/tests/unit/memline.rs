@@ -402,9 +402,30 @@ fn a_modified_buffer_marks_its_swap_file_dirty() {
     let mut handle = unsafe { Lines::in_buffer(Buf::new(swapped.buf)) };
     let lines: Vec<String> = LineNr::ONE
         .through(LineNr::try_from(LINES.len()).expect("a short list"))
-        .map(|lnum| String::from_utf8_lossy(handle.line(lnum)).into_owned())
+        .map(|lnum| String::from_utf8_lossy(&handle.line(lnum)).into_owned())
         .collect();
     assert_eq!(lines, LINES);
+}
+
+/// Two readers of one buffer: while the first one's line is out, the second
+/// reading the same line shares the cache, and reading another -- which
+/// would refill the cache and free or move the text under the first --
+/// panics instead.
+#[test]
+#[should_panic(expected = "a line of it was lent out")]
+fn a_second_reader_refilling_under_a_lent_line_panics() {
+    let swapped = Swapped::new("lines-lent");
+    // SAFETY: the fixture's buffer is live and has a memline.
+    let buf = unsafe { Buf::new(swapped.buf) };
+    let (mut first, mut second) = (Lines::in_buffer(buf), Lines::in_buffer(buf));
+    let held = first.line(LineNr::ONE);
+    assert_eq!(
+        &*second.line(LineNr::ONE),
+        &*held,
+        "the same line is shared"
+    );
+    let _ = second.line(LineNr::new(2));
+    unreachable!("read {} bytes after the cache moved", held.len());
 }
 
 /// `Lines` reads the bytes the buffer was built from, and writes through the
@@ -424,7 +445,7 @@ fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
 
     for (n, want) in LINES.iter().enumerate() {
         let lnum = LineNr::from_index(n);
-        assert_eq!(lines.line(lnum), want.as_bytes(), "line {lnum}");
+        assert_eq!(&*lines.line(lnum), want.as_bytes(), "line {lnum}");
         // SAFETY: a line of this buffer.
         let len = unsafe { neovim::memline::ml_get_buf_len(Buf::new(swapped.buf), lnum) };
         assert_eq!(
@@ -438,15 +459,15 @@ fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
     let last = LineNr::try_from(LINES.len()).expect("a short list");
     lines.line_mut(last).make_ascii_uppercase();
     assert_eq!(
-        lines.line(last),
+        &*lines.line(last),
         LINES[LINES.len() - 1].to_uppercase().as_bytes()
     );
 
     // ... and it is still there once another line has been read, so the
     // write landed in the memline's block and not in a copy.
-    assert_eq!(lines.line(LineNr::ONE), LINES[0].as_bytes());
+    assert_eq!(&*lines.line(LineNr::ONE), LINES[0].as_bytes());
     assert_eq!(
-        lines.line(last),
+        &*lines.line(last),
         LINES[LINES.len() - 1].to_uppercase().as_bytes()
     );
 }
@@ -467,13 +488,13 @@ fn an_out_of_range_line_reads_as_the_placeholder() {
     let mut lines = unsafe { Lines::in_buffer(Buf::new(swapped.buf)) };
 
     let past_the_end = LineNr::try_from(LINES.len()).expect("a short list") + 1;
-    assert_eq!(lines.line(past_the_end), b"???");
+    assert_eq!(&*lines.line(past_the_end), b"???");
     assert_eq!(lines.line_len(past_the_end), ColNr::new(3));
     // Reading it twice answers the same thing -- it is not a buffer that
     // one read empties.
-    assert_eq!(lines.line(past_the_end), b"???");
+    assert_eq!(&*lines.line(past_the_end), b"???");
     // And a real line still reads as itself afterwards.
-    assert_eq!(lines.line(LineNr::ONE), LINES[0].as_bytes());
+    assert_eq!(&*lines.line(LineNr::ONE), LINES[0].as_bytes());
 }
 
 /// The terminated views of a line: `line_cstr` borrows the cache and
@@ -509,7 +530,7 @@ fn the_terminated_views_carry_the_line_s_own_nul() {
 
     // A copy survives a read of another line, which is what it is for.
     let other = lines.line_copy(LineNr::ONE);
-    assert_eq!(lines.line(last), text.as_bytes());
+    assert_eq!(&*lines.line(last), text.as_bytes());
     assert_eq!(&*other, LINES[0].as_bytes());
 }
 

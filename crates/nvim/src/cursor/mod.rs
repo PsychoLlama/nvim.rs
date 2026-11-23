@@ -188,7 +188,7 @@ pub fn coladvance(win: Win, wcol: ColNr) -> bool {
         win.invalidate_virtcol();
     // The cursor's line, and a column `coladvance2` just clamped to it.
     } else if c_int::from(cstr::byte_at(
-        win.buffer().lines().line(cursor.lnum),
+        &win.buffer().lines().line(cursor.lnum),
         cursor.col.as_usize(),
     )) != c_int::from(TAB)
     {
@@ -271,16 +271,16 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
         let mut lines = buf.lines();
         let line = lines.line(lnum);
         let linelen = ColNr::from_index(line.len());
-        let (mut csarg, kind) = CharsizeArg::new(win, lnum, line);
+        let (mut csarg, kind) = CharsizeArg::new(win, lnum, &line);
         let mut at = 0;
-        let mut chr = c_char_info(line, 0);
+        let mut chr = c_char_info(&line, 0);
         let mut head: c_int = 0;
         while col <= wcol && at < line.len() {
             let cs = win_charsize(kind, col.get(), at, chr.value, &mut csarg);
             csize = cs.width;
             head = cs.head;
             col += cs.width;
-            (at, chr) = c_next_cluster(line, at, chr);
+            (at, chr) = c_next_cluster(&line, at, chr);
         }
         idx = ColNr::from_index(at);
         // The walk stepped one character too far, unless it stopped on the
@@ -294,14 +294,15 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
             && wcol >= ColNr::ZERO
             && ((col != wcol && col != wcol + 1) || csize > 1)
         {
-            if cstr::byte_at(line, idx.as_usize()) == 0 {
+            if cstr::byte_at(&line, idx.as_usize()) == 0 {
                 // Past the end of the line: pad it out with spaces.
                 let correct = wcol - col;
                 let size = i64::from(idx) + i64::from(correct);
                 let size = usize::try_from(size)
                     .expect("padding past the line end gives a non-negative size");
                 let spaces = usize::try_from(correct).expect("a column past the cursor");
-                let newline = padded(line, size, idx.as_usize(), spaces, 0, 0);
+                let newline = padded(&line, size, idx.as_usize(), spaces, 0, 0);
+                drop(line);
                 replace_padded(lnum, newline, idx.get(), 0, correct);
                 idx += correct;
                 col = wcol;
@@ -317,7 +318,8 @@ fn coladvance2(win: Win, pos: &mut Pos, addspaces: bool, finetune: bool, wcol_ar
                     .expect("a line with a character to split has a non-negative size");
                 let tail = usize::try_from(linelen - idx - 1).expect("STRICT_SUB overflow");
                 let spaces = usize::try_from(csize).expect("a character's width");
-                let newline = padded(line, size, idx.as_usize(), spaces, 1, tail);
+                let newline = padded(&line, size, idx.as_usize(), spaces, 1, tail);
+                drop(line);
                 replace_padded(lnum, newline, idx.get(), 1, csize);
                 idx += csize - 1 + correct;
                 col += correct;
@@ -416,11 +418,12 @@ pub(crate) fn dec_cursor_gchar() -> (Moved, c_int) {
         pos.coladd = 0;
         pos.col -= 1;
         let at = usize::try_from(pos.col).unwrap_or(0);
-        pos.col -= len_as_int(head_off(line, at));
+        pos.col -= len_as_int(head_off(&line, at));
         let c = char_at(
             line.get(usize::try_from(pos.col).unwrap_or(0)..)
                 .unwrap_or_default(),
         );
+        drop(line);
         win.set_w_cursor(pos);
         return (Moved::InLine, c.get());
     }
@@ -646,7 +649,7 @@ pub fn char_before_cursor() -> Option<Codepoint> {
     if col == 0 {
         return None;
     }
-    let prev_len = head_off(line, col - 1) + 1;
+    let prev_len = head_off(&line, col - 1) + 1;
     Some(char_at(&line[col - prev_len..]))
 }
 

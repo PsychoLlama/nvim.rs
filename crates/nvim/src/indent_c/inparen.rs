@@ -76,7 +76,7 @@ fn previous_line_under_same_paren(
         let no_code = {
             let mut lines = Lines::current();
             let text = lines.line(lnum);
-            only_comment_left(text, skip::white(text))
+            only_comment_left(&text, skip::white(&text))
         };
         let skip = no_code || preproc_start(&mut lnum, &mut amount);
         if !skip {
@@ -137,7 +137,7 @@ fn align_with_unclosed_paren(
         // cache answers with the line it sits on; `outermost.col` is this
         // function's own copy.
         let mut lines = Lines::current();
-        is_if_for_while = control_clause_before(lines.line(outermost.lnum), &mut outermost.col);
+        is_if_for_while = control_clause_before(&lines.line(outermost.lnum), &mut outermost.col);
     }
 
     let (mut amount, at) = skip_label(our_paren_pos.lnum);
@@ -146,7 +146,7 @@ fn align_with_unclosed_paren(
         let text = lines.line(our_paren_pos.lnum);
         at + skip::white(&text[at.min(text.len())..])
     };
-    if byte_at(Lines::current().line(our_paren_pos.lnum), look_col) == b'(' {
+    if byte_at(&Lines::current().line(our_paren_pos.lnum), look_col) == b'(' {
         // Ignore a '(' in front of the line that has a match *before* our
         // matching '(' -- a `(void)` cast, say.
         let save_lnum = Win::current().cursor().lnum();
@@ -175,7 +175,7 @@ fn align_with_unclosed_paren(
         // way -- the `skipwhite`d label tail of `our_paren_pos.lnum`.
         Buf::current().b_ind_unclosed() == 0 && !is_if_for_while
             || Buf::current().b_ind_unclosed_noignore() == 0
-                && byte_at(Lines::current().line(our_paren_pos.lnum), look_col) == b'('
+                && byte_at(&Lines::current().line(our_paren_pos.lnum), look_col) == b'('
                 && ignore_paren_col == 0
     };
 
@@ -187,14 +187,14 @@ fn align_with_unclosed_paren(
             // scan behind the option test, as upstream does.
             let mut lines = Lines::current();
             let l = lines.line(our_paren_pos.lnum);
-            if Buf::current().b_ind_unclosed_wrapped() != 0 && ends_in(l, 0, b"(") {
+            if Buf::current().b_ind_unclosed_wrapped() != 0 && ends_in(&l, 0, b"(") {
                 // The paren is the last non-white character of its line:
                 // indent one `W` level per nesting level instead.
                 let mut n = 1;
                 for col in 0..our_paren_pos.col.get() {
                     // `col` is below `our_paren_pos.col`, the column of a
                     // `(` found on this line, so it indexes inside it.
-                    match byte_at(l, usize::try_from(col).unwrap_or(usize::MAX)) {
+                    match byte_at(&l, usize::try_from(col).unwrap_or(usize::MAX)) {
                         b'(' | b'{' => n += 1,
                         b')' | b'}' if n > 1 => {
                             n -= 1;
@@ -211,13 +211,14 @@ fn align_with_unclosed_paren(
                 // `col` starts just past the `(`, and the terminator is not
                 // white space, so the walk cannot run off the end of `l`.
                 while ascii_iswhite(c_int::from(byte_at(
-                    l,
+                    &l,
                     usize::try_from(col).unwrap_or(usize::MAX),
                 ))) {
                     col += 1;
                 }
                 // In case of trailing space, stay on the paren.
-                our_paren_pos.col = if byte_at(l, usize::try_from(col).unwrap_or(usize::MAX)) == 0 {
+                our_paren_pos.col = if byte_at(&l, usize::try_from(col).unwrap_or(usize::MAX)) == 0
+                {
                     our_paren_pos.col + 1
                 } else {
                     col
@@ -249,7 +250,7 @@ fn align_with_unclosed_paren(
             // column only walked back towards column 0, so the cache answers
             // with a byte of its own line.
             let byte = byte_at(
-                Lines::current().line(our_paren_pos.lnum),
+                &Lines::current().line(our_paren_pos.lnum),
                 usize::try_from(our_paren_pos.col).unwrap_or(usize::MAX),
             );
             match byte {

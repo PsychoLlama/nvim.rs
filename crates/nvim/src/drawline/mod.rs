@@ -359,7 +359,7 @@ fn invoke_range_next(
             // Do not cut a character in half: forward to the start of the
             // next one when `end_col` is inside one.
             let at = usize::try_from(end_col).unwrap_or(0);
-            let back = head_off(line, at);
+            let back = head_off(&line, at);
             let fwd = if back == 0 {
                 0
             } else {

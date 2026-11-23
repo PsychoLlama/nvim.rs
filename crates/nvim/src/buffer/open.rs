@@ -151,7 +151,7 @@ fn set_option_false(id: c_int) {
 /// Whether line `lnum` of `buffer` differs from the current buffer's.
 fn lines_differ(buffer: Buf, lnum: LineNr) -> bool {
     let (mut theirs, mut ours) = (buffer.lines(), Buf::current().lines());
-    theirs.line(lnum) != ours.line(lnum)
+    *theirs.line(lnum) != *ours.line(lnum)
 }
 
 impl Buf {
@@ -182,6 +182,7 @@ impl Buf {
             // NL -> NUL translation.
             let line = lines.line(lnum);
             out.extend(line.iter().map(|&b| if b == b'\n' { b'\0' } else { b }));
+            drop(line);
             // Finished a line, add a NL, unless this line should not have one.
             if lnum != end
                 || self.b_p_bin() == 0 && self.b_p_fixeol() != 0

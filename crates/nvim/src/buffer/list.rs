@@ -850,13 +850,13 @@ mod tests {
             assert!(!b.b_s.b_sst.is_allocated());
             assert!(b.b_s.b_keywtab.is_empty());
             assert!(b.b_s.b_keywtab_ic.is_empty());
-            assert!(b.b_ml.get_mut().ml_stack.is_empty());
-            assert_eq!(b.b_ml.get_mut().ml_chunks.len(), 0);
-            assert!(b.b_ml.get_mut().ml_locked.is_none());
+            assert!(b.memline().ml_stack.is_empty());
+            assert_eq!(b.memline().ml_chunks.len(), 0);
+            assert!(b.memline().ml_locked.is_none());
             // The memfile and the line cache's owned text, both owners.
-            assert!(b.b_ml.get_mut().ml_mfp.is_none());
-            assert!(!b.b_ml.get_mut().line_is_dirty());
-            assert!(b.b_ml.get_mut().cached_bytes().is_empty());
+            assert!(b.memline().ml_mfp.is_none());
+            assert!(!b.memline().line_is_dirty());
+            assert!(b.memline().cached_bytes().is_empty());
             assert!(b.b_marktree.id2node.is_empty());
             assert!(b.b_extmark_ns.is_empty());
             assert!(b.b_start_fenc.is_none());

@@ -244,10 +244,10 @@ fn diff_find_change_simple(
         let mut lines = buf.lines();
         let new = lines.line(other);
 
-        let (si_org, si_new) = common_prefix(org, new);
+        let (si_org, si_new) = common_prefix(org, &new);
         *startp = (*startp).min(len_as_int(si_org));
-        if byte_at(org, si_org) != 0 || byte_at(new, si_new) != 0 {
-            *endp = (*endp).max(common_suffix(org, new, *startp, len_as_int(si_new)));
+        if byte_at(org, si_org) != 0 || byte_at(&new, si_new) != 0 {
+            *endp = (*endp).max(common_suffix(org, &new, *startp, len_as_int(si_new)));
         }
     }
     added

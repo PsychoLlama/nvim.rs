@@ -906,30 +906,59 @@ lent region.
   its alone — and every read and the unpin compare it (`memline/lines.rs`).
   The loan itself is otherwise safe to swap: the part bit is in the slot,
   and the memfile's pins and lend epoch move with it.
-- **The line cache's slices:** found a hole, open — S13.
+- **The line cache's slices:** found a hole, closed (check-always) —
+  S13: a lent line is counted in its memfile, and every walk refuses.
 - **The TUI's state (`&mut TUIData`):** found a hole, closed (type) —
   S14: the libuv handles are out of the lent region.
 
-### S13 — the line cache's slices (sound-by-convention: open)
+### ~~S13 — the line cache's slices~~ (closed: check-always)
 
 Found by the swap audit. `Buf::lend_cached_line*` (`winlayer/deref.rs`)
-answer `&'a [u8]` of the buffer's one-line cache for any `'a`, and
-`Lines::line` (`memline/lines.rs`) bounds that by its own `&mut self` —
-but nothing stops a second reader filling the same buffer's cache meanwhile
-(the `Lines` docs leave "the borrow ends before the call" to the caller).
+answered `&'a [u8]` of the buffer's one-line cache for any `'a`, and
+`Lines::line` (`memline/lines.rs`) bounded that by its own `&mut self` —
+but nothing stopped a second reader filling the same buffer's cache
+meanwhile (the `Lines` docs left "the borrow ends before the call" to the
+caller).
 
-- **Breaks:** `let x = a.line(1); let _ = b.line(2); x.len()` with two
-  `Lines` of one buffer (or any `ml_*` call or redraw between) refills the
-  cache under `x`: the second fill forms a `&mut MemLine` while `x`
-  borrows it, and frees a pending replacement's text or moves to another
-  block. A `forbid(unsafe_code)` probe in `tests/unit` compiles.
-- **Closure (sketched):** a type: `Lines::line` answers a guard holding the
-  memline loan (another fill panics while it lives, as a second walk does),
-  with `line_copy` for the shapes that hold text across a call; or the
-  cache keeps every text it lent alive until the `Lines` that lent it ends
-  (a per-reader epoch, as `HeldLines` pins). Either touches every line
-  reader (~hundreds of sites) and the per-line cost of the hot walks, and
-  the `lend_cached_line*` family becomes `unsafe fn` with the contract.
+- **Broke:** `let x = a.line(1); let _ = b.line(2); x.len()` with two
+  `Lines` of one buffer (or any `ml_*` call or redraw between) refilled the
+  cache under `x`, freeing a pending replacement's text or moving to
+  another block. A `forbid(unsafe_code)` probe compiled. The suites found
+  three real holders of a line across a refill: `measure_join` across the
+  seam's extmark splice (which reads other lines' offsets), the statusline
+  across its `%{}` expansion, and `coladvance2` across the `'virtualedit'`
+  padding's `ml_replace`.
+- **Closed:** `Lines::line`/`line_cstr` answer a guard, `LineText`
+  (`winlayer/deref.rs`; `Deref` to `[u8]`/`CStr`, `map` to narrow it).
+  While one lives the memfile counts it out (`MemFile::lend_text`), and
+  `Buf::ml` — every walk: a fill of another line, every `ml_*` change, a
+  close — panics; the memfile's `Drop` panics too. Reads of the line the
+  cache already holds take no walk (`Buf::lend_line_if_cached`), so two
+  readers of one line, the line count and the rest of the buffer stay
+  welcome. The count is in the memfile's box rather than the buffer's
+  slot because a buffer's whole value can be swapped under two edits:
+  the count goes wherever the lent text goes. For the same reason
+  `Buffer::b_ml` is private — an edit of a buffer reaches no memline, so
+  edits stay welcome while a line is out. `line_mut` answers
+  `LineTextMut`, which holds the walk itself. A guard lives to the end of
+  its scope rather than its last use, so the readers that call out after
+  reading drop it first (`drop(line)`, about eighty sites, placed from
+  clippy's `significant_drop_tightening` and a scan of holders across
+  calls). The `lend_cached_line*` family is gone. Its pinned sibling
+  (`HeldLines`) lends under a `MemPin` token now: `MemFile::pin` answers
+  it, `unpin` consumes it, and `lend_page`/`Buf::lend_pinned_line` borrow
+  the slice from it and check it is the memfile's own (an id, which a
+  swap of two memfiles' values carries along — the address `HeldLines`
+  compared before did not). `tests/unit/memline.rs`
+  `a_second_reader_refilling_under_a_lent_line_panics` is the probe, now
+  a panic. Debug builds name where each line still out was lent.
+- **Cost** (cgu1 Ir vs `6191ecb101`): ed +0.58 %, ml +0.54 %, read
+  +0.63 %, re +0.05 %, scr +0.13 %. Measured against two other designs:
+  a per-reader memfile pin (`HeldLines`' mechanism for every `Lines`,
+  prototyped without the copy-on-write a walk that edits between reads
+  would need): ed +3.58 %, scr +0.78 %, the rest ≤ 0.12 %; and a copy of
+  every line into a pooled per-reader buffer: ed +7.07 %, scr +0.36 %, the
+  rest ≤ 0.12 %.
 
 ### ~~S14 — the TUI's libuv handles under `&mut TUIData`~~ (closed: type holds it)
 

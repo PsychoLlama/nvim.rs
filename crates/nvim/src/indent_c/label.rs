@@ -62,7 +62,7 @@ pub(crate) fn after_label(line: &[u8]) -> Option<usize> {
 /// The screen column the code *after* a label on line `lnum` starts at, or 0
 /// when there is nothing after it.
 pub(crate) fn get_indent_nolabel(lnum: LineNr) -> c_int {
-    let Some(at) = after_label(Lines::current().line(lnum)) else {
+    let Some(at) = after_label(&Lines::current().line(lnum)) else {
         return 0;
     };
     line_vcol(lnum, ColNr::try_from(at).unwrap_or(ColNr::MAX))
@@ -83,7 +83,7 @@ pub(crate) fn skip_label(lnum: LineNr) -> (c_int, usize) {
     let labelled = {
         let mut lines = Lines::current();
         let line = lines.line(lnum);
-        is_case_label(line, 0, false) || is_scope_decl(line, 0)
+        is_case_label(&line, 0, false) || is_scope_decl(&line, 0)
     } || is_jump_label();
 
     let answer = if labelled {
@@ -92,7 +92,7 @@ pub(crate) fn skip_label(lnum: LineNr) -> (c_int, usize) {
         // after the label, "just in case".
         (
             amount,
-            after_label(Lines::current().line(lnum)).unwrap_or(0),
+            after_label(&Lines::current().line(lnum)).unwrap_or(0),
         )
     } else {
         (get_indent(), 0)
@@ -116,7 +116,7 @@ pub(crate) fn first_id_amount() -> c_int {
     let lnum = Win::current().cursor().lnum();
     let mut lines = Lines::current();
     let line = lines.line(lnum);
-    let mut at = skip::white(line);
+    let mut at = skip::white(&line);
 
     // Step over the storage class and the type's first word, so that the
     // identifier the answer is about is what `at` ends on.
@@ -148,17 +148,18 @@ pub(crate) fn first_id_amount() -> c_int {
     }
 
     let mut len = 0usize;
-    while vim_is_ident_char(Codepoint::from(byte_at(line, at + len))) {
+    while vim_is_ident_char(Codepoint::from(byte_at(&line, at + len))) {
         len += 1;
     }
     if len == 0
-        || !ascii_iswhite(c_int::from(byte_at(line, at + len)))
-        || only_comment_left(line, at)
+        || !ascii_iswhite(c_int::from(byte_at(&line, at + len)))
+        || only_comment_left(&line, at)
     {
         return 0;
     }
 
     let at = at + len + skip::white(&line[at + len..]);
+    drop(line);
     line_vcol(lnum, ColNr::try_from(at).unwrap_or(ColNr::MAX))
 }
 
@@ -173,31 +174,32 @@ pub(crate) fn first_id_amount() -> c_int {
 /// ends in a backslash -- the assignment started further up, so this line's
 /// `=` is not the one to line up with.
 pub(crate) fn equal_amount(lnum: LineNr) -> c_int {
-    if lnum > LineNr::ONE && ends_in_backslash(Lines::current().line(lnum - 1)) {
+    if lnum > LineNr::ONE && ends_in_backslash(&Lines::current().line(lnum - 1)) {
         return -1;
     }
 
     let mut lines = Lines::current();
     let line = lines.line(lnum);
     let mut at = 0usize;
-    while byte_at(line, at) != 0 && !b"=;{}\"'".contains(&byte_at(line, at)) {
-        if starts_comment(line, at) {
-            at = code_at(line, at);
+    while byte_at(&line, at) != 0 && !b"=;{}\"'".contains(&byte_at(&line, at)) {
+        if starts_comment(&line, at) {
+            at = code_at(&line, at);
         } else {
             at += 1;
         }
     }
-    if byte_at(line, at) != b'=' {
+    if byte_at(&line, at) != b'=' {
         return 0;
     }
 
     let mut at = at + 1;
     at += skip::white(&line[at.min(line.len())..]);
-    if only_comment_left(line, at) {
+    if only_comment_left(&line, at) {
         return 0;
     }
-    if byte_at(line, at) == b'"' {
+    if byte_at(&line, at) == b'"' {
         at += 1; // nice alignment for continued strings
     }
+    drop(line);
     line_vcol(lnum, ColNr::try_from(at).unwrap_or(ColNr::MAX))
 }

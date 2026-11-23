@@ -237,21 +237,22 @@ fn in_html_tag(end_tag: bool) -> bool {
         // Back to the `<` under or before the cursor, giving up at a `>`.
         let mut p = usize::try_from(cursor.col).unwrap_or(0).min(line.len());
         while p > 0 {
-            if byte_at(line, p) == b'<' {
+            if byte_at(&line, p) == b'<' {
                 break;
             }
-            p -= head_off(line, p - 1) + 1;
-            if byte_at(line, p) == b'>' {
+            p -= head_off(&line, p - 1) + 1;
+            if byte_at(&line, p) == b'>' {
                 break;
             }
         }
-        if byte_at(line, p) != b'<' {
+        if byte_at(&line, p) != b'<' {
             return false;
         }
 
         // The `/` an end tag needs after its `<`, and a start tag must not
         // have.
-        let slash = byte_at(line, p + c_cluster_len(&line[p..])) == b'/';
+        let slash = byte_at(&line, p + c_cluster_len(&line[p..])) == b'/';
+        drop(line);
         if slash != end_tag {
             return false;
         }
@@ -272,7 +273,7 @@ fn in_html_tag(end_tag: bool) -> bool {
         }
         // `inc` left `pos` on a character of the current buffer.
         let c = byte_at(
-            Lines::current().line(pos.lnum),
+            &Lines::current().line(pos.lnum),
             usize::try_from(pos.col).unwrap_or(usize::MAX),
         );
         if c == b'>' {
@@ -370,7 +371,7 @@ pub(crate) fn current_tagblock(
             let line = lines.line(cursor.lnum);
             let start = usize::try_from(cursor.col).unwrap_or(0).min(line.len());
             let mut end = start;
-            while !matches!(byte_at(line, end), 0 | b'>') && !ascii_iswhite(c_int::from(line[end]))
+            while !matches!(byte_at(&line, end), 0 | b'>') && !ascii_iswhite(c_int::from(line[end]))
             {
                 end += c_cluster_len(&line[end..]);
             }

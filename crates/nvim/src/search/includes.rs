@@ -227,6 +227,7 @@ fn get_line_and_copy(lnum: LineNr) -> Vec<u8> {
     let mut lines = Lines::current();
     let line = lines.line(lnum);
     let mut copy = cstr::until_nul(&line[..line.len().min(LSIZE - 1)]).to_vec();
+    drop(line);
     copy.push(b'\0');
     copy
 }

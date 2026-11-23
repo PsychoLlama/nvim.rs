@@ -169,7 +169,7 @@ fn same_level_indent(open: &Pos) -> Option<c_int> {
         if linewhite(win.cursor().lnum()) {
             continue;
         }
-        count_parens(Lines::current().line(win.cursor().lnum()), &mut parencount);
+        count_parens(&Lines::current().line(win.cursor().lnum()), &mut parencount);
         if parencount == 0 {
             return Some(get_indent());
         }
@@ -204,19 +204,19 @@ fn indent_after_open(open: &Pos) -> c_int {
     // The line `open` is on, which nothing below changes.
     let mut lines = Lines::current();
     let line = lines.line(open.lnum);
-    let (mut csarg, cstype) = CharsizeArg::new(win, open.lnum, line);
+    let (mut csarg, cstype) = CharsizeArg::new(win, open.lnum, &line);
 
     // Walk to `open`'s column, measuring what is before it.
     let mut that = 0;
-    let mut chr = c_char_info(line, 0);
+    let mut chr = c_char_info(&line, 0);
     let mut amount = 0;
     let mut col = open.col;
-    while byte_at(line, that) != 0 && col > ColNr::ZERO {
+    while byte_at(&line, that) != 0 && col > ColNr::ZERO {
         amount += win_charsize(cstype, amount, that, chr.value, &mut csarg).width;
-        (that, chr) = c_next_cluster(line, that, chr);
+        (that, chr) = c_next_cluster(&line, that, chr);
         col -= 1;
     }
-    let at = |i: usize| byte_at(line, i);
+    let at = |i: usize| byte_at(&line, i);
 
     // Some keywords indent their body rather than their arguments (the
     // non-standard-Lisp ones are Scheme special forms):
@@ -230,7 +230,7 @@ fn indent_after_open(open: &Pos) -> c_int {
         amount += 1;
     }
     let mut firsttry = amount;
-    skip_white_measuring(line, &mut that, &mut amount, cstype, &mut csarg);
+    skip_white_measuring(&line, &mut that, &mut amount, cstype, &mut csarg);
     if at(that) == 0 || at(that) == b';' {
         // A comment line, or nothing after the bracket at all.
         return amount;
@@ -240,8 +240,8 @@ fn indent_after_open(open: &Pos) -> c_int {
     if at(that) != b'(' && at(that) != b'[' {
         firsttry += 1;
     }
-    amount = measure_first_argument(line, &mut that, amount, cstype, &mut csarg);
-    skip_white_measuring(line, &mut that, &mut amount, cstype, &mut csarg);
+    amount = measure_first_argument(&line, &mut that, amount, cstype, &mut csarg);
+    skip_white_measuring(&line, &mut that, &mut amount, cstype, &mut csarg);
     if at(that) == 0 || at(that) == b';' {
         // Nothing followed the first argument on this line, so line the
         // continuation up with the argument instead of past it.

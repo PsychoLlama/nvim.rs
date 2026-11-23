@@ -78,7 +78,8 @@ impl SubLine {
         let mut lines = Lines::current();
         let text = lines.line(lnum);
         let mut bytes = Vec::with_capacity(text.len() + 1);
-        bytes.extend_from_slice(text);
+        bytes.extend_from_slice(&text);
+        drop(text);
         bytes.push(0);
         SubLine(bytes)
     }

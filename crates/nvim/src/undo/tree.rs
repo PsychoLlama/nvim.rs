@@ -277,7 +277,7 @@ pub fn u_undoline() {
 
 /// A fresh copy of line `lnum` of `buffer`.
 pub(crate) fn line_copy(buffer: Buf, lnum: LineNr) -> XString {
-    XString::from_bytes(buffer.lines().line(lnum))
+    XString::from_bytes(&buffer.lines().line(lnum))
 }
 
 #[cfg(test)]

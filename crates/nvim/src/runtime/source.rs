@@ -137,7 +137,7 @@ fn do_source_buffer_init(excmd: &ExArg, ex_lua: bool) -> Option<(SourceCookie, X
     let mut lines = Lines::in_buffer(buf);
     let copied = line1
         .through(line2)
-        .map(|lnum| CString::new(lines.line(lnum)).expect("a buffer line holds no NUL"))
+        .map(|lnum| CString::new(&*lines.line(lnum)).expect("a buffer line holds no NUL"))
         .collect();
     let mut cookie = SourceCookie::from_lines(copied);
     // The first line the reader hands out is `line1`, so the counter starts

@@ -131,7 +131,7 @@ pub(crate) fn diff_equal_entry(
         // buffers, so each cache holds its own line and neither read
         // disturbs the other.
         let (l1, l2) = (dp.df_lnum[idx1] + i, dp.df_lnum[idx2] + i);
-        if !lines_equal(b1.line(l1), b2.line(l2)) {
+        if !lines_equal(&b1.line(l1), &b2.line(l2)) {
             return false;
         }
     }

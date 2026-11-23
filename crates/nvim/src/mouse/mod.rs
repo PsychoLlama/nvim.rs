@@ -448,6 +448,7 @@ fn scroll_line_len(win: Win, lnum: LineNr) -> ColNr {
         }
         col += numchar;
     }
+    drop(line);
     col
 }
 

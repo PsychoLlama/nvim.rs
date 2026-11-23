@@ -359,7 +359,7 @@ fn word_end_is_word(word_col: ColNr, n: usize) -> bool {
     let prev = if end == 0 {
         0
     } else {
-        end - 1 - head_off(line, (end - 1).min(line.len()))
+        end - 1 - head_off(&line, (end - 1).min(line.len()))
     };
     is_word_at(line.get(prev..).unwrap_or_default(), Buf::current())
 }

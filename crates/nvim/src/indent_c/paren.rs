@@ -37,14 +37,15 @@ pub(crate) fn first_code_col(trypos: Pos) -> c_int {
     let line = lines.line(trypos.lnum);
     let limit = usize::try_from(trypos.col).expect("a paren column is never negative");
     let mut at = 0usize;
-    while byte_at(line, at) != 0 && at < limit {
-        if starts_comment(line, at) {
-            at = code_at(line, at);
+    while byte_at(&line, at) != 0 && at < limit {
+        if starts_comment(&line, at) {
+            at = code_at(&line, at);
         } else {
-            let past = string_end_at(line, at);
+            let past = string_end_at(&line, at);
             at = if past == at { at + 1 } else { past };
         }
     }
+    drop(line);
     c_int::try_from(at).expect("a column within a line fits an int")
 }
 
@@ -223,10 +224,10 @@ pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
         let (starts_while_of_do, interesting) = {
             let mut lines = Lines::current();
             let line = lines.line(Win::current().cursor().lnum());
-            let look = code_at(line, 0);
+            let look = code_at(&line, 0);
             (
-                starts_while(line, look),
-                is_else(line, look) || is_if(line, look) || is_do(line, look),
+                starts_while(&line, look),
+                is_else(&line, look) || is_if(&line, look) || is_do(&line, look),
             )
         };
         let interesting =
@@ -253,16 +254,16 @@ pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
         let (starts_while_of_do, is_else_line, plain_else, is_if_line, is_do_line) = {
             let mut lines = Lines::current();
             let line = lines.line(Win::current().cursor().lnum());
-            let look = code_at(line, 0);
+            let look = code_at(&line, 0);
             (
-                starts_while(line, look),
-                is_else(line, look),
+                starts_while(&line, look),
+                is_else(&line, look),
                 // An `else` that is not an `else if` needs one more `if`.
                 // Upstream reads four bytes on from `look` itself, which for
                 // `} else` is the middle of the word; reproduced.
-                !is_if(line, code_at(line, look + 4)),
-                is_if(line, look),
-                is_do(line, look),
+                !is_if(&line, code_at(&line, look + 4)),
+                is_if(&line, look),
+                is_do(&line, look),
             )
         };
 

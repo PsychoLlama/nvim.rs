@@ -76,7 +76,7 @@ pub(crate) fn fmt_check_par(lnum: LineNr, leader: &mut Leader, do_comments: bool
         let mut lines = Lines::current();
         let line = lines.line(lnum);
         leader.len = if do_comments {
-            let (len, flags) = get_leader_len(line, false, true);
+            let (len, flags) = get_leader_len(&line, false, true);
             // An item the scan did not reach leaves the old one in place.
             if flags.is_some() {
                 leader.flags = flags;
@@ -147,7 +147,7 @@ pub(crate) fn same_leader(lnum: LineNr, first: Leader, second: Leader) -> bool {
     leaders_match(
         &line1,
         usize::try_from(first.len).unwrap_or(0),
-        line2,
+        &line2,
         usize::try_from(second.len).unwrap_or(0),
     )
 }

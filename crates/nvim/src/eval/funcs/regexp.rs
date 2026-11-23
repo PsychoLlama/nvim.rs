@@ -405,7 +405,7 @@ pub fn f_matchbufline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData)
     while slnum <= elnum {
         let text = lines.line_cstr(slnum, 0);
         get_matches_in_str(
-            text,
+            &text,
             (&mut prog, ignore_case),
             &mut out,
             slnum.get(),

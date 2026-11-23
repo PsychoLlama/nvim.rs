@@ -220,7 +220,7 @@ impl Put {
             // The second half starts after the cursor's character for `p`,
             // at it for `P`.
             let mut split = col;
-            if self.dir == FORWARD && cstr::byte_at(line, col) != 0 {
+            if self.dir == FORWARD && cstr::byte_at(&line, col) != 0 {
                 split += c_cluster_len(&line[col..]);
             }
             (split, XString::from_bytes(&line[split..]))

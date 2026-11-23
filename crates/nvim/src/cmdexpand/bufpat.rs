@@ -102,7 +102,7 @@ pub(crate) fn copy_substring_from_pos(start: Pos, end: Pos) -> Option<(Vec<u8>, 
 
         // Append full lines between start and end.
         for lnum in (start.lnum + 1).up_to(end.lnum) {
-            text.extend_from_slice(Lines::current().line(lnum));
+            text.extend_from_slice(&Lines::current().line(lnum));
             text.extend_from_slice(newline);
         }
     }

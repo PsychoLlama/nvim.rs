@@ -292,16 +292,17 @@ impl BreakSearch {
 fn wrap_leader_len() -> i32 {
     let mut lines = Lines::current();
     let line = lines.line(Win::current().cursor().lnum());
-    let mut leader_len = get_leader_len(line, false, true).0;
+    let mut leader_len = get_leader_len(&line, false, true).0;
     if leader_len == 0
         && Buf::current().b_p_cin() != 0
-        && let Some(comment_start) = check_linecomment(line)
+        && let Some(comment_start) = check_linecomment(&line)
     {
         leader_len = get_leader_len(&line[comment_start..], false, true).0;
         if leader_len != 0 {
             leader_len += len_as_int(comment_start);
         }
     }
+    drop(line);
     leader_len
 }
 

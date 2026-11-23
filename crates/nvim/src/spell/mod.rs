@@ -416,11 +416,11 @@ pub fn ex_spellrepall(_excmd: &mut ExArg) {
             let mut lines = Lines::current();
             let line = lines.line(Win::current().cursor().lnum());
             let at = col.as_usize();
-            let present = chartab::tail(line, at).starts_with(&repl_to);
+            let present = chartab::tail(&line, at).starts_with(&repl_to);
             (!grows || !present).then(|| {
                 let mut rebuilt = XString::from_bytes(&line[..at.min(line.len())]);
                 rebuilt.push_bytes(&repl_to);
-                rebuilt.push_bytes(chartab::tail(line, at + repl_from_len));
+                rebuilt.push_bytes(chartab::tail(&line, at + repl_from_len));
                 rebuilt
             })
         };

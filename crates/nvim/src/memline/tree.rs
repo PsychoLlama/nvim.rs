@@ -71,14 +71,13 @@ pub(crate) fn fetch_line(buffer: Buf, lnum: LineNr, will_change: bool) {
     let (mut held, cached) = fetch_line_held(buffer, lnum);
     if will_change && cached == Cached::Line {
         held.locked_has_moved();
-        drop(held);
-        book_deleted_line(buffer);
+        book_deleted_line(buffer, held);
     }
 }
 
 /// [`fetch_line`] for a read, answering the walk's loan of the memline
 /// still held: the caller lends the cached line out of it
-/// ([`Buf::lend_cached_line_from`]) instead of asking the memline again --
+/// ([`Buf::lend_line`]) instead of asking the memline again --
 /// a search and a `Lines` read do this once per line.
 #[inline]
 pub(crate) fn fetch_line_lent<'a>(buffer: Buf, lnum: LineNr) -> MlRef<'a> {
@@ -182,9 +181,11 @@ fn invalid_lnum<'a>(buffer: Buf, lnum: LineNr) -> MlRef<'a> {
 /// Book the cached line, which the caller is about to change, as deleted
 /// text (`ml_add_deleted_len_buf`).
 #[inline]
-fn book_deleted_line(buffer: Buf) {
-    let text = buffer.lend_cached_line();
-    ml_add_deleted_len_buf(buffer, text, text.len());
+fn book_deleted_line(buffer: Buf, held: MlRef<'_>) {
+    let text = buffer.lend_line(held, false);
+    let counts = deleted_counts(buffer, &text, text.len());
+    drop(text);
+    book_deleted(buffer, counts);
 }
 
 /// The tree has no block for line `lnum`, which the line count says it

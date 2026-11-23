@@ -59,10 +59,10 @@ pub(crate) fn is_jump_label() -> bool {
     let is_label = {
         let mut lines = Lines::current();
         let line = lines.line(Win::current().cursor().lnum());
-        let at = code_at(line, 0);
+        let at = code_at(&line, 0);
         // The chain is left whole: `past_label` only steps over a line the
         // two tests in front of it did not claim.
-        !is_default_label(line, at) && !is_scope_decl(line, at) && past_label(line, at).is_some()
+        !is_default_label(&line, at) && !is_scope_decl(&line, at) && past_label(&line, at).is_some()
     };
     if !is_label {
         return false;
@@ -87,15 +87,15 @@ pub(crate) fn is_jump_label() -> bool {
         let verdict = {
             let mut lines = Lines::current();
             let line = lines.line(Win::current().cursor().lnum());
-            let at = code_at(line, 0);
-            if is_preproc(line) || at >= line.len() {
+            let at = code_at(&line, 0);
+            if is_preproc(&line) || at >= line.len() {
                 None
             } else {
                 Some(
-                    terminator(line, at, true, false) != 0
-                        || is_scope_decl(line, at)
-                        || is_case_label(line, at, true)
-                        || past_label(line, at).is_some_and(|end| only_comment_left(line, end)),
+                    terminator(&line, at, true, false) != 0
+                        || is_scope_decl(&line, at)
+                        || is_case_label(&line, at, true)
+                        || past_label(&line, at).is_some_and(|end| only_comment_left(&line, end)),
                 )
             }
         };
@@ -172,14 +172,14 @@ pub(crate) fn is_enum_or_init() -> bool {
 
     let mut lines = Lines::current();
     let line = lines.line(Win::current().cursor().lnum());
-    let mut at = code_at(line, 0);
-    if starts_with_word(line, at, b"typedef") {
-        at = code_at(line, at + 7);
+    let mut at = code_at(&line, 0);
+    if starts_with_word(&line, at, b"typedef") {
+        at = code_at(&line, at + 7);
     }
-    while let Some(word) = SKIP.iter().find(|word| starts_with_word(line, at, word)) {
-        at = code_at(line, at + word.len());
+    while let Some(word) = SKIP.iter().find(|word| starts_with_word(&line, at, word)) {
+        at = code_at(&line, at + word.len());
     }
-    starts_with_word(line, at, b"enum") || is_compound_init(line, at)
+    starts_with_word(&line, at, b"enum") || is_compound_init(&line, at)
 }
 
 /// Whether `line` is a preprocessor directive: anything starting with `#`.
@@ -203,12 +203,12 @@ pub(crate) fn preproc_start(lnum: &mut LineNr, amount: &mut c_int) -> bool {
     let mut candidate_amount = *amount;
     let mut lines = Lines::current();
 
-    if ends_in_backslash(lines.line(at_lnum)) {
+    if ends_in_backslash(&lines.line(at_lnum)) {
         candidate_amount = get_indent_lnum(at_lnum);
     }
 
     loop {
-        if is_preproc(lines.line(at_lnum)) {
+        if is_preproc(&lines.line(at_lnum)) {
             retval = true;
             *lnum = at_lnum;
             break;
@@ -217,7 +217,7 @@ pub(crate) fn preproc_start(lnum: &mut LineNr, amount: &mut c_int) -> bool {
             break;
         }
         at_lnum -= 1;
-        if !ends_in_backslash(lines.line(at_lnum)) {
+        if !ends_in_backslash(&lines.line(at_lnum)) {
             break;
         }
     }
@@ -262,7 +262,7 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
     // takes us to the line the declaration starts on.  The borrow ends
     // with the statement: the match search reads other lines.
     Win::current().cursor().set_lnum(lnum);
-    let has_paren = find_last_paren(Lines::current().line(lnum), b'(', b')');
+    let has_paren = find_last_paren(&Lines::current().line(lnum), b'(', b')');
     let opening = if has_paren {
         find_match_paren(Buf::current().b_ind_maxparen())
     } else {
@@ -281,14 +281,14 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
     let mut at = 0usize;
     {
         let line = lines.line(lnum);
-        if is_preproc(line) {
+        if is_preproc(&line) {
             return false; // ignore a line starting with #
         }
-        while !matches!(byte_at(line, at), 0 | b'(' | b';' | b'\'' | b'"') {
-            if starts_comment(line, at) {
-                at = code_at(line, at);
-            } else if byte_at(line, at) == b':' {
-                if byte_at(line, at + 1) != b':' {
+        while !matches!(byte_at(&line, at), 0 | b'(' | b';' | b'\'' | b'"') {
+            if starts_comment(&line, at) {
+                at = code_at(&line, at);
+            } else if byte_at(&line, at) == b':' {
+                if byte_at(&line, at + 1) != b':' {
                     // A constructor's initialiser list is not a declaration:
                     //     A::A(int a, int b)
                     //         : a(0)  // <-- not a function decl
@@ -300,7 +300,7 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
                 at += 1;
             }
         }
-        if byte_at(line, at) != b'(' {
+        if byte_at(&line, at) != b'(' {
             return false; // ';', ' or " before any () or no '('
         }
     }
@@ -312,25 +312,25 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
         let stopped = {
             let line = lines.line(lnum);
             loop {
-                let c = byte_at(line, at);
+                let c = byte_at(&line, at);
                 if matches!(c, 0 | b';' | b'\'' | b'"') {
                     break Stopped::NotOne;
                 }
-                if c == b')' && only_comment_left(line, at + 1) {
+                if c == b')' && only_comment_left(&line, at + 1) {
                     break Stopped::CloseParen;
                 }
                 // A ',' at the end continues into the next line; so does the
                 // end of the line, for this style:
                 //     func(arg1
                 //           , arg2)
-                if (c == b',' && only_comment_left(line, at + 1))
-                    || byte_at(line, at + 1) == 0
-                    || only_comment_left(line, at)
+                if (c == b',' && only_comment_left(&line, at + 1))
+                    || byte_at(&line, at + 1) == 0
+                    || only_comment_left(&line, at)
                 {
                     break Stopped::Continues { comma: c == b',' };
                 }
-                if starts_comment(line, at) {
-                    at = code_at(line, at);
+                if starts_comment(&line, at) {
+                    at = code_at(&line, at);
                 } else {
                     at += 1;
                     just_started = false;
@@ -346,13 +346,13 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
                 // is not a declaration, however it ends.  Line 0 is line 1,
                 // as it is for `ml_get`.
                 lnum = first_lnum - 1;
-                retval = !ends_in_backslash(lines.line(lnum));
+                retval = !ends_in_backslash(&lines.line(lnum));
                 break;
             }
             Stopped::Continues { comma } => {
                 while lnum < Buf::current().line_count() {
                     lnum += 1;
-                    if !is_preproc(lines.line(lnum)) {
+                    if !is_preproc(&lines.line(lnum)) {
                         break;
                     }
                 }
@@ -362,8 +362,9 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
                 // Require a comma at the end of this line, or a comma or
                 // ')' at the start of the next.
                 let line = lines.line(lnum);
-                at = skip::white(line);
-                let next = byte_at(line, at);
+                at = skip::white(&line);
+                let next = byte_at(&line, at);
+                drop(line);
                 if !just_started && !comma && next != b',' && next != b')' {
                     break;
                 }

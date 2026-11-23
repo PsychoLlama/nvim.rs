@@ -25,7 +25,7 @@ use crate::types::{ColNr, Failed, LineNr, Pos, TypVal, VAR_LIST};
 
 /// How many characters line `lnum` of `buffer` holds.
 fn line_char_count(buffer: Buf, lnum: LineNr) -> c_int {
-    let count = char_count(Lines::in_buffer(buffer).line(lnum));
+    let count = char_count(&Lines::in_buffer(buffer).line(lnum));
     c_int::try_from(count).unwrap_or(c_int::MAX)
 }
 
@@ -62,6 +62,7 @@ pub fn buf_byteidx_to_charidx(buffer: Option<Buf>, mut lnum: LineNr, byteidx: c_
     if t == line.len() && byteidx != 0 && bound == Some(t) {
         count += 1;
     }
+    drop(line);
     count - 1
 }
 
@@ -88,6 +89,7 @@ pub fn buf_charidx_to_byteidx(buffer: Option<Buf>, mut lnum: LineNr, charidx: c_
     } {
         t += cluster_len(&line[t..]);
     }
+    drop(line);
     c_int::try_from(t).unwrap_or(c_int::MAX)
 }
 

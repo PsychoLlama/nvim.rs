@@ -98,7 +98,7 @@ pub fn findpar(dir: c_int, mut count: c_int, what: u8, both: bool) -> Option<boo
             .set_col(ColNr::try_from(line.len()).unwrap_or(ColNr::MAX));
         if Win::current().cursor().col() != ColNr::ZERO {
             let col = Win::current().cursor().col() - 1;
-            let back = head_off(line, usize::try_from(col).unwrap_or(usize::MAX));
+            let back = head_off(&line, usize::try_from(col).unwrap_or(usize::MAX));
             Win::current()
                 .cursor()
                 .set_col(col - c_int::try_from(back).unwrap_or(0));
@@ -146,7 +146,7 @@ fn inmacro(opt: &[u8], s: &[u8]) -> bool {
 pub fn starts_para(lnum: LineNr, para: u8, both: bool) -> bool {
     let mut lines = Lines::current();
     let line = lines.line(lnum);
-    let first = byte_at(line, 0);
+    let first = byte_at(&line, 0);
     if first == para || first == 0x0c || (both && first == b'}') {
         return true;
     }

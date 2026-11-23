@@ -228,7 +228,7 @@ fn end_pending_comment(c: Key) {
 
     // Find the comment leader this line starts with.
     let lnum = Win::current().cursor().lnum();
-    let (lead, flags) = get_leader_len(Lines::current().line(lnum), false, true);
+    let (lead, flags) = get_leader_len(&Lines::current().line(lnum), false, true);
     // The middle item's flags, searched as upstream searches them: to the
     // end of 'comments'.
     let Some(flags) =
@@ -353,7 +353,7 @@ pub(crate) fn do_insert_char_pre(c: Key) -> Option<XString> {
 /// The byte under the cursor, NUL past the end of its line.
 fn cursor_byte() -> u8 {
     let cursor = Win::current().w_cursor();
-    byte_at(Lines::current().line(cursor.lnum), cursor.col.as_usize())
+    byte_at(&Lines::current().line(cursor.lnum), cursor.col.as_usize())
 }
 
 #[cfg(test)]

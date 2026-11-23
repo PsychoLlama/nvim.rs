@@ -456,7 +456,7 @@ impl Opening {
             // off again at the end and inserted character by character over
             // the original.  -- webb.
             next_line = Some(if lnum < ORIG_LINE_COUNT.get() {
-                XString::from_bytes(Lines::current().line(lnum + 1))
+                XString::from_bytes(&Lines::current().line(lnum + 1))
             } else {
                 XString::new()
             });

@@ -81,14 +81,15 @@ impl Buf {
             let line = lines.line(lnum);
             if DIFF_FLAGS.get() & DIFF_ICASE == 0 {
                 let copy = &mut out[at..at + line.len()];
-                copy.copy_from_slice(line);
+                copy.copy_from_slice(&line);
                 for byte in copy.iter_mut().filter(|byte| **byte == b'\n') {
                     *byte = 0;
                 }
                 at += line.len();
             } else {
-                at += fold_line(line, &mut out[at..]);
+                at += fold_line(&line, &mut out[at..]);
             }
+            drop(line);
             out[at] = b'\n';
             at += 1;
         }

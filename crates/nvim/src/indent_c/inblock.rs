@@ -90,7 +90,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         let mut lines = Lines::current();
         let start = lines.line(ourscope);
         (
-            byte_at(start, skip::white(start)) == b'{',
+            byte_at(&start, skip::white(&start)) == b'{',
             start.first() == Some(&b'{'),
         )
     };
@@ -110,7 +110,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         let mut lnum = ourscope;
         // The borrow ends with the statement: the match search reads other
         // lines, and only runs once `find_last_paren` found one.
-        let has_paren = find_last_paren(Lines::current().line(ourscope), b'(', b')');
+        let has_paren = find_last_paren(&Lines::current().line(ourscope), b'(', b')');
         if has_paren && let Some(trypos) = find_match_paren(Buf::current().b_ind_maxparen()) {
             lnum = trypos.lnum;
         }
@@ -125,7 +125,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
             let cursor_lnum = Win::current().cursor().lnum();
             let mut lines = Lines::current();
             let text = lines.line(cursor_lnum);
-            is_case_label(text, skip::white(text), false)
+            is_case_label(&text, skip::white(&text), false)
         };
         let amount = if starts_case {
             get_indent()
@@ -176,10 +176,10 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         let cursor_lnum = Win::current().cursor().lnum();
         let mut lines = Lines::current();
         let text = lines.line(cursor_lnum);
-        let at = skip::white(text);
-        if opens_namespace(text, at) {
+        let at = skip::white(&text);
+        if opens_namespace(&text, at) {
             amount += Buf::current().b_ind_cpp_namespace();
-        } else if opens_extern_c(text, at) {
+        } else if opens_extern_c(&text, at) {
             amount += Buf::current().b_ind_cpp_extern_c();
         }
     } else {

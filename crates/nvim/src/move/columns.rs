@@ -371,7 +371,7 @@ fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
     let (offset, _) = vcol_to_col(win, lnum, ColNr::new(vcol - 1));
     let mut lines = win.buffer().lines();
     let line = lines.line(lnum);
-    if cstr::byte_at(line, offset.as_usize()) != 0 {
+    if cstr::byte_at(&line, offset.as_usize()) != 0 {
         return (offset + 1).get();
     }
     if offset == ColNr::ZERO {
@@ -379,7 +379,7 @@ fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
         return 0;
     }
     // Move back onto the first byte of the last character.
-    (offset - len_as_int(head_off(line, (offset - 1).as_usize()))).get()
+    (offset - len_as_int(head_off(&line, (offset - 1).as_usize()))).get()
 }
 
 /// `virtcol2col({winid}, {lnum}, {col})`.

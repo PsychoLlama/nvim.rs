@@ -67,7 +67,7 @@ use crate::winlayer::{Buf, Win};
 /// non-blank of the line.
 pub fn inindent(extra: c_int) -> bool {
     let cursor = Win::current().w_cursor();
-    let col = len_as_int(skip::white(Lines::current().line(cursor.lnum)));
+    let col = len_as_int(skip::white(&Lines::current().line(cursor.lnum)));
     col >= cursor.col.get() + extra
 }
 
@@ -125,7 +125,7 @@ pub fn op_reindent(op: &OpArg, how: Indenter) {
                 let blank = {
                     let mut lines = Lines::current();
                     let line = lines.line(win.cursor().lnum());
-                    skip::white(line) == line.len()
+                    skip::white(&line) == line.len()
                 };
                 let amount = if blank { 0 } else { how.amount() };
                 if amount >= 0 && set_indent(amount, 0) {
@@ -206,10 +206,11 @@ fn si_indent_like_open_brace(pos: Pos) {
         // Skip the blanks before the '{'.
         while {
             i -= 1;
-            i > 0 && ascii_iswhite(c_int::from(byte_at(line, as_index(i))))
+            i > 0 && ascii_iswhite(c_int::from(byte_at(&line, as_index(i))))
         } {}
     }
-    let after_paren = byte_at(line, as_index(i)) == b')';
+    let after_paren = byte_at(&line, as_index(i)) == b')';
+    drop(line);
     win.cursor().set_lnum(pos.lnum);
     win.cursor().set_col(ColNr::new(i));
     if after_paren && let Some(open) = findmatch(None, Codepoint::byte(b'(')) {
@@ -234,7 +235,8 @@ fn si_should_shift_back() -> bool {
     while win.cursor().lnum() > LineNr::ONE {
         win.cursor().set_lnum(win.cursor().lnum() - 1);
         let line = lines.line(win.cursor().lnum());
-        let first = byte_at(line, skip::white(line));
+        let first = byte_at(&line, skip::white(&line));
+        drop(line);
         // Ignore empty lines and lines starting with '#'.
         if first != b'#' && first != 0 {
             break;
@@ -307,17 +309,17 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
         let mut lines = Lines::current();
         let line = lines.line(win.cursor().lnum());
         if !line.is_empty() {
-            let (mut csarg, cstype) = CharsizeArg::new(win, LineNr::ZERO, line);
+            let (mut csarg, cstype) = CharsizeArg::new(win, LineNr::ZERO, &line);
             let mut at = 0;
-            let mut chr = c_char_info(line, 0);
+            let mut chr = c_char_info(&line, 0);
             loop {
                 let next_vcol = vcol + win_charsize(cstype, vcol, at, chr.value, &mut csarg).width;
                 if next_vcol > end_vcol {
                     break;
                 }
                 vcol = next_vcol;
-                (at, chr) = c_next_cluster(line, at, chr);
-                if byte_at(line, at) == 0 {
+                (at, chr) = c_next_cluster(&line, at, chr);
+                if byte_at(&line, at) == 0 {
                     break;
                 }
             }
@@ -417,7 +419,7 @@ pub fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_by
     // Virtual Replace needs to know what the line looked like before.
     let orig = (STATE.get() & VREPLACE_FLAG != 0).then(|| {
         (
-            XString::from_bytes(Lines::current().line(win.cursor().lnum())),
+            XString::from_bytes(&Lines::current().line(win.cursor().lnum())),
             win.cursor().col(),
         )
     });
@@ -544,7 +546,7 @@ pub fn copy_indent(size: c_int, src: &[u8]) -> bool {
 
     // The indent, then the whole of the cursor line.
     let lnum = Win::current().cursor().lnum();
-    indent.extend_from_slice(Lines::current().line(lnum));
+    indent.extend_from_slice(&Lines::current().line(lnum));
     let _ = ml_replace_owned(lnum, XString::from_vec(indent));
     Win::current().cursor().set_col(ColNr::new(ind_len));
     true

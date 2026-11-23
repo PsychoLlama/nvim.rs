@@ -84,7 +84,7 @@ pub(crate) fn ins_shift(c: Key, lastc: Key) {
     if DID_AI.get() {
         let mut lines = Lines::current();
         let line = lines.line(Win::current().cursor().lnum());
-        if skip::white(line) < line.len() {
+        if skip::white(&line) < line.len() {
             DID_AI.set(false);
         }
     }

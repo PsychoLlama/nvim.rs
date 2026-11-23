@@ -518,7 +518,7 @@ pub fn mark_mb_adjustpos(buffer: Buf, pos: &mut Pos) {
     let col = if line.is_empty() || line.len() < col {
         0
     } else {
-        col - head_off(line, col)
+        col - head_off(&line, col)
     };
     pos.col = ColNr::try_from(col).unwrap_or(ColNr::MAX);
     let at = &line[col..];

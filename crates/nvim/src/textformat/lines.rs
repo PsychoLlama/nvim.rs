@@ -352,7 +352,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 if next_leader
                     .flags
                     .is_none_or(|flags| !flags.with_rest(|rest| rest.starts_with(b"://")))
-                    || check_linecomment(Lines::current().line(Win::current().cursor().lnum()))
+                    || check_linecomment(&Lines::current().line(Win::current().cursor().lnum()))
                         .is_none()
                 {
                     is_end_par = true;

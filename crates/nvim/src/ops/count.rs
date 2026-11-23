@@ -269,14 +269,15 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
                 ..
             } = counts;
             let mut lines = Lines::current();
-            let taken = line_count_info(lines.line(LineNr::new(lnum)), wc, cc, upto, eol_size);
+            let taken = line_count_info(&lines.line(LineNr::new(lnum)), wc, cc, upto, eol_size);
             counts.bytes_cursor = counts.bytes + taken;
         }
 
         let PosCounts { words, chars, .. } = counts;
         let all = VarNumber::from(MAXCOL);
         let mut lines = Lines::current();
-        counts.bytes += line_count_info(lines.line(LineNr::new(lnum)), words, chars, all, eol_size);
+        counts.bytes +=
+            line_count_info(&lines.line(LineNr::new(lnum)), words, chars, all, eol_size);
     }
 
     // The last line has no EOL, so it was counted one byte too long.
@@ -335,6 +336,7 @@ fn count_selected_line(
     let at = usize::try_from(start_col).unwrap_or(0).min(line.len());
     let tail = line.len() - at;
     let taken = line_count_info(&line[at..], wc, cc, VarNumber::from(len), eol_size);
+    drop(line);
     counts.bytes_cursor += taken;
     // The last line has no EOL, and the selection reaches its end.
     if lnum == Buf::current().line_count()
@@ -373,7 +375,7 @@ fn report_counts(counts: &PosCounts, selection: Option<&Selection>) -> String {
         );
         validate_virtcol(Win::current());
         let at = col_text(col.get(), virtcol.get());
-        let width = linetabsize_str(Lines::current().line(Win::current().cursor().lnum()));
+        let width = linetabsize_str(&Lines::current().line(Win::current().cursor().lnum()));
         let of = col_text(get_cursor_line_len().get(), width);
         return if same_as_bytes {
             tr!(

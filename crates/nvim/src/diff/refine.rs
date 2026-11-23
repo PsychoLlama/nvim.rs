@@ -187,6 +187,7 @@ fn refine_inline_word(
                 {
                     return Gap::Keep(false);
                 }
+                drop(line);
                 // How much text the two blocks either side of the gap cover:
                 // a gap is only worth swallowing next to a substantial change.
                 let mut changed: i64 = 0;
@@ -448,7 +449,7 @@ fn tokenize_and_diff(dp: &mut DiffBlock, slots: &DiffSlots) {
         for off in 0..dp.df_count[i] {
             let line = lines.line(dp.df_lnum[i] + off);
             let word = DIFF_FLAGS.get() & DIFF_INLINE_WORD != 0;
-            tokenize_line(line, off, &chartab, word, out, map);
+            tokenize_line(&line, off, &chartab, word, out, map);
         }
         if first {
             continue;

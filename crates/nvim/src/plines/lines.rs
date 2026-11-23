@@ -66,7 +66,7 @@ pub(crate) fn plines_win_nofill(window: Win, lnum: LineNr, limit_winheight: bool
 pub(crate) fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
     let mut text = window.buffer().lines();
     let s = text.line(lnum);
-    let (mut csarg, cstype) = CharsizeArg::new(window, lnum, s);
+    let (mut csarg, cstype) = CharsizeArg::new(window, lnum, &s);
     if s.is_empty() && csarg.virt_row < 0 {
         // Be quick for an empty line.
         return 1;
@@ -111,32 +111,32 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
 
     let mut text = window.buffer().lines();
     let line = text.line(lnum);
-    let (mut csarg, cstype) = CharsizeArg::new(window, lnum, line);
+    let (mut csarg, cstype) = CharsizeArg::new(window, lnum, &line);
 
     let mut vcol: ColNr = ColNr::ZERO;
     let mut at = 0;
-    let mut chr = c_char_info(line, 0);
+    let mut chr = c_char_info(&line, 0);
     if cstype == CharsizeKind::Fast {
         let use_tabstop = csarg.use_tabstop;
         with_byte_cells(|cells| {
-            while !ends_at(line, at, chr) && {
+            while !ends_at(&line, at, chr) && {
                 column -= 1;
                 column >= 0
             } {
                 let byte_width = |byte| cells.of(byte);
                 vcol +=
-                    charsize_fast_impl(window, line, at, use_tabstop, vcol, chr.value, byte_width)
+                    charsize_fast_impl(window, &line, at, use_tabstop, vcol, chr.value, byte_width)
                         .width;
-                (at, chr) = c_next_cluster(line, at, chr);
+                (at, chr) = c_next_cluster(&line, at, chr);
             }
         });
     } else {
-        while !ends_at(line, at, chr) && {
+        while !ends_at(&line, at, chr) && {
             column -= 1;
             column >= 0
         } {
             vcol += charsize_regular(&mut csarg, at, vcol, chr.value).width;
-            (at, chr) = c_next_cluster(line, at, chr);
+            (at, chr) = c_next_cluster(&line, at, chr);
         }
     }
 

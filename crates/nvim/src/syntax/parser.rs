@@ -237,7 +237,7 @@ impl SynState {
         let text = lines.line(self.lnum);
         let line = &mut self.line;
         line.bytes.clear();
-        line.bytes.extend_from_slice(text);
+        line.bytes.extend_from_slice(&text);
         line.buffer = self.buffer.handle();
         line.lnum = self.lnum;
         line.changedtick = changedtick;

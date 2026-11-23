@@ -416,13 +416,13 @@ pub fn check_need_cap(window: Win, lnum: LineNr, col: ColNr) -> bool {
     let context = {
         let mut lines = window.buffer().lines();
         let at_line_start =
-            col == ColNr::ZERO || ColNr::from_index(skip::white(lines.line(lnum))) >= col;
+            col == ColNr::ZERO || ColNr::from_index(skip::white(&lines.line(lnum))) >= col;
         if !at_line_start {
-            scan_before(lines.line(lnum), col.as_usize())
+            scan_before(&lines.line(lnum), col.as_usize())
         } else if lnum == LineNr::ONE {
             CapCheck::Needed
         } else {
-            sentence_before(lines.line(lnum - 1))
+            sentence_before(&lines.line(lnum - 1))
         }
     };
     let CapCheck::Scan { text, endcol } = context else {
@@ -516,7 +516,7 @@ pub fn spell_word_start(startcol: c_int) -> c_int {
     // Back up to a word character.
     let mut p = usize::try_from(startcol).unwrap_or(0).min(line.len());
     while p > 0 {
-        p -= head_off(line, p - 1) + 1;
+        p -= head_off(&line, p - 1) + 1;
         if spell_iswordp_nmw(&line[p..], win) {
             break;
         }
@@ -526,12 +526,13 @@ pub fn spell_word_start(startcol: c_int) -> c_int {
     let mut col = 0;
     while p > 0 {
         col = len_as_int(p);
-        p -= head_off(line, p - 1) + 1;
+        p -= head_off(&line, p - 1) + 1;
         if !spell_iswordp(&line[p..], win) {
             break;
         }
         col = 0;
     }
+    drop(line);
 
     col
 }

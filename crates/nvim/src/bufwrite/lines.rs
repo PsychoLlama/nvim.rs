@@ -101,13 +101,13 @@ impl Buf {
             let text = lines.line(lnum);
             if let Some(sha) = sha.as_deref_mut() {
                 // The terminating NUL goes in as the line separator.
-                sha.update(text);
+                sha.update(&text);
                 sha.update(b"\0");
             }
             // Stage the line a run at a time, flushing whenever the staging
             // buffer fills. This is the loop that runs over every byte of the
             // file. Keep it fast!
-            let mut rest = text;
+            let mut rest = &*text;
             while !rest.is_empty() {
                 let taken = writer.push_text(rest, mac);
                 rest = &rest[taken..];
@@ -119,6 +119,7 @@ impl Buf {
                     writer.start_lnum = lnum;
                 }
             }
+            drop(text);
 
             // Write failed, or the last line has no end-of-line: stop here.
             if end == LineNr::ZERO

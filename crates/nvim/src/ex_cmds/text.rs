@@ -66,6 +66,7 @@ pub(crate) fn describe_cursor_char() {
     // A copy of the character and its composing ones: the messages below
     // may redraw, which reads other lines through the same cache.
     let data = data[..len].to_vec();
+    drop(line);
     let data = data.as_slice();
     if len == 0 {
         msg(c"NUL", 0);
@@ -329,6 +330,7 @@ fn linelen() -> (c_int, bool) {
     // into the buffer line for that and puts the byte back; a copy of the
     // head is measured instead.
     let mut head = text[..last].to_vec();
+    drop(text);
     head.push(0);
     let head = CStr::from_bytes_until_nul(&head).expect("just terminated");
     let len = linetabsize_text(0, head);

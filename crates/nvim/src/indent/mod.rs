@@ -340,7 +340,7 @@ pub fn get_indent_lnum(lnum: LineNr) -> c_int {
 /// and dropped with it, which is the whole of what the cache asks.
 pub fn get_indent_buf(buffer: Buf, lnum: LineNr) -> c_int {
     let mut lines = buffer.lines();
-    buffer.indent_width(lines.line(lnum))
+    buffer.indent_width(&lines.line(lnum))
 }
 
 /// The screen width of the indent at `text`, with every tab a fixed
@@ -713,7 +713,7 @@ pub fn set_indent(size: c_int, flags: c_int) -> bool {
         skipcols,
         old_offset,
         new_offset,
-    }) = reindent_line(size, flags, Lines::current().line(lnum))
+    }) = reindent_line(size, flags, &Lines::current().line(lnum))
     else {
         return false;
     };
@@ -791,7 +791,8 @@ pub fn get_number_indent(lnum: LineNr) -> c_int {
         }
     }
     // The match may have ended at the line's NUL, which is not an indent.
-    if pos.lnum == LineNr::ZERO || byte_at(Lines::current().line(pos.lnum), pos.col.as_usize()) == 0
+    if pos.lnum == LineNr::ZERO
+        || byte_at(&Lines::current().line(pos.lnum), pos.col.as_usize()) == 0
     {
         return -1;
     }

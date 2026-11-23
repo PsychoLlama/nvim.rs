@@ -220,19 +220,20 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, b
 pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, i32) {
     let mut lines = win.buffer().lines();
     let line = lines.line(lnum);
-    let (mut csarg, cstype) = CharsizeArg::new(win, lnum, line);
+    let (mut csarg, cstype) = CharsizeArg::new(win, lnum, &line);
     let mut at = 0;
-    let mut chr = c_char_info(line, 0);
+    let mut chr = c_char_info(&line, 0);
     let mut cur_vcol: c_int = 0;
     // Try to advance to the specified column, stopping at the line's end.
-    while cur_vcol < vcol.get() && cstr::byte_at(line, at) != 0 {
+    while cur_vcol < vcol.get() && cstr::byte_at(&line, at) != 0 {
         let width = win_charsize(cstype, cur_vcol, at, chr.value, &mut csarg).width;
         if cur_vcol + width > vcol.get() {
             break;
         }
         cur_vcol += width;
-        (at, chr) = c_next_cluster(line, at, chr);
+        (at, chr) = c_next_cluster(&line, at, chr);
     }
+    drop(line);
     let col = ColNr::try_from(at).expect("a column of the line");
     (col, (vcol - cur_vcol).get())
 }

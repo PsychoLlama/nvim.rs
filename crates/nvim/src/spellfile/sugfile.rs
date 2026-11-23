@@ -364,13 +364,15 @@ fn sug_write(spin: &mut SpellInfo, fname: &CStr) {
     for lnum in 1..=wcount.get() {
         // The stored terminator goes out with the line.
         let mut lines = spellbuf.lines();
-        let line = lines.line_cstr(LineNr::new(lnum), 0).to_bytes_with_nul();
-        w.bytes(line);
+        let line = lines.line_cstr(LineNr::new(lnum), 0);
+        w.bytes(line.to_bytes_with_nul());
+        let len = line.to_bytes_with_nul().len();
+        drop(line);
         if !w.landed() {
             emsg(gettext(E_WRITE));
             return;
         }
-        spin.si_memtot += len_as_int(line.len());
+        spin.si_memtot += len_as_int(len);
     }
 
     w.byte(0);

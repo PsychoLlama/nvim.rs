@@ -45,7 +45,7 @@ pub fn u_compute_hash(buffer: Buf, hash: &mut [u8; UNDO_HASH_SIZE as usize]) {
     let mut ctx = Sha256::new();
     for lnum in 1..=buffer.line_count().get() {
         let mut lines = buffer.lines();
-        ctx.update(lines.line(LineNr::new(lnum)));
+        ctx.update(&lines.line(LineNr::new(lnum)));
         // The terminating NUL goes in too, as a line separator.
         ctx.update(&[0]);
     }

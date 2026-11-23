@@ -43,7 +43,7 @@ use crate::eval::eval_to_string;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::K_SPECIAL;
 use crate::mbyte::{c_cluster_len, char_at, char_len, encode_char, utf_char2len};
-use crate::memline::Lines;
+use crate::memline::{LineText, Lines};
 use crate::memory::XString;
 use crate::message::{E_NULL, E_RE_CORR, E_RE_DAMG, E_RESULTING_TEXT_TOO_LONG};
 use crate::message::{emsg, iemsg};
@@ -430,13 +430,18 @@ impl Expanding<'_> {
 
 /// Line `lnum` of a buffer match, counted from `firstlnum`, its terminator
 /// not included: `None` above line 1, empty past the end.
-fn getline(lines: &mut Lines, firstlnum: LineNr, maxline: LineNr, lnum: LineNr) -> Option<&[u8]> {
+fn getline(
+    lines: &mut Lines,
+    firstlnum: LineNr,
+    maxline: LineNr,
+    lnum: LineNr,
+) -> Option<Option<LineText<'_>>> {
     if firstlnum + lnum.get() < LineNr::ONE {
         None
     } else if lnum > maxline {
-        Some(b"")
+        Some(None)
     } else {
-        Some(lines.line(firstlnum + lnum.get()))
+        Some(Some(lines.line(firstlnum + lnum.get())))
     }
 }
 
@@ -729,6 +734,7 @@ fn copy_capture(
                 let Some(line) = getline(&mut lines, firstlnum, maxline, clnum) else {
                     return Outcome::Done;
                 };
+                let line = line.as_deref().unwrap_or_default();
                 let line_len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
                 let len = if end.lnum == clnum {
                     end.col - col

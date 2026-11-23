@@ -41,10 +41,11 @@ pub fn ins_compl_bs() -> Key {
             .unwrap_or(usize::MAX)
             .min(line.len());
         let back = if col > 0 {
-            head_off(line, col - 1) + 1
+            head_off(&line, col - 1) + 1
         } else {
             1
         };
+        drop(line);
         let to_c = |n: usize| c_int::try_from(n).unwrap_or(c_int::MAX);
         to_c(col) - to_c(back)
     };

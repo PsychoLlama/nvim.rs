@@ -115,7 +115,7 @@ pub fn ex_luado(excmd: &mut ExArg) {
                 let old_line = lines.line(l);
                 // A memline line holds no NUL (it stores one as an NL), so its
                 // length is where `lua_pushstring` would have stopped.
-                stack.push_bytes(old_line);
+                stack.push_bytes(&old_line);
                 len_as_int(old_line.len())
             };
             stack.push_number(lua_Number::from(l));

@@ -675,7 +675,7 @@ fn enter_new_buffer(
     // first non-blank.
     if !equalpos(Win::current().w_cursor(), orig_pos) {
         let cursor = Win::current().w_cursor();
-        let first_nonblank = skip::white(Lines::current().line(cursor.lnum));
+        let first_nonblank = skip::white(&Lines::current().line(cursor.lnum));
         if cursor.lnum != orig_pos.lnum || cursor.col != ColNr::from_index(first_nonblank) {
             state.newlnum = Win::current().cursor().lnum();
             state.newcol = Win::current().cursor().col().get();

@@ -373,7 +373,8 @@ impl LineCopy {
         let text = lines.line(lnum);
         let len = text.len();
         self.0.clear();
-        self.0.extend_from_slice(text);
+        self.0.extend_from_slice(&text);
+        drop(text);
         self.0.push(0);
         len
     }

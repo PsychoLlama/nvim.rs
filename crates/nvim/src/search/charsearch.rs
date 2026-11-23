@@ -178,7 +178,7 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
                 if col == 0 {
                     return Err(NoMatch);
                 }
-                col -= head_off(line, col - 1) + 1;
+                col -= head_off(&line, col - 1) + 1;
             }
             let hit = if bytelen <= 1 {
                 c_int::from(line[col]) == c.get()
@@ -199,7 +199,7 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
             col += bytelen;
         } else {
             col -= 1;
-            col -= head_off(line, col);
+            col -= head_off(&line, col);
         }
     }
     Win::current().cursor().set_col(ColNr::from_index(col));

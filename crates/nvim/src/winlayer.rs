@@ -147,6 +147,7 @@
 )]
 
 mod deref;
+pub use deref::{LineText, LineTextMut};
 pub(crate) use deref::{MlRef, SynEdit, SynRead};
 mod frame;
 pub mod graph;

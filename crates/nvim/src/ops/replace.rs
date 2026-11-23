@@ -44,7 +44,7 @@ use crate::mbyte::{c_cluster_len, encode_char};
 /// changes the line's length and has to go through [`replace_character`].
 pub(crate) fn pbyte(mut pos: Pos, c: u8) {
     let mut lines = Lines::current();
-    let line = lines.line_mut(pos.lnum);
+    let mut line = lines.line_mut(pos.lnum);
     // The caller's column may be past the line: the last character then.
     // (Upstream measures with the NUL, so an empty line would have its NUL
     // written; no caller gets here on an empty line.)
@@ -55,6 +55,7 @@ pub(crate) fn pbyte(mut pos: Pos, c: u8) {
     if let Some(byte) = line.get_mut(pos.col.as_usize()) {
         *byte = c;
     }
+    drop(line);
     if CURBUF_SPLICE_PENDING.get() == 0 {
         let row = pos.lnum.get() - 1;
         extmark_splice_cols(
@@ -164,7 +165,7 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
     // so only this side effect on `startspaces` is carried over.)
     if op_virtual()
         && bd.is_short
-        && byte_at(Lines::current().line(baselnum), bd.textcol.as_usize()) == 0
+        && byte_at(&Lines::current().line(baselnum), bd.textcol.as_usize()) == 0
     {
         let mut vpos = Pos {
             lnum: baselnum,

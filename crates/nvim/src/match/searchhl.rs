@@ -618,7 +618,7 @@ fn char_len_at(window: Win, lnum: LineNr, col: ColNr) -> ColNr {
 fn cluster_len_in_line(buffer: Buf, lnum: LineNr, at: usize) -> Option<usize> {
     let mut lines = buffer.lines();
     let line = lines.line(lnum);
-    (cstr::byte_at(line, at) != 0).then(|| c_cluster_len(&line[at..]))
+    (cstr::byte_at(&line, at) != 0).then(|| c_cluster_len(&line[at..]))
 }
 
 /// How far an empty match at `col` of line `lnum` highlights: the

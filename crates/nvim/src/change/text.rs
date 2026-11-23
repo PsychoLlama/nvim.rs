@@ -23,7 +23,7 @@
 
 use crate::cstr;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, head_off, iscomposing};
-use crate::memline::MlFlags;
+use crate::memline::{MlFlags, book_deleted, deleted_counts};
 use crate::memory::XString;
 use crate::narrow::len_as_int;
 use crate::siemsg;
@@ -104,6 +104,7 @@ fn vreplace_extent(new: &[u8], col: usize) -> (usize, usize) {
                 .expect("the padding is taken only when vcol is past new_vcol");
         }
     }
+    drop(line);
 
     Win::current().set_wo_list(old_list);
     (oldlen, newlen)
@@ -225,7 +226,7 @@ pub fn del_char(fixpos: bool) -> Result<(), Failed> {
     mb_adjust_cursor();
     let cursor = Win::current().w_cursor();
     let mut lines = Buf::current().lines();
-    if cstr::byte_at(lines.line(cursor.lnum), cursor.col.as_usize()) == b'\0' {
+    if cstr::byte_at(&lines.line(cursor.lnum), cursor.col.as_usize()) == b'\0' {
         return Err(Failed);
     }
     del_chars(1, c_int::from(fixpos))
@@ -244,6 +245,7 @@ pub fn del_chars(count: c_int, fixpos: c_int) -> Result<(), Failed> {
             at += cluster_len(&line[at..]);
             i += 1;
         }
+        drop(line);
         at - col
     };
     del_bytes(len_as_int(bytes), fixpos != 0, true)
@@ -299,7 +301,7 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
             >= usize::try_from(count).expect("a character count to delete is never negative")
         {
             let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-            if composes_with(line, at, at + char_len(&line[at..]), &mut state) {
+            if composes_with(&line, at, at + char_len(&line[at..]), &mut state) {
                 // Walk to the last composing character; there can be several.
                 let mut n = at;
                 loop {
@@ -307,7 +309,7 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
                     count = len_as_int(char_len(&line[n..]));
                     n += usize::try_from(count)
                         .expect("a character's byte length is never negative");
-                    if !composes_with(line, col.as_usize(), n, &mut state) {
+                    if !composes_with(&line, col.as_usize(), n, &mut state) {
                         break;
                     }
                 }
@@ -333,7 +335,7 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
                 .set_col(Win::current().cursor().col() - 1);
             Win::current().cursor().set_coladd(0);
             let at = Win::current().cursor().col().as_usize();
-            let back = head_off(Buf::current().lines().line(lnum), at);
+            let back = head_off(&Buf::current().lines().line(lnum), at);
             Win::current().cursor().set_col(
                 Win::current().cursor().col() - ColNr::try_from(back).unwrap_or(ColNr::ZERO).get(),
             );
@@ -348,9 +350,12 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
     if ml_line_alloced() {
         // The cached line is this buffer's own, `oldlen + 1` bytes of it, so
         // the tail moves up inside it. `movelen` counts the NUL.
-        let arg = Buf::current().lend_cached_line();
-        ml_add_deleted_len(arg, oldlen.as_usize());
         let buffer = Buf::current();
+        let counts = {
+            let cached = buffer.lend_line(buffer.ml(), false);
+            deleted_counts(buffer, &cached, oldlen.as_usize())
+        };
+        book_deleted(buffer, counts);
         let mut held = buffer.ml();
         let line = held
             .owned_bytes_with_nul_mut()

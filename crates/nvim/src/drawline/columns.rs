@@ -678,7 +678,7 @@ impl WinLineVars {
                 gap_attr
             };
             let mut lines = window.buffer().lines();
-            let mut num = get_breakindent_win(window, lines.line(self.lnum));
+            let mut num = get_breakindent_win(window, &lines.line(self.lnum));
             if self.row == self.startrow {
                 // The first row of a line whose top is scrolled off: the
                 // indent is measured from the second row's left edge.

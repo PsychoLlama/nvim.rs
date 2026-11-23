@@ -160,11 +160,11 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
     let mut lines = Lines::current();
     {
         let line = lines.line(lnum);
-        let at = skip::white(line);
-        if byte_at(line, at) == b'#' {
+        let at = skip::white(&line);
+        if byte_at(&line, at) == b'#' {
             return false; // skip #define FOO x ? (x) : x
         }
-        if only_comment_left(line, at) {
+        if only_comment_left(&line, at) {
             return false;
         }
     }
@@ -184,24 +184,25 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
     //    {}
     while lnum > LineNr::ONE {
         let line = lines.line(lnum - 1);
-        let mut at = skip::white(line);
-        let stop = if byte_at(line, at) == b'#' || byte_at(line, at) == 0 {
+        let mut at = skip::white(&line);
+        let stop = if byte_at(&line, at) == b'#' || byte_at(&line, at) == 0 {
             true
         } else {
-            while byte_at(line, at) != 0 {
-                at = code_at(line, at);
-                if byte_at(line, at) == b'{'
-                    || byte_at(line, at) == b'}'
-                    || (byte_at(line, at) == b';' && only_comment_left(line, at + 1))
+            while byte_at(&line, at) != 0 {
+                at = code_at(&line, at);
+                if byte_at(&line, at) == b'{'
+                    || byte_at(&line, at) == b'}'
+                    || (byte_at(&line, at) == b';' && only_comment_left(&line, at + 1))
                 {
                     break;
                 }
-                if byte_at(line, at) != 0 {
+                if byte_at(&line, at) != 0 {
                     at += 1;
                 }
             }
-            byte_at(line, at) != 0
+            byte_at(&line, at) != 0
         };
+        drop(line);
         if stop {
             break;
         }
@@ -213,7 +214,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
     'lines: loop {
         let line = lines.line(lnum);
         loop {
-            if byte_at(line, at) == 0 {
+            if byte_at(&line, at) == 0 {
                 if lnum == Win::current().cursor().lnum() {
                     break 'lines;
                 }
@@ -223,11 +224,11 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
             }
             if at == 0 {
                 // Do not recognise "case (foo):" as a base class.
-                if is_case_label(line, 0, false) {
+                if is_case_label(&line, 0, false) {
                     break 'lines;
                 }
-                at = code_at(line, 0);
-                if byte_at(line, at) == 0 {
+                at = code_at(&line, 0);
+                if byte_at(&line, at) == 0 {
                     continue;
                 }
             }
@@ -235,14 +236,14 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
             // Past the test above, `at` is never on the line's end, so
             // `at + 1` is at worst one past it -- which is what every step
             // below rests on.
-            let c = byte_at(line, at);
-            if c == b'"' || (c == b'R' && byte_at(line, at + 1) == b'"') {
-                at = string_end_at(line, at) + 1;
+            let c = byte_at(&line, at);
+            if c == b'"' || (c == b'R' && byte_at(&line, at + 1) == b'"') {
+                at = string_end_at(&line, at) + 1;
             } else if c == b':' {
-                if byte_at(line, at + 1) == b':' {
+                if byte_at(&line, at + 1) == b':' {
                     // A double colon: no longer a constructor initialisation.
                     lookfor_ctor_init = false;
-                    at = code_at(line, at + 2);
+                    at = code_at(&line, at + 2);
                 } else {
                     if lookfor_ctor_init || class_or_struct {
                         // The start of a base-class declaration or of a
@@ -252,15 +253,15 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
                         class_or_struct = false;
                         cached.lpos.col = ColNr::ZERO;
                     }
-                    at = code_at(line, at + 1);
+                    at = code_at(&line, at + 1);
                 }
             } else if let Some(word) = [&b"class"[..], &b"struct"[..]]
                 .into_iter()
-                .find(|word| starts_with_word(line, at, word))
+                .find(|word| starts_with_word(&line, at, word))
             {
                 class_or_struct = true;
                 lookfor_ctor_init = false;
-                at = code_at(line, at + word.len());
+                at = code_at(&line, at + word.len());
             } else {
                 if c == b'{' || c == b'}' || c == b';' {
                     cpp_base_class = false;
@@ -288,11 +289,11 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
                 // When the line ends in a comma, do not align with it.
                 if lnum == Win::current().cursor().lnum()
                     && c == b','
-                    && only_comment_left(line, at + 1)
+                    && only_comment_left(&line, at + 1)
                 {
                     cached.lpos.col = ColNr::ZERO;
                 }
-                at = code_at(line, at + 1);
+                at = code_at(&line, at + 1);
             }
         }
     }
@@ -312,7 +313,7 @@ pub(crate) fn get_baseclass_amount(col: c_int) -> c_int {
         // The borrow ends with the statement: the match search reads other
         // lines, and only runs when a paren was found, as upstream has it.
         let cursor_lnum = Win::current().cursor().lnum();
-        let has_paren = find_last_paren(Lines::current().line(cursor_lnum), b'(', b')');
+        let has_paren = find_last_paren(&Lines::current().line(cursor_lnum), b'(', b')');
         if let Some(trypos) = has_paren
             .then(|| find_match_paren(Buf::current().b_ind_maxparen()))
             .flatten()
@@ -320,7 +321,7 @@ pub(crate) fn get_baseclass_amount(col: c_int) -> c_int {
             amount = get_indent_lnum(trypos.lnum);
         }
         let cursor_lnum = Win::current().cursor().lnum();
-        if !ends_in(Lines::current().line(cursor_lnum), 0, b",") {
+        if !ends_in(&Lines::current().line(cursor_lnum), 0, b",") {
             amount += Buf::current().b_ind_cpp_baseclass();
         }
         amount

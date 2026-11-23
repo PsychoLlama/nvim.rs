@@ -371,7 +371,7 @@ impl Buf {
                     return None;
                 }
                 let next = lines.line(lnum + 1);
-                let skip = if p_paste() { 0 } else { skip::white(next) };
+                let skip = if p_paste() { 0 } else { skip::white(&next) };
                 out.extend_from_slice(&next[skip..]);
             } else {
                 let line = lines.line(lnum);
@@ -391,10 +391,11 @@ impl Buf {
                 return None;
             }
             // Find the start of the next word.
-            at = word_start(line, at);
+            at = word_start(&line, at);
         }
         // Find the end of this word.
-        let mut len = word_end(line, at) - col;
+        let mut len = word_end(&line, at) - col;
+        drop(line);
         let mut cont_s_ipos = false;
 
         if compl_status_adding() && len == typed_len {
@@ -404,9 +405,9 @@ impl Buf {
                 // than typed_len, so the copy always fits -- Acevedo
                 out.truncate(len);
                 let next = lines.line(lnum + 1);
-                let start = skip::white(next);
+                let start = skip::white(&next);
                 // Find the start and then the end of the next word.
-                let end = word_end(next, word_start(next, start));
+                let end = word_end(&next, word_start(&next, start));
                 if end > start {
                     if next[start] != b')' && out[len - 1] != TAB {
                         if out[len - 1] != b' ' {
@@ -481,11 +482,10 @@ impl Buf {
                 } else {
                     usize::try_from(current_pos.col).unwrap_or(usize::MAX)
                 };
-                let line = lines.line(current_pos.lnum);
-                if at < line.len() {
+                if at < lines.line(current_pos.lnum).len() {
                     if whole_line {
                         let text = lines.line_cstr(current_pos.lnum, 0);
-                        if fuzzy_match_str(text, pattern) != FUZZY_SCORE_NONE {
+                        if fuzzy_match_str(&text, pattern) != FUZZY_SCORE_NONE {
                             *pos = current_pos;
                             out.clear();
                             out.extend_from_slice(text.to_bytes());
@@ -493,7 +493,8 @@ impl Buf {
                             return Some(LineMatch { len, score: None });
                         }
                     } else {
-                        if let Some(found) = fuzzy_match_in_line(line, at, pattern) {
+                        let line = lines.line(current_pos.lnum);
+                        if let Some(found) = fuzzy_match_in_line(&line, at, pattern) {
                             current_pos.col =
                                 ColNr::try_from(found.start + found.len).unwrap_or(ColNr::MAX);
                             *pos = current_pos;
@@ -505,6 +506,7 @@ impl Buf {
                                 score,
                             });
                         }
+                        drop(line);
                         if looped_around && current_pos.lnum == circly_end.lnum {
                             return None;
                         }

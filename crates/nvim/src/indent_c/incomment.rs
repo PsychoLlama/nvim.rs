@@ -38,7 +38,7 @@ pub(crate) fn align_with_line_comment() -> Option<c_int> {
         // There may be a statement before the comment; search from the
         // end of the line above for a comment start.
         let lnum = Win::current().cursor().lnum() - 1;
-        if let Some(col) = check_linecomment(Lines::current().line(lnum)) {
+        if let Some(col) = check_linecomment(&Lines::current().line(lnum)) {
             let lnum = Win::current().cursor().lnum() - 1;
             trypos = Some(Pos {
                 lnum,
@@ -85,7 +85,7 @@ pub(crate) fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
         let mut lines = Lines::current();
         let start = lines.line(comment.lnum);
         let look = usize::try_from(comment.col).unwrap_or(0) + 2; // skip / and *
-        nothing_after_opener = byte_at(start, look) == 0;
+        nothing_after_opener = byte_at(&start, look) == 0;
         if !nothing_after_opener {
             let at = look + skip::white(&start[look.min(start.len())..]);
             comment.col = ColNr::try_from(at).expect("a column within a line fits a ColNr");
@@ -186,11 +186,17 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
                 // indent plus the offset.  With the middle leader: its
                 // indent and nothing more.
                 let mut lines = Lines::current();
-                let above = lines.line(prev);
-                let above = &above[skip::white(above)..];
-                if ncmp_eq(above, &lead_start, lead_start_len) {
+                let (above_starts, above_middles) = {
+                    let above = lines.line(prev);
+                    let above = &above[skip::white(&above)..];
+                    (
+                        ncmp_eq(above, &lead_start, lead_start_len),
+                        ncmp_eq(above, &lead_middle, lead_middle_len),
+                    )
+                };
+                if above_starts {
                     *amount = get_indent_lnum(prev);
-                } else if ncmp_eq(above, &lead_middle, lead_middle_len) {
+                } else if above_middles {
                     *amount = get_indent_lnum(prev);
                     break;
                 } else {

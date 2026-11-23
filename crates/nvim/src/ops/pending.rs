@@ -539,7 +539,7 @@ fn finish_visual_region(op: Op, include_line_break: bool, gui_yank: bool, lbr_sa
         let ends_on_nul = {
             let mut lines = Lines::current();
             let line = lines.line(op.end().lnum);
-            byte_at(line, usize::try_from(op.end().col).unwrap_or(0)) == 0
+            byte_at(&line, usize::try_from(op.end().col).unwrap_or(0)) == 0
         };
         if ends_on_nul && (include_line_break || !op_virtual()) {
             op.edit().inclusive = false;

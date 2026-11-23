@@ -419,13 +419,9 @@ here; all closed: an always-on check, [safe-surface.md](safe-surface.md)
 S7, guards on every handle, S5, a lifetime on the argument frame with
 copies elsewhere, S10, the header beside the value it lends, S11, a
 table that owns its items, S12, and the TUI's libuv handles pinned out of
-the `&mut TUIData` the painters borrow, S14.)
+the `&mut TUIData` the painters borrow, S14, and a lent buffer line
+counted in its memfile, which refuses every walk while it is out, S13.)
 
-- **The line cache's slices** ([safe-surface.md](safe-surface.md) S13,
-  open) (`winlayer/deref.rs`'s `lend_cached_line*`, `memline/lines.rs`'s
-  `Lines`): a slice of the cached line is valid until the next fill of the
-  buffer's cache, and nothing but the reader's convention keeps a second
-  reader from filling it while the first slice lives.
 - **The emulator's offset keepers** (`vterm/types.rs`, `vterm/internal.rs`): `_lineinfo_slots`
   and `_buffer_slot` exist only so that C declarations the battery and the
   fixture compile keep reading the right offsets. Not unsafe in Rust, but a
