@@ -234,7 +234,19 @@ describe("preserve and (R)ecover with custom 'directory'", function()
       end)
       local screen0 = Screen.new()
       local child_server = new_pipename()
-      fn.jobstart({ nvim_prog, '-u', 'NONE', '-i', 'NONE', '--listen', child_server }, {
+      -- No core file: the abort is the point, and writing one (systemd-coredump)
+      -- holds the exit for seconds under load.
+      local job = fn.jobstart({
+        'prlimit',
+        '--core=0',
+        nvim_prog,
+        '-u',
+        'NONE',
+        '-i',
+        'NONE',
+        '--listen',
+        child_server,
+      }, {
         term = true,
         env = { VIMRUNTIME = os.getenv('VIMRUNTIME'), NVIM_LOG_FILE = testlog },
       })
@@ -247,6 +259,8 @@ describe("preserve and (R)ecover with custom 'directory'", function()
       n.async_meths.nvim__panic('on purpose', case.at)
       set_session(nvim0)
       -- 128 + SIGABRT: the server aborted, and the client passes its status on.
+      -- Wait on the exit itself, not a screen timeout.
+      eq({ 134 }, fn.jobwait({ job }, 120000))
       screen0:expect({ any = '%[Process exited 134%]' })
       t.assert_log(
         'panic: thread .' .. case.name .. '. panicked at .*\nnvim__panic: on purpose',
