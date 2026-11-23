@@ -30,6 +30,7 @@ count	callee	no_raw	defs	def
 5	read_at	0	1	crates/nvim/src/slot/guards.rs
 5	stream_may_close	0	1	crates/nvim/src/event/stream.rs
 4	.ml_unlent	1	1	crates/nvim/src/winlayer/deref.rs
+4	.pty	1	1	crates/nvim/src/event/proc.rs
 4	Uv::new	0	1	crates/nvim/src/event/libuv_proc.rs
 4	fcntl	0	0	
 4	from_raw_parts_mut	0	0	
@@ -94,6 +95,7 @@ count	callee	no_raw	defs	def
 2	install_luv	0	1	crates/nvim/src/lua/executor/luv.rs
 2	list_free_list	0	1	crates/nvim/src/eval/typval/handle.rs
 2	listxattr	0	0	
+2	loans	0	1	crates/nvim/src/global_cell.rs
 2	luaL_ref	0	0	
 2	luaL_unref	0	0	
 2	lua_getinfo	0	0	
@@ -132,6 +134,7 @@ count	callee	no_raw	defs	def
 2	wstream_write	0	1	crates/nvim/src/event/wstream.rs
 2	xcalloc	0	1	crates/nvim/src/memory/mod.rs
 2	xstrlcpy	0	1	crates/nvim/src/memory/mod.rs
+1	.addr	1	1	crates/nvim/src/event/socket/mod.rs
 1	.assume_init	0	0	
 1	.assume_init_mut	0	0	
 1	.bit_copy	1	1	crates/nvim/src/eval/typval/handle.rs

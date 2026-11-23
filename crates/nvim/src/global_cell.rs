@@ -821,8 +821,9 @@ fn whole_write_conflict(borrowed: State, (start, end): (usize, usize), what: &st
     if abandoned() {
         return;
     }
-    let whole_lent =
-        borrowed == EXCLUSIVE || loans(borrowed).any(|loan| loan.start == start && loan.end == end);
+    // SAFETY: the cell's state, read just now; the walk ends here.
+    let whole_lent = borrowed == EXCLUSIVE
+        || unsafe { loans(borrowed) }.any(|loan| loan.start == start && loan.end == end);
     if whole_lent {
         panic!(
             "GlobalCell::{what} while already borrowed (cell @ {start:#x}) — \
@@ -841,7 +842,9 @@ fn field_write_conflict(borrowed: State, field: usize, size: usize, whole: (usiz
         return;
     }
     let end = field + size.max(1);
-    if let Some(loan) = loans(borrowed).find(|loan| field < loan.end && loan.start < end) {
+    // SAFETY: the cell's state, read just now; the walk ends here.
+    let conflict = unsafe { loans(borrowed) }.find(|loan| field < loan.end && loan.start < end);
+    if let Some(loan) = conflict {
         if (loan.start, loan.end) == whole {
             panic!("GlobalCell field written during an active with borrow (field @ {field:#x})");
         }
@@ -850,7 +853,12 @@ fn field_write_conflict(borrowed: State, field: usize, size: usize, whole: (usiz
 }
 
 /// The shared loans open on a cell, innermost first, from its borrow state.
-fn loans<'a>(borrowed: State) -> impl Iterator<Item = &'a Loan> {
+///
+/// # Safety
+/// `borrowed` is a cell's current state, and the iterator and every loan
+/// it yields are used before any borrow on the cell ends (a conflict path,
+/// which reads the chain and panics or returns).
+unsafe fn loans<'a>(borrowed: State) -> impl Iterator<Item = &'a Loan> {
     let mut next = borrowed;
     core::iter::from_fn(move || {
         if next == FREE || next == EXCLUSIVE {

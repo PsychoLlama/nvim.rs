@@ -51,7 +51,7 @@ A row that stops being needed has to leave in the same commit, the way a
 `PERIMETER` entry does.
 
 `unsafe_fns_without_raw_params` is 0 with this list as the floor, and every
-`unsafe fn` left in the tree — 237, all on the perimeter
+`unsafe fn` left in the tree — 240, all on the perimeter
 ([docs/unsafe-audit.md](unsafe-audit.md)) — has a `# Safety` section naming
 what its caller must hold. Adding a row lowers the count, so a row is a claim
 a reviewer reads: the bar is the four classes above and nothing softer.
@@ -65,3 +65,5 @@ a reviewer reads: the bar is the four classes above and nothing softer.
 | `towupper`                    | `crates/nvim/src/os/cshim.rs`           | `ffi:` as [`towlower`].                                                                                                                             |
 | `Buf::ml_unlent`              | `crates/nvim/src/winlayer/deref.rs`     | `field:` lends the memline through the handle's slot pointer for any lifetime; the caller ends the borrow before anything else reaches the memline. |
 | `Buf::ml_unlent_mut`          | `crates/nvim/src/winlayer/deref.rs`     | `field:` as [`Buf::ml_unlent`], mutably, for one write.                                                                                             |
+| `Child::pty`                  | `crates/nvim/src/event/proc.rs`         | `field:` lends the child's `PtyProc` through the handle's `Proc` pointer as `&mut`, which no other borrow may overlap.                              |
+| `Watcher::addr`               | `crates/nvim/src/event/socket/mod.rs`   | `field:` lends the watcher's address buffer through the handle's pointer, valid only while the watcher lives and nothing rewrites the address.      |

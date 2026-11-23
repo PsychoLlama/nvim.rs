@@ -125,10 +125,14 @@ impl Child {
 
     /// The same child as a `PtyProc`, for a pty child. `Proc` is its first
     /// field.
-    fn pty<'a>(self) -> &'a mut PtyProc {
+    ///
+    /// # Safety
+    /// The child is a pty child, live for `'a`, and nothing else borrows
+    /// its `PtyProc` meanwhile (the borrow is the caller's one call into
+    /// the pty layer, which reads and writes its plain fields only).
+    unsafe fn pty<'a>(self) -> &'a mut PtyProc {
         debug_assert!(self.is_pty());
-        // SAFETY: a pty child is a `PtyProc`, live for as long as this
-        // handle; the pty layer reads and writes its plain fields only.
+        // SAFETY: the caller's promise; a pty child is a `PtyProc`.
         unsafe { &mut *self.0.cast::<PtyProc>() }
     }
 
@@ -281,7 +285,8 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
     }
 
     let status = if child.is_pty() {
-        pty_proc_spawn(child.pty())
+        // SAFETY: a pty child, live, and borrowed for this one call.
+        pty_proc_spawn(unsafe { child.pty() })
     } else {
         // SAFETY: a libuv child is a `LibuvProc`, and is not yet spawned.
         unsafe { libuv_proc_spawn(child.as_libuv()) }
@@ -476,7 +481,8 @@ pub unsafe fn proc_stop(proc: *mut Proc) {
         child.set_exit_signal(as_exit_signal(libc::SIGHUP));
         // SAFETY: a live child.
         unsafe { proc_close_streams(child.as_ptr()) };
-        pty_proc_close_master(child.pty());
+        // SAFETY: a pty child, live, and borrowed for this one call.
+        pty_proc_close_master(unsafe { child.pty() });
     } else {
         child.set_exit_signal(as_exit_signal(libc::SIGTERM));
         os_proc_tree_kill(child.pid, libc::SIGTERM);
@@ -658,7 +664,8 @@ fn proc_close(child: Child) {
 
     if child.is_pty() {
         // Dropping the master is the pty child's close; tell the owner.
-        pty_proc_close_master(child.pty());
+        // SAFETY: a pty child, live, and borrowed for this one call.
+        pty_proc_close_master(unsafe { child.pty() });
         if let Some(notify) = child.internal_close_cb {
             // SAFETY: the child's own close callback.
             unsafe { notify(child.as_ptr()) };
@@ -707,7 +714,8 @@ fn flush_stream(child: Child, stream: Reader) {
         let num_bytes = stream.num_bytes;
 
         if child.is_pty() && !stream.did_eof {
-            pty_proc_flush_master(child.pty());
+            // SAFETY: a pty child, live, and borrowed for this one call.
+            pty_proc_flush_master(unsafe { child.pty() });
         }
         // SAFETY: the child's loop, and the stream's own queue.
         unsafe {

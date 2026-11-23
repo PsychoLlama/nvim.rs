@@ -911,6 +911,34 @@ lent region.
 - **The TUI's state (`&mut TUIData`):** found a hole, closed (type) —
   S14: the libuv handles are out of the lent region.
 
+## The lifetime sweep
+
+After S13, every perimeter function was asked whether it answers a
+reference whose lifetime the caller picks: `fn f<'a>(…) -> &'a …` with
+`'a` tied to no input, a `&'static` from a source that is not, or a
+`from_raw_parts`/`CStr::from_ptr` in a safe function.
+
+- **The line cache's lenders** (`lend_cached_line*`): S13, gone.
+- **`HeldLines`' pinned lender**: closed with S13 — the slice is borrowed
+  from a `MemPin`, which only a pin makes.
+- **Private helpers that lent for any lifetime** — `Buf::ml_unlent`/
+  `ml_unlent_mut` (`winlayer/deref.rs`), `Child::pty` (`event/proc.rs`,
+  a `&mut PtyProc` from a `Copy` handle), `Watcher::addr`
+  (`event/socket/mod.rs`) and `loans` (`global_cell.rs`, the borrow
+  chain's walk): each is an `unsafe fn` with its contract now, every call
+  site a `SAFETY` comment (the first three are rows of
+  [unsafe-fn-allowlist.md](unsafe-fn-allowlist.md)).
+- **Sound as they stand:** the slot guards' phantom lifetimes and
+  `header`/`readers` (a slot's memory is never given back); a tree-sitter
+  language's names, supertypes and fields (`&'static`: a language's
+  library is never closed once registered); `os_strerror`/`os_err_name`,
+  `lua_typename`, `gettext` (static or leaked strings); every
+  `from_raw_parts`/`CStr::from_ptr` in a safe function either copies out
+  before returning or answers a borrow of `&self`/`&mut self` over memory
+  the receiver owns (`ThinCString`, `Directory`'s entry, the Lua stack's
+  strings — S7's ground); the rest are `unsafe fn`s taking the raw
+  pointer.
+
 ### ~~S13 — the line cache's slices~~ (closed: check-always)
 
 Found by the swap audit. `Buf::lend_cached_line*` (`winlayer/deref.rs`)

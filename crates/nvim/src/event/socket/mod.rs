@@ -114,10 +114,14 @@ impl Watcher {
         unsafe { (&raw mut (*self.0).addr).cast() }
     }
 
-    /// The address buffer as a string, for as long as the caller keeps the
-    /// watcher alive: it is always NUL-terminated (`xstrlcpy` writes it).
-    fn addr<'a>(self) -> &'a CStr {
-        // SAFETY: a field of the live watcher, NUL-terminated.
+    /// The address buffer as a string: it is always NUL-terminated
+    /// (`xstrlcpy` writes it).
+    ///
+    /// # Safety
+    /// The watcher stays alive, and its address buffer unwritten, for `'a`.
+    unsafe fn addr<'a>(self) -> &'a CStr {
+        // SAFETY: a field of the live watcher (the caller's promise),
+        // NUL-terminated.
         unsafe { CStr::from_ptr(self.addr_ptr()) }
     }
 
@@ -572,8 +576,10 @@ impl Listener {
     /// The address it listens on: the endpoint as resolved, with the port
     /// the kernel picked once it is bound.
     pub(crate) fn address(&self) -> &CStr {
-        // The watcher this value owns, live until `close`.
-        Watcher(self.0.as_ptr()).addr()
+        // SAFETY: the watcher this value owns, live until `close` consumes
+        // it; the address is written only by `start`, which takes `&mut
+        // self`, so not while the answer borrows `self`.
+        unsafe { Watcher(self.0.as_ptr()).addr() }
     }
 
     /// Bind and listen, reporting each connection to `cb`; the libuv error
@@ -619,7 +625,9 @@ impl Incoming<'_> {
 
     /// The address the listener is bound to.
     pub(crate) fn address(&self) -> CString {
-        self.watcher.addr().to_owned()
+        // SAFETY: the listener, live for the callback this is lent to; the
+        // copy is taken before the borrow ends.
+        unsafe { self.watcher.addr() }.to_owned()
     }
 }
 
