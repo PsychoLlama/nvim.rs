@@ -17,14 +17,14 @@
 //! convention -- see [`Staging`].
 
 use crate::cursor_shape::CursorEntry;
-use crate::event::objects::{RStream, SignalWatcher};
-use crate::event::uv::{uv_loop_t, uv_pipe_t, uv_timer_t, uv_tty_t};
 use crate::highlight::HlAttrs;
 use crate::tui::terminfo::entry::TerminfoEntry;
+use crate::tui::tui::Handles;
 use crate::tui::ugrid::UGrid;
 use crate::types::{Integer, OptInt};
 use core::ffi::{CStr, c_char, c_int};
 use std::borrow::Cow;
+use std::pin::Pin;
 
 pub type TermMode = ::core::ffi::c_uint;
 pub type TermModeState = ::core::ffi::c_uint;
@@ -41,9 +41,10 @@ pub const KEY_BUFFER_SIZE: usize = 0x1000;
 ///
 /// One of these exists per UI process. It is built by
 /// [`Tui::start`](crate::tui::tui::Tui::start) into a boxed cell and lives
-/// as long as the process does: libuv keeps the addresses of the handles
-/// inside it, so it can neither move nor be freed while the loop it
-/// registered with is still running.
+/// as long as the process does. The handles libuv keeps by address are not
+/// in the part this lends: they sit pinned behind [`Handles`], whose fields
+/// only the TUI's libuv files reach, and only as raw pointers -- so nothing
+/// handed a `&mut TUIData` can overwrite, swap or move one.
 ///
 /// Holding a `&mut TUIData` means holding a TUI that `tui_start` finished
 /// setting up: the write handles are open and `ti` describes the terminal
@@ -58,20 +59,19 @@ pub struct TUIData {
     /// Bytes on their way to the terminal.
     pub staging: Staging,
     pub input: TermInput,
-    /// The loop writes run on, private to the TUI so a flush can be
-    /// synchronous without pumping the editor's loop.
-    pub write_loop: uv_loop_t,
+    /// The handles libuv keeps by address: the write loop, the output
+    /// handle, the resize watcher, the timers and the read stream. There is
+    /// one, built with this state; nothing else can make another to swap
+    /// in, and a pinned `!Unpin` value lends no `&mut`.
+    pub handles: Pin<Box<Handles>>,
     /// This terminal's capabilities.
     pub ti: TerminfoEntry,
     /// `$TERM`, or the name of the built-in entry standing in for it; `None`
     /// until the terminal is started and after it is stopped.
     pub term: Option<Cow<'static, CStr>>,
-    pub output_handle: OutputHandle,
+    /// Is the output a terminal? Painting's question; which output handle
+    /// is open is [`Handles`]' own record, not this.
     pub out_isatty: bool,
-    pub winch_handle: SignalWatcher,
-    /// Fires once, shortly after startup, for the sequences that must not
-    /// be sent until the terminal has settled.
-    pub startup_delay_timer: uv_timer_t,
     /// What the TUI believes is on the screen.
     pub grid: UGrid,
     /// Rectangles waiting to be repainted at the next flush.
@@ -260,19 +260,11 @@ crate::bitfield_accessors! {
     }
 }
 
-/// Where output goes: a tty when there is one, a pipe otherwise.
-pub union OutputHandle {
-    pub tty: uv_tty_t,
-    pub pipe: uv_pipe_t,
-}
-// Which arm is live is `TUIData::out_isatty`'s to say.
-crate::untagged_union_debug!(OutputHandle);
-
 /// Everything needed to read one terminal.
 ///
-/// It lives inside the [`TUIData`] it belongs to, and holds that one's
-/// pointer: what the terminal says about its modes and its size is the TUI's
-/// business rather than the editor's.
+/// It lives inside the [`TUIData`] it belongs to: what the terminal says
+/// about its modes and its size is the TUI's business rather than the
+/// editor's. Its timers and read stream are in the TUI's [`Handles`].
 #[derive(Debug)]
 pub struct TermInput {
     /// The terminal's file descriptor: this process's own stdin.
@@ -289,12 +281,6 @@ pub struct TermInput {
     /// termkey's parser, holding whatever sequence is half-read. `None`
     /// until the input layer is initialised and after it is destroyed.
     pub tk: Option<crate::tui::termkey::termkey::TermKey>,
-    /// Fires when an incomplete sequence has waited long enough.
-    pub timer_handle: uv_timer_t,
-    /// Rations the background-colour queries that a terminal announcing a
-    /// theme change would otherwise provoke one of per announcement.
-    pub bg_query_timer: uv_timer_t,
-    pub read_stream: RStream,
     /// Keys named but not yet sent. One `nvim_input` carries as many as have
     /// accumulated by the end of a read.
     pub key_buffer: [u8; KEY_BUFFER_SIZE],

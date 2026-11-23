@@ -907,7 +907,8 @@ lent region.
   The loan itself is otherwise safe to swap: the part bit is in the slot,
   and the memfile's pins and lend epoch move with it.
 - **The line cache's slices:** found a hole, open — S13.
-- **The TUI's state (`&mut TUIData`):** found a hole, open — S14.
+- **The TUI's state (`&mut TUIData`):** found a hole, closed (type) —
+  S14: the libuv handles are out of the lent region.
 
 ### S13 — the line cache's slices (sound-by-convention: open)
 
@@ -930,22 +931,31 @@ but nothing stops a second reader filling the same buffer's cache meanwhile
   reader (~hundreds of sites) and the per-line cost of the hot walks, and
   the `lend_cached_line*` family becomes `unsafe fn` with the contract.
 
-### S14 — the TUI's libuv handles under `&mut TUIData` (sound-by-convention: open)
+### ~~S14 — the TUI's libuv handles under `&mut TUIData`~~ (closed: type holds it)
 
-Found by the swap audit. `TUIData` (`tui/state.rs`) holds handles libuv
+Found by the swap audit. `TUIData` (`tui/state.rs`) held handles libuv
 keeps by address — `write_loop`, `output_handle`, `winch_handle`,
 `startup_delay_timer`, and the input's `timer_handle`, `bg_query_timer` and
 `read_stream` — as `pub` fields, and every painting module takes
 `&mut TUIData` (S8 closed the same shape in `event/`, not here).
 
-- **Breaks:** `t.startup_delay_timer.loop_0 = ptr::null_mut()` or
+- **Broke:** `t.startup_delay_timer.loop_0 = ptr::null_mut()` or
   `mem::swap(&mut t.input.timer_handle, &mut t.input.bg_query_timer)` in
-  any function handed `&mut TUIData` rewrites memory libuv's loop links
-  through. A `forbid(unsafe_code)` probe compiles.
-- **Closure (sketched):** a type: the handles out of the lent region —
-  into a perimeter-private block the TUI files reach by address (or
-  `Pin`ned, behind field writers as `event/stream.rs`'s
-  `field_writers!`), so `&mut TUIData` lends only the painting state.
+  any function handed `&mut TUIData` rewrote memory libuv's loop links
+  through. A `forbid(unsafe_code)` probe compiled.
+- **Closed:** the handles left the lent region for `tui::tui::Handles`,
+  which `TUIData` holds as `Pin<Box<Handles>>`: private fields (each an
+  `UnsafeCell`, as libuv writes them while the state is borrowed),
+  `!Unpin`, built only by `TUIData::new`, no `Default`/`Clone` — so safe
+  code can neither reach a handle, lend `&mut Handles`, nor swap or replace
+  the box (there is no second value). It lends raw pointers, for the four
+  libuv files' `unsafe` calls. Which output handle is open (tty, pipe,
+  none) is its own private record, so a painter flipping `out_isatty` can
+  no longer send a write or a mode change through a handle libuv never
+  initialised; a flush with no output open drops what was staged. The
+  probe's field write and swap, and `Pin::get_mut`, a field read and
+  `Handles::new()` against the new shape, all fail to compile (E0609,
+  E0277, E0616, E0624).
 
 ## Closed before the survey
 

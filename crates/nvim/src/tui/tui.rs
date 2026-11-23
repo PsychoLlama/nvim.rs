@@ -32,18 +32,19 @@
 )]
 
 use crate::event::libuv::{
-    uv_close, uv_is_closing, uv_loop_close, uv_loop_init, uv_pipe_init, uv_pipe_open, uv_run,
-    uv_timer_init, uv_timer_start, uv_tty_get_winsize, uv_tty_init, uv_tty_reset_mode,
-    uv_tty_set_mode,
+    uv_close, uv_loop_close, uv_loop_init, uv_pipe_init, uv_pipe_open, uv_run, uv_timer_init,
+    uv_timer_start, uv_tty_get_winsize, uv_tty_init, uv_tty_reset_mode, uv_tty_set_mode,
 };
 use crate::event::r#loop::{Drain, main_loop_raw, poll_main_loop, wait_on_main_loop};
-use crate::event::objects::SignalWatcher;
+use crate::event::objects::{RStream, SignalWatcher};
 use crate::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
 use crate::event::stream::stream_set_blocking;
 use crate::event::uv::{UV_RUN_DEFAULT, UV_TTY_MODE_IO};
-use crate::event::uv::{uv_file, uv_handle_t, uv_timer_t};
+use crate::event::uv::{
+    uv_file, uv_handle_t, uv_loop_t, uv_pipe_t, uv_stream_t, uv_timer_t, uv_tty_t,
+};
 use crate::global_cell::GlobalCell;
 use crate::highlight::{HlAttrFlags, HlAttrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
@@ -81,9 +82,12 @@ use crate::types::ApiString;
 use crate::ui::state::T_COLORS;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::libc::{abort, kill};
+use core::cell::{Cell, UnsafeCell};
 use core::ffi::{CStr, c_int, c_void};
+use core::marker::PhantomPinned;
 use core::ptr;
 use std::borrow::Cow;
+use std::pin::Pin;
 
 // --------------------------------------------------------------- the state
 
@@ -139,6 +143,134 @@ pub(crate) fn with_started_tui<R>(f: impl FnOnce(&mut TUIData) -> R) -> R {
     with_tui(f)
 }
 
+/// The handles libuv keeps by address, apart from the state the TUI's
+/// modules borrow.
+///
+/// A [`TUIData`] holds its one `Handles` pinned in a box: built only by
+/// [`TUIData::new`], with private fields, no `Default` or `Clone`, and
+/// `!Unpin`, so safe code handed the state can neither move one, swap in
+/// another, nor reach inside it. What it lends are raw pointers, for the
+/// `unsafe` libuv calls in the TUI's four libuv files; each handle sits in
+/// an [`UnsafeCell`] because libuv writes it while the state is borrowed.
+pub struct Handles {
+    /// The loop writes run on, private to the TUI so a flush can be
+    /// synchronous without pumping the editor's loop.
+    write_loop: UnsafeCell<uv_loop_t>,
+    /// The output when it is a terminal...
+    tty: UnsafeCell<uv_tty_t>,
+    /// ...and when it is not.
+    pipe: UnsafeCell<uv_pipe_t>,
+    /// Which of the two is open: set by [`open_output`] and
+    /// [`terminfo_stop`] only, so no painter can make a write go through a
+    /// handle libuv never initialised.
+    output: Cell<Output>,
+    winch: UnsafeCell<SignalWatcher>,
+    /// Fires once, shortly after startup, for the sequences that must not
+    /// be sent until the terminal has settled.
+    startup_delay_timer: UnsafeCell<uv_timer_t>,
+    /// Fires when an incomplete input sequence has waited long enough.
+    input_timer: UnsafeCell<uv_timer_t>,
+    /// Rations the background-colour queries that a terminal announcing a
+    /// theme change would otherwise provoke one of per announcement.
+    bg_query_timer: UnsafeCell<uv_timer_t>,
+    /// stdin.
+    read_stream: UnsafeCell<RStream>,
+    _pinned: PhantomPinned,
+}
+
+/// Which output handle is open.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Output {
+    Unopened,
+    Tty,
+    Pipe,
+    Closed,
+}
+
+impl ::core::fmt::Debug for Handles {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        f.debug_struct("Handles")
+            .field("output", &self.output.get())
+            .finish_non_exhaustive()
+    }
+}
+
+impl Handles {
+    /// Handles libuv has not been given yet.
+    fn new() -> Pin<Box<Self>> {
+        // SAFETY: libuv handles, loops and the read stream are C layouts for
+        // which all-zero is the state their `*_init` initialises from, as it
+        // was when the TUI's struct was xcalloc'ed.
+        let zeroed = unsafe {
+            Self {
+                write_loop: core::mem::zeroed(),
+                tty: core::mem::zeroed(),
+                pipe: core::mem::zeroed(),
+                output: Cell::new(Output::Unopened),
+                winch: core::mem::zeroed(),
+                startup_delay_timer: core::mem::zeroed(),
+                input_timer: core::mem::zeroed(),
+                bg_query_timer: core::mem::zeroed(),
+                read_stream: core::mem::zeroed(),
+                _pinned: PhantomPinned,
+            }
+        };
+        Box::pin(zeroed)
+    }
+
+    /// The TUI's private write loop.
+    pub(crate) fn write_loop(&self) -> *mut uv_loop_t {
+        self.write_loop.get()
+    }
+
+    /// The open output handle, as a stream to write to; `None` before
+    /// [`open_output`] and after [`terminfo_stop`].
+    pub(crate) fn output_stream(&self) -> Option<*mut uv_stream_t> {
+        match self.output.get() {
+            Output::Tty => Some(self.tty.get().cast::<uv_stream_t>()),
+            Output::Pipe => Some(self.pipe.get().cast::<uv_stream_t>()),
+            Output::Unopened | Output::Closed => None,
+        }
+    }
+
+    /// The output handle when it is an open terminal.
+    pub(crate) fn output_tty(&self) -> Option<*mut uv_tty_t> {
+        (self.output.get() == Output::Tty).then(|| self.tty.get())
+    }
+
+    /// The `SIGWINCH` watcher.
+    fn winch(&self) -> *mut SignalWatcher {
+        self.winch.get()
+    }
+
+    /// The startup timer.
+    fn startup_delay_timer(&self) -> *mut uv_timer_t {
+        self.startup_delay_timer.get()
+    }
+
+    /// The input layer's sequence timer.
+    pub(crate) fn input_timer(&self) -> *mut uv_timer_t {
+        self.input_timer.get()
+    }
+
+    /// The input layer's background-query timer.
+    pub(crate) fn bg_query_timer(&self) -> *mut uv_timer_t {
+        self.bg_query_timer.get()
+    }
+
+    /// stdin's read stream.
+    pub(crate) fn read_stream(&self) -> *mut RStream {
+        self.read_stream.get()
+    }
+
+    /// Has stdin's read stream seen the end of its input?
+    fn input_at_eof(&self) -> bool {
+        // SAFETY: a plain read of the stream's own flag; libuv writes it only
+        // in a callback the loop runs, and none runs while this does.
+        unsafe { (*self.read_stream.get()).did_eof }
+    }
+}
+
 /// The running TUI, as its client holds it: a token for the state in
 /// [`STATE`], which the process exits with.
 #[derive(Debug)]
@@ -160,23 +292,17 @@ impl Tui {
             // SAFETY: the editor's loop, live from startup to exit, and the
             // watcher inside the boxed state, which never moves; its callback
             // looks the state up again.
+            let winch = tui.handles.winch();
             unsafe {
-                signal_watcher_init(main_loop_raw(), &raw mut tui.winch_handle, ptr::null_mut());
-                signal_watcher_start(&raw mut tui.winch_handle, Some(sigwinch_cb), libc::SIGWINCH);
+                signal_watcher_init(main_loop_raw(), winch, ptr::null_mut());
+                signal_watcher_start(winch, Some(sigwinch_cb), libc::SIGWINCH);
             }
             tui_terminal_start(tui);
+            let timer = tui.handles.startup_delay_timer();
             // SAFETY: as above, for the startup timer.
             unsafe {
-                uv_timer_init(
-                    &raw mut (*main_loop_raw()).uv,
-                    &raw mut tui.startup_delay_timer,
-                );
-                uv_timer_start(
-                    &raw mut tui.startup_delay_timer,
-                    Some(after_startup_cb),
-                    STARTUP_DELAY_MS,
-                    0,
-                );
+                uv_timer_init(&raw mut (*main_loop_raw()).uv, timer);
+                uv_timer_start(timer, Some(after_startup_cb), STARTUP_DELAY_MS, 0);
             }
         });
         Self { _started: () }
@@ -247,13 +373,10 @@ impl TUIData {
             Box::new(Self {
                 staging: Staging::new(),
                 input: TermInput::new(),
-                write_loop: core::mem::zeroed(),
+                handles: Handles::new(),
                 ti: TerminfoEntry::default(),
                 term: None,
-                output_handle: core::mem::zeroed(),
                 out_isatty: false,
-                winch_handle: core::mem::zeroed(),
-                startup_delay_timer: core::mem::zeroed(),
                 grid: core::mem::zeroed(),
                 invalid_regions: Vec::new(),
                 row: 0,
@@ -405,35 +528,37 @@ fn terminfo_start(tui: &mut TUIData) {
 /// Attach the output file descriptor to the TUI's own write loop.
 fn open_output(tui: &mut TUIData) {
     let out_fd = tui.out_fd as uv_file;
-    // SAFETY: the write loop and the output handle are this TUI's own
-    // fields, which do not move (the TUI is boxed for the process); libuv
-    // keeps their addresses from here until `terminfo_stop` closes them.
-    unsafe {
-        uv_loop_init(&raw mut tui.write_loop);
-        if !tui.out_isatty {
-            let ret = uv_pipe_init(&raw mut tui.write_loop, &raw mut tui.output_handle.pipe, 0);
-            log_uv_error(ret, "uv_pipe_init");
-            let ret = uv_pipe_open(&raw mut tui.output_handle.pipe, out_fd);
-            log_uv_error(ret, "uv_pipe_open");
-            return;
-        }
-        let ret = uv_tty_init(
-            &raw mut tui.write_loop,
-            &raw mut tui.output_handle.tty,
-            out_fd,
-            0,
-        );
-        log_uv_error(ret, "uv_tty_init");
-        // Setting the mode can be interrupted by a signal, which says
-        // nothing about whether it would succeed.
-        let mut retries = 10;
-        let mut ret = UV_EINTR;
-        while ret == UV_EINTR && retries > 0 {
-            ret = uv_tty_set_mode(&raw mut tui.output_handle.tty, UV_TTY_MODE_IO);
-            retries -= 1;
-        }
-        log_uv_error(ret, "uv_tty_set_mode");
+    let handles = &tui.handles;
+    let write_loop = handles.write_loop();
+    // SAFETY: the TUI's pinned write loop; libuv keeps its address from
+    // here until `terminfo_stop` closes it.
+    unsafe { uv_loop_init(write_loop) };
+    if !tui.out_isatty {
+        let pipe = handles.pipe.get();
+        // SAFETY: as above, for the pinned pipe handle and the write loop.
+        let ret = unsafe { uv_pipe_init(write_loop, pipe, 0) };
+        log_uv_error(ret, "uv_pipe_init");
+        // SAFETY: as above.
+        let ret = unsafe { uv_pipe_open(pipe, out_fd) };
+        log_uv_error(ret, "uv_pipe_open");
+        handles.output.set(Output::Pipe);
+        return;
     }
+    let tty = handles.tty.get();
+    // SAFETY: as above, for the pinned tty handle and the write loop.
+    let ret = unsafe { uv_tty_init(write_loop, tty, out_fd, 0) };
+    log_uv_error(ret, "uv_tty_init");
+    handles.output.set(Output::Tty);
+    // Setting the mode can be interrupted by a signal, which says nothing
+    // about whether it would succeed.
+    let mut retries = 10;
+    let mut ret = UV_EINTR;
+    while ret == UV_EINTR && retries > 0 {
+        // SAFETY: the tty handle just initialised.
+        ret = unsafe { uv_tty_set_mode(tty, UV_TTY_MODE_IO) };
+        retries -= 1;
+    }
+    log_uv_error(ret, "uv_tty_set_mode");
 }
 
 /// Log a libuv failure, if `ret` is one.
@@ -493,13 +618,19 @@ fn terminfo_stop(tui: &mut TUIData) {
         terminfo_out(tui, TERM_EXIT_CA_MODE);
     }
     flush(tui);
+    let handles = &tui.handles;
+    let output = handles
+        .output_stream()
+        .expect("the output handle is open until the terminal stops");
+    let write_loop = handles.write_loop();
+    handles.output.set(Output::Closed);
     // SAFETY: the output handle and the write loop `open_output` opened;
     // the loop runs the close to completion before it is closed itself.
     unsafe {
         uv_tty_reset_mode();
-        uv_close((&raw mut tui.output_handle).cast::<uv_handle_t>(), None);
-        uv_run(&raw mut tui.write_loop, UV_RUN_DEFAULT);
-        if uv_loop_close(&raw mut tui.write_loop) != 0 {
+        uv_close(output.cast::<uv_handle_t>(), None);
+        uv_run(write_loop, UV_RUN_DEFAULT);
+        if uv_loop_close(write_loop) != 0 {
             // A loop that will not close has a handle still open, which
             // would mean writing to a terminal that is being reset.
             abort();
@@ -514,10 +645,10 @@ fn tui_terminal_start(tui: &mut TUIData) {
     tui.print_attr_id = -1;
     terminfo_start(tui);
     if tui.input.tk.is_none() {
-        tinput_init(&mut tui.input, &tui.ti);
+        tinput_init(&mut tui.input, &tui.handles, &tui.ti);
     }
     tui_guess_size(tui);
-    tinput_start(&mut tui.input);
+    tinput_start(&tui.handles);
 }
 
 /// The startup delay timer's callback.
@@ -542,8 +673,7 @@ fn tui_terminal_after_startup(tui: &mut TUIData) {
 /// it holds nothing of it: the state is borrowed before and after.
 fn tui_stop() {
     let stopping = with_tui(|tui| {
-        // SAFETY: the TUI's own output handle.
-        if unsafe { uv_is_closing((&raw mut tui.output_handle).cast::<uv_handle_t>()) } != 0 {
+        if tui.handles.output_stream().is_none() {
             logmsg!(LOGLVL_ERR, c"tui_stop", 0, "TUI already stopped (race?)");
             tui.stopped = true;
             return false;
@@ -557,10 +687,10 @@ fn tui_stop() {
     if !stopping {
         return;
     }
-    let answered = || read_tui(|tui| tui.stopped || tui.input.read_stream.did_eof);
+    let answered = || read_tui(|tui| tui.stopped || tui.handles.input_at_eof());
     wait_on_main_loop(Drain::Events, DA1_TIMEOUT_MS, answered);
     with_tui(|tui| {
-        if !tui.stopped && !tui.input.read_stream.did_eof {
+        if !tui.stopped && !tui.handles.input_at_eof() {
             logmsg!(
                 LOGLVL_WRN,
                 c"tui_stop",
@@ -571,15 +701,13 @@ fn tui_stop() {
         tui.stopped = true;
         tui_terminal_stop(tui);
         stream_set_blocking(tui.input.in_fd, true);
-        tinput_destroy(&mut tui.input);
+        tinput_destroy(&mut tui.input, &tui.handles);
+        let (winch, timer) = (tui.handles.winch(), tui.handles.startup_delay_timer());
         // SAFETY: the TUI's own watcher and timer, open until here.
         unsafe {
-            signal_watcher_stop(&raw mut tui.winch_handle);
-            signal_watcher_close(&raw mut tui.winch_handle, None);
-            uv_close(
-                (&raw mut tui.startup_delay_timer).cast::<uv_handle_t>(),
-                None,
-            );
+            signal_watcher_stop(winch);
+            signal_watcher_close(winch, None);
+            uv_close(timer.cast::<uv_handle_t>(), None);
         }
     });
 }
@@ -594,7 +722,7 @@ fn tui_stop_cb(tui: &mut TUIData) {
 
 /// Stop reading input and close the terminal.
 fn tui_terminal_stop(tui: &mut TUIData) {
-    tinput_stop(&mut tui.input);
+    tinput_stop(&tui.handles);
     terminfo_stop(tui);
 }
 
@@ -665,16 +793,11 @@ pub fn tui_set_size(tui: &mut TUIData, width: c_int, height: c_int) {
 /// claimed, and finally a plain 80x24.
 fn tui_guess_size(tui: &mut TUIData) {
     let (mut width, mut height) = (0, 0);
-    // SAFETY: the tty handle `open_output` opened when `out_isatty`, and two
-    // ints of this frame's for libuv to fill.
-    let from_tty = tui.out_isatty
-        && unsafe {
-            uv_tty_get_winsize(
-                &raw mut tui.output_handle.tty,
-                &raw mut width,
-                &raw mut height,
-            )
-        } == 0;
+    // SAFETY: the open tty handle, and two ints of this frame's for libuv
+    // to fill.
+    let from_tty = tui.handles.output_tty().is_some_and(|tty| unsafe {
+        uv_tty_get_winsize(tty, &raw mut width, &raw mut height) == 0
+    });
     if !from_tty {
         match (env_size(c"LINES"), env_size(c"COLUMNS")) {
             (Some(lines), Some(columns)) => (height, width) = (lines, columns),

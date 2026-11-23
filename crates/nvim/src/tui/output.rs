@@ -28,7 +28,7 @@
 
 use crate::event::libuv::{uv_run, uv_write};
 use crate::event::uv::UV_RUN_DEFAULT;
-use crate::event::uv::{uv_buf_t, uv_stream_t, uv_write_t};
+use crate::event::uv::{uv_buf_t, uv_write_t};
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::os::fs::os_strerror;
@@ -296,7 +296,9 @@ fn write_out(tui: &mut TUIData, oversized: Option<&[u8]>) {
             .write_all(&pre[..pre_len])
             .and_then(|()| file.write_all(body))
             .and_then(|()| file.write_all(&post[..post_len]));
-    } else {
+    } else if let Some(output) = tui.handles.output_stream() {
+        // No output handle open (before the terminal starts or after it
+        // stops) drops what was staged, as a closed terminal would.
         let (body, body_len) = match oversized {
             Some(bytes) => (bytes.as_ptr().cast_mut().cast(), bytes.len()),
             None => tui.staging.staged(),
@@ -325,7 +327,7 @@ fn write_out(tui: &mut TUIData, oversized: Option<&[u8]>) {
             let mut req: uv_write_t = core::mem::zeroed();
             let ret = uv_write(
                 &raw mut req,
-                (&raw mut tui.output_handle).cast::<uv_stream_t>(),
+                output,
                 bufs.as_ptr(),
                 bufs.len().try_into().expect("`bufs` holds three buffers"),
                 None,
@@ -341,7 +343,7 @@ fn write_out(tui: &mut TUIData, oversized: Option<&[u8]>) {
             }
             // The write loop is private to the TUI and runs to completion
             // here, which is what makes the flush synchronous.
-            uv_run(&raw mut tui.write_loop, UV_RUN_DEFAULT);
+            uv_run(tui.handles.write_loop(), UV_RUN_DEFAULT);
         }
     }
 

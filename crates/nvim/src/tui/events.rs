@@ -21,7 +21,7 @@
 
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_tty_set_mode, uv_write};
 use crate::event::uv::{UV_RUN_DEFAULT, UV_TTY_MODE_IO, UV_TTY_MODE_NORMAL};
-use crate::event::uv::{uv_buf_t, uv_stream_t, uv_write_t};
+use crate::event::uv::{uv_buf_t, uv_write_t};
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
@@ -112,10 +112,13 @@ pub fn tui_mode_info_set(tui: &mut TUIData, guicursor_enabled: bool, args: Array
 pub fn tui_mode_change(tui: &mut TUIData, _mode: ApiString, mode_idx: Integer) {
     // Reading from a pipe while writing to a tty leaves libuv's idea of the
     // terminal mode stale; setting it twice re-applies it.
-    if tui.out_isatty && tui.is_starting && !STDIN_ISATTY.get() {
+    if let Some(tty) = tui.handles.output_tty()
+        && tui.is_starting
+        && !STDIN_ISATTY.get()
+    {
         for mode in [UV_TTY_MODE_NORMAL, UV_TTY_MODE_IO] {
-            // SAFETY: the handle is the TUI's own and libuv owns its state.
-            let ret = unsafe { uv_tty_set_mode(&raw mut tui.output_handle.tty, mode) };
+            // SAFETY: the TUI's open tty handle; libuv owns its state.
+            let ret = unsafe { uv_tty_set_mode(tty, mode) };
             if ret != 0 {
                 logmsg!(
                     LOGLVL_ERR,
@@ -168,6 +171,9 @@ const VISUAL_BELL_MS: core::ffi::c_uint = 100;
 /// This is `ui_send`: whatever the editor wrote goes out as it stands,
 /// synchronously, without the TUI interpreting any of it.
 pub fn tui_ui_send(tui: &mut TUIData, content: ApiString) {
+    let Some(output) = tui.handles.output_stream() else {
+        return;
+    };
     // SAFETY: an API string owns `len()` readable bytes; `uv_write` fills in
     // the request, which lives until the loop below has run it.
     unsafe {
@@ -176,13 +182,7 @@ pub fn tui_ui_send(tui: &mut TUIData, content: ApiString) {
             base: content.data(),
             len: content.len(),
         };
-        let ret = uv_write(
-            &raw mut req,
-            (&raw mut tui.output_handle).cast::<uv_stream_t>(),
-            &raw const buf,
-            1,
-            None,
-        );
+        let ret = uv_write(&raw mut req, output, &raw const buf, 1, None);
         if ret != 0 {
             logmsg!(
                 LOGLVL_ERR,
@@ -192,7 +192,7 @@ pub fn tui_ui_send(tui: &mut TUIData, content: ApiString) {
                 msg_cstr(os_strerror(ret))
             );
         }
-        uv_run(&raw mut tui.write_loop, UV_RUN_DEFAULT);
+        uv_run(tui.handles.write_loop(), UV_RUN_DEFAULT);
     }
 }
 

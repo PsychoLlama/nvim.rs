@@ -417,18 +417,15 @@ stack's consuming operations, the handle borrow model, the value bit
 copies, the container header words and the dictionary item store were
 here; all closed: an always-on check, [safe-surface.md](safe-surface.md)
 S7, guards on every handle, S5, a lifetime on the argument frame with
-copies elsewhere, S10, the header beside the value it lends, S11, and a
-table that owns its items, S12.)
+copies elsewhere, S10, the header beside the value it lends, S11, a
+table that owns its items, S12, and the TUI's libuv handles pinned out of
+the `&mut TUIData` the painters borrow, S14.)
 
 - **The line cache's slices** ([safe-surface.md](safe-surface.md) S13,
   open) (`winlayer/deref.rs`'s `lend_cached_line*`, `memline/lines.rs`'s
   `Lines`): a slice of the cached line is valid until the next fill of the
   buffer's cache, and nothing but the reader's convention keeps a second
   reader from filling it while the first slice lives.
-- **The TUI's libuv handles** ([safe-surface.md](safe-surface.md) S14,
-  open) (`tui/state.rs`, used by `tui/{tui,input,output}.rs`): the handles
-  libuv holds by address are `pub` fields of the `TUIData` every painting
-  module borrows `&mut`, so safe code can overwrite or swap them.
 - **The emulator's offset keepers** (`vterm/types.rs`, `vterm/internal.rs`): `_lineinfo_slots`
   and `_buffer_slot` exist only so that C declarations the battery and the
   fixture compile keep reading the right offsets. Not unsafe in Rust, but a

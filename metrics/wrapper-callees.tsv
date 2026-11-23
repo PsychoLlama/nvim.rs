@@ -2,9 +2,9 @@ count	callee	no_raw	defs	def
 41	f	0	0	
 31	CStr::from_ptr	0	0	
 20	from_raw_parts	0	0	
-17	zeroed	0	0	
 16	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 15	.as_ref	0	0	
+14	zeroed	0	0	
 11	Box::from_raw	0	6	
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 10	notify	0	0	
@@ -38,6 +38,7 @@ count	callee	no_raw	defs	def
 4	ts_node_child	0	0	
 4	ts_node_child_count	0	0	
 4	uv_dlclose	0	0	
+4	uv_pipe_init	0	0	
 4	uv_timer_start	0	0	
 3	.get_unchecked_mut	0	0	
 3	.next_arg::<::core::ffi::c_int>	0	0	
@@ -61,7 +62,7 @@ count	callee	no_raw	defs	def
 3	uv_freeaddrinfo	0	0	
 3	uv_fs_access	0	0	
 3	uv_fs_req_cleanup	0	0	
-3	uv_pipe_init	0	0	
+3	uv_pipe_open	0	0	
 3	uv_timer_stop	0	0	
 3	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
 2	.is_collected	1	1	crates/nvim/src/lua/stack/userdata.rs
@@ -118,10 +119,11 @@ count	callee	no_raw	defs	def
 2	tv_dict_free_dict	0	1	crates/nvim/src/eval/typval/handle.rs
 2	uv_fs_lstat	0	0	
 2	uv_listen	0	0	
-2	uv_pipe_open	0	0	
+2	uv_loop_init	0	0	
 2	uv_signal_start	0	0	
 2	uv_signal_stop	0	0	
 2	uv_sleep	0	0	
+2	uv_tty_set_mode	0	0	
 2	word_at	0	1	crates/nvim/src/slot.rs
 2	write	0	0	
 2	wstream_init	0	1	crates/nvim/src/event/wstream.rs
@@ -305,8 +307,6 @@ count	callee	no_raw	defs	def
 1	uv_guess_handle	0	0	
 1	uv_hrtime	0	0	
 1	uv_idle_stop	0	0	
-1	uv_is_closing	0	0	
-1	uv_loop_init	0	0	
 1	uv_now	0	0	
 1	uv_os_homedir	0	0	
 1	uv_os_setenv	0	0	
@@ -325,8 +325,7 @@ count	callee	no_raw	defs	def
 1	uv_thread_self	0	0	
 1	uv_timer_get_due_in	0	0	
 1	uv_timer_init	0	0	
-1	uv_tty_get_winsize	0	0	
-1	uv_tty_set_mode	0	0	
+1	uv_tty_init	0	0	
 1	uv_unref	0	0	
 1	uv_uptime	0	0	
 1	waitpid	0	0	
