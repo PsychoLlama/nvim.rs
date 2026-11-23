@@ -616,9 +616,10 @@ fn digraph_setlist_common(arg: &TypVal) -> Result<(), DigraphError> {
             return Err(DigraphError::NotAListOfPairs);
         }
         // SAFETY: a live list of exactly two items.
-        let pair = pli.li_tv.list_ref();
-        let pair = list_items(pair.as_deref());
+        let pair_list = pli.li_tv.list_ref();
+        let pair = list_items(pair_list.as_deref());
         digraph_set_common(&pair[0].li_tv, &pair[1].li_tv)?;
+        drop(pair_list);
     }
     Ok(())
 }

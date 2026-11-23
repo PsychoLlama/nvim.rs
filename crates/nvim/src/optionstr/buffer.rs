@@ -145,7 +145,9 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
         let held = buf.read();
         let value = held.b_p_bt.bytes();
         let first = value.first().copied().unwrap_or(0);
-        (first, opt_strings_ok(value, &OPT_BT_VALUES, false))
+        let out = (first, opt_strings_ok(value, &OPT_BT_VALUES, false));
+        drop(held);
+        out
     };
     let has_terminal = buf.terminal().is_some();
     if has_terminal != (first == b't') || !listed {

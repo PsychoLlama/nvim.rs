@@ -51,7 +51,9 @@ pub(super) fn fold_create_markers(window: Win, start: Pos, end: Pos) {
     let (open, close) = {
         let held = window.read();
         let (open, close) = markers(held.w_onebuf_opt.wo_fmr.bytes());
-        (open.to_vec(), close.to_vec())
+        let out = (open.to_vec(), close.to_vec());
+        drop(held);
+        out
     };
     fold_add_marker(buf, start, &open);
     fold_add_marker(buf, end, &close);
@@ -149,7 +151,9 @@ impl Win {
             let (open, close) = {
                 let held = self.read();
                 let (open, close) = markers(held.w_onebuf_opt.wo_fmr.bytes());
-                (open.to_vec(), close.to_vec())
+                let out = (open.to_vec(), close.to_vec());
+                drop(held);
+                out
             };
             fold_del_marker(self.buffer(), first, &open);
             fold_del_marker(self.buffer(), last, &close);
@@ -228,6 +232,7 @@ pub(super) fn parse_marker(window: Win) {
     FOLDSTARTMARKERLEN.set(comma);
     let end = foldmarker.get(comma + 1..).unwrap_or_default();
     FOLDENDMARKERLEN.set(end.iter().position(|&b| b == 0).unwrap_or(end.len()));
+    drop(held);
 }
 
 /// Low level function to get the foldlevel for the "marker" method.

@@ -106,13 +106,15 @@ impl BufferWatch {
         let current = Buf::current();
         let held = current.read();
         let (full, shown) = (held.name.full(), held.name.shown());
-        BufferWatch {
+        let watch = BufferWatch {
             buffer: Buf::current_raw(),
-            full: current.read().name.full_ptr().addr(),
-            shown: current.read().name.shown_ptr().addr(),
+            full: held.name.full_ptr().addr(),
+            shown: held.name.shown_ptr().addr(),
             using_full: is_named(fname, full) || is_named(sfname, full),
             using_shown: is_named(fname, shown) || is_named(sfname, shown),
-        }
+        };
+        drop(held);
+        watch
     }
 
     /// Whether the current buffer, or the name being read, changed since.

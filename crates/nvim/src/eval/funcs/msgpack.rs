@@ -86,6 +86,7 @@ pub fn f_msgpackdump(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             }
         }
     });
+    drop(list);
     if args.len() > 1 && numbuf.bytes(&args[1]) == b"B" {
         // The Blob adopts the packed bytes as they are; nothing copies.
         blob_alloc_ret(result).bv_data = data;

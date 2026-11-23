@@ -80,7 +80,9 @@ impl DiffLine {
         }
         let tpr = tp.read();
         let block = tpr.tp_diff.get(block as usize)?;
-        block.df_changes.get((first + i) as usize).copied()
+        let out = block.df_changes.get((first + i) as usize).copied();
+        drop(tpr);
+        out
     }
 
     /// Where change `i` starts in this line's buffer, as the block stored

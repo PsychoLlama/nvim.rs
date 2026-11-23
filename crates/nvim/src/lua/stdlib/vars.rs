@@ -174,5 +174,6 @@ pub(crate) fn getvar(stack: &mut Stack) -> Result<c_int, Raise> {
         return Ok(0); // nil
     };
     let _ = push_typval(stack, &item.di_tv, false);
+    drop(read);
     Ok(1)
 }

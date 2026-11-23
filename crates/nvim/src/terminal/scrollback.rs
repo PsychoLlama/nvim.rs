@@ -139,12 +139,15 @@ pub(crate) fn fetch_row(term: Term, row: c_int, end_col: c_int) {
         let terminal = term.read();
         let vt = terminal.vt.borrow();
         let screen = vt.screen_row(row);
-        render_row(&mut text, end_col, |col, cell| {
+        let len = render_row(&mut text, end_col, |col, cell| {
             if let Some(screen) = &screen {
                 screen.export(col, cell);
             }
             true
-        })
+        });
+        drop(vt);
+        drop(terminal);
+        len
     } else {
         render_row(&mut text, end_col, |col, cell| {
             fetch_cell(term, row, col, cell)
@@ -201,7 +204,7 @@ pub(crate) fn fetch_cell(term: Term, row: c_int, col: c_int, cell: &mut VTermScr
     let stored = sb
         .row(as_index(-row - 1))
         .and_then(|stored| stored.get(as_index(col)));
-    match stored {
+    let found = match stored {
         Some(found) => {
             *cell = *found;
             true
@@ -210,7 +213,10 @@ pub(crate) fn fetch_cell(term: Term, row: c_int, col: c_int, cell: &mut VTermScr
             *cell = blank_cell();
             false
         }
-    }
+    };
+    drop(sb);
+    drop(terminal);
+    found
 }
 
 /// Bring the scrollback back within `'scrollback'` after the option changed
@@ -290,6 +296,8 @@ pub(crate) fn refresh_scrollback(term: Term, buffer: Buf) {
             let textbuf = terminal.textbuf.borrow();
             let text = crate::cstr::in_bytes(&textbuf).to_bytes_with_nul();
             let _ = ml_append_buf_terminated(buffer, at, text, false);
+            drop(textbuf);
+            drop(terminal);
         }
         appended_lines_buf(buffer, at, 1);
         term.read().sb.borrow_mut().mark_mirrored();

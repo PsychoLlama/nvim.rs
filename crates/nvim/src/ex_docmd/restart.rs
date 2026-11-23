@@ -367,6 +367,7 @@ fn restart_argv(no_ui: bool) -> (Vec<ThinCString>, Option<ThinCString>) {
         }
         at += 1;
     }
+    drop(held);
     (words, listen_arg)
 }
 

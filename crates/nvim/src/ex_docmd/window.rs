@@ -401,7 +401,9 @@ fn fill_name(buffer: Buf) -> XString {
         None => {
             let held = buffer.read();
             let fname = held.name.shown().unwrap_or(c"");
-            home_to_tilde(Some(buffer), fname, IOSIZE as usize, true)
+            let out = home_to_tilde(Some(buffer), fname, IOSIZE as usize, true);
+            drop(held);
+            out
         }
         Some(special) => {
             let special = special.as_cstr().to_bytes();

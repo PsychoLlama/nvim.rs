@@ -94,7 +94,9 @@ fn qf_jump_edit_buffer(
     let (entry_kind, fnum) = {
         let list = started.qfl.read();
         let entry = &list.entries[at];
-        (entry.kind, entry.fnum)
+        let out = (entry.kind, entry.fnum);
+        drop(list);
+        out
     };
 
     let opened = if entry_kind == 1 {
@@ -255,12 +257,14 @@ fn qf_jump_print_msg(qi: Qi, qf_index: c_int, at: usize, old_curbuf: Buf, old_ln
         let Some(entry) = qfl.entries.get(at) else {
             return;
         };
-        (
+        let out = (
             qfl.count(),
             entry.cleared,
             qf_types(c_int::from(entry.kind), entry.nr),
             entry.text.clone(),
-        )
+        );
+        drop(stack);
+        out
     };
     let deleted = if cleared {
         gettext(c" (line deleted)")
@@ -356,12 +360,14 @@ fn qf_jump_to_buffer(
     let position = {
         let stack = qi.read();
         let entry = &stack.current_list().entries[at];
-        Position {
+        let position = Position {
             lnum: entry.lnum,
             col: entry.col,
             viscol: entry.viscol,
             pattern: entry.pattern.as_ref().map(|p| p.to_vec()),
-        }
+        };
+        drop(stack);
+        position
     };
     qf_jump_goto_line(&position);
     if FDO_FLAGS.get() & OPT_FDO_FLAG_QUICKFIX as c_uint != 0 && openfold {

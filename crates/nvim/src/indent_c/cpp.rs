@@ -167,6 +167,7 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
         if only_comment_left(&line, at) {
             return false;
         }
+        drop(line);
     }
 
     let mut cpp_base_class = false;
@@ -211,21 +212,22 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
 
     cached.lpos.lnum = lnum;
     let mut at = 0usize;
-    'lines: loop {
+    loop {
         let line = lines.line(lnum);
-        loop {
+        // Whether the next line is wanted too.
+        let more = loop {
             if byte_at(&line, at) == 0 {
                 if lnum == Win::current().cursor().lnum() {
-                    break 'lines;
+                    break false;
                 }
                 lnum += 1; // continue into the cursor's line
                 at = 0;
-                continue 'lines;
+                break true;
             }
             if at == 0 {
                 // Do not recognise "case (foo):" as a base class.
                 if is_case_label(&line, 0, false) {
-                    break 'lines;
+                    break false;
                 }
                 at = code_at(&line, 0);
                 if byte_at(&line, at) == 0 {
@@ -295,6 +297,10 @@ pub(crate) fn in_baseclass_list(cached: &mut CppBaseclassCache) -> bool {
                 }
                 at = code_at(&line, at + 1);
             }
+        };
+        drop(line);
+        if !more {
+            break;
         }
     }
 

@@ -242,7 +242,9 @@ fn indent_after_open(open: &Pos) -> c_int {
     }
     amount = measure_first_argument(&line, &mut that, amount, cstype, &mut csarg);
     skip_white_measuring(&line, &mut that, &mut amount, cstype, &mut csarg);
-    if at(that) == 0 || at(that) == b';' {
+    let ends = at(that) == 0 || at(that) == b';';
+    drop(line);
+    if ends {
         // Nothing followed the first argument on this line, so line the
         // continuation up with the argument instead of past it.
         firsttry

@@ -380,5 +380,6 @@ fn adjust_entries(
             }
         }
     }
+    drop(edit);
     found_one
 }

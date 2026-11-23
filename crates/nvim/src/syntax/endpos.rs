@@ -340,13 +340,15 @@ impl SynState {
                 (eoe_pos, 0, m_endpos)
             };
 
-        RegionEnd {
+        let end = RegionEnd {
             m_endpos,
             hl_endpos,
             eoe_pos,
             end_idx,
             flags: Some(spp.sp_flags),
-        }
+        };
+        drop(held);
+        end
     }
 }
 
@@ -620,13 +622,15 @@ impl SynState {
             found = self.match_keyword(held.b_keywtab_ic.lookup(&folded), cur_si);
         }
         let entry = found?;
-        Some(KeywordMatch {
+        let out = Some(KeywordMatch {
             id: c_int::from(entry.syn.id),
             endcol: startcol + len_as_int(kwlen),
             flags: entry.flags,
             next_list: entry.next_list.clone(),
             cchar: entry.conceal_char,
-        })
+        });
+        drop(held);
+        out
     }
 
     /// The first of a keyword's `entries` that the containment rules admit

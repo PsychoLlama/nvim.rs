@@ -53,6 +53,7 @@ fn matchadd_dict_arg(tv: &TypVal, win: &mut Win) -> Result<Option<CString>, Fail
         emsg(gettext(E_INVALWINDOW));
         return Err(Failed);
     };
+    drop(dict);
     *win = found;
     Ok(conceal)
 }
@@ -210,6 +211,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
                 win.add_match(group, None, priority, id, positions, conceal)
             }
         };
+        drop(d);
         match added {
             Ok(added) if added == id => {}
             Ok(_) => match_add_failed = true,
@@ -221,6 +223,7 @@ pub(crate) fn f_setmatches(args: &[TypVal], result: &mut TypVal, _fptr: EvalFunc
 
         at += 1;
     }
+    drop(l);
     if !match_add_failed {
         result.write_number(0);
     }
@@ -325,6 +328,7 @@ pub(crate) fn f_matchaddpos(args: &[TypVal], result: &mut TypVal, _fptr: EvalFun
 
     let conceal = conceal_char.as_deref();
     let added = win.add_match(group, None, prio, id, l.as_deref(), conceal);
+    drop(l);
     result.write_number(VarNumber::from(answer_or_report(added)));
 }
 

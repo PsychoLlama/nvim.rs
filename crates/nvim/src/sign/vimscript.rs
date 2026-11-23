@@ -476,6 +476,7 @@ pub(crate) fn f_sign_undefine(args: &[TypVal], result: &mut TypVal, _fptr: EvalF
             };
             retlist.push_number(VarNumber::from(answer_or_report(undefined)));
         }
+        drop(retlist);
         return;
     }
 

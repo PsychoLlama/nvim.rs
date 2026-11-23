@@ -253,6 +253,7 @@ pub fn f_setreg(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             if let Some(stropt) = numbuf3.dict_string(d_ref.as_deref(), b"points_to") {
                 pointreg = RegName::from_byte(cstr::byte_at(stropt.to_bytes(), 0));
                 regname = pointreg.byte();
+                drop(d_ref);
             }
         } else if dict_get_number(d_ref.as_deref(), b"isunnamed") != 0 {
             pointreg = RegName::from_byte(regname);

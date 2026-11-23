@@ -732,6 +732,7 @@ fn search(
                 let fname = held.name.shown().map_or(&[][..], CStr::to_bytes);
                 st.is_txt =
                     fname.len() > 4 && fname[fname.len() - 4..].eq_ignore_ascii_case(b".txt");
+                drop(held);
             }
 
             // Ignoring case rules out bisection, so a search that may

@@ -372,13 +372,15 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
         return;
     }
 
-    let d = args[0].dict_ref();
+    // NULL dict behaves like an empty dict
+    let Some(d) = args[0].dict_ref() else {
+        tv_list_alloc_ret(result, 0);
+        return;
+    };
     tv_list_alloc_ret(
         result,
-        ptrdiff_t::try_from(dict_len(d.as_deref())).unwrap_or(ptrdiff_t::MAX),
+        ptrdiff_t::try_from(dict_len(Some(&*d))).unwrap_or(ptrdiff_t::MAX),
     );
-    // NULL dict behaves like an empty dict
-    let Some(d) = d else { return };
     let Some(mut list) = result.list_mut() else {
         return;
     };
@@ -406,6 +408,7 @@ pub(crate) fn tv_dict2list(args: &[TypVal], result: &mut TypVal, what: DictListT
 
         list.push(tv_item);
     }
+    drop(d);
 }
 
 /// `items()`: index/value pairs of a string, list, blob or dictionary.

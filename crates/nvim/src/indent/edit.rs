@@ -323,6 +323,7 @@ fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
                     break;
                 }
             }
+            drop(line);
             new_cursor_col = len_as_int(at);
         }
     }

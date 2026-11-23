@@ -225,10 +225,12 @@ pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
             let mut lines = Lines::current();
             let line = lines.line(Win::current().cursor().lnum());
             let look = code_at(&line, 0);
-            (
+            let out = (
                 starts_while(&line, look),
                 is_else(&line, look) || is_if(&line, look) || is_do(&line, look),
-            )
+            );
+            drop(line);
+            out
         };
         let interesting =
             interesting || (starts_while_of_do && while_closes_do(Win::current().cursor().lnum()));
@@ -255,7 +257,7 @@ pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
             let mut lines = Lines::current();
             let line = lines.line(Win::current().cursor().lnum());
             let look = code_at(&line, 0);
-            (
+            let out = (
                 starts_while(&line, look),
                 is_else(&line, look),
                 // An `else` that is not an `else if` needs one more `if`.
@@ -264,7 +266,9 @@ pub(crate) fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
                 !is_if(&line, code_at(&line, look + 4)),
                 is_if(&line, look),
                 is_do(&line, look),
-            )
+            );
+            drop(line);
+            out
         };
 
         // Looking for an `if`, ignore the `if`s and `else`s of a deeper

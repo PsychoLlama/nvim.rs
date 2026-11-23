@@ -303,7 +303,9 @@ pub(crate) fn with_maphash_lists<R>(
             (MapTable::Buffer(buf), local),
             (MapTable::Global, global.list(hash, false)),
         ];
-        f(hash, lists)
+        let out = f(hash, lists);
+        drop(held);
+        out
     })
 }
 

@@ -295,7 +295,9 @@ fn diffgetput(
                     at += 1;
                 }
             }
-            (blocks[at].df_lnum, blocks[at].df_count)
+            let out = (blocks[at].df_lnum, blocks[at].df_count);
+            drop(tpr);
+            out
         };
         let end = |idx: usize| df_lnum[idx] + df_count[idx];
         if df_lnum[idx_cur] > line2 + off {

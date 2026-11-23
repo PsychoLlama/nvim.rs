@@ -395,6 +395,7 @@ fn ml_split_data_block(
                 in_left = false;
                 space_needed += int64_t::from(total_moved);
             }
+            drop(held);
         }
     }
 
@@ -820,6 +821,7 @@ fn ml_free_data_block(buffer: Buf, id: BlockId) -> bool {
             let mut ml = buffer.ml();
             ml.put(id, false);
             ml.stack_clear();
+            drop(ml);
             return false;
         }
         let count = pointers.count().wrapping_sub(1);

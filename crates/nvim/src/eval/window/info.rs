@@ -104,6 +104,7 @@ pub fn f_gettabinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             return;
         }
     }
+    drop(list);
 }
 
 /// `getwininfo([{winid}])` — every window of every tab page, or just the one
@@ -140,6 +141,7 @@ pub fn f_getwininfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             }
         }
     }
+    drop(list);
 }
 
 impl FrameRef {

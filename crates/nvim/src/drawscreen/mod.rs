@@ -641,6 +641,7 @@ pub fn setcursor_mayforce(window: Win, force: bool) {
         } else {
             1
         };
+        drop(line);
         col = window.w_view_width() - window.w_wcol() - cells;
     }
 

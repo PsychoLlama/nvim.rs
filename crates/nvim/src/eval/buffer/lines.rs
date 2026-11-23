@@ -112,6 +112,7 @@ impl LinesInto {
                     break;
                 };
                 line = Some(typval_tostring(Some(&item.li_tv), false));
+                drop(read);
                 at += 1;
             }
             result.write_number(1);

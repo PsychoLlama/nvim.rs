@@ -375,8 +375,8 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
                 semsg!("E475: Invalid argument: {}", "pos");
                 return;
             }
-            let items = di.di_tv.list_ref();
-            let items = list_items(items.as_deref());
+            let items_list = di.di_tv.list_ref();
+            let items = list_items(items_list.as_deref());
             if items.len() != 3 {
                 semsg!("E475: Invalid argument: List format should be [lnum, col, off]");
                 return;
@@ -393,6 +393,7 @@ pub fn f_searchcount(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             let Some(coladd) = list_number(&items[2].li_tv) else {
                 return;
             };
+            drop(items_list);
             pos.coladd = coladd;
         }
     }

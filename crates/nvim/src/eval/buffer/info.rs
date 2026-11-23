@@ -106,6 +106,7 @@ pub fn f_getbufinfo(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             return;
         }
     }
+    drop(list);
 }
 
 /// The `getbufinfo({dict})` selectors. Each is an *additional* requirement,

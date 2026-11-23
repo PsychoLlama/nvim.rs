@@ -191,7 +191,9 @@ impl Buf {
             StopList::Tab => held.b_p_vts_array.as_deref(),
             StopList::SoftTab => held.b_p_vsts_array.as_deref(),
         };
-        f(tabstops(vts))
+        let out = f(tabstops(vts));
+        drop(held);
+        out
     }
 
     /// How many columns from `col` to this buffer's next tabstop, by its

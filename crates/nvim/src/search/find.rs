@@ -885,6 +885,7 @@ pub(crate) fn search_for_exact_line(
                 return Ok(());
             }
         }
+        drop(line);
     }
     Err(NoMatch)
 }

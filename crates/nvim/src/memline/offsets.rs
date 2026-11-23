@@ -178,6 +178,7 @@ fn ml_chunk_addline(
             chunks.set(curix + 1, 1, rest);
             chunks.add_size(curix, -rest);
             chunks.add_lines(curix, -1);
+            drop(held);
         }
     }
     true
@@ -229,6 +230,7 @@ fn ml_chunk_split(b: Buf, curix: usize, curline_arg: LineNr) -> bool {
             - data
                 .line_start(end_idx.cast_unsigned() as usize)
                 .cast_signed();
+        drop(held);
     }
 
     b.ml().ml_chunks.add_lines(curix + 1, -linecnt);
@@ -339,7 +341,7 @@ impl Buf {
                 return None;
             }
             let id = ml_find_line(self, curline, ML_FIND)?;
-            let ml = &self.ml();
+            let ml = self.ml();
             let (locked_low, locked_high) = (ml.locked_low(), ml.locked_high());
             let count = locked_high - locked_low + 1;
             let start_idx = curline - locked_low;
@@ -394,6 +396,7 @@ impl Buf {
                 }
                 return Some(curline.get());
             }
+            drop(ml);
             curline = locked_high + 1;
         }
 

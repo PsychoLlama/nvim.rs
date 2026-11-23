@@ -423,6 +423,7 @@ pub fn f_sockconnect(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     if args.get(2).is_some_and(|arg| arg.v_type() == VAR_DICT) {
         let opts = args[2].dict_ref();
         rpc = dict_get_number(opts.as_deref(), b"rpc") != 0;
+        drop(opts);
         if let Err(refused) = dict_get_callback(args[2].dict_shared(), b"on_data", &mut on_data.cb)
         {
             refused.report();

@@ -579,7 +579,9 @@ fn continue_multiline(prefix: u8, qfl: Qfl, fields: &mut Fields) -> Status {
             if prev.end_col == 0 {
                 prev.end_col = fields.end_col;
             }
-            prev.fnum.is_none()
+            let out = prev.fnum.is_none();
+            drop(edit);
+            out
         };
         if needs_fnum {
             // Naming the file can fire `BufNew`, so the entry is found again

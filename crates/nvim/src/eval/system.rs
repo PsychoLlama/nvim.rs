@@ -106,6 +106,7 @@ pub fn tv_to_argv(cmd_tv: &TypVal) -> Result<Argv, ArgvRefusal> {
                 .unwrap_or_else(|| ThinCString::from_cstr(word)),
         );
     }
+    drop(items);
     Ok(Argv::from_words(words))
 }
 
@@ -242,9 +243,10 @@ fn buffer_as_string(tv: &TypVal) -> Result<Option<Vec<u8>>, Failed> {
     let mut lines = Lines::in_buffer(buffer);
     let mut out = Vec::new();
     for lnum in 1..=buffer.line_count().get() {
-        let line = lines.line(LineNr::new(lnum));
-        let line = line.split(|&b| b == 0).next().unwrap_or_default();
+        let text = lines.line(LineNr::new(lnum));
+        let line = text.split(|&b| b == 0).next().unwrap_or_default();
         push_swapping_nl(&mut out, line);
+        drop(text);
         out.push(b'\n');
     }
     Ok((!out.is_empty()).then_some(out))

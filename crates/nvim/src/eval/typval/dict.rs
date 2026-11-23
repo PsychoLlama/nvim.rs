@@ -342,6 +342,7 @@ pub fn dict_extend(d1: &DictRef, d2: &DictRef, action: u8) {
             };
             let new = item2.di_tv.clone();
             let note = watched.then(|| (ThinCString::from_bytes(item2.key()), new.clone()));
+            drop(read2);
             (new, note)
         };
         if let Some(item1) = d1.edit().item_at_mut(slot1) {
@@ -440,6 +441,7 @@ pub fn dict_copy(
         } else {
             tv_copy(&item.di_tv, &mut new_item.di_tv);
         }
+        drop(read);
         if let Err(refused) = copy.edit().add_item(new_item) {
             drop(refused);
             break;

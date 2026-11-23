@@ -442,7 +442,9 @@ pub(crate) fn win_set_minimal_style(win: Win) {
     let scl_auto = {
         let held = win.read();
         let scl = held.w_onebuf_opt.wo_scl.bytes();
-        scl.first() == Some(&b'a') && scl.len() < 8
+        let out = scl.first() == Some(&b'a') && scl.len() < 8;
+        drop(held);
+        out
     };
     if !scl_auto {
         win.edit().w_onebuf_opt.wo_scl = Some(XString::from_cstr(c"auto"));

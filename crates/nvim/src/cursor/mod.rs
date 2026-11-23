@@ -450,6 +450,7 @@ pub(crate) fn inc_cursor_gchar() -> (Moved, c_int) {
             } else {
                 Moved::OntoNul
             };
+            drop(line);
             return (moved, c.get());
         }
     }

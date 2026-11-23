@@ -242,7 +242,9 @@ pub(crate) fn tv_list_item_lock(
     let descent = {
         let mut items = list.edit();
         let item = &mut items.items_mut()[at];
-        tv_item_lock_slot(&mut item.li_lock, &item.li_tv, deep, lock, check_refcount)
+        let out = tv_item_lock_slot(&mut item.li_lock, &item.li_tv, deep, lock, check_refcount);
+        drop(items);
+        out
     };
     if let Some(descent) = descent {
         descent.run();
@@ -324,7 +326,10 @@ impl Held {
                         let mut this = dict.edit();
                         let item = this.item_at_mut(slot).expect("a kept slot");
                         let lock_of = &mut item.di_lock;
-                        tv_item_lock_slot(lock_of, &item.di_tv, deep - 1, lock, check_refcount)
+                        let out =
+                            tv_item_lock_slot(lock_of, &item.di_tv, deep - 1, lock, check_refcount);
+                        drop(this);
+                        out
                     };
                     if let Some(descent) = descent {
                         descent.run();

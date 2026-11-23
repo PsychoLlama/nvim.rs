@@ -63,13 +63,15 @@ impl SynState {
         let (sp_flags, sp_cchar, sp_next_list, sp_type, sp_syn_match_id) = {
             let held = self.block().read();
             let spp = held.pattern(idx);
-            (
+            let out = (
                 spp.sp_flags,
                 spp.sp_cchar,
                 spp.sp_next_list.clone(),
                 spp.sp_type,
                 spp.sp_syn_match_id,
-            )
+            );
+            drop(held);
+            out
         };
 
         self.push_current_state(idx);

@@ -76,6 +76,7 @@ pub(crate) fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
         CharsizeKind::Fast => linesize_fast(&csarg, 0, ColNr::MAX),
         CharsizeKind::Regular => linesize_regular(&mut csarg, 0, ColNr::MAX),
     });
+    drop(s);
 
     // In 'list' mode the trailing '$' may take one more column.
     if window.wo_list() != 0 && window.read().w_p_lcs_chars.eol != 0 {
@@ -148,6 +149,7 @@ pub(crate) fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c
     if chr.value == c_int::from(TAB) && STATE.get() & MODE_NORMAL != 0 && csarg.use_tabstop {
         col += win_charsize(cstype, col.get(), at, chr.value, &mut csarg).width - 1;
     }
+    drop(line);
 
     // Column offset for 'number', 'relativenumber', 'foldcolumn', etc.
     let width = window.w_view_width() - window.col_off();

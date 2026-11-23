@@ -110,6 +110,7 @@ pub(crate) fn getvcol(window: Win, pos: &mut Pos) -> (ColNr, ColNr, ColNr) {
     } else {
         vcol + virt_text_cursor_off(&csarg, on_nul) + head
     };
+    drop(line);
     (start, cursor, end)
 }
 

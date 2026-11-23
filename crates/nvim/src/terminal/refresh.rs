@@ -248,6 +248,8 @@ pub(crate) fn refresh_screen(term: Term, buffer: Buf) {
             let _ = ml_append_buf_terminated(buffer, linenr - 1, text.to_bytes_with_nul(), false);
             added += 1;
         }
+        drop(textbuf);
+        drop(terminal);
     }
 
     term.read().old_height.set(height);

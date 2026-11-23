@@ -286,6 +286,7 @@ fn seed_list(tv: &TypVal) -> Option<(&ListRef, [u32; 4])> {
         // The state is the low 32 bits of each Number.
         *word = number_as_u32(item.li_tv.as_number()?);
     }
+    drop(held);
     Some((list, state))
 }
 
@@ -365,6 +366,7 @@ pub fn f_range(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         };
         start = next;
     }
+    drop(list);
 }
 
 /// `str2float({string})` — the leading sign and any whitespace around it are

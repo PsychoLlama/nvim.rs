@@ -110,12 +110,14 @@ pub(crate) fn shada_buffer_marks(buffer: Buf) -> Vec<(c_char, ShadaMark)> {
         .iter()
         .zip(b'a'..=b'z')
         .map(|(mark, name)| (name, mark));
-    special
+    let out = special
         .into_iter()
         .chain(named)
         .filter(|(_, mark)| mark.is_set())
         .map(|(name, mark)| (mark_name(name), ShadaMark::of(mark, None)))
-        .collect()
+        .collect();
+    drop(held);
+    out
 }
 
 /// The jump list of `win`, oldest first, copied.

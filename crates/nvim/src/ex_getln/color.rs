@@ -294,8 +294,8 @@ impl Colouring {
             }
 
             // The item's own list, just checked to hold three items.
-            let chunk = li.li_tv.list_ref();
-            let chunk = list_items(chunk.as_deref());
+            let chunk_list = li.li_tv.list_ref();
+            let chunk = list_items(chunk_list.as_deref());
             let start = tv_get_number_chk(&chunk[0].li_tv).map_err(|_| Stop::Error)?;
             if !(prev_end <= start && start < len) {
                 print_errmsg!(
@@ -345,6 +345,7 @@ impl Colouring {
                 end: number_as_int(end),
                 hl_id: syn_name2id(group),
             };
+            drop(chunk_list);
             colored_ccline.with_mut(|line| line.last_colors.push(chunk));
         }
 

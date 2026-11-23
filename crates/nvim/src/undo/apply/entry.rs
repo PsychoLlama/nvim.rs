@@ -396,6 +396,7 @@ fn swap_marks(
         b.b_visual = header.visual;
         header.visual = saved_visual;
     }
+    drop(edit);
 }
 
 /// Puts the cursor where the header says it was, or on the first line the

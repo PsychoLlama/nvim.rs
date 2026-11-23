@@ -316,6 +316,7 @@ pub fn del_bytes(mut count: i32, fixpos_arg: bool, use_delcombine: bool) -> Resu
                 fixpos = false;
             }
         }
+        drop(line);
     }
 
     // What is left to move up, including the trailing NUL.

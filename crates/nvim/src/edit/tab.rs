@@ -315,6 +315,7 @@ fn tab_spaces_to_tabs() {
             if cached.len() == line.len() {
                 cached.copy_from_slice(&line);
             }
+            drop(held);
         }
         if i > 0 {
             // Each deleted space had an entry on the replace stack.

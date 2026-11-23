@@ -269,12 +269,14 @@ fn parse_osc8(payload: &[u8]) -> Option<c_int> {
 /// it carry the link.
 fn apply_osc8(term: Term, state: &mut StateCx<'_>) {
     let terminal = term.read();
-    let buffer = terminal.termrequest_buffer.borrow();
-    let buffer: &[u8] = &buffer;
+    let accumulated = terminal.termrequest_buffer.borrow();
+    let buffer: &[u8] = &accumulated;
     // Past the "\x1b]8;" that `accumulate` put back.
     let Some(attr) = buffer.get(b"\x1b]8;".len()..).and_then(parse_osc8) else {
         return;
     };
+    drop(accumulated);
+    drop(terminal);
     set_pen_attr(state, VTERM_ATTR_URI, Value::Int(attr));
 }
 

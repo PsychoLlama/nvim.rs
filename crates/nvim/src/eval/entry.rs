@@ -245,6 +245,7 @@ pub(crate) fn typval2string(tv: &TypVal, join_list: bool) -> XString {
         if list_len(l.as_deref()) > 0 {
             text.push_byte(b'\n');
         }
+        drop(l);
         return text;
     }
     if tv.v_type() == VAR_LIST || tv.v_type() == VAR_DICT {

@@ -325,6 +325,7 @@ impl Drop for HeldLines {
                 return;
             }
             memfile.expect("a pinned memfile is not dropped").unpin(pin);
+            drop(ml);
         }
     }
 }
@@ -827,6 +828,7 @@ pub(crate) fn dec(pos: &mut Pos) -> Moved {
         pos.col -= ColNr::try_from(head_off(&line, at))
             .unwrap_or(ColNr::ZERO)
             .get();
+        drop(line);
     };
     if pos.col == ColNr::MAX {
         // Past the end of the line.

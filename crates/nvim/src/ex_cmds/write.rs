@@ -344,7 +344,9 @@ pub fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     } else {
         let held = Buf::current().read();
         let name = &held.name;
-        (own_name(name.full()), own_name(name.shown()))
+        let out = (own_name(name.full()), own_name(name.shown()));
+        drop(held);
+        out
     };
     args.check_overwrite(Buf::current(), fname.as_deref(), ffname.as_deref(), other)?;
 

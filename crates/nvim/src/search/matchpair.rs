@@ -159,6 +159,7 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
             ptr += 1;
         }
     }
+    drop(held);
 }
 
 /// What the walk is looking for, once `initc` and the text under the
@@ -393,6 +394,7 @@ fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: Codepoint) -> Option<Po
         } else if word.starts_with(b"endif") {
             count += 1;
         }
+        drop(line);
     }
     None
 }
@@ -569,6 +571,7 @@ impl Walk {
                 && near[1] == b'R'
                 && near[2] == b'"'
                 && line[(col + 1).min(line.len())..].contains(&b'(');
+            drop(line);
             (near, raw_opens)
         };
         let at = |off: isize| match off {

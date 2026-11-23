@@ -211,7 +211,7 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
         );
         line.extend_from_slice(&oldp[..textcol]);
         line.resize(line.len() + width(bd.startspaces), b' ');
-        if splits_line {
+        let out = if splits_line {
             let mut after = Vec::with_capacity(tail.len() + 1);
             after.extend_from_slice(tail);
             after.push(0);
@@ -227,7 +227,9 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
                 line.extend_from_slice(tail);
             }
             (line, None, len_as_int(newcols))
-        }
+        };
+        drop(oldp);
+        out
     };
     let newrows = c_int::from(after.is_some());
 

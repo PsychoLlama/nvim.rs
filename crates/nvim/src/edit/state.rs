@@ -270,12 +270,14 @@ fn restore_ctrl_o_column() {
         if tail.is_empty() {
             return;
         }
-        if byte_at(tail, 1) == 0 {
+        let step = if byte_at(tail, 1) == 0 {
             1
         } else {
             let len = c_cluster_len(tail);
             if byte_at(tail, len) == 0 { len } else { 0 }
-        }
+        };
+        drop(line);
+        step
     };
     Win::current()
         .cursor()

@@ -88,7 +88,9 @@ pub(crate) fn fmt_check_par(lnum: LineNr, leader: &mut Leader, do_comments: bool
         let after = &line[usize::try_from(leader.len)
             .unwrap_or(usize::MAX)
             .min(line.len())..];
-        byte_at(after, skip::white(after)) == b'\0'
+        let out = byte_at(after, skip::white(after)) == b'\0';
+        drop(line);
+        out
     };
     let ends_a_comment = leader.len > 0 && leader.has_flag(COM_END);
     nothing_but_leader || ends_a_comment || starts_para(lnum, 0, false)

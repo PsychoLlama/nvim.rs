@@ -423,6 +423,7 @@ impl Buf {
                     // Copy as much as possible of the new word.
                     let room = IOSIZE as usize - len - 1;
                     out.extend_from_slice(&next[start..end.min(start + room)]);
+                    drop(next);
                     len = out.len();
                     cont_s_ipos = true;
                 }
@@ -489,6 +490,7 @@ impl Buf {
                             *pos = current_pos;
                             out.clear();
                             out.extend_from_slice(text.to_bytes());
+                            drop(text);
                             let len = out.len();
                             return Some(LineMatch { len, score: None });
                         }

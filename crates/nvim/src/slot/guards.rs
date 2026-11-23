@@ -225,6 +225,7 @@ pub(crate) unsafe fn check_part_unlent<T>(value: *const T, generation: u32) {
 
 /// A value's part lent by [`lend_part_at`]: its slot carries the part bit
 /// and one reader until this is dropped.
+#[clippy::has_significant_drop]
 pub(crate) struct SlotPart<'a, T, U> {
     slot: NonNull<Slot<T>>,
     part: NonNull<U>,
@@ -277,6 +278,7 @@ impl<T, U> fmt::Debug for SlotPart<'_, T, U> {
 /// a `&mut T`: a reference field would be retagged as protected when the
 /// guard is moved into a call (`drop(edit)`), and the drop's write of the
 /// header beside it would then be undefined behaviour.
+#[clippy::has_significant_drop]
 pub(crate) struct SlotEdit<'a, T> {
     slot: NonNull<Slot<T>>,
     generation: u32,
@@ -317,6 +319,7 @@ impl<T> fmt::Debug for SlotEdit<'_, T> {
 }
 
 /// A value borrowed by [`read_at`]: counted in its slot until dropped.
+#[clippy::has_significant_drop]
 pub(crate) struct SlotRead<'a, T> {
     slot: NonNull<Slot<T>>,
     _shared: PhantomData<&'a T>,

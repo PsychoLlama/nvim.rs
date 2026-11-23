@@ -37,7 +37,9 @@ pub(crate) fn find_rawstring_end(lines: &mut Lines, startpos: &Pos, endpos: &Pos
     let delim = {
         let linep = lines.line(start_lnum);
         let tail = &linep[(start_col + 1).min(linep.len())..];
-        tail[..tail.iter().position(|&b| b == b'(').unwrap_or(tail.len())].to_vec()
+        let out = tail[..tail.iter().position(|&b| b == b'(').unwrap_or(tail.len())].to_vec();
+        drop(linep);
+        out
     };
 
     for lnum in start_lnum.through(end_lnum) {
@@ -61,6 +63,7 @@ pub(crate) fn find_rawstring_end(lines: &mut Lines, startpos: &Pos, endpos: &Pos
             }
             at += 1;
         }
+        drop(line);
     }
     false
 }

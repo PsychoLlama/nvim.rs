@@ -530,7 +530,9 @@ fn do_arglist(arg: &[u8], op: ArgListOp, after: c_int, will_edit: bool) -> Resul
         let (Some(_), Some(shown)) = (held.name.full(), held.name.shown()) else {
             return Ok(());
         };
-        split_arglist(shown.to_bytes(), false)
+        let out = split_arglist(shown.to_bytes(), false);
+        drop(held);
+        out
     } else {
         split_arglist(arg, true)
     };

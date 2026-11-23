@@ -45,6 +45,7 @@ pub(crate) fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
         let mut held = block.edit();
         let list = &mut held.clusters_mut()[tlg_id].scl_list;
         syn_combine_list(list, IdList::from_ids(&[id16(id)]), CLUSTER_ADD);
+        drop(held);
     }
 }
 

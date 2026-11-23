@@ -54,6 +54,7 @@ pub fn f_str2list(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         list.push_number(VarNumber::from(char_at(rest)));
         at += char_len(rest);
     }
+    drop(list);
 }
 
 /// "str2nr()" function.

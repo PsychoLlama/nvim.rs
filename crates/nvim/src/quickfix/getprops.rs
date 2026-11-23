@@ -131,6 +131,7 @@ pub(crate) fn get_errorlist(
         }
         get_qfline_items(entry, list);
     }
+    drop(stack);
     Ok(())
 }
 

@@ -9,6 +9,11 @@
 // root: `tests/` is not source the ratchet measures, and there is no per-file
 // story to tell about it.
 #![allow(unsafe_code)]
+// A case holds its fixtures -- the editor lock, a sandbox, a probe, an
+// allocation log -- for the whole case on purpose, and a guard a case keeps
+// past a walk panics the case itself: the lint that ties a guard to its last
+// use has nothing to add here.
+#![allow(clippy::significant_drop_tightening)]
 
 mod support;
 

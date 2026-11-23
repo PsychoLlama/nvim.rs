@@ -182,6 +182,7 @@ pub(crate) fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         } else if opens_extern_c(&text, at) {
             amount += Buf::current().b_ind_cpp_extern_c();
         }
+        drop(text);
     } else {
         // Compensate for adding `b_ind_open_extra` later.
         amount = (amount - Buf::current().b_ind_open_extra()).max(0);

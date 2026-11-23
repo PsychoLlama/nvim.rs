@@ -868,6 +868,7 @@ pub(crate) fn gettext_template(msgid: &'static str) -> Option<&'static str> {
         if cache.epoch != epoch {
             cache.epoch = epoch;
             cache.seen.clear();
+            drop(cache);
         } else if let Some(&held) = cache.seen.get(&key) {
             return held;
         }

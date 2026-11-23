@@ -120,7 +120,9 @@ fn vimvar_at_hint<R, F: FnOnce(&mut DictItem) -> R>(idx: Vv, f: &mut Option<F>) 
         if ::core::ptr::from_ref(item).addr() != addr {
             return None;
         }
-        f.take().map(|f| f(item))
+        let out = f.take().map(|f| f(item));
+        drop(edit);
+        out
     })
 }
 
@@ -141,7 +143,9 @@ fn with_vimvar_ref<R>(idx: Vv, f: impl FnOnce(&DictItem) -> R) -> R {
         if ::core::ptr::from_ref(item).addr() != addr {
             return None;
         }
-        f.take().map(|f| f(item))
+        let out = f.take().map(|f| f(item));
+        drop(read);
+        out
     });
     if let Some(answer) = hinted {
         return answer;

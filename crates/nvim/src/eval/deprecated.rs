@@ -86,6 +86,7 @@ pub fn f_rpcstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     argv.extend(list_iter(list.as_deref()).map(|arg| arg.li_tv.string_cstr().unwrap_or(c"")));
     // The channel id, or the reason the spawn failed.
     result.write_number(rpc_job_start(&argv));
+    drop(list);
 }
 
 /// `rpcstop(id)`: stop a job, or close a channel that is not one.

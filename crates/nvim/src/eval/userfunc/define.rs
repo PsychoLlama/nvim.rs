@@ -510,6 +510,7 @@ impl Definition<'_, '_> {
         tv_clear(&mut item.di_tv);
         item.di_tv
             .write_func_name(Some(ThinCString::from_bytes(name)));
+        drop(held);
         Ok(())
     }
 

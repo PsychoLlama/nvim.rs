@@ -239,7 +239,9 @@ pub(crate) fn conv_error(refusal: Dump, path: &ConvPath<'_, '_>) -> Flow {
                     // path can name the key rather than the index.
                     let held = value.list_ref()?;
                     let key_tv = &held.items().first()?.li_tv;
-                    Some(tv2echo_bytes(key_tv))
+                    let out = Some(tv2echo_bytes(key_tv));
+                    drop(held);
+                    out
                 });
                 append(match pair_key {
                     None => crate::tr!("index {}", idx),

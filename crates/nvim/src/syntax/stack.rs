@@ -493,6 +493,7 @@ impl SynState {
         entry.next_list = self.next_list.clone();
         entry.tick = display_tick.get();
         entry.change_lnum = LineNr::ZERO;
+        drop(held);
     }
 
     /// Copy cached entry `id` into the state.
@@ -527,6 +528,7 @@ impl SynState {
         self.next_list = entry.next_list.clone();
         self.next_flags = entry.next_flags;
         self.lnum = entry.lnum;
+        drop(held);
     }
 
     /// Is the cached entry `id` equal to the state?
@@ -542,7 +544,7 @@ impl SynState {
             return false;
         }
         // Innermost first, as upstream compares.
-        entry
+        let out = entry
             .items
             .iter()
             .zip(&self.stack)
@@ -553,7 +555,9 @@ impl SynState {
                     && extmatch_equal(cached.extmatch.as_ref(), si.si_extmatch.as_ref(), || {
                         block.read().pattern(si.si_idx).sp_ic != 0
                     })
-            })
+            });
+        drop(held);
+        out
     }
 }
 

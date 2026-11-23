@@ -379,6 +379,7 @@ pub(crate) fn dialog_close_terminal(buffer: Buf) -> bool {
     let held = buffer.read();
     let name = held.name.shown().unwrap_or(c"?");
     let question = dialog_msg(c"Close \"%s\"?", Some(name));
+    drop(held);
     vim_dialog_yesnocancel(DialogKind::Question, None, question.as_cstr(), Answer::Yes)
         == Answer::Yes
 }

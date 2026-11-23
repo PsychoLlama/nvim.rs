@@ -578,10 +578,12 @@ impl BlockScan<'_> {
                 let mut lines = Lines::current();
                 let l = lines.line(cursor_lnum);
                 let at = at + skip::white(&l[at.min(l.len())..]);
-                (
+                let out = (
                     byte_at(&l, at) == b'{',
                     byte_at(&l, at) != b'}' && is_else(&l, at),
-                )
+                );
+                drop(l);
+                out
             };
             if opens_brace {
                 self.amount -= Buf::current().b_ind_open_extra();
@@ -613,7 +615,9 @@ impl BlockScan<'_> {
                     let mut lines = Lines::current();
                     let l = lines.line(trypos.lnum);
                     let at = code_at(&l, 0);
-                    byte_at(&l, at) == b'}' || !is_else(&l, at)
+                    let out = byte_at(&l, at) == b'}' || !is_else(&l, at);
+                    drop(l);
+                    out
                 };
                 if term_again {
                     continue;
@@ -797,11 +801,13 @@ impl BlockScan<'_> {
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
             let at = skip::white(&l);
-            (
+            let out = (
                 is_do(&l, at),
                 is_else(&l, at) && byte_at(&l, at) == b'}',
                 at,
-            )
+            );
+            drop(l);
+            out
         };
         if isdo {
             if self.whilelevel == 0 {

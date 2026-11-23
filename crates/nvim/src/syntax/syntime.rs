@@ -107,6 +107,7 @@ fn syntime_report() {
                 .as_deref()
                 .map_or_else(Vec::new, |p| p.to_bytes().to_vec()),
         });
+        drop(held);
     }
 
     // Ascending by `profile_cmp`, which is negative when its *first*

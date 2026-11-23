@@ -36,6 +36,7 @@ use ::core::cell::Cell;
 /// protected for the call, and the loan's release writes the word inside
 /// the object under it. `Deref`, `DerefMut` and the projections are the
 /// handle file's.
+#[clippy::has_significant_drop]
 #[derive(Debug)]
 pub struct Edit<'a, T> {
     pub(super) target: ::core::ptr::NonNull<T>,
@@ -51,6 +52,7 @@ pub struct Edit<'a, T> {
 /// while it is out, instead of writing under it. A body that runs user
 /// code, which can reach the object through another holder, takes its
 /// `Read` per step and lets it go before the call.
+#[clippy::has_significant_drop]
 #[derive(Debug)]
 pub struct Read<'a, T: ?Sized> {
     pub(super) target: &'a T,

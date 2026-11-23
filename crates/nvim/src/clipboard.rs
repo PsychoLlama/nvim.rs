@@ -192,6 +192,8 @@ fn register_from_provider(result: &TypVal) -> Result<YankReg, bool> {
         }
         text.push(XString::from_cstr(li.li_tv.string_cstr().unwrap_or(c"")));
     }
+    drop(lines);
+    drop(held);
 
     if text.last().is_some_and(|last| last.is_empty()) {
         // A known-to-be charwise yank might have a final linebreak, but

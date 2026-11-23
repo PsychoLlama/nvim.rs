@@ -226,8 +226,10 @@ impl SynState {
                             .then(|| {
                                 let held = block.read();
                                 let lspp = held.pattern(self.next_match.idx);
-                                (!lspp.sp_next_list.is_none())
-                                    .then(|| (lspp.sp_next_list.clone(), lspp.sp_flags))
+                                let out = (!lspp.sp_next_list.is_none())
+                                    .then(|| (lspp.sp_next_list.clone(), lspp.sp_flags));
+                                drop(held);
+                                out
                             })
                             .flatten();
                         if let Some((next_list, next_flags)) = zero_width_next {
@@ -539,7 +541,7 @@ impl SynState {
         let block = self.block();
         let held = block.read();
         let cont_in = &held.pattern(idx).sp_cont_in_list;
-        if !self.next_list.is_none() {
+        let admitted = if !self.next_list.is_none() {
             // A pending `nextgroup=` admits only what it names.
             self.in_id_list(None, &self.next_list, spp.syn, cont_in, SynFlags::NONE)
         } else if let Some(cur_si) = cur_si {
@@ -549,7 +551,9 @@ impl SynState {
         } else {
             // At the top level, anything that is not `contained`.
             !spp.flags.has(SynFlags::CONTAINED)
-        }
+        };
+        drop(held);
+        admitted
     }
 
     /// Publish the attributes of the innermost item whose highlight range
@@ -686,7 +690,7 @@ impl PatScan {
     fn of(block: SynBlockRef, idx: c_int) -> PatScan {
         let held = block.read();
         let spp = held.pattern(idx);
-        PatScan {
+        let scan = PatScan {
             syncing: spp.sp_syncing,
             flags: spp.sp_flags,
             ty: c_int::from(spp.sp_type),
@@ -694,6 +698,8 @@ impl PatScan {
             startcol: spp.sp_startcol.get(),
             syn: spp.sp_syn,
             offsets: spp.offsets(),
-        }
+        };
+        drop(held);
+        scan
     }
 }

@@ -185,6 +185,7 @@ pub fn get_winopts(buffer: Buf) {
             let mut edit = cur.edit();
             let window = &mut *edit;
             copy_winopt(&window.w_allbuf_opt, &mut window.w_onebuf_opt);
+            drop(edit);
         }
     }
     if let Some(entry) = entry {

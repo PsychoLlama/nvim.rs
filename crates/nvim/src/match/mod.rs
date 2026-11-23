@@ -197,8 +197,8 @@ fn fill_pos_array(
         let mut skip = false;
 
         if tv.v_type() == VAR_LIST {
-            let sub = tv.list_ref();
-            let sub = list_items(sub.as_deref());
+            let sub_list = tv.list_ref();
+            let sub = list_items(sub_list.as_deref());
             if sub.is_empty() {
                 return Err(MatchError::EmptyPosition(at));
             }
@@ -230,6 +230,7 @@ fn fill_pos_array(
                     positions[i].len = len;
                 }
             }
+            drop(sub_list);
         } else if tv.v_type() == VAR_NUMBER {
             if tv.number_or_zero() <= 0 {
                 skip = true;

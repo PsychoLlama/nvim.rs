@@ -138,6 +138,7 @@ impl SynState {
                     self.update_si_attr(self.state_len() - 1);
                     break;
                 }
+                drop(held);
             }
         }
 
@@ -263,7 +264,9 @@ impl SynState {
                     let block = self.block();
                     let held = block.read();
                     let spp = held.pattern(cur_si.si_idx);
-                    (spp.sp_flags, spp.sp_sync_idx)
+                    let out = (spp.sp_flags, spp.sp_sync_idx);
+                    drop(held);
+                    out
                 };
                 let m_endpos = cur_si.si_m_endpos;
                 found = Some(SyncPoint {

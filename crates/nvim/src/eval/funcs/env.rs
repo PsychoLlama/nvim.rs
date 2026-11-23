@@ -144,6 +144,7 @@ pub fn f_expand(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         for name in xpc.matches() {
             list.push_str(Some(name.as_cstr()));
         }
+        drop(list);
         expand_cleanup(&mut xpc);
     }
 }

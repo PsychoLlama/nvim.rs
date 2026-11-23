@@ -182,6 +182,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
                 let line = text.line(lnum);
                 let bd = block_def_of(op, lnum, &line);
                 lines.push(yank_copy_line(&line, &bd, region.excl_tr_ws));
+                drop(line);
             }
             MotionType::LineWise => {
                 lines.push(XString::from_bytes(&Buf::current().lines().line(lnum)))
@@ -197,6 +198,7 @@ pub fn op_yank_reg(op: &OpArg, message: bool, reg: Reg, append: bool) {
                 let rest = line.len() - textcol;
                 bd.textlen = bd.textlen.min(c_int::try_from(rest).unwrap_or(c_int::MAX));
                 lines.push(yank_copy_line(&line, &bd, false));
+                drop(line);
             }
             _ => ::std::process::abort(),
         }

@@ -166,10 +166,12 @@ impl Buf {
         let Some(file) = memfile.file.as_ref() else {
             return true;
         };
-        std::os::unix::fs::fchown(file, None, Some(gid)).map_or_else(
+        let out = std::os::unix::fs::fchown(file, None, Some(gid)).map_or_else(
             |error| error.raw_os_error() != Some(::libc::EPERM),
             |()| true,
-        )
+        );
+        drop(held);
+        out
     }
 
     /// The name of the buffer's swap file, if it has a memfile with one.
@@ -216,4 +218,5 @@ pub(crate) fn mf_close_file(buffer: Buf, getlines: bool) {
         os_remove(fname);
         memfile.free_fnames();
     }
+    drop(held);
 }

@@ -7,6 +7,12 @@
 // Cargo.toml allow (which still governs the sibling bin/test/bench roots) and
 // makes the finished state compiler-enforced rather than a grep result.
 #![deny(unsafe_op_in_unsafe_fn)]
+// A test holds its fixtures -- the editor lock, a frame tree, a parser --
+// for the whole case on purpose, and dropping one early tears its state down
+// under the asserts. The lint that ties a guard to its last use
+// (`significant_drop_tightening`, Cargo.toml) checks the library code in the
+// non-test pass, so it stands down where only tests are compiled with it.
+#![cfg_attr(test, allow(clippy::significant_drop_tightening))]
 
 pub(crate) mod allocator;
 pub mod api;

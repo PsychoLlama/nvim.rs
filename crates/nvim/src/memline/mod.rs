@@ -323,6 +323,7 @@ fn ml_open_blocks(buffer: Buf) -> Result<(), Failed> {
         hname[host.len()] = 0;
         hname[B0_HNAME_SIZE as usize - 1] = 0;
         b0.set_pid(process_id());
+        drop(held);
     }
 
     // Always sync block zero, so that findswapname can read the file name

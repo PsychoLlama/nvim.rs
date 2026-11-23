@@ -50,7 +50,9 @@ impl ComFlags {
         let buffer = Buf::current();
         let held = buffer.read();
         let com = held.b_p_com.bytes();
-        f(com.get(self.0..).unwrap_or_default())
+        let out = f(com.get(self.0..).unwrap_or_default());
+        drop(held);
+        out
     }
 
     /// The item's flag letters: the bytes up to its `:`.

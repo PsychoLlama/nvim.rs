@@ -184,6 +184,7 @@ pub fn diff_set_topline(fromwin: Win, towin: Win) {
             }
         }
     }
+    drop(tpr);
 
     towin.set_w_botfill(false);
     if towin.w_topline() > tobuf.line_count() {
@@ -334,5 +335,7 @@ pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
         return LineNr::ZERO;
     }
     let i = slot_index(i);
-    (lnum + (dp.df_lnum[i] - dp.df_lnum[idx])).min(dp.end(i))
+    let out = (lnum + (dp.df_lnum[i] - dp.df_lnum[idx])).min(dp.end(i));
+    drop(tpr);
+    out
 }

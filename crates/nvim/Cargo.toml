@@ -148,3 +148,8 @@ disallowed_methods = "deny"
 # and `types_defs.h`. The repeated name is the mapping back to the C, which is
 # worth more than the nesting costs.
 module_inception = "allow"
+# A guard marked `#[clippy::has_significant_drop]` (a memline line, a slot's
+# read or edit, a value's `Read`/`Edit`) lives to the end of its scope, and a
+# walk, edit or free of its owner after the last use panics at run time:
+# drop it after the last use (AGENTS.md, Ratchet).
+significant_drop_tightening = "deny"

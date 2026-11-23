@@ -298,7 +298,6 @@ pub fn get_breakindent_win(window: Win, line: &[u8]) -> c_int {
     // One exclusive borrow for the whole computation: nothing below calls
     // back into this function (the regex engine and chartabsize helpers run
     // no user code), and debug builds will catch it if that ever changes.
-    let held = buf.read();
     let vts = held.b_p_vts_array.as_deref();
     let hit = flp.with_bytes(|flp| CACHE.with(|prev| prev.answers(&key, line, vts, flp)));
     // Copies of what the cache keys on, taken only on a miss.

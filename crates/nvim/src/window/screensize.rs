@@ -205,10 +205,12 @@ fn scan_windows(what: &mut Scan) {
         let (ignore_scroll, ignore_resize) = {
             let held = wp.read();
             let eiw = held.w_onebuf_opt.wo_eiw.bytes();
-            (
+            let out = (
                 event_ignored(AutoEvent::WinScrolled, eiw, true),
                 event_ignored(AutoEvent::WinResized, eiw, true),
-            )
+            );
+            drop(held);
+            out
         };
         let size_changed = !ignore_resize
             && (wp.w_last_width() != wp.w_width() || wp.w_last_height() != wp.w_height());

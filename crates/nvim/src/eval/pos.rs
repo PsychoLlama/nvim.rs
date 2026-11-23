@@ -140,6 +140,7 @@ pub fn var2fpos(
         pos.col -= 1;
 
         pos.coladd = number_as_int(list_find_nr(Some(&l), 2, Some(&mut error)));
+        drop(l);
         if error {
             pos.coladd = 0;
         }

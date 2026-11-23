@@ -576,7 +576,9 @@ fn alternate_name(
         let oldfiles = oldfiles.as_ref().map(|l| l.read());
         let name = list_find_str(oldfiles.as_deref(), i - 1, &mut numbuf)
             .map_err(|Failed| Expansion::Quiet)?;
-        return Ok(Named::path(name.to_owned()));
+        let named = Named::path(name.to_owned());
+        drop(oldfiles);
+        return Ok(named);
     }
     if i == 0 && byte(1) == b'<' && *used > 1 {
         *used = 1;

@@ -547,7 +547,9 @@ impl Wrap {
                 let mut lines = Lines::current();
                 let line = lines.line(cursor.lnum);
                 let rest = &line[usize::try_from(cursor.col).unwrap_or(0).min(line.len())..];
-                rest[..usize::try_from(startcol).unwrap_or(0).min(rest.len())].to_vec()
+                let out = rest[..usize::try_from(startcol).unwrap_or(0).min(rest.len())].to_vec();
+                drop(line);
+                out
             };
             win.cursor().set_col(ColNr::new(orig_col));
             if !self.fo_white_par {

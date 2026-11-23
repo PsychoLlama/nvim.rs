@@ -436,7 +436,9 @@ pub(super) fn mark_line(pos: Pos, lead_len: c_int) -> XString {
         }
         at += c_cluster_len(rest).max(1);
     }
-    XString::from_bytes(&s[..at.min(s.len())])
+    let out = XString::from_bytes(&s[..at.min(s.len())]);
+    drop(line);
+    out
 }
 
 /// The name of the file a filemark is in — or, when it is in the current

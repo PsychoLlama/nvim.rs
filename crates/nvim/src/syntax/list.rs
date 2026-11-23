@@ -231,13 +231,15 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
         let (flags, sync_idx, contains, contained_in, next) = {
             let held = block.read();
             let spp = &held.patterns()[first];
-            (
+            let out = (
                 spp.sp_flags,
                 spp.sp_sync_idx,
                 (!spp.sp_cont_list.is_none()).then(|| spp.sp_cont_list.ids().to_vec()),
                 (!spp.sp_cont_in_list.is_none()).then(|| spp.sp_cont_in_list.ids().to_vec()),
                 (!spp.sp_next_list.is_none()).then(|| spp.sp_next_list.ids().to_vec()),
-            )
+            );
+            drop(held);
+            out
         };
         syn_list_flags(&ITEM_FLAG_NAMES, flags, LIST_HL);
         if let Some(ids) = contains {
@@ -300,6 +302,7 @@ fn put_item_patterns(mut idx: usize) -> usize {
             }
             idx -= 1;
         }
+        drop(held);
     }
     let mut last_matchgroup = 0;
     for (name, c, view) in &parts {
@@ -357,10 +360,12 @@ fn syn_list_cluster(id: c_int) {
         let block = cur_syn_block();
         let held = block.read();
         let cluster = &held.clusters()[as_index(id)];
-        (
+        let out = (
             cluster.scl_name.clone(),
             (!cluster.scl_list.is_none()).then(|| cluster.scl_list.ids().to_vec()),
-        )
+        );
+        drop(held);
+        out
     };
     msg_put_ascii(b'\n');
     msg_display(&name, 0, false);

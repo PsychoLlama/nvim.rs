@@ -62,7 +62,11 @@ pub(crate) fn is_jump_label() -> bool {
         let at = code_at(&line, 0);
         // The chain is left whole: `past_label` only steps over a line the
         // two tests in front of it did not claim.
-        !is_default_label(&line, at) && !is_scope_decl(&line, at) && past_label(&line, at).is_some()
+        let out = !is_default_label(&line, at)
+            && !is_scope_decl(&line, at)
+            && past_label(&line, at).is_some();
+        drop(line);
+        out
     };
     if !is_label {
         return false;
@@ -179,7 +183,9 @@ pub(crate) fn is_enum_or_init() -> bool {
     while let Some(word) = SKIP.iter().find(|word| starts_with_word(&line, at, word)) {
         at = code_at(&line, at + word.len());
     }
-    starts_with_word(&line, at, b"enum") || is_compound_init(&line, at)
+    let out = starts_with_word(&line, at, b"enum") || is_compound_init(&line, at);
+    drop(line);
+    out
 }
 
 /// Whether `line` is a preprocessor directive: anything starting with `#`.
@@ -311,7 +317,7 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
         // where the walk has to look at another one.
         let stopped = {
             let line = lines.line(lnum);
-            loop {
+            let stopped = loop {
                 let c = byte_at(&line, at);
                 if matches!(c, 0 | b';' | b'\'' | b'"') {
                     break Stopped::NotOne;
@@ -335,7 +341,9 @@ pub(crate) fn is_func_decl(first_lnum: LineNr, min_lnum: LineNr) -> bool {
                     at += 1;
                     just_started = false;
                 }
-            }
+            };
+            drop(line);
+            stopped
         };
 
         match stopped {

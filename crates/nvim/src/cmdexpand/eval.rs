@@ -176,6 +176,7 @@ pub fn f_getcompletion(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
     for name in xpc.matches() {
         retlist.push(string_tv(name.as_cstr().to_bytes()));
     }
+    drop(retlist);
     expand_cleanup(&mut xpc);
 }
 

@@ -56,13 +56,14 @@ fn add_mark(
             ColNr::MAX
         }));
     lpos.edit().push_number(VarNumber::from(pos.coladd));
-    let d = &mut d_held.edit();
+    let mut d = d_held.edit();
     if d.add_str(b"mark", Some(mname)).is_err()
         || d.add_list(b"pos", Some(lpos)).is_err()
         || fname.is_some_and(|fname| d.add_str(b"file", Some(fname)).is_err())
     {
         return Err(Failed);
     }
+    drop(d);
     Ok(())
 }
 

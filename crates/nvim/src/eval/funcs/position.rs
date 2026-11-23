@@ -275,6 +275,7 @@ fn getpos_both(args: &[TypVal], result: &mut TypVal, getcurpos: bool, charcol: b
     if getcurpos {
         append_curswant(&mut l, wp);
     }
+    drop(l);
 }
 
 /// `getcurpos()`'s fifth element. Reading it means recomputing 'curswant',

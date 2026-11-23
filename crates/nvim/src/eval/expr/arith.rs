@@ -73,6 +73,7 @@ pub(crate) fn eval_addblob(tv1: &mut TypVal, tv2: &TypVal) {
         let room = held.claim(total);
         room[..b1.len()].copy_from_slice(&b1);
         room[b1.len()..].copy_from_slice(&b2);
+        drop(held);
     }
     drop((b1, b2));
     tv_clear(tv1);

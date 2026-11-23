@@ -192,6 +192,7 @@ pub fn f_inputlist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             msg_put_ascii(b'\n');
         }
     }
+    drop(list);
 
     let mut mouse_used = false;
     let mut selected = prompt_for_number(&mut mouse_used);

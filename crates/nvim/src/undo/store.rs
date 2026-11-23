@@ -375,6 +375,7 @@ impl Iterator for TreeWalk {
             alt_prev: uh.alt_prev,
             next: uh.next,
         });
+        drop(uh);
         Some(Visit {
             link: here,
             first,

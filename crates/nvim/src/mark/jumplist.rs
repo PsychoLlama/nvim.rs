@@ -286,6 +286,7 @@ pub fn cleanup_jumplist(window: Win, loadfiles: bool) {
         w.w_jumplistlen -= 1;
         w.w_jumplistidx -= 1;
     }
+    drop(edit);
 }
 
 /// Copy the jumplist from window "from" to window "to".

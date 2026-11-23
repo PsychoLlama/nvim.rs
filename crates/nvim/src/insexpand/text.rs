@@ -189,6 +189,7 @@ pub(crate) fn get_next_bufname_token() {
             let tail = tail.to_bytes();
             ins_compl_add(tail, None, NO_EXTRA, None, dir, flags, false, NO_HL, score);
         }
+        drop(held);
     }
 }
 
@@ -306,6 +307,7 @@ pub(crate) fn find_common_prefix(curbuf_only: bool) -> Option<(XString, usize)> 
             {
                 len -= text_len;
             }
+            drop(line);
         }
     }
     Some((first, len))

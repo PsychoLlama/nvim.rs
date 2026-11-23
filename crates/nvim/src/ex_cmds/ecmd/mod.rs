@@ -536,6 +536,7 @@ fn resolve_target(
         // re-edit with same file name
         *ffname = current.full().map(CStr::to_owned);
         *sfname = current.shown().map(CStr::to_owned);
+        drop(held);
     }
     // may expand to full path name
     let name = ffname.as_deref().unwrap_or_default();

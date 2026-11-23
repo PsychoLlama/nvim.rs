@@ -290,8 +290,8 @@ fn script_query(args: &[TypVal]) -> ScriptQuery {
         return ScriptQuery::All;
     };
     // The tag was tested above, so this is the argument's own dictionary.
-    let dict = arg.dict_ref();
-    let dict = dict.as_deref();
+    let held = arg.dict_ref();
+    let dict = held.as_deref();
 
     if let Some(sid_di) = dict_find(dict, b"sid") {
         let Ok(sid) = tv_get_number_chk(&sid_di.di_tv) else {
@@ -306,6 +306,7 @@ fn script_query(args: &[TypVal]) -> ScriptQuery {
     }
 
     let pat: Option<ThinCString> = dict_get_string_alloc(dict, b"name");
+    drop(held);
     pat.and_then(|pat| OwnedProg::compile(pat.as_cstr(), RE_MAGIC + RE_STRING))
         .map_or(ScriptQuery::All, ScriptQuery::Matching)
 }

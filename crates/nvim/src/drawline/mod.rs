@@ -354,7 +354,7 @@ fn invoke_range_next(
         let mut lines = window.buffer().lines();
         let line = lines.line(lnum);
         let line_len = ColNr::try_from(line.len()).unwrap_or(ColNr::MAX);
-        (col_off <= line_len - begin_col).then(|| {
+        let out = (col_off <= line_len - begin_col).then(|| {
             let end_col = begin_col + col_off;
             // Do not cut a character in half: forward to the start of the
             // next one when `end_col` is inside one.
@@ -366,7 +366,9 @@ fn invoke_range_next(
                 c_cluster_len(&line[at - back..]) - back
             };
             end_col + ColNr::try_from(fwd).unwrap_or(ColNr::ZERO).get()
-        })
+        });
+        drop(line);
+        out
     };
 
     if let Some(end_col) = end_col {

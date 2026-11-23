@@ -88,6 +88,7 @@ pub(crate) fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
         nothing_after_opener = byte_at(&start, look) == 0;
         if !nothing_after_opener {
             let at = look + skip::white(&start[look.min(start.len())..]);
+            drop(start);
             comment.col = ColNr::try_from(at).expect("a column within a line fits a ColNr");
         }
     }
@@ -187,12 +188,14 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
                 // indent and nothing more.
                 let mut lines = Lines::current();
                 let (above_starts, above_middles) = {
-                    let above = lines.line(prev);
-                    let above = &above[skip::white(&above)..];
-                    (
+                    let above_line = lines.line(prev);
+                    let above = &above_line[skip::white(&above_line)..];
+                    let out = (
                         ncmp_eq(above, &lead_start, lead_start_len),
                         ncmp_eq(above, &lead_middle, lead_middle_len),
-                    )
+                    );
+                    drop(above_line);
+                    out
                 };
                 if above_starts {
                     *amount = get_indent_lnum(prev);
@@ -211,6 +214,7 @@ fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> 
                     if !ncmp_eq(opener, &lead_start, lead_start_len) {
                         continue;
                     }
+                    drop(line);
                 }
             }
             if start_off != 0 {

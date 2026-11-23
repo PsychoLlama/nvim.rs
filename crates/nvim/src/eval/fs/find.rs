@@ -251,6 +251,7 @@ pub fn f_glob(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     for name in xpc.files() {
         list.push_str(Some(name.as_cstr()));
     }
+    drop(list);
     xpc.cleanup();
 }
 

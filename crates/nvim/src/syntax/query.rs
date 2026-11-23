@@ -156,6 +156,7 @@ pub(crate) fn get_syntax_name(_expand: &Expand, idx: usize) -> Option<Candidate>
             let mut text = Vec::with_capacity(name.count_bytes() + 1);
             text.push(b'@');
             text.extend_from_slice(name.to_bytes());
+            drop(held);
             Some(Candidate::Owned(
                 CString::new(text).expect("a cluster name holds no NUL"),
             ))

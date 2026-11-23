@@ -400,6 +400,7 @@ pub fn fmarks_check_names(buffer: Buf) {
             fmarks_check_one(jump, name, handle);
         }
     }
+    drop(held);
 }
 
 fn fmarks_check_one(fm: &mut XFileMark, name: &[u8], handle: Handle) {
@@ -491,6 +492,7 @@ pub fn clrallmarks(buffer: Buf, timestamp: Timestamp) {
         change.clear(timestamp);
     }
     b.b_changelistlen = 0;
+    drop(edit);
 }
 
 pub fn set_last_cursor(win: Win) {
@@ -529,4 +531,5 @@ pub fn mark_mb_adjustpos(buffer: Buf, pos: &mut Pos) {
     {
         pos.coladd = 0;
     }
+    drop(line);
 }

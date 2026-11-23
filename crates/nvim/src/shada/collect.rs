@@ -242,7 +242,9 @@ impl Iterator for VarWalk {
             }
             let mut value = TV_INITIAL_VALUE;
             tv_copy(&item.di_tv, &mut value);
-            return Some((XString::from_bytes(item.di_key.bytes()), value));
+            let key = XString::from_bytes(item.di_key.bytes());
+            drop(read);
+            return Some((key, value));
         }
         None
     }

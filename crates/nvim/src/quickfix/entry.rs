@@ -354,6 +354,7 @@ pub fn qf_get_valid_size(cmdidx: CmdIdx) -> size_t {
             }
         }
     }
+    drop(stack);
     size
 }
 
@@ -391,6 +392,7 @@ pub fn qf_get_cur_valid_idx(cmdidx: CmdIdx) -> c_int {
             }
         }
     }
+    drop(stack);
     if eidx != 0 { eidx } else { 1 }
 }
 

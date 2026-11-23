@@ -153,6 +153,7 @@ pub fn list_copy(
         } else {
             tv_copy(from, &mut value);
         }
+        drop(read);
         copy.edit().push(value);
     }
     Some(copy)

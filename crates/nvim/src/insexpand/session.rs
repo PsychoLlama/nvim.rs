@@ -197,6 +197,7 @@ pub(crate) fn get_filename_compl_info(mut startcol: c_int, curs_col: ColNr) -> R
     let end = (start + usize::try_from(COMPL_LENGTH.get()).unwrap_or(0)).min(line.len());
     let typed = &line[start..end];
     compl_pattern().set(ApiString::from_bytes(&addstar(typed, ExpandContext::Files)));
+    drop(line);
     Ok(())
 }
 
@@ -719,11 +720,13 @@ pub(crate) fn compl_pattern_from_line() -> ApiString {
     let mut lines = Lines::current();
     let line = lines.line(Win::current().cursor().lnum());
     let text = compl_range(&line);
-    if p_ic() {
+    let pattern = if p_ic() {
         ApiString::from_bytes(&foldcase(text, None))
     } else {
         ApiString::from_bytes(text)
-    }
+    };
+    drop(line);
+    pattern
 }
 
 /// The same bytes, copied verbatim -- what `compl_orig_text` and the

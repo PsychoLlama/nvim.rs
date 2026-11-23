@@ -157,6 +157,7 @@ impl TagStack {
         entry.fmark.set_fnum(item.fnum);
         entry.fmark.view = FileMarkView::NONE;
         entry.user_data = item.user_data;
+        drop(entries);
     }
 
     /// Add every dict in `items` that describes a jump, oldest first.

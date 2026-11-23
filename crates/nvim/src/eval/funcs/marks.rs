@@ -81,6 +81,7 @@ pub fn f_getchangelist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData
             .map_or(changelistlen, |entry| entry.wi_changelistidx)
     };
     out.push_number(VarNumber::from(index));
+    drop(out);
 
     for i in 0..buf.b_changelistlen() {
         let mark = buf.read().b_changelist[as_index(i)].mark;
@@ -101,6 +102,7 @@ pub fn f_getjumplist(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
     let entries = tv_list_alloc(wp.w_jumplistlen() as isize);
     out.push_list(Some(entries.clone()));
     out.push_number(VarNumber::from(wp.w_jumplistidx()));
+    drop(out);
     for i in 0..wp.w_jumplistlen() {
         let entry = &wp.read().w_jumplist[as_index(i)];
         if entry.fmark.mark.lnum == LineNr::ZERO {
@@ -189,6 +191,7 @@ pub fn f_tagfiles(_args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     while let Some(name) = files.next() {
         out.push_str(Some(name.as_cstr()));
     }
+    drop(out);
 }
 
 /// `taglist({expr} [, {filename}])`.

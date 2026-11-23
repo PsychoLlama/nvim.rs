@@ -253,7 +253,9 @@ pub fn getnextmark(startpos: Pos, dir: c_int, begin_line: bool) -> Option<FileMa
             result = Some(mark);
         }
     }
-    result.cloned()
+    let out = result.cloned();
+    drop(held);
+    out
 }
 
 /// Move to the given file mark, changing the buffer and cursor position.

@@ -527,6 +527,7 @@ impl SynState {
                 if id_list_has(block, cont_in_list, spp.sp_syn, spp.sp_flags, 0) {
                     return true;
                 }
+                drop(held);
             }
         }
         id_list_has(block, list, ssp, flags, 0)
@@ -602,6 +603,7 @@ fn id_list_has(
             {
                 return retval;
             }
+            drop(held);
         }
     }
     !retval

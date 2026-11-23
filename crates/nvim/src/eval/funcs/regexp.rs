@@ -251,8 +251,8 @@ impl<'a> MatchWalk<'a> {
         match kind {
             SOME_MATCH_STR_POS => {
                 // The four items seeded, overwritten in place.
-                let mut seeded = result.list_mut();
-                let seeded = list_items_mut(seeded.as_deref_mut());
+                let mut seeded_list = result.list_mut();
+                let seeded = list_items_mut(seeded_list.as_deref_mut());
                 drop(seeded[0].li_tv.take_string());
                 let span = hit.group(0).unwrap_or(0..0);
                 seeded[0]
@@ -267,6 +267,7 @@ impl<'a> MatchWalk<'a> {
                 if self.list.is_some() {
                     seeded[1].li_tv.write_number(VarNumber::from(self.idx));
                 }
+                drop(seeded_list);
             }
             SOME_MATCH_LIST => {
                 let mut out = result.list_mut().expect("the list seeded");
@@ -432,7 +433,9 @@ fn want_submatches(args: &[TypVal], i: usize) -> Result<bool, Failed> {
         semsg!("E475: Invalid value for argument {arg0}");
         return Err(Failed);
     }
-    Ok(tv_get_bool(&di.di_tv) != 0)
+    let out = Ok(tv_get_bool(&di.di_tv) != 0);
+    drop(held);
+    out
 }
 
 /// `match({expr}, {pat} [, {start} [, {count}]])`.

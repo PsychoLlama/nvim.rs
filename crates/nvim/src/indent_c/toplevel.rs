@@ -206,7 +206,9 @@ fn search_backwards(line: &Line) -> c_int {
             let mut lines = Lines::current();
             let l = lines.line(cursor_lnum);
             let at = skip::white(&l);
-            byte_at(&l, at) == b';' && only_comment_left(&l, at + 1)
+            let out = byte_at(&l, at) == b';' && only_comment_left(&l, at + 1);
+            drop(l);
+            out
         };
         if lone_semicolon {
             let curpos_save = Win::current().w_cursor();

@@ -253,8 +253,10 @@ pub fn qf_list(excmd: &mut ExArg) {
             let Some(entry) = list.nth(i) else {
                 break;
             };
-            ((entry.valid || all) && idx1 <= i && i <= idx2)
-                .then(|| (Listed::of(entry), i == list.index))
+            let out = ((entry.valid || all) && idx1 <= i && i <= idx2)
+                .then(|| (Listed::of(entry), i == list.index));
+            drop(list);
+            out
         };
         if let Some((listed, current)) = wanted {
             qf_list_entry(&listed, i, current);

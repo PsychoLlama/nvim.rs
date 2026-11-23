@@ -766,6 +766,7 @@ impl Walk {
                 let line = text[..=len].to_vec();
                 self.append(&line);
             }
+            drop(held);
         }
         if has_error {
             self.note(c"???END");

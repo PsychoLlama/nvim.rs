@@ -91,6 +91,7 @@ impl SynState {
                         last_min_valid = Some(id);
                     }
                 }
+                drop(held);
             }
             if let Some(id) = last_min_valid {
                 self.load_current_state(id);
@@ -174,6 +175,7 @@ impl SynState {
             {
                 sp = cache.next(id);
             }
+            drop(held);
             sp
         };
 

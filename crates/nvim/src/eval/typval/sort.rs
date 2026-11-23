@@ -332,7 +332,9 @@ pub(crate) fn do_uniq(list: &ListRef, info: &mut SortInfo<'_>) {
         let res = if builtin {
             let list = list.read();
             let items = list.items();
-            compare_builtin(info, &items[at - 1].li_tv, &items[at].li_tv)
+            let out = compare_builtin(info, &items[at - 1].li_tv, &items[at].li_tv);
+            drop(list);
+            out
         } else if info.func_err {
             0
         } else {

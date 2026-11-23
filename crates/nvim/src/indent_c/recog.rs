@@ -343,9 +343,11 @@ pub(crate) fn ends_a_do_while(terminated: u8) -> bool {
             }
             at = code_at(&line, at);
             let after = at + 1 + skip::white(&line[(at + 1).min(line.len())..]);
-            byte_at(&line, at) == b')'
+            let out = byte_at(&line, at) == b')'
                 && byte_at(&line, after) == b';'
-                && only_comment_left(&line, after + 1)
+                && only_comment_left(&line, after + 1);
+            drop(line);
+            out
         };
         if closed {
             // Found ");" at end of the line; now check there is a "while"
@@ -360,7 +362,9 @@ pub(crate) fn ends_a_do_while(terminated: u8) -> bool {
                     let mut lines = Lines::current();
                     let opener = lines.line(trypos.lnum);
                     let start = past_close_brace(&opener, code_at(&opener, 0));
-                    starts_with_word(&opener, start, b"while")
+                    let out = starts_with_word(&opener, start, b"while");
+                    drop(opener);
+                    out
                 };
                 if opens_while {
                     Win::current().cursor().set_lnum(trypos.lnum);

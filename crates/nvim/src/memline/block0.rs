@@ -428,7 +428,9 @@ pub(crate) fn swapfile_is_for_other_file(buffer: Buf, fname: &CStr) -> bool {
     // point at the same file under two names, so the inode has the last
     // word.
     let expanded = expand_env_within(&cstr::owned(stored), MAXPATHL as usize);
-    files_differ(full, Some(&cstr::owned(&expanded)), b0.ino())
+    let differ = files_differ(full, Some(&cstr::owned(&expanded)), b0.ino());
+    drop(held);
+    differ
 }
 
 /// Whether the four magic numbers say this swap file was written by a
@@ -532,4 +534,5 @@ pub fn ml_setflags(buffer: Buf) {
     // Best effort: a swap file that cannot take block zero is reported
     // where it is created, and there is nothing to do about it here.
     let _ = memfile.sync(MFS_ZERO);
+    drop(held);
 }

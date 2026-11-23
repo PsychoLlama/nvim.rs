@@ -156,6 +156,7 @@ unsafe extern "C" fn input_cb(
     let count = rest.len().min(CHUNK_SIZE);
     let chunk = &mut input.chunk;
     chunk[..count].copy_from_slice(&rest[..count]);
+    drop(line);
     // The memline keeps a NUL as an NL.
     for byte in &mut chunk[..count] {
         if *byte == b'\n' {

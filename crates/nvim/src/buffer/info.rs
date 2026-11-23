@@ -198,7 +198,9 @@ fn fill_name(buffer: Buf) -> XString {
     }
     let held = buffer.read();
     let fname = held.name.shown().unwrap_or(c"");
-    home_to_tilde(Some(buffer), fname, MAXPATHL as usize, true)
+    let out = home_to_tilde(Some(buffer), fname, MAXPATHL as usize, true);
+    drop(held);
+    out
 }
 
 /// Print one buffer's line: the number, the flag column, the name padded to
@@ -504,6 +506,7 @@ fn default_icon() -> Vec<u8> {
     }
     let mut out = [0u8; IOSIZE as usize];
     out[..name.len() - start].copy_from_slice(&name[start..]);
+    drop(held);
     trans_characters_in(&mut out);
     cstr::until_nul(&out).to_vec()
 }

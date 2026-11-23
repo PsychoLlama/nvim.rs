@@ -527,6 +527,7 @@ pub(crate) fn mb_adjust_opend(op: &mut OpArg) {
     if byte_at(&line, at) != 0 {
         let at = at - head_off(&line, at);
         let at = at + cluster_len(&line[at..]) - 1;
+        drop(line);
         op.end.col = ColNr::try_from(at).unwrap_or(ColNr::MAX);
     }
 }

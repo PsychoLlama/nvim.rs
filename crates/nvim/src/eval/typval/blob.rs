@@ -361,6 +361,7 @@ pub(crate) fn set_range(
     let first = usize::try_from(n1).expect("a byte of the blob");
     // Two different blobs, so the borrows name different allocations.
     dest.edit().bytes_mut()[first..first + bytes.len()].copy_from_slice(&bytes);
+    drop(bytes);
     Ok(())
 }
 
@@ -404,6 +405,7 @@ pub fn blob_remove(
         let mut edit = blob.edit();
         result.write_number(VarNumber::from(edit.bytes()[first]));
         edit.drain(first, first);
+        drop(edit);
         return;
     }
 

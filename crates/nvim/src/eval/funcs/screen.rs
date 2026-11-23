@@ -125,6 +125,7 @@ pub fn f_screenchars(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
             break;
         }
     }
+    drop(list);
 }
 
 /// `screencol()` — the cursor's screen column, one-based.

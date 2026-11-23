@@ -269,9 +269,11 @@ fn qf_add_entries(
                 let Some(item) = read.items().get(at) else {
                     break;
                 };
-                (item.li_tv.v_type() == VAR_DICT)
+                let out = (item.li_tv.v_type() == VAR_DICT)
                     .then(|| item.li_tv.dict_ref().as_deref().map(DictEntry::of))
-                    .flatten()
+                    .flatten();
+                drop(read);
+                out
             };
             if let Some(from) = from {
                 if qf_add_entry_from_dict(qfl, from, at == 0) {

@@ -150,6 +150,7 @@ pub(crate) fn next_for_item(info: &mut ForInfo, arg: &[u8]) -> bool {
             }
             let at = i32::try_from(*next).expect("a Blob index fits an int");
             value.write_number(VarNumber::from(blob.byte(at)));
+            drop(blob);
             *next += 1;
         }
         Walk::Text { text, next } => {

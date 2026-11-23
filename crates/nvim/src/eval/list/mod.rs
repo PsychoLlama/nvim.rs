@@ -677,6 +677,7 @@ impl<'a> BlobArg<'a> {
         let bytes = blob.bytes_mut();
         bytes.copy_within(idx..len, idx + 1);
         bytes[idx] = byte;
+        drop(blob);
     }
 
     /// Append `byte`, growing the blob -- `add()`'s one-item form.

@@ -331,6 +331,7 @@ pub fn ex_diffoff(excmd: &mut ExArg) {
                     let opt = &mut edit.w_onebuf_opt;
                     opt.wo_fdm = saved_or(&opt.wo_fdm_save, c"manual");
                     opt.wo_fdc = saved_or(&opt.wo_fdc_save, c"0");
+                    drop(edit);
                 }
                 if wp.wo_fdl() == 0 as OptInt {
                     wp.set_wo_fdl(wp.wo_fdl_save());

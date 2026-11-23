@@ -368,6 +368,7 @@ fn draw_one_line(
             wl.wl_folded = foldinfo.fi_lines > 0;
             wl.wl_foldend = LineNr::new(lastlnum.get());
             wl.wl_lastlnum = LineNr::new(lastlnum.get());
+            drop(edit);
         }
         w.did_update = if foldinfo.fi_lines > 0 {
             DidUpdate::Fold
@@ -398,6 +399,7 @@ fn draw_one_line(
         let wl = &mut edit.w_lines[idx];
         wl.wl_lnum = w.lnum;
         wl.wl_valid = true;
+        drop(edit);
     }
 
     // `DOLLAR_VCOL >= 0` on the cursor line means it was not fully drawn

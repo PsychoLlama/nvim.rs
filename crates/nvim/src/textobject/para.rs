@@ -99,6 +99,7 @@ pub fn findpar(dir: c_int, mut count: c_int, what: u8, both: bool) -> Option<boo
         if Win::current().cursor().col() != ColNr::ZERO {
             let col = Win::current().cursor().col() - 1;
             let back = head_off(&line, usize::try_from(col).unwrap_or(usize::MAX));
+            drop(line);
             Win::current()
                 .cursor()
                 .set_col(col - c_int::try_from(back).unwrap_or(0));
@@ -154,8 +155,10 @@ pub fn starts_para(lnum: LineNr, para: u8, both: bool) -> bool {
         return false;
     }
     let name = &line[1..];
-    p_sections(|sections| inmacro(sections.to_bytes(), name))
-        || (para == 0 && p_para(|paragraphs| inmacro(paragraphs.to_bytes(), name)))
+    let out = p_sections(|sections| inmacro(sections.to_bytes(), name))
+        || (para == 0 && p_para(|paragraphs| inmacro(paragraphs.to_bytes(), name)));
+    drop(line);
+    out
 }
 
 /// Grow an existing linewise Visual selection by `count` more paragraphs.

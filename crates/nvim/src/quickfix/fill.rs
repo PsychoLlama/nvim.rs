@@ -180,6 +180,7 @@ fn qf_buf_line(
                 let held = errbuf.read();
                 let shown = held.name.shown().map_or(&b""[..], CStr::to_bytes);
                 out.extend_from_slice(&shown[tail_index(shown)..]);
+                drop(held);
             } else {
                 // Shorten the file name if not done already. For speed,
                 // only for the first entry of each buffer.
@@ -192,6 +193,7 @@ fn qf_buf_line(
                         let held = errbuf.read();
                         let shown = held.name.shown().map_or(&b""[..], CStr::to_bytes);
                         out.extend_from_slice(shown);
+                        drop(held);
                     }
                 }
             }
@@ -422,6 +424,7 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
                     Some(text) => text_func = Some(text.to_bytes().to_vec()),
                     None => invalid_val = true,
                 }
+                drop(list);
             }
 
             let fnum = {
@@ -438,6 +441,7 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
                     text_func.as_deref(),
                     prev_bufnr != Some(fnum),
                 );
+                drop(list);
                 fnum
             };
             if ml_append_bytes(buffer, lnum, &line).is_err() {

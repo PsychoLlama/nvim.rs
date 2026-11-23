@@ -260,6 +260,7 @@ fn end_pending_comment(c: Key) {
             p += 1; // find the end of the end flags
         }
         let (lead_end, _) = split_option_part(&com[p..], COM_MAX_LEN, b",");
+        drop(held);
         (len_as_int(middle_len), lead_end)
     };
 
@@ -312,8 +313,9 @@ pub(crate) fn echeck_abbr(c: Key, literal: bool) -> bool {
     // A copy of the line before the cursor: the expansion can run user code,
     // which may change the line.
     let mut lines = Lines::current();
-    let line = lines.line(cursor.lnum);
-    let line = line[..col.min(line.len())].to_vec();
+    let text = lines.line(cursor.lnum);
+    let line = text[..col.min(text.len())].to_vec();
+    drop(text);
     check_abbr(c, literal, line, start_col.get())
 }
 
