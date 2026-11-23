@@ -32,7 +32,7 @@ pub fn nvim_open_term(buf: BufferHandle, opts: &mut KeyDict_open_term) -> Result
         return Err(Error::exception(E_CMDWIN));
     }
     let mut may_read_buffer: bool = true;
-    if !buffer.terminal().is_null() {
+    if buffer.terminal().is_some() {
         if buf_terminal_running(buffer) {
             let handle = buffer.handle();
             return Err(api_error!(

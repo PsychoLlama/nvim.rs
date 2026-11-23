@@ -129,7 +129,7 @@ impl Terminal {
 /// callback, which may be Lua that feeds this terminal again
 /// (`nvim_chan_send` from `nvim_open_term`'s `on_input`).
 pub(super) fn with_vt<R>(term: Term, f: impl FnOnce(&mut VTerm) -> R) -> R {
-    let answer = f(&mut term.vt.borrow_mut());
+    let answer = f(&mut term.read().vt.borrow_mut());
     flush_output(term);
     answer
 }
@@ -138,19 +138,19 @@ pub(super) fn with_vt<R>(term: Term, f: impl FnOnce(&mut VTerm) -> R) -> R {
 /// replies if there is one (no user code runs for that, and the order
 /// against the request is kept), else collect them for [`with_vt`] to send.
 fn collect_output(term: Term, bytes: &[u8]) {
-    if term.closed.get() {
+    if term.read().closed.get() {
         return;
     }
-    if let Some(held) = &*term.pending.send.borrow() {
+    if let Some(held) = &*term.read().pending.send.borrow() {
         held.borrow_mut().extend_from_slice(bytes);
         return;
     }
-    term.output.borrow_mut().extend_from_slice(bytes);
+    term.read().output.borrow_mut().extend_from_slice(bytes);
 }
 
 /// Send the child what vterm has written for it since the last flush.
 fn flush_output(term: Term) {
-    let bytes = term.output.take();
+    let bytes = term.read().output.take();
     if !bytes.is_empty() {
         terminal_send(term, &bytes);
     }
@@ -165,7 +165,7 @@ fn write_to_emulator(term: Term, bytes: &[u8]) {
 
 /// The buffer this terminal draws into, `None` once it has been wiped.
 fn term_buf(term: Term) -> Option<Buf> {
-    buf_for_handle(term.buf_handle.get())
+    buf_for_handle(term.read().buf_handle.get())
 }
 
 /// The buffer a handle names, `None` once it has been wiped.
@@ -185,30 +185,41 @@ pub(crate) fn terminal_alloc(buffer: Buf, opts: TerminalOptions) -> Term {
     // Owned by the buffer from here; every other reference reaches it
     // through `Buffer::terminal`, and `terminal_destroy` frees it.
     let term = Term::alloc(Terminal::new(opts, buffer.handle()));
-    buffer.set_terminal(term.raw());
+    buffer.set_terminal(Some(term));
 
     // None of the consumers being installed can run before this returns.
-    term.vt.borrow_mut().set_utf8(true);
-    term.vt.borrow_mut().obtain_screen();
-    term.vt.borrow_mut().screen_enable_altscreen();
-    term.vt.borrow_mut().obtain_screen().enable_reflow(true);
+    term.read().vt.borrow_mut().set_utf8(true);
+    term.read().vt.borrow_mut().obtain_screen();
+    term.read().vt.borrow_mut().screen_enable_altscreen();
+    term.read()
+        .vt
+        .borrow_mut()
+        .obtain_screen()
+        .enable_reflow(true);
     let handle = term;
-    term.vt
+    term.read()
+        .vt
         .borrow_mut()
         .set_screen_host(Box::new(callbacks::ScreenReports(handle)));
-    term.vt
+    term.read()
+        .vt
         .borrow_mut()
         .set_fallbacks(Box::new(termrequest::Requests(handle)));
     // Merge damage reports up to a whole scrolled region before they are
     // delivered; the refresh works in row ranges anyway.
-    term.vt.borrow_mut().set_damage_merge(VTERM_DAMAGE_SCROLL);
-    term.vt.borrow_mut().screen_reset(true);
-    term.vt
+    term.read()
+        .vt
+        .borrow_mut()
+        .set_damage_merge(VTERM_DAMAGE_SCROLL);
+    term.read().vt.borrow_mut().screen_reset(true);
+    term.read()
+        .vt
         .borrow_mut()
         .set_output(OutputSink::Rust(Box::new(move |bytes: &[u8]| {
             collect_output(handle, bytes);
         })));
-    term.vt
+    term.read()
+        .vt
         .borrow_mut()
         .set_selection_host(Box::new(callbacks::Clipboard(handle)), SELECTIONBUF_SIZE);
 
@@ -225,10 +236,12 @@ pub(crate) fn terminal_alloc(buffer: Buf, opts: TerminalOptions) -> Term {
     };
     let cursor_blink = shape.blinkon != 0 && shape.blinkoff != 0;
     let _ = term
+        .read()
         .vt
         .borrow_mut()
         .set_termprop(VTERM_PROP_CURSORSHAPE, Value::Int(cursor_shape));
     let _ = term
+        .read()
         .vt
         .borrow_mut()
         .set_termprop(VTERM_PROP_CURSORBLINK, Value::Bool(cursor_blink));
@@ -236,9 +249,14 @@ pub(crate) fn terminal_alloc(buffer: Buf, opts: TerminalOptions) -> Term {
     // sink sent directly.
     flush_output(term);
 
-    term.invalid_start.set(0);
-    term.invalid_end.set(c_int::from(term.opts.height));
-    term.pending.events.replace(Some(ParkingQueue::detached()));
+    term.read().invalid_start.set(0);
+    term.read()
+        .invalid_end
+        .set(c_int::from(term.read().opts.height));
+    term.read()
+        .pending
+        .events
+        .replace(Some(ParkingQueue::detached()));
 
     if !buffer.ml_flags().has(MlFlags::EMPTY) {
         let line_count = buffer.line_count();
@@ -249,7 +267,7 @@ pub(crate) fn terminal_alloc(buffer: Buf, opts: TerminalOptions) -> Term {
         }
         deleted_lines_buf(buffer, LineNr::ONE, line_count.get());
     }
-    term.old_height.set(1);
+    term.read().old_height.set(1);
     term
 }
 
@@ -263,10 +281,10 @@ pub(crate) fn terminal_open(term: Term, buffer: Buf, attached: &dyn Fn() -> bool
     let mut aco = AcoSave::default();
     // SAFETY: paired with the `aucmd_restbuf` below.
     aucmd_prepbuf(&mut aco, buffer);
-    if term.sb.borrow().is_sized() {
+    if term.read().sb.borrow().is_sized() {
         refresh_scrollback(term, buffer);
     } else {
-        debug_assert!(term.invalid_start.get() >= 0);
+        debug_assert!(term.read().invalid_start.get() >= 0);
     }
     refresh::refresh_screen(term, buffer);
 
@@ -307,7 +325,7 @@ pub(crate) fn terminal_open(term: Term, buffer: Buf, attached: &dyn Fn() -> bool
     aucmd_restbuf(&mut aco);
     // TermOpen may have closed and freed the terminal; it is only reached
     // again once its driver says it still holds it.
-    if !attached() || term.buf_handle.get() == Handle::NONE {
+    if !attached() || term.read().buf_handle.get() == Handle::NONE {
         return;
     }
     if !term_may_alloc_scrollback(term, Some(buffer)) {
@@ -340,9 +358,9 @@ pub(crate) fn terminal_open(term: Term, buffer: Buf, attached: &dyn Fn() -> bool
             },
         };
         with_vt(term, |vt| vt.set_palette_color(i, &color));
-        let mut color_set = term.color_set.get();
+        let mut color_set = term.read().color_set.get();
         color_set[as_index(i)] = true;
-        term.color_set.set(color_set);
+        term.read().color_set.set(color_set);
     }
 }
 
@@ -354,13 +372,13 @@ pub(crate) fn terminal_open(term: Term, buffer: Buf, attached: &dyn Fn() -> bool
 /// it.
 ///
 pub(crate) fn terminal_close(term: Term, status: c_int) {
-    if term.destroy.get() {
+    if term.read().destroy.get() {
         return;
     }
     let buf = term_buf(term);
 
     // Closing an already-closed terminal leaves only the freeing half.
-    let only_destroy = term.closed.get();
+    let only_destroy = term.read().closed.get();
     if !only_destroy {
         if !EXITING.get() {
             // Show the child's last output before announcing its death.
@@ -369,7 +387,7 @@ pub(crate) fn terminal_close(term: Term, status: c_int) {
             refresh::refresh_terminal(term);
             unblock_autocmds();
         }
-        term.closed.set(true);
+        term.read().closed.set(true);
     }
 
     // Where the child left off, reported to `TermClose` as `v:event`-adjacent
@@ -377,15 +395,15 @@ pub(crate) fn terminal_close(term: Term, status: c_int) {
     let mut pos = buf.map_or(0, |buf| buf.line_count().get() - 1);
     if status == -1 || EXITING.get() {
         // Nothing to report on: detach from the buffer straight away.
-        term.buf_handle.set(Handle::NONE);
+        term.read().buf_handle.set(Handle::NONE);
         if let Some(buf) = buf {
-            buf.set_terminal(::core::ptr::null_mut());
+            buf.set_terminal(None);
         }
-        if term.refcount.get() == RefcountSize::ZERO {
-            term.destroy.set(true);
+        if term.read().refcount.get() == RefcountSize::ZERO {
+            term.read().destroy.set(true);
             // Read out before the call: the channel's close callback is free
             // to free the terminal.
-            let (close_cb, owner) = (term.opts.close_cb, term.opts.owner);
+            let (close_cb, owner) = (term.read().opts.close_cb, term.read().opts.owner);
             close_cb.expect("every terminal's channel sets a close callback")(owner);
         }
     } else if !only_destroy {
@@ -395,7 +413,7 @@ pub(crate) fn terminal_close(term: Term, status: c_int) {
                 wp.set_w_redr_status(true);
             }
         }
-        pos = pos.min(row_to_linenr(term, term.cursor.row.get()));
+        pos = pos.min(row_to_linenr(term, term.read().cursor.row.get()));
     }
 
     if only_destroy {
@@ -444,7 +462,7 @@ fn handle_of(word: u64) -> Handle {
 fn terminal_state_change_event(handle: u64, _: u64) {
     let buf = buf_for_handle(handle_of(handle));
     if let Some(buf) = buf
-        && !buf.terminal().is_null()
+        && buf.terminal().is_some()
     {
         let last = buf.line_count();
         redraw_buf_line_later(buf, last, false);
@@ -456,17 +474,17 @@ fn terminal_state_change_event(handle: u64, _: u64) {
 /// The redraw is deferred: this is reached from a process-status callback,
 /// which is no place to touch the screen.
 pub(crate) fn terminal_set_state(term: Term, suspended: bool) {
-    if term.suspended.get() != suspended
+    if term.read().suspended.get() != suspended
         && let Some(queue) = refresh::refresh_queue()
     {
         let event = Event::Ids(
             terminal_state_change_event,
-            handle_word(term.buf_handle.get()),
+            handle_word(term.read().buf_handle.get()),
             0,
         );
         event_queue::put(queue, event);
     }
-    term.suspended.set(suspended);
+    term.read().suspended.set(suspended);
 }
 
 /// [`terminal_check_size`] for the terminal `buffer` holds, if it holds one.
@@ -486,10 +504,10 @@ pub(crate) fn buf_terminal_running(buffer: Buf) -> bool {
 /// The largest of them, not the smallest: a narrower window scrolls
 /// sideways rather than making the child reflow for everyone else.
 pub(crate) fn terminal_check_size(term: Term) {
-    if term.closed.get() {
+    if term.read().closed.get() {
         return;
     }
-    let (curheight, curwidth) = term.size();
+    let (curheight, curwidth) = term.read().size();
 
     let (mut width, mut height) = (0, 0);
     for wp in tab_windows() {
@@ -500,7 +518,7 @@ pub(crate) fn terminal_check_size(term: Term) {
         }
         if wp
             .buffer_or_none()
-            .is_none_or(|buf| buf.terminal() != term.raw())
+            .is_none_or(|buf| buf.terminal() != Some(term))
         {
             continue;
         }
@@ -519,7 +537,7 @@ pub(crate) fn terminal_check_size(term: Term) {
         vt.set_size(height, width);
         vt.flush_damage();
     });
-    term.pending.resize.set(true);
+    term.read().pending.resize.set(true);
     refresh::invalidate_terminal(term, None);
 }
 
@@ -530,13 +548,13 @@ pub(crate) fn terminal_check_size(term: Term) {
 /// it freed the terminal, after which the caller drops its handle.
 pub(crate) fn terminal_destroy(term: Term) -> bool {
     if let Some(buf) = term_buf(term) {
-        term.buf_handle.set(Handle::NONE);
-        buf.set_terminal(::core::ptr::null_mut());
+        term.read().buf_handle.set(Handle::NONE);
+        buf.set_terminal(None);
     }
-    if term.refcount.get() != RefcountSize::ZERO {
+    if term.read().refcount.get() != RefcountSize::ZERO {
         return false;
     }
-    let events = term.pending.events.borrow_mut().take();
+    let events = term.read().pending.events.borrow_mut().take();
     refresh::refresh_before_destroy(term);
     drop(events);
     // Everything the terminal owns goes with it, the emulator included, and
@@ -550,17 +568,17 @@ pub(crate) fn terminal_destroy(term: Term) -> bool {
 ///
 /// See [`TerminalPending::send`](crate::terminal::state::TerminalPending).
 fn terminal_send(term: Term, data: &[u8]) {
-    if term.closed.get() {
+    if term.read().closed.get() {
         return;
     }
-    if let Some(held) = &*term.pending.send.borrow() {
+    if let Some(held) = &*term.read().pending.send.borrow() {
         if !data.is_empty() {
             held.borrow_mut().extend_from_slice(data);
         }
         return;
     }
     // Read out before the call: the channel's write callback may re-enter.
-    let (write_cb, owner) = (term.opts.write_cb, term.opts.owner);
+    let (write_cb, owner) = (term.read().opts.write_cb, term.read().opts.owner);
     write_cb.expect("every terminal's channel sets a write callback")(data, owner);
 }
 
@@ -586,7 +604,7 @@ fn on_sync_flush(handle: u64, _: u64) {
 /// those means "next line, column zero", which to a terminal is CR LF.
 ///
 pub(crate) fn terminal_receive(term: Term, bytes: &[u8]) {
-    if term.opts.force_crlf {
+    if term.read().opts.force_crlf {
         let mut crlf = Vec::with_capacity(bytes.len());
         for (i, &byte) in bytes.iter().enumerate() {
             if byte == b'\n' && (i == 0 || bytes[i - 1] != b'\r') {
@@ -600,15 +618,15 @@ pub(crate) fn terminal_receive(term: Term, bytes: &[u8]) {
     }
     with_vt(term, |vt| vt.flush_damage());
 
-    if term.sync_flush_pending.get() {
+    if term.read().sync_flush_pending.get() {
         // The frame the child was assembling is complete: invalidate all of
         // it and redraw once, from the main loop rather than from the middle
         // of parsing its output.
-        term.sync_flush_pending.set(false);
-        let (height, _) = term.size();
-        term.invalid_start.set(0);
-        term.invalid_end.set(height);
-        put_id_event_on_main_loop(on_sync_flush, handle_word(term.buf_handle.get()), 0);
+        term.read().sync_flush_pending.set(false);
+        let (height, _) = term.read().size();
+        term.read().invalid_start.set(0);
+        term.read().invalid_end.set(height);
+        put_id_event_on_main_loop(on_sync_flush, handle_word(term.read().buf_handle.get()), 0);
     }
 }
 
@@ -652,7 +670,7 @@ pub(crate) fn terminal_get_line_attributes(
     let term = buffer
         .terminal_handle()
         .expect("the caller passes a terminal buffer");
-    let (height, width) = term.size();
+    let (height, width) = term.read().size();
     debug_assert!(linenr != 0, "buffer line numbers are one-based");
 
     let row = linenr_to_row(term, linenr);
@@ -688,7 +706,7 @@ pub(crate) fn terminal_get_line_attributes(
         // here; one they did not stays indexed, so that the UI's own palette
         // applies instead.
         let user_set = |idx: int16_t| {
-            (1..=16).contains(&idx) && term.color_set.get()[as_index(c_int::from(idx) - 1)]
+            (1..=16).contains(&idx) && term.read().color_set.get()[as_index(c_int::from(idx) - 1)]
         };
         let (fg_set, bg_set) = (user_set(vt_fg_idx), user_set(vt_bg_idx));
 
@@ -716,8 +734,16 @@ pub(crate) fn terminal_get_line_attributes(
             let resolved = HlAttrs {
                 rgb_ae_attr: hl_attrs,
                 cterm_ae_attr: hl_attrs,
-                rgb_fg_color: if fg_default { -1 } else { term.rgb(cell.fg) },
-                rgb_bg_color: if bg_default { -1 } else { term.rgb(cell.bg) },
+                rgb_fg_color: if fg_default {
+                    -1
+                } else {
+                    term.read().rgb(cell.fg)
+                },
+                rgb_bg_color: if bg_default {
+                    -1
+                } else {
+                    term.read().rgb(cell.bg)
+                },
                 rgb_sp_color: -1 as RgbValue,
                 cterm_fg_color: vt_fg_idx,
                 cterm_bg_color: vt_bg_idx,
@@ -737,7 +763,7 @@ pub(crate) fn terminal_get_line_attributes(
 
 /// The buffer `term` draws into, 0 once it has been detached.
 pub(crate) fn terminal_buf(term: Term) -> BufferHandle {
-    term.buf_handle.get() as BufferHandle
+    term.read().buf_handle.get() as BufferHandle
 }
 
 /// [`terminal_close`] of `buffer`'s terminal, which must be set.
@@ -759,14 +785,14 @@ pub(crate) fn check_buf_terminal_size(buffer: Buf) {
 
 /// Whether `term`'s child is still running.
 pub(crate) fn terminal_running(term: Term) -> bool {
-    !term.closed.get()
+    !term.read().closed.get()
 }
 
 /// Whether `buffer` holds a terminal whose job is suspended.
 pub(crate) fn buf_terminal_suspended(buffer: Buf) -> bool {
     buffer
         .terminal_handle()
-        .is_some_and(|term| term.suspended.get())
+        .is_some_and(|term| term.read().suspended.get())
 }
 
 /// Tell the child of `buffer`'s terminal, if it has one and asked for theme
@@ -775,7 +801,7 @@ pub(crate) fn terminal_notify_theme(buffer: Buf, dark: bool) {
     let Some(term) = buffer.terminal_handle() else {
         return;
     };
-    if !term.theme_updates.get() {
+    if !term.read().theme_updates.get() {
         return;
     }
     let report: &[u8] = if dark { b"\x1b[997;1n" } else { b"\x1b[997;2n" };
@@ -788,17 +814,17 @@ fn row_to_linenr(term: Term, row: c_int) -> c_int {
     if row == c_int::MAX {
         return c_int::MAX;
     }
-    row + count_as_int(term.sb.borrow().len()) + 1
+    row + count_as_int(term.read().sb.borrow().len()) + 1
 }
 
 /// The inverse of [`row_to_linenr`]. Negative for a scrollback line.
 fn linenr_to_row(term: Term, linenr: c_int) -> c_int {
-    linenr - count_as_int(term.sb.borrow().len()) - 1
+    linenr - count_as_int(term.read().sb.borrow().len()) - 1
 }
 
 /// Whether the user is typing at this terminal right now.
 fn is_focused(term: Term) -> bool {
-    STATE.get() & MODE_TERMINAL != 0 && Buf::current().terminal() == term.raw()
+    STATE.get() & MODE_TERMINAL != 0 && Buf::current().terminal() == Some(term)
 }
 
 /// What `dict` holds under `key`, or nil.

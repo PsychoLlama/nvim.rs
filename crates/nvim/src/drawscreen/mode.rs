@@ -208,7 +208,7 @@ fn show_mode_name(hl_id: c_int) {
         RESTART_EDIT.get().as_byte(),
         Some(b'I' | b'i' | b'a' | b'A')
     ) {
-        if Buf::current().terminal().is_null() {
+        if Buf::current().terminal().is_none() {
             put_translated(c" (insert)");
         } else {
             put_translated(c" (terminal)");

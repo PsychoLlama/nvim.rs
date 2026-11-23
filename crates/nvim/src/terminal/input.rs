@@ -262,14 +262,14 @@ pub(crate) fn buf_terminal_set_streamed_paste(buffer: Buf, streamed: bool) {
     let Some(term) = buffer.terminal_handle() else {
         return;
     };
-    if term.streamed_paste.get() != streamed {
+    if term.read().streamed_paste.get() != streamed {
         if streamed {
             with_vt(term, |vt| vt.keyboard_start_paste());
         } else {
             with_vt(term, |vt| vt.keyboard_end_paste());
         }
     }
-    term.streamed_paste.set(streamed);
+    term.read().streamed_paste.set(streamed);
 }
 
 /// Paste `lines` into the current terminal `count` times.
@@ -284,7 +284,7 @@ pub(crate) fn terminal_paste(lines: &[XString], count: c_int) {
     let term = Buf::current()
         .terminal_handle()
         .expect("a paste into a terminal buffer");
-    let bracket = !term.streamed_paste.get();
+    let bracket = !term.read().streamed_paste.get();
     if bracket {
         with_vt(term, |vt| vt.keyboard_start_paste());
     }
@@ -396,9 +396,11 @@ pub(super) fn send_mouse_event(term: Term, c: Key) -> bool {
             && (grid > 1 || row + mouse_win.w_winbar_height() < mouse_win.w_height())
             && col >= offset
             && (grid > 1 || col < mouse_win.w_width());
-        let showing_term = mouse_win.buffer().terminal() == term.raw();
-        let forwarding =
-            !term.suspended.get() && !term.closed.get() && term.forward_mouse.get() && showing_term;
+        let showing_term = mouse_win.buffer().terminal() == Some(term);
+        let forwarding = !term.read().suspended.get()
+            && !term.read().closed.get()
+            && term.read().forward_mouse.get()
+            && showing_term;
 
         if forwarding && inside {
             let Some((button, pressed)) = mouse_button(c) else {

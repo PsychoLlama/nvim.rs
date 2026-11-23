@@ -16,9 +16,9 @@ use core::ffi::{c_int, c_uint};
 use crate::buffer::BufFlags;
 use crate::os::libc::{int16_t, int64_t, size_t, time_t, uint64_t};
 use crate::slot;
-use crate::terminal::state::Terminal;
 use crate::types::*;
 use crate::undo::node::{UndoLink, VisualInfo};
+use crate::winlayer::Term;
 use crate::winlayer::{Buf, BufId};
 
 slot_fields! {
@@ -173,7 +173,7 @@ slot_fields! {
         b_spell, set_b_spell: bool;
         b_prompt_append_new_line, set_b_prompt_append_new_line: bool;
         b_prompt_insert, set_b_prompt_insert: Key;
-        terminal, set_terminal: *mut Terminal;
+        terminal, set_terminal: Option<Term>;
         b_mapped_ctrl_c: c_int;
         b_prev_line_count, set_b_prev_line_count: c_int;
         update_need_codepoints, set_update_need_codepoints: bool;

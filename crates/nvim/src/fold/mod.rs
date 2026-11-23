@@ -270,7 +270,7 @@ impl Win {
 /// `terminal` through [`Win::buffer`] leans on -- as the C does.
 pub fn has_any_folding(win: Win) -> c_int {
     c_int::from(
-        win.buffer().terminal().is_null()
+        win.buffer().terminal().is_none()
             && win.wo_fen() != 0
             && (!foldmethod_is_manual(win) || !win.read().w_folds.is_empty()),
     )

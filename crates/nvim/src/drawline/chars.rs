@@ -298,7 +298,7 @@ impl Cells {
             wlv.char_attr = hl_combine_attr(self.attr_base, self.attr_pri);
         }
 
-        if !window.w_buffer().terminal().is_null() {
+        if window.w_buffer().terminal().is_some() {
             let term_attr = usize::try_from(wlv.vcol)
                 .ok()
                 .and_then(|vcol| f.term_attrs.get(vcol))

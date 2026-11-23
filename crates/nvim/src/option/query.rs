@@ -523,7 +523,7 @@ pub(crate) fn get_winbuf_options(buffer: bool) -> DictRef {
 /// scrolls off, whatever the option says.
 ///
 pub(crate) fn get_scrolloff_value(window: Win) -> int64_t {
-    if STATE.get() & MODE_TERMINAL != 0 && !window.w_buffer().terminal().is_null() {
+    if STATE.get() & MODE_TERMINAL != 0 && window.w_buffer().terminal().is_some() {
         return 0;
     }
     match window.wo_so() {

@@ -36,7 +36,7 @@ pub(crate) const SELECTIONBUF_SIZE: usize = 0x400;
 /// that matters: `vt.borrow_mut().input_write(..)` runs vterm's callbacks,
 /// which reach this terminal again through their own copy.
 #[derive(Debug)]
-pub struct terminal {
+pub(crate) struct terminal {
     pub opts: TerminalOptions,
     /// The emulator the child's output is written into.
     pub vt: RefCell<Box<VTerm>>,
@@ -84,7 +84,7 @@ impl terminal {
     /// This stands in for the `xcalloc` the transpiled code used: every
     /// field starts as the all-zeroes value C would have produced, so the
     /// initialisation that follows is the same one the C did.
-    pub fn new(opts: TerminalOptions, buf_handle: Handle) -> Self {
+    pub(crate) fn new(opts: TerminalOptions, buf_handle: Handle) -> Self {
         let vt = VTerm::new(
             ::core::ffi::c_int::from(opts.height),
             ::core::ffi::c_int::from(opts.width),
@@ -121,14 +121,14 @@ impl terminal {
     }
 
     /// One more owner: a request or a terminal-mode loop standing on it.
-    pub fn retain(&self) {
+    pub(crate) fn retain(&self) {
         let mut count = self.refcount.get();
         count.retain();
         self.refcount.set(count);
     }
 
     /// One fewer owner.
-    pub fn release(&self) {
+    pub(crate) fn release(&self) {
         let mut count = self.refcount.get();
         count.release();
         self.refcount.set(count);
@@ -146,7 +146,7 @@ impl terminal {
 /// A capacity of zero means the scrollback has not been sized yet: that
 /// waits until there is a buffer to read `'scrollback'` from.
 #[derive(Default, Debug)]
-pub struct Scrollback {
+pub(crate) struct Scrollback {
     rows: VecDeque<Box<[VTermScreenCell]>>,
     capacity: usize,
     /// Rows pushed but not yet mirrored into the buffer by the refresh.
@@ -157,32 +157,32 @@ pub struct Scrollback {
 }
 
 impl Scrollback {
-    pub fn is_sized(&self) -> bool {
+    pub(crate) fn is_sized(&self) -> bool {
         self.capacity > 0
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.rows.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.rows.is_empty()
     }
 
-    pub fn pending(&self) -> ::core::ffi::c_int {
+    pub(crate) fn pending(&self) -> ::core::ffi::c_int {
         self.pending
     }
 
-    pub fn deleted(&self) -> usize {
+    pub(crate) fn deleted(&self) -> usize {
         self.deleted
     }
 
-    pub fn set_capacity(&mut self, capacity: usize) {
+    pub(crate) fn set_capacity(&mut self, capacity: usize) {
         self.capacity = capacity;
     }
 
     /// The row `index` places above the top of the screen, newest first.
-    pub fn row(&self, index: usize) -> Option<&[VTermScreenCell]> {
+    pub(crate) fn row(&self, index: usize) -> Option<&[VTermScreenCell]> {
         self.rows.get(index).map(|row| &**row)
     }
 
@@ -191,7 +191,7 @@ impl Scrollback {
     /// When the scrollback is full the oldest row makes way, and its
     /// allocation is reused if it is the right width — the common case,
     /// since a terminal that is not being resized pushes one width forever.
-    pub fn push(&mut self, cells: &[VTermScreenCell]) {
+    pub(crate) fn push(&mut self, cells: &[VTermScreenCell]) {
         let mut reused = None;
         if self.rows.len() >= self.capacity
             && let Some(oldest) = self.rows.pop_back()
@@ -221,7 +221,7 @@ impl Scrollback {
     ///
     /// `cells` is vterm's row buffer. A stored row narrower than that leaves
     /// the tail blank; a wider one is truncated.
-    pub fn pop(
+    pub(crate) fn pop(
         &mut self,
         cells: &mut [VTermScreenCell],
         old_height: &mut ::core::ffi::c_int,
@@ -246,7 +246,7 @@ impl Scrollback {
     }
 
     /// Forget every row kept, without giving up the sizing.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.deleted += self.rows.len();
         self.rows.clear();
         self.pending = 0;
@@ -257,17 +257,17 @@ impl Scrollback {
     /// Unlike eviction by [`Self::push`] this does not bump `deleted`: the
     /// caller is deleting the buffer's line itself and moving the marks, so
     /// the line numbering does not shift.
-    pub fn drop_oldest(&mut self) {
+    pub(crate) fn drop_oldest(&mut self) {
         self.rows.pop_back();
     }
 
     /// Record that the refresh has appended one owed row to the buffer.
-    pub fn mark_mirrored(&mut self) {
+    pub(crate) fn mark_mirrored(&mut self) {
         self.pending -= 1;
     }
 }
 #[derive(Debug, Default)]
-pub struct TerminalPending {
+pub(crate) struct TerminalPending {
     pub resize: Cell<bool>,
     pub cursor: Cell<bool>,
     /// Where writes to the child go while a `TermRequest` autocommand is
@@ -278,7 +278,7 @@ pub struct TerminalPending {
     pub(crate) events: RefCell<Option<crate::event_queue::ParkingQueue>>,
 }
 #[derive(Debug, Default)]
-pub struct TerminalCursor {
+pub(crate) struct TerminalCursor {
     pub row: Cell<::core::ffi::c_int>,
     pub col: Cell<::core::ffi::c_int>,
     pub shape: Cell<::core::ffi::c_int>,
@@ -289,7 +289,7 @@ pub struct TerminalCursor {
 /// What a terminal is built with: its size and its driver's callbacks, each
 /// told the driver's id. Rust-only: no C code reads it.
 #[derive(Clone, Debug)]
-pub struct TerminalOptions {
+pub(crate) struct TerminalOptions {
     /// Who drives the terminal (a channel's id), handed to each callback.
     pub owner: u64,
     pub width: uint16_t,

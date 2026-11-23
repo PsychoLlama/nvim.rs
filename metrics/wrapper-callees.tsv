@@ -6,8 +6,8 @@ count	callee	no_raw	defs	def
 16	.as_ref	0	0	
 16	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
-10	Box::from_raw	0	6	
 10	notify	0	0	
+9	Box::from_raw	0	6	
 8	Conn::new	0	1	crates/nvim/src/event/stream.rs
 8	process_events_until	0	1	crates/nvim/src/event/loop.rs
 8	xfree	0	1	crates/nvim/src/memory/mod.rs
@@ -33,6 +33,7 @@ count	callee	no_raw	defs	def
 4	from_raw_parts_mut	0	0	
 4	generation_at	0	1	crates/nvim/src/slot.rs
 4	proc_stop	0	1	crates/nvim/src/event/proc.rs
+4	read_at	0	1	crates/nvim/src/slot/guards.rs
 4	try_to_free_memory	1	1	crates/nvim/src/memory/mod.rs
 4	ts_node_child	0	0	
 4	ts_node_child_count	0	0	
@@ -50,7 +51,6 @@ count	callee	no_raw	defs	def
 3	proc_free	0	1	crates/nvim/src/event/proc.rs
 3	proc_get_exepath	0	1	crates/nvim/src/event/proc.rs
 3	process_events	0	1	crates/nvim/src/event/loop.rs
-3	read_at	0	1	crates/nvim/src/slot/guards.rs
 3	rstream_init	0	1	crates/nvim/src/event/rstream.rs
 3	rstream_may_close	0	1	crates/nvim/src/event/rstream.rs
 3	state_terminal	0	1	crates/nvim/src/vterm/abi/mod.rs

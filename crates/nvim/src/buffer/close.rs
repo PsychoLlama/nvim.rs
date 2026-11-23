@@ -247,7 +247,7 @@ impl Disposition {
         };
         // The caller must take care of NOT deleting/freeing when 'bufhidden'
         // is "hide" (otherwise we could never free or delete a buffer).
-        if buffer.terminal().is_null() {
+        if buffer.terminal().is_none() {
             match buffer.read().b_p_bh.first_byte() {
                 b'd' => (it.del, it.unload) = (true, true),
                 b'w' => (it.del, it.unload, it.wipe) = (true, true, true),
@@ -671,7 +671,7 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
     }
 
     // Autocommands may have opened another terminal. Block them this time.
-    if !buf.terminal().is_null() {
+    if buf.terminal().is_some() {
         block_autocmds_now();
         buf_close_terminal(buf);
         unblock_autocmds_now();
@@ -708,7 +708,7 @@ fn announce_unload(buffer: Buf, flags: c_int) -> Option<Buf> {
 
     let bufref = BufRef::of(buffer);
 
-    if !buffer.terminal().is_null() {
+    if buffer.terminal().is_some() {
         buf_close_terminal(buffer);
     }
     detach_updates(buffer);

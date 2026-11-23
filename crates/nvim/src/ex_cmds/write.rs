@@ -583,7 +583,7 @@ fn write_one_buffer(
 ) -> WriteAll {
     if EXITING.get()
         && !args.forceit
-        && !buffer.terminal().is_null()
+        && buffer.terminal().is_some()
         && channel_job_running(buffer.b_p_channel().cast_unsigned())
     {
         // A running terminal is not written: going on to write it would

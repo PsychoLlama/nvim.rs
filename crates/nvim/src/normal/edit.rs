@@ -509,7 +509,7 @@ pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
         return;
     }
     // A terminal buffer is not 'modifiable' and is still editable.
-    if Buf::current().b_p_ma() == 0 && Buf::current().terminal().is_null() {
+    if Buf::current().b_p_ma() == 0 && Buf::current().terminal().is_none() {
         emsg(gettext(E_MODIFIABLE));
         clear_op(cmd_arg.op());
         return;

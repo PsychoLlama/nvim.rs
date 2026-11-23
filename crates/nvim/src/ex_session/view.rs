@@ -151,7 +151,7 @@ fn put_edit(out: &mut SessionFile, window: Win, opts: SessionOpts) -> Result<boo
         return put_help_edit(out, window).map(|()| true);
     }
     if !buffer.read().name.full().is_none()
-        && (!buf_is_nofilename(window.buffer_or_none()) || !buffer.terminal().is_null())
+        && (!buf_is_nofilename(window.buffer_or_none()) || buffer.terminal().is_some())
     {
         // Editing a file. This may have side effects -- a compressed or
         // network file -- and if a buffer for it already exists we

@@ -53,13 +53,16 @@ fn blank_cell() -> VTermScreenCell {
 /// Returns false only when there is no buffer to read the option from,
 /// which happens if the buffer was wiped while the terminal still lives.
 pub(crate) fn term_may_alloc_scrollback(term: Term, buffer: Option<Buf>) -> bool {
-    if term.sb.borrow().is_sized() {
+    if term.read().sb.borrow().is_sized() {
         return true;
     }
     let Some(buf) = buffer.or_else(|| super::term_buf(term)) else {
         return false;
     };
-    term.sb.borrow_mut().set_capacity(scrollback_limit(buf));
+    term.read()
+        .sb
+        .borrow_mut()
+        .set_capacity(scrollback_limit(buf));
     true
 }
 
@@ -77,8 +80,8 @@ pub(crate) fn scrollback_push(term: Term, row: &[VTermScreenCell]) -> c_int {
     if !term_may_alloc_scrollback(term, None) {
         return 0;
     }
-    term.sb.borrow_mut().push(row);
-    if !term.synchronized_output.get() {
+    term.read().sb.borrow_mut().push(row);
+    if !term.read().synchronized_output.get() {
         invalidate_terminal(term, None);
     }
     1
@@ -87,12 +90,12 @@ pub(crate) fn scrollback_push(term: Term, row: &[VTermScreenCell]) -> c_int {
 /// The screen grew: give back the row most recently scrolled off, into
 /// `row`.
 pub(crate) fn scrollback_pop(term: Term, row: &mut [VTermScreenCell]) -> c_int {
-    let mut old_height = term.old_height.get();
-    if !term.sb.borrow_mut().pop(row, &mut old_height) {
+    let mut old_height = term.read().old_height.get();
+    if !term.read().sb.borrow_mut().pop(row, &mut old_height) {
         return 0;
     }
-    term.old_height.set(old_height);
-    if !term.synchronized_output.get() {
+    term.read().old_height.set(old_height);
+    if !term.read().synchronized_output.get() {
         invalidate_terminal(term, None);
     }
     1
@@ -103,10 +106,13 @@ pub(crate) fn scrollback_clear(term: Term) -> c_int {
     // On the alternate screen the scrollback belongs to the screen
     // underneath, which is about to be restored; clearing it there would
     // lose history the program never touched.
-    if term.in_altscreen.get() || !term.sb.borrow().is_sized() || term.sb.borrow().is_empty() {
+    if term.read().in_altscreen.get()
+        || !term.read().sb.borrow().is_sized()
+        || term.read().sb.borrow().is_empty()
+    {
         return 1;
     }
-    term.sb.borrow_mut().clear();
+    term.read().sb.borrow_mut().clear();
     invalidate_terminal(term, None);
     1
 }
@@ -121,16 +127,17 @@ pub(crate) fn fetch_row(term: Term, row: c_int, end_col: c_int) {
     // the terminator. C sized this buffer once, at 8191 bytes, which a wide
     // enough terminal full of clusters overruns.
     let needed = as_index(end_col.max(0)) * MAX_SCHAR_SIZE + 1;
-    if term.textbuf.borrow().len() < needed {
-        term.textbuf.borrow_mut().resize(needed, 0);
+    if term.read().textbuf.borrow().len() < needed {
+        term.read().textbuf.borrow_mut().resize(needed, 0);
     }
     // Out of the terminal for the walk: reading a cell does not touch it.
     // The two arms are the same walk, specialised: which half of
     // `fetch_cell` runs is decided once per row rather than once per cell,
     // and a screen row is found once rather than for each of its cells.
-    let mut text = term.textbuf.take();
+    let mut text = term.read().textbuf.take();
     let line_len = if row >= 0 {
-        let vt = term.vt.borrow();
+        let terminal = term.read();
+        let vt = terminal.vt.borrow();
         let screen = vt.screen_row(row);
         render_row(&mut text, end_col, |col, cell| {
             if let Some(screen) = &screen {
@@ -144,7 +151,7 @@ pub(crate) fn fetch_row(term: Term, row: c_int, end_col: c_int) {
         })
     };
     text[line_len] = b'\0';
-    term.textbuf.replace(text);
+    term.read().textbuf.replace(text);
 }
 
 /// [`fetch_row`]'s walk over the cells `cell_at` reads, into `text`:
@@ -183,10 +190,14 @@ fn render_row(
 /// stored while the terminal was narrower; the cell is left blank.
 pub(crate) fn fetch_cell(term: Term, row: c_int, col: c_int, cell: &mut VTermScreenCell) -> bool {
     if row >= 0 {
-        term.vt.borrow().get_cell(VTermPos { row, col }, cell);
+        term.read()
+            .vt
+            .borrow()
+            .get_cell(VTermPos { row, col }, cell);
         return true;
     }
-    let sb = term.sb.borrow();
+    let terminal = term.read();
+    let sb = terminal.sb.borrow();
     let stored = sb
         .row(as_index(-row - 1))
         .and_then(|stored| stored.get(as_index(col)));
@@ -210,21 +221,21 @@ pub(crate) fn fetch_cell(term: Term, row: c_int, col: c_int, cell: &mut VTermScr
 pub(crate) fn adjust_scrollback(term: Term, buffer: Buf) {
     let limit = scrollback_limit(buffer);
     assert!(
-        term.sb.borrow().pending() == 0,
+        term.read().sb.borrow().pending() == 0,
         "scrollback trimmed while rows were still owed to the buffer"
     );
-    if limit < term.sb.borrow().len() {
-        let diff = term.sb.borrow().len() - limit;
+    if limit < term.read().sb.borrow().len() {
+        let diff = term.read().sb.borrow().len() - limit;
         for _ in 0..diff {
             let _ = ml_delete_buf(buffer, LineNr::ONE, false);
-            term.sb.borrow_mut().drop_oldest();
+            term.read().sb.borrow_mut().drop_oldest();
         }
         let diff = len_as_int(diff);
         mark_adjust_term(buffer, LineNr::new(diff), -diff);
         // Report what the deletion took away.
         deleted_lines_buf(buffer, LineNr::ONE, diff);
     }
-    term.sb.borrow_mut().set_capacity(limit);
+    term.read().sb.borrow_mut().set_capacity(limit);
 }
 
 /// `mark_adjust_buf` as this module always calls it: a deletion at the top
@@ -242,22 +253,25 @@ fn mark_adjust_term(buffer: Buf, line2: LineNr, amount: i32) {
 /// wrong place.
 pub(crate) fn refresh_scrollback(term: Term, buffer: Buf) {
     let read_pause = term
+        .read()
         .opts
         .read_pause_cb
         .expect("every terminal's channel sets a read-pause callback");
-    read_pause(true, term.opts.owner);
+    read_pause(true, term.read().opts.owner);
 
     // Rows evicted since the last refresh are gone from the buffer's top;
     // move the marks that were pointing at them.
     let mut deleted = LineNr::new(len_as_int(
-        term.sb.borrow().deleted() - term.old_sb_deleted.get(),
+        term.read().sb.borrow().deleted() - term.read().old_sb_deleted.get(),
     ))
     .min(buffer.line_count());
     mark_adjust_term(buffer, deleted, -deleted.get());
-    term.old_sb_deleted.set(term.sb.borrow().deleted());
+    term.read()
+        .old_sb_deleted
+        .set(term.read().sb.borrow().deleted());
 
-    let mut old_height = term.old_height.get();
-    let (height, width) = term.size();
+    let mut old_height = term.read().old_height.get();
+    let (height, width) = term.read().size();
 
     while deleted > LineNr::ZERO && buffer.line_count() > LineNr::new(old_height) {
         let _ = ml_delete_buf(buffer, LineNr::ONE, false);
@@ -268,18 +282,21 @@ pub(crate) fn refresh_scrollback(term: Term, buffer: Buf) {
 
     // Each owed row is appended just above the rows that make up the
     // screen, which sit at the end of the buffer.
-    while term.sb.borrow().pending() > 0 {
-        fetch_row(term, -term.sb.borrow().pending(), width);
+    while term.read().sb.borrow().pending() > 0 {
+        fetch_row(term, -term.read().sb.borrow().pending(), width);
         let at = LineNr::new(buffer.line_count().get() - old_height);
-        let textbuf = term.textbuf.borrow();
-        let text = crate::cstr::in_bytes(&textbuf).to_bytes_with_nul();
-        let _ = ml_append_buf_terminated(buffer, at, text, false);
+        {
+            let terminal = term.read();
+            let textbuf = terminal.textbuf.borrow();
+            let text = crate::cstr::in_bytes(&textbuf).to_bytes_with_nul();
+            let _ = ml_append_buf_terminated(buffer, at, text, false);
+        }
         appended_lines_buf(buffer, at, 1);
-        term.sb.borrow_mut().mark_mirrored();
+        term.read().sb.borrow_mut().mark_mirrored();
     }
 
     // Anything past the scrollback plus one screen is stale.
-    let max_line_count = LineNr::new(count_as_int(term.sb.borrow().len()) + height);
+    let max_line_count = LineNr::new(count_as_int(term.read().sb.borrow().len()) + height);
     while buffer.line_count() > max_line_count {
         let last = buffer.line_count();
         let _ = ml_delete_buf(buffer, last, false);
@@ -287,7 +304,7 @@ pub(crate) fn refresh_scrollback(term: Term, buffer: Buf) {
     }
 
     adjust_scrollback(term, buffer);
-    read_pause(false, term.opts.owner);
+    read_pause(false, term.read().opts.owner);
 }
 
 /// The scrollback's line accounting, on the store itself: the rows kept

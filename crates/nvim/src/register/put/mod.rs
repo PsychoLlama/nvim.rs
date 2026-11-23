@@ -320,7 +320,7 @@ impl Put {
     /// message already out) when there is nothing to put or the line could
     /// not be split or saved for undo.
     fn run(&mut self, regname: RegName) {
-        if !Buf::current().terminal().is_null() {
+        if Buf::current().terminal().is_some() {
             terminal_paste(&self.lines, self.count);
             return;
         }
@@ -473,7 +473,7 @@ pub fn do_put(
         },
     };
 
-    if Buf::current().terminal().is_null() {
+    if Buf::current().terminal().is_none() {
         // Saving for undo can run autocommands, which may write the register,
         // so it happens before the register is read.
         let lnum = Win::current().cursor().lnum();
@@ -520,7 +520,7 @@ pub fn do_put(
         Buf::current().set_b_op_end(orig_end);
     }
 
-    if Buf::current().terminal().is_null() {
+    if Buf::current().terminal().is_none() {
         set_visual_active(false);
     }
 

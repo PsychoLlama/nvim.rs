@@ -300,7 +300,7 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
         INSSTART_ORIG.set(INSSTART.get());
     }
 
-    if !Buf::current().terminal().is_null() && !STOP_INSERT_MODE.get() {
+    if Buf::current().terminal().is_some() && !STOP_INSERT_MODE.get() {
         // Exiting a terminal buffer's Insert mode: a K_NOP is stuffed so
         // the loop wakes up and sees `STOP_INSERT_MODE`.
         STOP_INSERT_MODE.set(true);
@@ -672,7 +672,7 @@ pub(crate) fn insert_handle_key_post(s: &mut InsertState) {
 /// when inserting is not allowed here (the sandbox, textlock), which has
 /// been reported.
 pub(crate) fn edit(cmdchar: Key, startln: bool, count: c_int) -> Result<bool, Failed> {
-    if !Buf::current().terminal().is_null() {
+    if Buf::current().terminal().is_some() {
         if EX_NORMAL_BUSY.get() != 0 {
             // Do not enter terminal mode from `:normal`; ask for Insert
             // mode again after it finishes.

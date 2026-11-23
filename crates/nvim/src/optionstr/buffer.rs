@@ -147,7 +147,7 @@ pub fn did_set_buftype(args: &mut OptSet) -> Result<(), OptError> {
         let first = value.first().copied().unwrap_or(0);
         (first, opt_strings_ok(value, &OPT_BT_VALUES, false))
     };
-    let has_terminal = !buf.terminal().is_null();
+    let has_terminal = buf.terminal().is_some();
     if has_terminal != (first == b't') || !listed {
         return invalid();
     }

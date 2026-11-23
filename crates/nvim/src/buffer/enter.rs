@@ -430,7 +430,7 @@ fn do_autochdir_now() {
 // "No write since last change"
 
 pub fn no_write_message_buf(buffer: Buf) {
-    if !buffer.terminal().is_null() && job_running(buffer) {
+    if buffer.terminal().is_some() && job_running(buffer) {
         err_static(E_JOB_STILL_RUNNING_ADD_BANG_TO_END_THE_JOB);
     } else {
         let nr = buffer.handle().get();
@@ -440,7 +440,7 @@ pub fn no_write_message_buf(buffer: Buf) {
 
 pub fn no_write_message() {
     let buf = Buf::current();
-    if !buf.terminal().is_null() && job_running(buf) {
+    if buf.terminal().is_some() && job_running(buf) {
         err_static(E_JOB_STILL_RUNNING_ADD_BANG_TO_END_THE_JOB);
     } else {
         err_static(E_NO_WRITE_SINCE_LAST_CHANGE_ADD_BANG_TO_OVERRIDE);
@@ -448,7 +448,7 @@ pub fn no_write_message() {
 }
 
 pub fn no_write_message_nobang(buffer: Buf) {
-    if !buffer.terminal().is_null() && job_running(buffer) {
+    if buffer.terminal().is_some() && job_running(buffer) {
         err_static(E_JOB_STILL_RUNNING);
     } else {
         err_static(E_NO_WRITE_SINCE_LAST_CHANGE);

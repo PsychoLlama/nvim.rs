@@ -169,7 +169,7 @@ impl<'a> Walk<'a> {
 
 /// Whether the `:ls` flags in `arg` say to skip this buffer.
 fn skip(buffer: Buf, arg: &CStr, forceit: c_int) -> bool {
-    let is_terminal = !buffer.terminal().is_null();
+    let is_terminal = buffer.terminal().is_some();
     let job_running = buf_terminal_running(buffer);
     let loaded = buffer.ml().ml_mfp.is_some();
     let alt_fnum = current_win().w_alt_fnum();
@@ -218,7 +218,7 @@ fn show(buffer: Buf, by_time: bool, name: &XString) {
     } else {
         b' '
     };
-    if !buffer.terminal().is_null() {
+    if buffer.terminal().is_some() {
         ro_char = if buf_terminal_running(buffer) {
             b'R'
         } else {

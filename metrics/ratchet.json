@@ -40,7 +40,7 @@
   "typval_raw_params": 0,
   "exarg_raw": 0,
   "cmdarg_raw": 0,
-  "global_cells": 769,
+  "global_cells": 770,
   "cell_raw_ptr": 4,
   "api_err_params": 0,
   "char_as_c_int": 212,
@@ -752,7 +752,6 @@
     "crates/nvim/src/tag/query.rs": {"pub_items": 1},
     "crates/nvim/src/tag/stack.rs": {"pub_items": 4},
     "crates/nvim/src/tag/tagfunc.rs": {"pub_items": 3},
-    "crates/nvim/src/terminal/state.rs": {"pub_items": 5},
     "crates/nvim/src/textformat/auto.rs": {"pub_items": 2},
     "crates/nvim/src/textformat/mod.rs": {"pub_items": 3},
     "crates/nvim/src/textformat/wrap.rs": {"pub_items": 1},
@@ -871,7 +870,7 @@
     "crates/nvim/src/winlayer/graph.rs": {"extern_abi": 1, "no_mangle": 2, "pub_items": 2, "unsafe_stmts": 17},
     "crates/nvim/src/winlayer/grid.rs": {"cell_ptr": 1, "pub_items": 2, "unsafe_stmts": 6},
     "crates/nvim/src/winlayer/handles.rs": {"pub_items": 1},
-    "crates/nvim/src/winlayer/terminal.rs": {"unsafe_stmts": 2},
+    "crates/nvim/src/winlayer/terminal.rs": {"pub_items": 1, "unsafe_stmts": 1},
     "crates/nvim/src/xdiff/ffi.rs": {"unsafe_stmts": 1}
   }
 }

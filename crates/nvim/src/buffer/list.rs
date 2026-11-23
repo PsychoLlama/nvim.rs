@@ -413,7 +413,7 @@ pub fn curbuf_reusable() -> bool {
     let empty = buf.ml().ml_mfp.is_none() || buf_is_empty(buf);
     buf.read().name.full().is_none()
         && buf.b_nwindows() <= 1
-        && buf.terminal().is_null()
+        && buf.terminal().is_none()
         && empty
         && !buf_is_quickfix(Some(buf))
         && !curbuf_is_changed()

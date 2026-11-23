@@ -66,7 +66,7 @@ pub(crate) fn prepare_line(
 
         // 'colorcolumn'; a terminal buffer never shows one.
         wlv.color_col =
-            if window.w_buffer().terminal().is_null() && !window.read().w_p_cc_cols.is_empty() {
+            if window.w_buffer().terminal().is_none() && !window.read().w_p_cc_cols.is_empty() {
                 0
             } else {
                 NO_COLOR_COL
@@ -166,7 +166,7 @@ pub(crate) fn prepare_line(
 
     // The `:terminal` attributes themselves are filled in by the caller:
     // see [`LineSetup::has_terminal`].
-    if !window.w_buffer().terminal().is_null() {
+    if window.w_buffer().terminal().is_some() {
         s.has_terminal = true;
         s.extra_check = true;
     }

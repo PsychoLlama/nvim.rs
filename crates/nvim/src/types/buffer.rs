@@ -27,9 +27,9 @@ use crate::regexp::RegMMatch;
 use crate::registry::IdMap;
 use crate::spell::LangP;
 use crate::syntax::{SynCluster, SynPat};
-use crate::terminal::state::Terminal;
 use crate::undo::node::{UndoLink, VisualInfo};
 use crate::usercmd::UserCmd;
+use crate::winlayer::Term;
 use core::ffi::{CStr, c_char};
 use core::ptr;
 
@@ -683,7 +683,7 @@ pub struct Buffer {
     pub b_prompt_start: FileMark,
     pub b_s: SynBlock,
     pub b_signcols: file_buffer_b_signcols,
-    pub terminal: *mut Terminal,
+    pub terminal: Option<Term>,
     /// What the ShaDa file carried for this buffer that nvim does not read.
     pub(crate) additional_data: Option<crate::shada::ShadaExtra>,
     pub b_mapped_ctrl_c: ::core::ffi::c_int,

@@ -260,7 +260,7 @@ pub fn ml_open(buffer: Buf) -> Result<(), Failed> {
         buffer.set_b_p_swf(0);
     }
     // A swap file may still be opened later, when 'updatecount' is set.
-    buffer.set_b_may_swap(buffer.terminal().is_null() && p_uc() != 0 && buffer.b_p_swf() != 0);
+    buffer.set_b_may_swap(buffer.terminal().is_none() && p_uc() != 0 && buffer.b_p_swf() != 0);
 
     buffer.ml().ml_mfp = Some(MemFile::in_memory());
     buffer.set_ml_flags(MlFlags::EMPTY);
@@ -389,7 +389,7 @@ pub fn ml_open_file(buffer: Buf) {
         .is_none_or(|memfile| memfile.has_file())
         || buffer.b_p_swf() == 0
         || cmdmod_has(CmdModFlags::NOSWAPFILE)
-        || !buffer.terminal().is_null()
+        || buffer.terminal().is_some()
     {
         return; // nothing to do
     }

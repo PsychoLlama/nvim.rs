@@ -8,17 +8,22 @@
 //! can run Vimscript that reaches the terminal again. So the editor carries a
 //! `Copy` handle, as it does a [`Win`] or a [`Buf`].
 //!
-//! The handle lends only `&Terminal`. Everything about a terminal that
-//! changes is a `Cell` or a `RefCell` (see `Terminal`), so two copies of the
-//! handle in use at once share it the way two `&RefCell`s do: a store is a
-//! `set`, and a borrow held across a call that re-enters -- the emulator's
-//! `vt.borrow_mut()` across `input_write`, whose callbacks reach the terminal
-//! through their own copy -- makes a second `borrow_mut` of the same field
-//! panic instead of aliasing.
+//! The handle lends only `&Terminal`, through a counted guard
+//! ([`Term::read`]). Everything about a terminal that changes is a `Cell` or
+//! a `RefCell` (see `Terminal`), so two copies of the handle in use at once
+//! share it the way two `&RefCell`s do: a store is a `set`, and a borrow
+//! held across a call that re-enters -- the emulator's `vt.borrow_mut()`
+//! across `input_write`, whose callbacks reach the terminal through their
+//! own copy -- makes a second `borrow_mut` of the same field panic instead
+//! of aliasing.
 //!
-//! A terminal is allocated once ([`Term::alloc`]) and freed once
-//! ([`Term::free`], which `terminal_destroy` reaches when nothing stands on
-//! it); in between, its buffer and its channel hold the handle.
+//! A terminal is allocated once ([`Term::alloc`]) into a slot of its own
+//! pool and freed once ([`Term::free`], which `terminal_destroy` reaches
+//! when nothing stands on it); in between, its buffer and its channel hold
+//! the handle. The handle carries the slot's generation, as a [`Win`] does:
+//! a copy used after the free -- a read, or a second free -- panics, and the
+//! free itself panics while a read guard is out, so no borrow of a terminal
+//! outlives it.
 //!
 //! [`Win`]: super::Win
 //! [`Buf`]: super::Buf
@@ -34,58 +39,74 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ops::Deref;
-use core::ptr::NonNull;
-
+use crate::global_cell::GlobalCell;
+use crate::slot::{self, SlotPool, SlotRead, SlotRef};
 use crate::terminal::state::Terminal;
 
 use super::Buf;
 
-/// A live terminal.
+/// Every live terminal, each in a slot whose memory outlives every handle.
+static TERMINAL_SLOTS: GlobalCell<SlotPool<Terminal>> = GlobalCell::new(SlotPool::new());
+
+/// A live terminal: its slot and the generation it was handed, checked at
+/// every access.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct Term(NonNull<Terminal>);
+pub struct Term(SlotRef<Terminal>);
 
-impl Deref for Term {
-    type Target = Terminal;
+impl Term {
+    /// Moves `terminal` into a slot, where it stays until [`Term::free`].
+    pub(crate) fn alloc(terminal: Terminal) -> Self {
+        Term(TERMINAL_SLOTS.with_mut(|pool| pool.insert(terminal)))
+    }
 
-    #[inline(always)]
-    fn deref(&self) -> &Terminal {
-        // SAFETY: a handle is made by `alloc` or read from the buffer that
-        // owns the terminal, and the terminal lives until `free`, after which
-        // its buffer and channel have dropped every copy (the module docs).
-        unsafe { self.0.as_ref() }
+    /// Frees the terminal and everything it owns. Every copy of the handle
+    /// goes stale: a later access through one, a second free included,
+    /// panics instead of reaching freed memory.
+    ///
+    /// # Panics
+    /// When the terminal is gone already, or a [`Term::read`] of it is out
+    /// (the free would pull it from under that borrow).
+    #[track_caller]
+    pub(crate) fn free(self) {
+        let terminal = TERMINAL_SLOTS.with_mut(|pool| pool.remove(self.0));
+        // Dropped outside the pool's borrow: what it owns is plain data, but
+        // nothing here needs to promise so.
+        drop(terminal);
+    }
+
+    /// Borrow the terminal until the guard is dropped. Counted: freeing it
+    /// through any copy panics while the guard is held. Everything about a
+    /// terminal that changes is a `Cell` or a `RefCell` (the module docs),
+    /// so reads through two copies at once share it as two `&RefCell`s do.
+    ///
+    /// # Panics
+    /// When the terminal is gone.
+    #[inline]
+    #[track_caller]
+    pub(crate) fn read<'a>(self) -> SlotRead<'a, Terminal> {
+        // SAFETY: a handle's address is its slot's value address in
+        // `TERMINAL_SLOTS` (`alloc`), whose memory is never given back.
+        unsafe { slot::read_at(self.0.raw(), self.0.generation()) }
     }
 }
 
-impl Term {
-    /// Moves `terminal` to the heap, where it stays until [`Term::free`].
-    pub(crate) fn alloc(terminal: Terminal) -> Self {
-        Term(NonNull::from(Box::leak(Box::new(terminal))))
-    }
-
-    /// Frees the terminal and everything it owns. The caller drops every copy
-    /// of the handle it can reach; the buffer and channel have already let
-    /// go of theirs.
-    pub(crate) fn free(self) {
-        // SAFETY: the other half of `alloc`'s leak, reached once.
-        drop(unsafe { Box::from_raw(self.0.as_ptr()) });
-    }
-
-    /// The address, as `Buffer::terminal` stores it.
-    pub(crate) fn raw(self) -> *mut Terminal {
-        self.0.as_ptr()
-    }
+/// Forget every read guard out on a terminal, as if each had been dropped.
+/// Only for the emergency exits ([`SlotPool::abandon_loans`]).
+pub(crate) fn abandon_terminal_loans() {
+    TERMINAL_SLOTS.with(SlotPool::abandon_loans);
 }
 
 impl Buf {
     /// The terminal this buffer draws, if it is a terminal buffer.
     pub(crate) fn terminal_handle(self) -> Option<Term> {
-        NonNull::new(self.terminal()).map(Term)
+        self.terminal()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
     use super::*;
     use crate::buffer::{bare_buffer, free_bare_buffer};
     use crate::global_cell::editor_state_lock;
@@ -116,26 +137,40 @@ mod tests {
         let driver = Term::alloc(Terminal::new(options(), Handle::new(1)));
         let buffer = bare_buffer();
         assert_eq!(buffer.terminal_handle(), None);
-        buffer.set_terminal(driver.raw());
+        buffer.set_terminal(Some(driver));
         let drawn = buffer.terminal_handle().expect("a terminal buffer");
         assert_eq!(drawn, driver);
 
-        drawn.title.borrow_mut().extend_from_slice(b"shell");
-        driver.title.borrow_mut().push(b'!');
-        assert_eq!(*drawn.title.borrow(), b"shell!");
-        driver.textbuf.borrow_mut().resize(64, b' ');
-        drawn.closed.set(true);
-        assert!(driver.closed.get());
-        assert_eq!(drawn.textbuf.borrow().len(), 64);
-        assert_eq!(drawn.opts.width, 4);
+        drawn.read().title.borrow_mut().extend_from_slice(b"shell");
+        driver.read().title.borrow_mut().push(b'!');
+        assert_eq!(*drawn.read().title.borrow(), b"shell!");
+        driver.read().textbuf.borrow_mut().resize(64, b' ');
+        drawn.read().closed.set(true);
+        assert!(driver.read().closed.get());
+        assert_eq!(drawn.read().textbuf.borrow().len(), 64);
+        assert_eq!(drawn.read().opts.width, 4);
         {
-            let _writing = driver.vt.borrow_mut();
-            assert!(drawn.vt.try_borrow().is_err(), "no read under a write");
+            let terminal = driver.read();
+            let _writing = terminal.vt.borrow_mut();
+            assert!(
+                drawn.read().vt.try_borrow().is_err(),
+                "no read under a write"
+            );
         }
-        assert!(drawn.vt.try_borrow_mut().is_ok());
+        assert!(drawn.read().vt.try_borrow_mut().is_ok());
 
-        buffer.set_terminal(::core::ptr::null_mut());
+        // No free while a copy holds a borrow of it.
+        let held = drawn.read();
+        assert!(catch_unwind(AssertUnwindSafe(|| driver.free())).is_err());
+        assert!(drawn.0.is_live());
+        drop(held);
+
+        buffer.set_terminal(None);
         driver.free();
+        assert!(!drawn.0.is_live());
+        // Every copy is stale now: a read and a second free both refuse.
+        assert!(catch_unwind(AssertUnwindSafe(|| drop(drawn.read()))).is_err());
+        assert!(catch_unwind(AssertUnwindSafe(|| drawn.free())).is_err());
         free_bare_buffer(buffer);
     }
 }

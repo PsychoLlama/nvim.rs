@@ -366,7 +366,7 @@ pub(crate) fn buf_check_timestamp(buffer: Buf) -> TimestampCheck {
     // If it's a terminal, there is no file name, the buffer is not
     // loaded, 'buftype' is set, we are in the middle of a save, or we are
     // being called recursively: ignore this buffer.
-    if !buffer.terminal().is_null()
+    if buffer.terminal().is_some()
         || buffer.read().name.full().is_none()
         || buffer.ml().ml_mfp.is_none()
         || !buf_is_normal(Some(buffer))

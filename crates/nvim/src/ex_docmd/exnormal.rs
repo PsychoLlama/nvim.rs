@@ -90,7 +90,7 @@ pub fn restore_current_state(s: &mut SaveState) {
 
 /// `:normal` — run the argument as normal-mode keys.
 pub(crate) fn ex_normal(excmd: &mut ExArg) {
-    if !Buf::current().terminal().is_null() && STATE.get() & MODE_TERMINAL != 0 {
+    if Buf::current().terminal().is_some() && STATE.get() & MODE_TERMINAL != 0 {
         emsg(c"Can't re-enter normal mode from terminal mode");
         return;
     }

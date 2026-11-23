@@ -287,7 +287,7 @@ pub(crate) fn close_last_tabpage_window(win: Win, free_buf: bool, prev_curtab: T
     let old_curbuf = Buf::current_raw();
     if win
         .buffer_or_none()
-        .is_some_and(|buf| !buf.terminal().is_null())
+        .is_some_and(|buf| buf.terminal().is_some())
     {
         free_buf = false; // Don't free terminal buffers
     }

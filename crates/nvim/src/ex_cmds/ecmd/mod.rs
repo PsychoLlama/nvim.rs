@@ -316,7 +316,7 @@ fn edit(
     so: ScrollOff,
 ) -> Result<(), Failed> {
     // Re-editing a terminal buffer: skip most buffer re-initialization.
-    if !other_file && !Buf::current().terminal().is_null() {
+    if !other_file && Buf::current().terminal().is_some() {
         // Needed when called from do_argfile(); the title may show the
         // arg index, e.g. "(2 of 5)".
         check_arg_idx(Win::current());

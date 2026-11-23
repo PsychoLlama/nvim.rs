@@ -79,8 +79,8 @@ impl ScreenHost for ScreenReports {
         _visible: c_int,
     ) -> Option<c_int> {
         let term = self.0;
-        term.cursor.row.set(new_pos.row);
-        term.cursor.col.set(new_pos.col);
+        term.read().cursor.row.set(new_pos.row);
+        term.read().cursor.col.set(new_pos.col);
         invalidate_terminal(term, None);
         Some(1)
     }
@@ -146,13 +146,13 @@ fn accumulate_title(term: Term, frag: &Fragment<'_>) {
         return;
     }
     if frag.initial {
-        term.title.borrow_mut().clear();
+        term.read().title.borrow_mut().clear();
     }
-    term.title.borrow_mut().extend_from_slice(bytes);
+    term.read().title.borrow_mut().extend_from_slice(bytes);
     if frag.last {
         // Taken rather than borrowed: publishing reaches the editor, and
         // the accumulator is done with either way.
-        let title = term.title.take();
+        let title = term.read().title.take();
         buf_set_term_title(buf, &title);
     }
 }
@@ -168,29 +168,29 @@ fn apply_termprop(term: Term, prop: VTermProp, val: &Value<'_>) -> c_int {
     let number = val.int();
     let flag = number != 0;
     match prop {
-        VTERM_PROP_ALTSCREEN => term.in_altscreen.set(flag),
+        VTERM_PROP_ALTSCREEN => term.read().in_altscreen.set(flag),
         VTERM_PROP_CURSORVISIBLE => {
-            term.cursor.visible.set(flag);
+            term.read().cursor.visible.set(flag);
             invalidate_terminal(term, None);
         }
-        VTERM_PROP_MOUSE => term.forward_mouse.set(flag),
+        VTERM_PROP_MOUSE => term.read().forward_mouse.set(flag),
         VTERM_PROP_CURSORBLINK => {
-            term.cursor.blink.set(flag);
-            term.pending.cursor.set(true);
+            term.read().cursor.blink.set(flag);
+            term.read().pending.cursor.set(true);
             invalidate_terminal(term, None);
         }
         VTERM_PROP_CURSORSHAPE => {
-            term.cursor.shape.set(number);
-            term.pending.cursor.set(true);
+            term.read().cursor.shape.set(number);
+            term.read().pending.cursor.set(true);
             invalidate_terminal(term, None);
         }
-        VTERM_PROP_THEMEUPDATES => term.theme_updates.set(flag),
+        VTERM_PROP_THEMEUPDATES => term.read().theme_updates.set(flag),
         VTERM_PROP_SYNCOUTPUT => {
             // While synchronized output is on, damage is recorded but not
             // refreshed; leaving it owes the screen one flush.
-            term.synchronized_output.set(flag);
+            term.read().synchronized_output.set(flag);
             if !flag {
-                term.sync_flush_pending.set(true);
+                term.read().sync_flush_pending.set(true);
             }
         }
         _ => return 0,
@@ -238,11 +238,14 @@ impl SelectionHost for Clipboard {
     fn set(&mut self, mask: VTermSelectionMask, frag: Fragment<'_>) -> Option<c_int> {
         let term = self.0;
         if frag.initial {
-            term.selection.borrow_mut().clear();
+            term.read().selection.borrow_mut().clear();
         }
-        term.selection.borrow_mut().extend_from_slice(frag.bytes());
+        term.read()
+            .selection
+            .borrow_mut()
+            .extend_from_slice(frag.bytes());
         if frag.last {
-            let payload = term.selection.borrow().clone();
+            let payload = term.read().selection.borrow().clone();
             put_job_on_main_loop(move || term_clipboard_set(mask, &payload));
         }
         Some(1)

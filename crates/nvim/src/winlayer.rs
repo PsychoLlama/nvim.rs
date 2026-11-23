@@ -162,7 +162,7 @@ pub(crate) use grid::{GridCell, OwnedGrid, grid_of_view};
 
 pub use handles::BufId;
 pub(crate) use handles::Stamp;
-pub(crate) use terminal::Term;
+pub(crate) use terminal::{Term, abandon_terminal_loans};
 
 pub(crate) use graph::forget_window;
 pub(crate) use handles::{

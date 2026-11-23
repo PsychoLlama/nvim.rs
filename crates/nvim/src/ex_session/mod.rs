@@ -287,7 +287,7 @@ pub(crate) fn ses_do_win(win: Win) -> bool {
     let buf = win.buffer();
     if buf.read().name.is_unnamed()
         // The contents of a "nofile" buffer cannot be restored.
-        || (buf.terminal().is_null() && buf_is_nofilename(Some(buf)))
+        || (buf.terminal().is_none() && buf_is_nofilename(Some(buf)))
     {
         return SSOP_FLAGS.get() & OPT_SSOP_FLAG_BLANK != 0;
     }

@@ -64,7 +64,7 @@ fn buftype_2(buffer: Buf) -> u8 {
 }
 
 fn has_terminal(buffer: Buf) -> bool {
-    !buffer.terminal().is_null()
+    buffer.terminal().is_some()
 }
 
 // ---------------------------------------------------------------------------

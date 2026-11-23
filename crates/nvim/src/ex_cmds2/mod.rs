@@ -498,7 +498,7 @@ fn report_unwritten(buffer: Buf) {
         MSG_COL.set(0);
         MSG_DIDOUT.set(false);
     }
-    let shown = if !buffer.terminal().is_null()
+    let shown = if buffer.terminal().is_some()
         && channel_job_running(buffer.b_p_channel().cast_unsigned())
     {
         let name = buffer.read().name.shown().map(CStr::to_owned);

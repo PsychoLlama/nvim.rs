@@ -111,8 +111,14 @@ fn emit_termrequest(mut request: TermRequest) {
     let Some(term) = buf.terminal_handle() else {
         return;
     };
-    if term.sb.borrow().pending() > 0 {
-        let events = term.pending.events.borrow().as_ref().map(ParkingQueue::id);
+    if term.read().sb.borrow().pending() > 0 {
+        let events = term
+            .read()
+            .pending
+            .events
+            .borrow()
+            .as_ref()
+            .map(ParkingQueue::id);
         let events = events.expect("a live terminal has its pending queue");
         let event = Event::Job(Box::new(move || emit_termrequest(request)));
         event_queue::put(events, event);
@@ -132,6 +138,7 @@ fn report(request: &mut TermRequest, term: Term, buffer: Buf) {
     // was queued): none of the rows it counted are here to have moved.
     // (Upstream's `size_t` subtraction wraps there.)
     let scrolled = term
+        .read()
         .sb
         .borrow()
         .deleted()
@@ -155,7 +162,7 @@ fn report(request: &mut TermRequest, term: Term, buffer: Buf) {
 
     // The handler can close the terminal; hold it open across the call so
     // the writes below still have somewhere to go.
-    term.retain();
+    term.read().retain();
     // Pre-bound so that the eight-argument call still fits on one line.
     let data = data.object();
     let group = AUGROUP_ALL;
@@ -163,11 +170,11 @@ fn report(request: &mut TermRequest, term: Term, buffer: Buf) {
     // borrowed across it.
     let (event, buffer) = (AutoEvent::TermRequest, Some(buffer));
     apply_autocmds_group(event, None, None, true, group, buffer, None, Some(&data));
-    term.release();
+    term.read().release();
 
     // Let writes through again before flushing what the handler wrote, or
     // it would be appended to the buffer it is being read from.
-    let held = term.pending.send.borrow_mut().take();
+    let held = term.read().pending.send.borrow_mut().take();
     let written = ::core::mem::take(&mut *request.pending_send.borrow_mut());
     if !written.is_empty() {
         terminal_send(term, &written);
@@ -177,14 +184,16 @@ fn report(request: &mut TermRequest, term: Term, buffer: Buf) {
     if let Some(held) = held
         && !Rc::ptr_eq(&held, &request.pending_send)
     {
-        term.pending.send.replace(Some(held));
+        term.read().pending.send.replace(Some(held));
     }
 
-    if term.buf_handle.get() == Handle::NONE && term.refcount.get() == RefcountSize::ZERO {
-        term.destroy.set(true);
+    if term.read().buf_handle.get() == Handle::NONE
+        && term.read().refcount.get() == RefcountSize::ZERO
+    {
+        term.read().destroy.set(true);
         // Read out before the call: the channel's close callback is free to
         // free the terminal.
-        let (close_cb, owner) = (term.opts.close_cb, term.opts.owner);
+        let (close_cb, owner) = (term.read().opts.close_cb, term.read().opts.owner);
         close_cb.expect("every terminal's channel sets a close callback")(owner);
     }
 }
@@ -193,23 +202,23 @@ fn report(request: &mut TermRequest, term: Term, buffer: Buf) {
 pub(crate) fn schedule_termrequest(term: Term) {
     // Output vterm collected earlier in this emulator call goes ahead of
     // the request's replies; with no request in flight, it is still unsent.
-    let earlier = if term.pending.send.borrow().is_none() {
-        term.output.take()
+    let earlier = if term.read().pending.send.borrow().is_none() {
+        term.read().output.take()
     } else {
         Vec::new()
     };
     let pending_send = Rc::new(RefCell::new(earlier));
     let request = TermRequest {
-        buf_handle: term.buf_handle.get(),
-        sequence: term.termrequest_buffer.borrow().clone(),
-        line: row_to_linenr(term, term.cursor.row.get()),
-        col: term.cursor.col.get(),
-        sb_deleted: term.sb.borrow().deleted(),
-        terminator: term.termrequest_terminator.get(),
+        buf_handle: term.read().buf_handle.get(),
+        sequence: term.read().termrequest_buffer.borrow().clone(),
+        line: row_to_linenr(term, term.read().cursor.row.get()),
+        col: term.read().cursor.col.get(),
+        sb_deleted: term.read().sb.borrow().deleted(),
+        terminator: term.read().termrequest_terminator.get(),
         pending_send: Rc::clone(&pending_send),
     };
     // Shared with the request until `report` flushes it.
-    term.pending.send.replace(Some(pending_send));
+    term.read().pending.send.replace(Some(pending_send));
     let event = Event::Job(Box::new(move || emit_termrequest(request)));
     event_queue::put(QueueId::MAIN, event);
 }
@@ -219,16 +228,18 @@ pub(crate) fn schedule_termrequest(term: Term) {
 /// autocommand sees is what the child sent.
 fn accumulate(term: Term, frag: &Fragment<'_>, prefix: &[u8]) {
     if frag.initial {
-        term.termrequest_buffer.borrow_mut().clear();
-        term.termrequest_buffer
+        term.read().termrequest_buffer.borrow_mut().clear();
+        term.read()
+            .termrequest_buffer
             .borrow_mut()
             .extend_from_slice(prefix);
     }
-    term.termrequest_buffer
+    term.read()
+        .termrequest_buffer
         .borrow_mut()
         .extend_from_slice(frag.bytes());
     if frag.last {
-        term.termrequest_terminator.set(frag.terminator);
+        term.read().termrequest_terminator.set(frag.terminator);
     }
 }
 
@@ -257,7 +268,8 @@ fn parse_osc8(payload: &[u8]) -> Option<c_int> {
 /// Apply a finished OSC 8 to vterm's pen, so that the cells written after
 /// it carry the link.
 fn apply_osc8(term: Term, state: &mut StateCx<'_>) {
-    let buffer = term.termrequest_buffer.borrow();
+    let terminal = term.read();
+    let buffer = terminal.termrequest_buffer.borrow();
     let buffer: &[u8] = &buffer;
     // Past the "\x1b]8;" that `accumulate` put back.
     let Some(attr) = buffer.get(b"\x1b]8;".len()..).and_then(parse_osc8) else {

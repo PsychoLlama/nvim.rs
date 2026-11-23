@@ -495,7 +495,7 @@ pub fn f_jobstart(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             emsg(gettext(msg));
             return;
         }
-        if !Buf::current().terminal().is_null() {
+        if Buf::current().terminal().is_some() {
             if buf_terminal_running(Buf::current()) {
                 let handle = Buf::current().handle();
                 semsg!("Terminal already connected to buffer {}", handle);

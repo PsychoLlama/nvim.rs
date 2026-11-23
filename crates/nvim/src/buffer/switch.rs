@@ -753,7 +753,7 @@ fn refuse_unload(buffer: Buf, bufref: BufRef, flags: c_int) -> Option<Result<(),
         }
     }
 
-    if flags & DOBUF_FORCEIT == 0 && !buffer.terminal().is_null() && terminal_alive(buffer) {
+    if flags & DOBUF_FORCEIT == 0 && buffer.terminal().is_some() && terminal_alive(buffer) {
         if confirming() {
             if !ask_about_terminal(buffer) {
                 return Some(Err(Failed));
