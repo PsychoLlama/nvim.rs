@@ -35,7 +35,7 @@ use std::borrow::Cow;
 
 use super::*;
 use crate::eval::typval::DictItem;
-use crate::eval::typval::{dict_find, dict_is_watched, dict_watcher_notify};
+use crate::eval::typval::{dict_is_watched, dict_watcher_notify};
 use crate::ex_docmd::cmdmod_has;
 use crate::message::emsg;
 use crate::option::vars::p_hid;
@@ -230,18 +230,28 @@ pub fn buf_inc_changedtick(buffer: Buf) {
 }
 
 /// Set `b:changedtick`, telling any `b:` watcher about the change.
+///
+/// The counter is the buffer's; the `b:` dictionary owns an item of its own
+/// under the key (`buf_init_changedtick`), written here to match. Upstream
+/// embedded that item in the buffer and pointed the table at it, which made
+/// a dictionary hold an item it did not own.
 pub fn buf_set_changedtick(b: Buf, changedtick: VarNumber) {
     // `b:changedtick` is always a plain number, so the watcher's "old
     // value" is one too: a fresh typval, owning nothing.
-    let old_val = TypVal::Number(b.read().changedtick_di.di_tv.number_or_zero());
-    check_changedtick_item(b);
-    b.edit().changedtick_di.di_tv.write_number(changedtick);
-    let watched = dict_is_watched(b.read().b_bufvar.di_tv.dict_ref().as_deref());
+    let old_val = TypVal::Number(b.b_changedtick());
+    b.set_b_changedtick(changedtick);
     let vars = b.read().b_bufvar.di_tv.dict_handle();
-    if watched && let Some(vars) = vars {
+    let Some(vars) = vars else {
+        return;
+    };
+    // Between clearing `b:` and filling it again the key is missing, as the
+    // embedded item was out of the table then.
+    if let Some(item) = vars.edit().find_mut(b"changedtick") {
+        check_changedtick_item(item);
+        item.di_tv.write_number(changedtick);
+    }
+    if dict_is_watched(Some(&vars.read())) {
         b.set_b_locked(b.b_locked() + 1);
-        // The new value as a copy: the watchers run Vimscript, which must
-        // not find the buffer's own item borrowed.
         let new_val = TypVal::Number(changedtick);
         dict_watcher_notify(&vars, c"changedtick", Some(&new_val), Some(&old_val));
         b.set_b_locked(b.b_locked() - 1);
@@ -250,15 +260,10 @@ pub fn buf_set_changedtick(b: Buf, changedtick: VarNumber) {
 
 /// The consistency checks upstream wraps in `#ifndef NDEBUG`: `b:` must
 /// still hold the fixed, read-only number `buf_init_changedtick` put there.
-fn check_changedtick_item(buffer: Buf) {
+fn check_changedtick_item(item: &DictItem) {
     if !cfg!(debug_assertions) {
         return;
     }
-    let key = c"changedtick";
-    let held = buffer.read();
-    let vars = held.b_bufvar.di_tv.dict_ref();
-    let item = dict_find(vars.as_deref(), key.to_bytes())
-        .expect("every buffer's b: dict holds changedtick");
     assert!(
         item.di_tv.v_type() == VAR_NUMBER as _,
         "changedtick_di->di_tv.v_type() == VAR_NUMBER"
@@ -268,11 +273,8 @@ fn check_changedtick_item(buffer: Buf) {
         "changedtick_di->di_lock == VarLock::Fixed"
     );
     assert!(
-        c_int::from(item.di_flags) == c_int::from(DI_FLAGS_RO) | c_int::from(DI_FLAGS_FIX),
+        c_int::from(item.di_flags) & (c_int::from(DI_FLAGS_RO) | c_int::from(DI_FLAGS_FIX))
+            == c_int::from(DI_FLAGS_RO) | c_int::from(DI_FLAGS_FIX),
         "changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)"
-    );
-    assert!(
-        ::core::ptr::from_ref(item) == (&raw const buffer.read().changedtick_di).cast::<DictItem>(),
-        "changedtick_di == (DictItem *)&buf->changedtick_di"
     );
 }

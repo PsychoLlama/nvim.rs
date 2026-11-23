@@ -33,6 +33,7 @@ slot_fields! {
         file_id_valid, set_file_id_valid: bool;
         b_changed, set_b_changed: c_int;
         b_changed_invalid, set_b_changed_invalid: bool;
+        b_changedtick, set_b_changedtick: VarNumber;
         b_last_changedtick, set_b_last_changedtick: VarNumber;
         b_last_changedtick_i, set_b_last_changedtick_i: VarNumber;
         b_last_changedtick_pum, set_b_last_changedtick_pum: VarNumber;

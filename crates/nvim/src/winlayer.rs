@@ -582,19 +582,6 @@ impl Buf {
         self.ptr.wrapping_byte_add(offset_of!(Buffer, b_s)).cast()
     }
 
-    /// The address of `b:changedtick`'s item, embedded in the buffer, for
-    /// the `b:` table to point at. Computed from the base as
-    /// [`Buf::syntax_block`] is: `&raw mut buf.changedtick_di` would carry
-    /// the provenance of one `&mut Buffer`, which the next write to the
-    /// buffer ends, and every later read of `b:changedtick` through the
-    /// table would be through a dead pointer (Miri caught it).
-    #[inline]
-    pub(crate) fn changedtick_item(self) -> *mut crate::eval::typval::DictItem {
-        self.ptr
-            .wrapping_byte_add(offset_of!(Buffer, changedtick_di))
-            .cast()
-    }
-
     /// Whether this is the null buffer: a window between losing a buffer
     /// and being given another. Reads nothing.
     #[inline(always)]

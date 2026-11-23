@@ -15,7 +15,7 @@
 use super::*;
 use crate::buffer::BufFlags;
 use crate::decoration::defs::VirtText;
-use crate::eval::typval::{DictItem, ScopeDictItem};
+use crate::eval::typval::ScopeDictItem;
 use crate::mapping::MapTables;
 use crate::mark::defs::FileMark;
 use crate::marktree::MarkTree;
@@ -441,7 +441,9 @@ pub struct Buffer {
     pub file_id: FileID,
     pub b_changed: ::core::ffi::c_int,
     pub b_changed_invalid: bool,
-    pub changedtick_di: DictItem,
+    /// `b:changedtick`'s counter. The `b:` dictionary holds an item of its
+    /// own under that key, which [`buf_set_changedtick`](crate::buffer::buf_set_changedtick) keeps equal to it.
+    pub b_changedtick: VarNumber,
     pub b_last_changedtick: VarNumber,
     pub b_last_changedtick_i: VarNumber,
     pub b_last_changedtick_pum: VarNumber,

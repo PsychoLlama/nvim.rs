@@ -190,9 +190,7 @@ crate::flag_set! {
 pub const KEYMAP_INIT: ::core::ffi::c_short = 1;
 #[inline(always)]
 pub fn buf_get_changedtick(buffer: Buf) -> VarNumber {
-    // `b:changedtick`'s dict item is always a `VAR_NUMBER`, so the tag test
-    // inside the accessor never answers the zero.
-    buffer.read().changedtick_di.di_tv.number_or_zero()
+    buffer.b_changedtick()
 }
 static BUF_FREE_COUNT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static TOP_FILE_NUM: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);

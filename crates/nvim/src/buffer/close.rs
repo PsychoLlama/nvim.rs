@@ -41,7 +41,7 @@ use crate::buffer_updates::{buf_free_callbacks, buf_updates_unload};
 use crate::change::deleted_lines_mark;
 use crate::diff::{diff_buf_delete, diffopt_hiddenoff};
 use crate::drawscreen::state::UPDATING_SCREEN;
-use crate::eval::typval::{callback_free, tv_dict_item_copy, unlink_buf_changedtick};
+use crate::eval::typval::{DictItem, callback_free};
 use crate::eval::vars::{release_var_scope, vars_clear};
 use crate::mapping::map_clear_mode;
 use crate::mark::defs::{FileMark, FileMarkView};
@@ -56,6 +56,7 @@ use crate::startup::EXITING;
 use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::close_buf_terminal;
+use crate::types::TypVal;
 use crate::types::{Callback, ColNr, Handle, LineNr, Pos, Timestamp};
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -181,24 +182,22 @@ fn mark_lines_deleted(count: i32) {
     deleted_lines_mark(LineNr::ONE, count as c_int);
 }
 
-/// Free every buffer-local variable.
-///
-/// `b:changedtick` lives in a field of `Buffer` rather than in the dictionary's
-/// own storage, so it is taken out of the table first: clearing it would
-/// go through `clear_tv()` and zero the counter.
+/// Free every buffer-local variable, `b:changedtick`'s item included: the
+/// counter is the buffer's, and `buf_init_changedtick` puts the item back.
 fn clear_buf_vars(buffer: Buf) {
-    unlink_buf_changedtick(buffer);
     if let Some(dict) = buffer.read().b_bufvar.di_tv.dict_handle() {
         vars_clear(&dict);
     }
 }
 
 /// Hand `b:changedtick` to the dictionary before the buffer goes away, for the
-/// script that is still holding a reference to it.
+/// script that is still holding a reference to it: a plain item, as upstream's
+/// copy of the embedded one was.
 fn rescue_changedtick(buffer: Buf) {
-    let copy = tv_dict_item_copy(&buffer.read().changedtick_di);
-    if let Some(mut dict) = buffer.edit().b_bufvar.di_tv.dict_mut() {
-        let _ = dict.add_item(copy);
+    let mut item = DictItem::boxed(b"changedtick");
+    item.di_tv = TypVal::Number(buffer.b_changedtick());
+    if let Some(dict) = buffer.read().b_bufvar.di_tv.dict_handle() {
+        let _ = dict.edit().add_item(item);
     }
 }
 
@@ -745,7 +744,6 @@ fn free_buffer(buffer: Buf) {
     // address to work through; `owned` is only who gives the memory back.
     let owned = forget_handle(buffer);
     note_buffer_freed();
-    // b:changedtick uses an item in Buffer.
     free_buffer_stuff(buffer, BFF_CLEAR_WIN_INFO);
     let shared = buffer
         .read()

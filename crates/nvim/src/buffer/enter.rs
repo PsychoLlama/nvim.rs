@@ -34,7 +34,6 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::arglist::check_arg_idx;
-use crate::eval::typval::link_buf_changedtick;
 use crate::memory::XString;
 use crate::os::time::os_time_raw;
 
@@ -42,7 +41,7 @@ use crate::channel::channel_job_running;
 use crate::diff::diff_buf_add;
 use crate::digraph::keymap_init;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::eval::typval::{DictItem, DictKey};
+use crate::eval::typval::DictItem;
 use crate::ex_docmd::cmdmod_has;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::{buf_check_timestamp, shorten_fnames};
@@ -463,15 +462,17 @@ fn err_static(msg: &'static CStr) {
 // ---------------------------------------------------------------------------
 // b:changedtick
 
-/// Initialise `b:changedtick` and its `changedtick_val` attribute.
+/// Put `b:changedtick` in the buffer's `b:` dictionary: a fixed, read-only
+/// number the dictionary owns, holding the buffer's counter.
 pub(crate) fn buf_init_changedtick(buffer: Buf) {
-    let value = DictItem {
-        di_tv: TypVal::Number(buf_get_changedtick(buffer)),
-        di_lock: VarLock::Fixed,
-        // Must not include DI_FLAGS_ALLOC.
-        di_flags: DI_FLAGS_RO | DI_FLAGS_FIX,
-        di_key: DictKey::new(b"changedtick"),
-    };
-    buffer.edit().changedtick_di = value;
-    link_buf_changedtick(buffer);
+    let mut item = DictItem::boxed(b"changedtick");
+    item.di_tv = TypVal::Number(buf_get_changedtick(buffer));
+    item.di_lock = VarLock::Fixed;
+    item.di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
+    let vars = buffer.read().b_bufvar.di_tv.dict_handle();
+    if let Some(vars) = vars {
+        // `b:` is neither scope the function-name check guards.
+        let added = vars.edit().add_item(item);
+        debug_assert!(added.is_ok(), "b:changedtick is added once");
+    }
 }
