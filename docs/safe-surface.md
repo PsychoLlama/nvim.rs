@@ -753,30 +753,92 @@ to an object libuv holds by address (`Stream` carries `PhantomPinned`).
 tree the caller owns and hands over"; its three callers pass a tree fresh
 from `ts_tree_copy` or a parse.
 
-### S10 — value bit copies (sound-by-convention: open)
+### ~~S10 — value bit copies~~ (closed: type holds it)
 
-Found by the closing audit; no slice has taken it. Three safe exports of
-`eval/typval/` let a caller hold a bit copy of a value it does not own:
+Found by the closing audit. Safe exports of `eval/typval/` let a caller
+hold a bit copy of a value it does not own, or a handle with no reference:
 
-- `TypVal::named_for_call(&self) -> TypVal` (`handle.rs`): the `a:` and
-  `a:000` items name the caller's arguments; `cleanup_function_call`
-  disowns them (or upgrades them to copies when the scope outlives the
-  call). A caller that drops the result releases the caller's payload a
-  second time; one that keeps it past the original reads freed memory.
-- `CallFrame::push_borrowed(&mut self, &TypVal)` (`handle.rs`) takes no
-  lifetime, so a frame can outlive the value it names; two callers name a
-  `v:` value through a closure (`with_vim_var(.., |v| argv.push_borrowed(v))`,
-  `filter()`/`map()`'s `v:key`/`v:val`).
-- `CallFrame::own(idx)` (`frame.rs`) on a named slot makes the frame
-  release a value it does not own.
+- `TypVal::named_for_call(&self) -> TypVal`: the `a:` and `a:000` items
+  named the caller's arguments; `cleanup_function_call` disowned them (or
+  upgraded them to copies when the scope outlived the call). Dropping the
+  result released the caller's payload a second time; keeping it past the
+  original read freed memory. The `a:000` entry in `a:` named the funccall's
+  own list the same way, uncounted.
+- `CallFrame::push_borrowed(&mut self, &TypVal)` took no lifetime, so a
+  frame could outlive the value it named: `filter()`/`map()`/`indexof()`
+  pushed `v:key`/`v:val` from inside `with_vim_var`'s closure, and the
+  `v:testing` argument stack (`FUNCARGS`) kept bit copies of every call's
+  arguments in a global.
+- `CallFrame::own(idx)` on a named slot made the frame release a value it
+  did not own (`reduce()` used it to take the accumulator over).
+- `registered_dict`/`registered_list` answered a `ManuallyDrop` handle
+  owning no reference: `ManuallyDrop::into_inner` turned it into one that
+  releases, and nothing bounded it by the registry slot's life.
 
-**Closure:** a type. `CallFrame<'a, N>` tying `push_borrowed` to the
-named value's lifetime (the `v:` callers copy the value in, or borrow it
-across the call), `own` refusing a named slot (a bit test), and the `a:`
-binding moved into a perimeter function that owns both halves (bind and
-disown) so `named_for_call` stops being an export. Cost to measure:
-evalbench's call path (a copy per string argument is what the bit copy
-avoids).
+**Closed:**
+
+- `named_for_call` is gone: an `a:`/`a:000` item is a copy of its own
+  (`Clone`: a container takes a reference, a string is duplicated), the
+  `a:000` entry counts its reference, and the disown and upgrade paths
+  (`List::disown_items`/`own_items`, the forgetting `clear_scope`) are
+  deleted.
+- `CallFrame<'a, N>`: every named slot borrows its value for `'a`
+  (`push_borrowed(&mut self, &'a TypVal)`), so the frame cannot outlive
+  it; `own` is deleted and the only push that takes ownership is
+  `push_owned`. The `v:` callers copy the value in; `FUNCARGS` holds
+  `CallFrame<'static, _>` of copies. A method call's base is a shared
+  borrow (`CallWith::basetv: Option<&TypVal>`), which the frame's lifetime
+  now required. `reduce()` moves (or, for a Blob, copies) the accumulator
+  into the frame.
+- The collector's views are ordinary handles (`registered_dict` retains),
+  and `free_registered_dict(idx)` frees only when the view's reference is
+  the last one — an always-on check: a holder the marking never saw keeps
+  an emptied container instead of a dangling one.
+- `TypVal::bit_copy` is private to `handle.rs`; its one caller is
+  `push_borrowed`.
+
+Cost (cgu1 release, cachegrind Ir against the open state): evalbench at
++0.11 %, its parser phase at +0.19 %, rpcbench at −0.06 %.
+
+### S11 — container header words through `&mut` (sound-by-convention: open)
+
+Found by S10's sweep. A List, Dict or Blob carries its reference count and
+its `Lent` word inline (`lv_refcount`/`lv_lent` …, `types/typval.rs`), and
+`Edit` lends `&mut List` — the whole struct, header included:
+
+- **Breaks:** `mem::swap(&mut *a.edit(), &mut *b.edit())` swaps two
+  objects' counts (A's last handle then frees it under B's holders);
+  `mem::replace(&mut *l.edit(), List::empty())` writes a count of 0 and a
+  free `Lent` word under a live edit, so a second `edit()` succeeds. The
+  count's mutators (`Refcount::retain`/`release`/`reset`/`release_many`)
+  are `pub` and take `&self`, so `l.read().lv_refcount.release()` is safe
+  code; the funccall and script scopes seed `DO_NOT_FREE_CNT` by assigning
+  the field.
+- **Closure:** a type. The header out of the lent region — `Rc`'s shape:
+  the handle points at `{count, lent, value}` and `edit()`/`read()` lend
+  the value only — or `Edit` dereferencing to a body struct without the
+  header; the count's mutators private to `eval/typval/`; the scope seeds
+  a counted token (`retain_many` answering a guard that releases them)
+  instead of a field write. Touches every `*_refcount` read (≈80, mostly
+  tests) and the C layout ffigen emits.
+
+### S12 — the dictionary item store's raw slots (sound-by-convention: open)
+
+Found by S10's sweep. `DictEntry` (`handle.rs`) is a `Copy` raw pointer, and
+`HashTab`'s slot API (`slot`, `insert_at`, `slots_mut`) is safe and `pub`,
+over a `pub` `dv_hashtab`; which slots own their item is `DI_FLAGS_ALLOC`
+in the item's `pub` `di_flags`.
+
+- **Breaks:** copying a slot's entry into a second dictionary's table
+  (`b.edit().dv_hashtab.insert_at(hi, a.read().dv_hashtab.slot(i)…)`)
+  makes two tables free one `Box`; setting `DI_FLAGS_ALLOC` on
+  `b:changedtick` (the one embedded item), or swapping it with a boxed
+  item through two `items_mut`, makes `take_item` `Box::from_raw` the
+  buffer's own bytes.
+- **Closure:** a type. Ownership in the entry, not the item (a tag bit in
+  `DictEntry` for the embedded `b:changedtick`, set only by
+  `link_buf_changedtick`), `DictEntry` not `Copy` outside `handle.rs`, and
+  `dv_hashtab` reachable only through `Dict`'s own insert/remove/probe API.
 
 ## Closed before the survey
 

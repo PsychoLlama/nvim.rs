@@ -348,10 +348,10 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
 ### `eval/typval/handle.rs` — Vimscript value handles
 
 - **What:** `ListRef`, `DictRef`, `BlobRef` and `PartialRef`, and a
-  dictionary's item store (50): the dereference core (13), the borrow word
+  dictionary's item store (51): the dereference core (13), the borrow word
   each object carries, reached through its own bytes (2), allocation and
-  release (14), the item slots that name a boxed or an embedded `DictItem`
-  (10), `TypVal::bit_copy` and its two users (3), the deep copy's memo (2),
+  release (16), the item slots that name a boxed or an embedded `DictItem`
+  (10), `TypVal::bit_copy` and its one user (2), the deep copy's memo (2),
   two raw bridges for callers that still hold a pointer (2) and four test
   cases.
 - **Contract:** a value is reached from many holders at once and the
@@ -362,7 +362,10 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
   built, except by its last holder (`PartialRef::get_mut`). The reference
   count and the word are `Cell`s, each reached through its own bytes, so
   neither forms a borrow of the whole object. `bit_copy` duplicates a value without its reference:
-  exactly one of the two may be released (`docs/unsafe-fn-allowlist.md`).
+  exactly one of the two may be released (`docs/unsafe-fn-allowlist.md`);
+  its one user is `CallFrame::push_borrowed`, whose frame borrows the value
+  for its own lifetime. The collector's registry views take a reference,
+  and a structure is freed only when the view's is the last.
 - **Retires:** only with a different value model. Two cuts are listed: Lists
   and Dictionaries in a `Box` (needs the unit suite's allocation log
   rewritten) and one generic handle type (needs ffigen to emit the C
@@ -401,16 +404,20 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
 ## Soundness by contract
 
 What is still sound by a rule the type system does not hold. (The Lua
-stack's consuming operations and the handle borrow model were here; both
-closed: an always-on check, [safe-surface.md](safe-surface.md) S7, and
-guards on every handle, S5.)
+stack's consuming operations, the handle borrow model and the value bit
+copies were here; all three closed: an always-on check,
+[safe-surface.md](safe-surface.md) S7, guards on every handle, S5, and a
+lifetime on the argument frame with copies elsewhere, S10.)
 
-- **`TypVal::named_for_call`**, with `CallFrame::push_borrowed`/`own`
-  ([safe-surface.md](safe-surface.md) S10, open) (`eval/typval/handle.rs`): a function's `a:`
-  and `a:000` items are `bit_copy`s naming the caller's arguments;
-  `cleanup_function_call` disowns them, or they are upgraded to real copies
-  when the scope outlives the call. Residual: a panic unwinding through a
-  call would release the named values a second time while the process dies.
+- **The value containers' header words** ([safe-surface.md](safe-surface.md)
+  S11, open) (`types/typval.rs`, `eval/typval/handle.rs`): a List, Dict or
+  Blob's reference count and `Lent` word sit inside the struct `edit()`
+  lends as `&mut`, and the count's mutators are `pub`; sound only while no
+  safe code swaps, replaces or writes them.
+- **The dictionary item store's slots** ([safe-surface.md](safe-surface.md)
+  S12, open) (`eval/typval/handle.rs`, `hashtab.rs`): a slot's `Copy` entry
+  and the item's `DI_FLAGS_ALLOC` decide which table frees an item; sound
+  only while no safe code copies an entry or sets the flag.
 - **The emulator's offset keepers** (`vterm/types.rs`, `vterm/internal.rs`): `_lineinfo_slots`
   and `_buffer_slot` exist only so that C declarations the battery and the
   fixture compile keep reading the right offsets. Not unsafe in Rust, but a
