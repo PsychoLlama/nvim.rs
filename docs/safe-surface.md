@@ -264,9 +264,10 @@ Every row type it held (`VimOption`, `CommandDefinition`, `EvalFuncDef`,
 the compiler asks the question; `ConstTable` is deleted. A row type that
 gains a `Cell` or a raw pointer fails to build.
 
-### S5 — `Copy` object handles lending `&`/`&mut` (sound-by-convention)
+### ~~S5 — `Copy` object handles lending `&`/`&mut`~~ (closed: type holds it, checked)
 
-~~`Win`~~, ~~`Buf`~~, ~~`TabPage`, `FrameRef`, `PosRef`~~, ~~`Live<T>`~~, `GridRef`, `Term`:
+~~`Win`~~, ~~`Buf`~~, ~~`TabPage`, `FrameRef`, `PosRef`~~, ~~`Live<T>`~~, ~~`GridRef`~~, ~~`Term`~~,
+~~`SlotRef` (the `IdTable` views)~~:
 `Deref`/`DerefMut` from a `Copy` value. Constructors are `unsafe` (or the
 registries, which check); every dereference after is safe and unchecked.
 Rows: the eight `Deref`/`DerefMut` pairs; ~~`Win::syn_block`~~/~~`syn_block_mut`~~
@@ -349,8 +350,7 @@ line's bytes for the life of a `&Buf`, i.e. a local)~~.
   generation its value was handed — and every dereference compares the
   two, so a view kept past its value panics instead of reading freed
   memory (the slot's memory is still a slot, whatever became of the
-  value). Aliasing is unchanged: two copies still lend overlapping
-  `&mut`. This is the floor the window, buffer and tab page handles move
+  value). Aliasing closed later (below, "`SlotRef`"). This is the floor the window, buffer and tab page handles move
   onto. The same check faked on the four graph handles (one load and a
   compare per dereference, release, codegen-units = 1, cachegrind Ir):
   mlbench +2.5 %, readbench +2.2 %, spellbench +2.1 %, scrbench +1.9 %,
@@ -543,23 +543,52 @@ w_lines[b].clone()` (the right side's read temporary lives to the end of
   in `spell_iswordp`), scrbench +0.65 % (most of it `win_line` register
   allocation again, the rest the counted reads in the syntax engine),
   edbench +0.44 %, every other bench within ±0.35 %.
-- **Left in this class from these two:** `GridRef`'s `Deref` — a
-  `&ScreenGrid` held across a write through another copy
-  (`let c = g.cells(0, n); g2.alloc(..); c[0]`) — is the read half, with
-  the other handles' `Deref`s; `Term::free` on a `Copy` handle is the
-  liveness half.
+- **Closed — `GridRef` (both halves, checked):** a window's own grid
+  carries the window's slot generation and every access compares it with
+  the slot's word, as a `Win` does, so a grid handle kept past its window,
+  or used while an `edit()` of the window is out, panics; the three static
+  grids (`GridCell`) have no owner. ~~`Deref`~~ is gone: a read is a
+  by-value accessor (`grid_reads!`, a getter per field), a borrow that
+  never leaves `winlayer/grid.rs`. The one borrow held across a call --
+  the cells the UI layer and the compositor read -- is
+  `GridRef::with_cells`, counted in the grid (`ScreenGrid::lent`): every
+  write through any copy refuses while it is out, and so does an `edit()`
+  of the owning window (the loan holds a counted read of it). The window's
+  grid is an `OwnedGrid` (an `UnsafeCell` with no accessors), reachable
+  only as `Win::grid_alloc()`, so a `read()` of the window and a grid write
+  coexist. A view stores the checked handle itself (`GridView::target:
+Option<GridRef>`). Never fired across functional and oldtest. Cost
+  (release, codegen-units = 1, cachegrind Ir): scrbench +0.17 %, edbench
+  and mlbench flat.
+- **Closed — `Term` (liveness, checked):** terminals live in a slot pool
+  (`TERMINAL_SLOTS`); `Term` is a slot handle carrying the generation, so
+  a copy used after `Term::free` -- a read or a second free -- panics.
+  ~~`Deref`~~ is gone: `Term::read()` is a counted guard and the free
+  refuses while one is out, so no `&Terminal` outlives the terminal.
+  `Buffer::terminal` stores the handle. No bench drives a terminal.
+- **Closed — `SlotRef` (the `IdTable` views `Qi`, `Qfl`, `Op`; aliasing,
+  checked):** ~~`Deref`/`DerefMut`~~ are gone; a view's value is borrowed
+  only through `SlotRef::read()`/`edit()`, the counted guards above, with
+  by-value getters for the `Copy` fields (each read let go before the
+  getter returns). A table either hands out views (`ViewTable`, no
+  `get_mut`) or lends through `&mut` of itself (`IdTable::get_mut`, no
+  views), so the pool's uncounted borrow never meets a guard;
+  `SlotPool::get_mut` is private to `slot/`. The suites found one borrow
+  the old `DerefMut` lent unchecked across user code: a quickfix entry
+  borrowed across the jump's `BufEnter`, which `Test_lhelpgrep_autocmd`
+  answers by freeing the lists.
 
 - **Breaks — aliasing:** two copies give two live `&mut`
   ~~(`let c = &mut w1.w_cursor; w2.w_cursor.lnum = 1; c.col = 0`)~~;
   ~~`syn_block_mut()` held while the buffer's block is reached through a
   `Buf`~~;
-  `GRID.with(|g| { grid_ref.cols = 0; g.cols })`; ~~`held_line`'s slice
+  ~~`GRID.with(|g| { grid_ref.cols = 0; g.cols })`~~; ~~`held_line`'s slice
   outliving the cache when a copy of the `Buf` reads another line~~.
 - ~~**Breaks — liveness:**~~ (graph handles closed above) a handle held
   across a call that runs user code (an autocommand, a Lua callback — the
   p45 hazard — Vimscript) and dereferenced after `:bwipeout`/`:close` freed
-  the object: now a panic at the dereference, not a use-after-free. Still
-  open for `GridRef`/`Term` (`PosRef` is its window's handle now).
+  the object: now a panic at the dereference, not a use-after-free, for
+  every handle (`GridRef` through its window, `Term` through its slot).
 - **Closure:** restructure. Liveness: a handle is an id plus a generation
   checked against a side table on dereference (the object's own memory
   cannot carry it — it may be freed); a check-always that wants its own
@@ -723,6 +752,31 @@ to an object libuv holds by address (`Stream` carries `PhantomPinned`).
 `Drop` deletes the tree. It is an `unsafe fn` whose contract is "null, or a
 tree the caller owns and hands over"; its three callers pass a tree fresh
 from `ts_tree_copy` or a parse.
+
+### S10 — value bit copies (sound-by-convention: open)
+
+Found by the closing audit; no slice has taken it. Three safe exports of
+`eval/typval/` let a caller hold a bit copy of a value it does not own:
+
+- `TypVal::named_for_call(&self) -> TypVal` (`handle.rs`): the `a:` and
+  `a:000` items name the caller's arguments; `cleanup_function_call`
+  disowns them (or upgrades them to copies when the scope outlives the
+  call). A caller that drops the result releases the caller's payload a
+  second time; one that keeps it past the original reads freed memory.
+- `CallFrame::push_borrowed(&mut self, &TypVal)` (`handle.rs`) takes no
+  lifetime, so a frame can outlive the value it names; two callers name a
+  `v:` value through a closure (`with_vim_var(.., |v| argv.push_borrowed(v))`,
+  `filter()`/`map()`'s `v:key`/`v:val`).
+- `CallFrame::own(idx)` (`frame.rs`) on a named slot makes the frame
+  release a value it does not own.
+
+**Closure:** a type. `CallFrame<'a, N>` tying `push_borrowed` to the
+named value's lifetime (the `v:` callers copy the value in, or borrow it
+across the call), `own` refusing a named slot (a bit test), and the `a:`
+binding moved into a perimeter function that owns both halves (bind and
+disown) so `named_for_call` stops being an export. Cost to measure:
+evalbench's call path (a copy per string argument is what the bit copy
+avoids).
 
 ## Closed before the survey
 

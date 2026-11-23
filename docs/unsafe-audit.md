@@ -289,8 +289,9 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
   `word_at`, `SlotRef::from_parts`; the graph handles' constructors and
   checks from a bare address) or lend through one (`edit_at`, `read_at`,
   `check_write`), with their tests (13).
-  `IdTable` (`id_table.rs`, forbid) is built on it, and so are the window,
-  buffer, tab page and frame pools (`winlayer/handles.rs`, forbid).
+  `IdTable`/`ViewTable` (`slot/id_table.rs`, forbid) are built on it, and
+  so are the window, buffer, tab page, frame and terminal pools
+  (`winlayer/handles.rs`, forbid; `winlayer/terminal.rs`).
 - **Contract:** a slot's value is initialised exactly while its generation
   is odd; every handle is handed an odd generation, and emptying a slot
   moves it on (to even, or to zero for a slot that reached the limit, which
@@ -307,10 +308,9 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
   loan and a part read (`check_part_unlent`) refuse; the part lives in an
   `UnsafeCell` and is reached only through these. `abandon_loans` zeroes
   every guard's mark, for the emergency exits alone (their guards' frames
-  never resume). Exclusivity holds
-  for everything lent through those guards (`Win`, `Buf`, `TabPage`,
-  `FrameRef`, `PosRef`); a `SlotRef`'s `DerefMut` through two copies still
-  lends overlapping `&mut` ([safe-surface.md](safe-surface.md) S5).
+  never resume). A `SlotRef` lends only through
+  those guards (no `Deref`), and `get_mut` (the pool's uncounted borrow) is
+  private to `slot/`, used only by `IdTable`, which hands out no handle.
 - **Retires:** never; it is the floor the window, buffer and tab page
   handles stand on.
 
@@ -321,8 +321,10 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
   `Copy` value over one pointer (`winlayer.rs` 10, `graph.rs` 17,
   `deref.rs` 18 — the checked handles, the place getters and setters
   (`deref/buf_fields.rs`, `deref/win_fields.rs`) and `edit()`/`read()` —, `grid.rs`
-  2, `terminal.rs` 2). Building one from an address is the
-  unsafe step; dereferencing it is not. `curwin`/`CURBUF`/`CURTAB` are cells
+  6, `terminal.rs` 1). Building one from an address is the
+  unsafe step; dereferencing it is not. A window's grid handle carries the
+  window's generation and is checked against it; a terminal handle is a
+  slot handle of its own pool. `curwin`/`CURBUF`/`CURTAB` are cells
   holding a raw pointer (`curwin` is a C symbol a functional spec reads).
 - **Contract:** the constructor's caller promises the object is live when
   the handle is made: the handle takes its slot's generation then. The
@@ -398,21 +400,13 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
 
 ## Soundness by contract
 
-Four places are sound by a rule the type system does not hold. Each was
-decided in writing; each has a cheaper-to-break form that was measured and
-not taken, or a fix listed for later.
+What is still sound by a rule the type system does not hold. (The Lua
+stack's consuming operations and the handle borrow model were here; both
+closed: an always-on check, [safe-surface.md](safe-surface.md) S7, and
+guards on every handle, S5.)
 
-- **The Lua stack's consuming operations** (`lua/stack/`): an operation that
-  consumes values off the top consumes values its view pushed. Debug builds
-  check it; the release check cost 0.8–1.7 % on the Lua benchmarks, so the
-  row's text is the contract.
-- **The handle borrow model** (`winlayer`): a `Copy` handle lends `&`/`&mut`
-  into an object the type system cannot tie it to — `GridRef`'s
-  `Deref` (the compositor reads a grid while it is drawn; its writes are
-  in-place writers that lend no `&mut`). Two copies of one handle can
-  produce overlapping borrows; the rule is that no borrow is held across an
-  access through another handle or across user code.
-- **`TypVal::named_for_call`** (`eval/typval/handle.rs`): a function's `a:`
+- **`TypVal::named_for_call`**, with `CallFrame::push_borrowed`/`own`
+  ([safe-surface.md](safe-surface.md) S10, open) (`eval/typval/handle.rs`): a function's `a:`
   and `a:000` items are `bit_copy`s naming the caller's arguments;
   `cleanup_function_call` disowns them, or they are upgraded to real copies
   when the scope outlives the call. Residual: a panic unwinding through a
