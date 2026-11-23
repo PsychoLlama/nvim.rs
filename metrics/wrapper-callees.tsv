@@ -15,12 +15,12 @@ count	callee	no_raw	defs	def
 7	cbytes	0	1	crates/nvim/src/memory/mod.rs
 7	check_write	0	1	crates/nvim/src/slot/guards.rs
 7	lua_tolstring	0	0	
+7	slot_of	0	1	crates/nvim/src/slot.rs
 7	uv_close	0	0	
 6	.add	0	0	
 6	Stack::from_raw	0	1	crates/nvim/src/lua/stack/mod.rs
 6	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
 6	loop_poll_events	0	1	crates/nvim/src/event/loop.rs
-6	slot_of	0	1	crates/nvim/src/slot.rs
 5	.as_mut	0	0	
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
 5	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
@@ -254,6 +254,7 @@ count	callee	no_raw	defs	def
 1	text	0	0	
 1	towlower	1	1	crates/nvim/src/os/cshim.rs
 1	towupper	1	1	crates/nvim/src/os/cshim.rs
+1	try_lend_part_at	0	1	crates/nvim/src/slot/guards.rs
 1	ts_language_abi_version	0	0	
 1	ts_language_field_count	0	0	
 1	ts_language_is_wasm	0	0	

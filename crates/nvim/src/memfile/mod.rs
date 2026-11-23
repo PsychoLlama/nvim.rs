@@ -972,62 +972,28 @@ fn pages_in_file(size: FileOffset, page_size: c_uint) -> BlockNr {
     (size + page_size - 1) / page_size
 }
 
-/// Close and delete the swap file of `buffer`, keeping the memory file. Used
-/// when `'swapfile'` is reset.
-///
-/// `getlines` first pulls every line into memory — clumsy, but the blocks
-/// still in the file are about to become unreachable.
-pub(crate) fn mf_close_file(buffer: Buf, getlines: bool) {
-    if buffer
-        .ml()
-        .ml_mfp
-        .as_ref()
-        .is_none_or(|memfile| !memfile.has_file())
-    {
-        return;
-    }
-
-    if getlines {
-        // Read every line once, which pulls each block into memory before
-        // the file under them goes.
-        let mut lines = buffer.lines();
-        for lnum in 1..=lines.count().get() {
-            lines.line(LineNr::new(lnum));
-        }
-    }
-
-    let mut held = buffer.ml();
-    let Some(memfile) = held.ml_mfp.as_deref_mut() else {
-        return;
-    };
-    if let Some(file) = memfile.file.take()
-        && close_file(file).is_err()
-    {
-        emsg(gettext(E_SWAPCLOSE));
-    }
-
-    if let Some(fname) = memfile.fname() {
-        os_remove(fname);
-        memfile.free_fnames();
-    }
-}
-
 /// Drop as many cached blocks as possible, for when memory has run out.
 /// Answers whether anything was released.
 pub(crate) fn mf_release_all() -> bool {
-    use crate::memfile::MemFile;
     let mut released = false;
     for buf in buffers() {
-        let Some(has_file) = buf.ml().ml_mfp.as_deref().map(MemFile::has_file) else {
+        // A memline in use -- lent to the walk that is allocating, or a line
+        // of it up the stack -- keeps its blocks, which either may point into.
+        let Some(has_file) = buf
+            .try_ml()
+            .and_then(|walk| walk.ml_mfp.as_deref().map(MemFile::has_file))
+        else {
             continue;
         };
         // Nothing can be released without somewhere to put it.
         if !has_file && buf.b_may_swap() {
             ml_open_file(buf);
         }
-        if let Some(memfile) = buf.ml().ml_mfp.as_deref_mut() {
-            released |= memfile.release_unlocked();
-        }
+        released |= buf.try_ml().is_some_and(|mut walk| {
+            walk.ml_mfp
+                .as_deref_mut()
+                .is_some_and(MemFile::release_unlocked)
+        });
     }
     released
 }

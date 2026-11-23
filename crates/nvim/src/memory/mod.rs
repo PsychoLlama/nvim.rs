@@ -59,8 +59,10 @@ use ::libc::{calloc, free, malloc, realloc};
 ///
 /// It frees the message scrollback, every memfile's cached blocks and the
 /// block pool's spare blocks, so no reference into any of them may be live
-/// across the call; the allocation paths that call it hold none. Main thread
-/// only: those are main-thread state.
+/// across the call; the allocation paths that call it hold none. A memfile
+/// whose memline is lent -- to a walk, or a line of it as a `LineText` -- is
+/// passed over, so those may be. Main thread only: those are main-thread
+/// state.
 unsafe fn try_to_free_memory() {
     static TRYING_TO_FREE: AtomicBool = AtomicBool::new(false);
     if TRYING_TO_FREE.swap(true, Ordering::Relaxed) {

@@ -2,8 +2,8 @@
 //!
 //! Split out of [`super`] for the file-size cap: everything here is about
 //! the *file* a memfile is backed by rather than the blocks in it - the
-//! name it was given and the full one, freeing both, and the `open` that
-//! [`MemFile::open`] and a rename go through.
+//! name it was given and the full one, freeing both, the `open` that
+//! [`MemFile::open`] and a rename go through, and closing it for good.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -175,5 +175,45 @@ impl Buf {
     /// The name of the buffer's swap file, if it has a memfile with one.
     pub(crate) fn swap_file_name(self) -> Option<CString> {
         buf_swap_name(self)
+    }
+}
+
+/// Close and delete the swap file of `buffer`, keeping the memory file. Used
+/// when `'swapfile'` is reset.
+///
+/// `getlines` first pulls every line into memory — clumsy, but the blocks
+/// still in the file are about to become unreachable.
+pub(crate) fn mf_close_file(buffer: Buf, getlines: bool) {
+    if buffer
+        .ml()
+        .ml_mfp
+        .as_ref()
+        .is_none_or(|memfile| !memfile.has_file())
+    {
+        return;
+    }
+
+    if getlines {
+        // Read every line once, which pulls each block into memory before
+        // the file under them goes.
+        let mut lines = buffer.lines();
+        for lnum in 1..=lines.count().get() {
+            lines.line(LineNr::new(lnum));
+        }
+    }
+
+    let mut held = buffer.ml();
+    let Some(memfile) = held.ml_mfp.as_deref_mut() else {
+        return;
+    };
+    if let Some(file) = memfile.file.take()
+        && close_file(file).is_err()
+    {
+        emsg(gettext(E_SWAPCLOSE));
+    }
+
+    if let Some(fname) = memfile.fname() {
+        os_remove(fname);
+        memfile.free_fnames();
     }
 }

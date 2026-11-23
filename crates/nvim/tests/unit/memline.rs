@@ -35,7 +35,7 @@ use neovim::memline::{
     B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT, B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1, Lines,
     ZeroBlockLayout, ml_append_bytes, ml_close, ml_open, ml_open_file, ml_preserve,
 };
-use neovim::memory::XString;
+use neovim::memory::{XString, try_malloc};
 use neovim::option::vars::P_DIR;
 use neovim::types::{Buffer, LineNr};
 use neovim::winlayer::Buf;
@@ -426,6 +426,30 @@ fn a_second_reader_refilling_under_a_lent_line_panics() {
     );
     let _ = second.line(LineNr::new(2));
     unreachable!("read {} bytes after the cache moved", held.len());
+}
+
+/// Out of memory, the editor gives back every memfile's cached blocks it can
+/// -- but a line lent out may point into any of its buffer's blocks, so that
+/// memfile is passed over (asking it for a walk would panic), and the line
+/// reads the same after.
+#[test]
+fn the_out_of_memory_release_passes_over_a_lent_line() {
+    let swapped = Swapped::new("memline-release");
+    // SAFETY: the fixture's buffer is live and has a memline.
+    let buf = unsafe { Buf::new(swapped.buf) };
+    // More than any allocator hands out, so `try_malloc` asks for memory
+    // back and still fails.
+    let too_much = usize::MAX / 2;
+    let mut lines = Lines::in_buffer(buf);
+    let line = lines.line(LineNr::new(4));
+    // SAFETY: the release passes over the lent line's memfile; nothing else
+    // is borrowed from a cached block, the scrollback or the block pool.
+    assert!(unsafe { try_malloc(too_much) }.is_null());
+    assert_eq!(&*line, LINES[3].as_bytes());
+    drop(line);
+    // SAFETY: as above, with nothing lent.
+    assert!(unsafe { try_malloc(too_much) }.is_null());
+    assert_eq!(&*lines.line(LineNr::new(4)), LINES[3].as_bytes());
 }
 
 /// `Lines` reads the bytes the buffer was built from, and writes through the

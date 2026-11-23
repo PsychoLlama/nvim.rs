@@ -305,6 +305,17 @@ impl Buf {
         walk
     }
 
+    /// [`Buf::ml`] for a caller that can do without the walk: `None` where
+    /// that panics -- the memline lent to a walk, or a line of it lent out,
+    /// or the buffer lent to an edit. What the out-of-memory release asks,
+    /// since it runs under whatever allocated, a walk included.
+    pub(crate) fn try_ml<'a>(self) -> Option<MlRef<'a>> {
+        // SAFETY: as `ml`.
+        let walk =
+            unsafe { slot::try_lend_part_at(self.ptr, self.stamp.generation(), self.ml_place()) }?;
+        (!walk.ml_mfp.as_deref().is_some_and(MemFile::has_lent_text)).then_some(walk)
+    }
+
     /// [`Buf::ml`] for the emergency exits' abandon, after the slot loans
     /// are abandoned: a line lent out (whose holder never resumes) does not
     /// refuse it. The abandon then zeroes the count

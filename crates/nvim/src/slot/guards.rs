@@ -164,6 +164,36 @@ pub(crate) unsafe fn lend_part_at<'a, T, U>(
     if word != generation || count & SLOT_PART_BIT != 0 {
         refused_part::<T>(word, generation, count);
     }
+    lend_checked_part(slot, count, part)
+}
+
+/// [`lend_part_at`] for a caller that has somewhere else to go: `None`
+/// where that panics -- the value gone or lent to an edit, or the part
+/// already lent.
+///
+/// # Safety
+/// As [`lend_part_at`].
+#[track_caller]
+pub(crate) unsafe fn try_lend_part_at<'a, T, U>(
+    value: *mut T,
+    generation: u32,
+    part: NonNull<U>,
+) -> Option<SlotPart<'a, T, U>> {
+    // SAFETY: the caller's promise.
+    let slot = unsafe { slot_of(value) };
+    let (word, count) = (header(slot).get(), readers(slot).get());
+    (word == generation && count & SLOT_PART_BIT == 0).then(|| lend_checked_part(slot, count, part))
+}
+
+/// The loan both lenders make once the slot's words said yes: one more
+/// reader, and the part bit.
+#[inline(always)]
+#[track_caller]
+fn lend_checked_part<'a, T, U>(
+    slot: NonNull<Slot<T>>,
+    count: u32,
+    part: NonNull<U>,
+) -> SlotPart<'a, T, U> {
     readers(slot).set(
         count
             .checked_add(1 | SLOT_PART_BIT)

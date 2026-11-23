@@ -82,7 +82,7 @@ pub(crate) mod id_table;
 use guards::refused;
 pub(crate) use guards::{
     EditPart, ReadPart, SlotEdit, SlotPart, SlotRead, check_part_unlent, check_write, edit_at,
-    lend_part_at, read_at,
+    lend_part_at, read_at, try_lend_part_at,
 };
 
 /// The highest generation a slot is handed out under; emptying a slot that
