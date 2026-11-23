@@ -394,7 +394,7 @@ impl Fields {
 /// `linelen` is the length the reader measured, which counts a newline it
 /// has since overwritten.
 pub(crate) fn parse_line(
-    mut qfl: Qfl,
+    qfl: Qfl,
     line: &CStr,
     linelen: usize,
     efm: &mut Efm,
@@ -411,7 +411,7 @@ pub(crate) fn parse_line(
     // A `%O`/`%P`/`%Q` match can leave a tail, which is then scanned as a
     // line of its own; that is the only way round this loop.
     loop {
-        let (multiline, multiscan) = (qfl.multiline, qfl.multiscan);
+        let (multiline, multiscan) = (qfl.multiline(), qfl.multiscan());
         fields.valid = true;
 
         // Start at the first format, or — after a `%>` — at the one that
@@ -431,14 +431,14 @@ pub(crate) fn parse_line(
                 break;
             }
         }
-        qfl.multiscan = false;
+        qfl.edit().multiscan = false;
 
         let Some(idx) = matched else {
             // Nothing matched: keep the line as a message, and close any
             // multi-line message that was open.
             no_match(line.to_bytes(), linelen, fields);
-            qfl.multiline = false;
-            qfl.multiignore = false;
+            qfl.edit().multiline = false;
+            qfl.edit().multiignore = false;
             return Status::Ok;
         };
 
@@ -464,8 +464,8 @@ pub(crate) fn parse_line(
         }
 
         if b"AEWIN".contains(&prefix) {
-            qfl.multiline = true; // start of a multi-line message
-            qfl.multiignore = false; // reset continuation
+            qfl.edit().multiline = true; // start of a multi-line message
+            qfl.edit().multiignore = false; // reset continuation
         } else if b"CZ".contains(&prefix) {
             // A continuation line never makes an entry of its own, so this
             // always ends the line.
@@ -489,9 +489,9 @@ pub(crate) fn parse_line(
 
         if flags == b'-' {
             // Generally exclude this line.
-            if qfl.multiline {
+            if qfl.multiline() {
                 // Exclude its continuation lines too.
-                qfl.multiignore = true;
+                qfl.edit().multiignore = true;
             }
             return Status::Ignore;
         }
@@ -511,34 +511,34 @@ fn no_match(line: &[u8], linelen: usize, fields: &mut Fields) {
 
 /// `%D` and `%X`: enter and leave the directory the following file names
 /// are relative to.
-fn push_pop_dir(prefix: u8, fields: &Fields, mut qfl: Qfl) -> Status {
+fn push_pop_dir(prefix: u8, fields: &Fields, qfl: Qfl) -> Status {
     if prefix == b'D' {
         if !fields.has_name() {
             emsg(gettext(c"E379: Missing or empty directory name"));
             return Status::Fail;
         }
-        qf_push_dir(fields.namebuf(), &mut qfl.dir_stack, false);
+        qf_push_dir(fields.namebuf(), &mut qfl.edit().dir_stack, false);
     } else {
-        qf_pop_dir(&mut qfl.dir_stack);
+        qf_pop_dir(&mut qfl.edit().dir_stack);
     }
     Status::Ok
 }
 
 /// `%O`, `%P` and `%Q`: name the file the following lines belong to.
 /// `tail` is what follows the `%r` capture, if the format had one.
-fn claim_file(prefix: u8, fields: &mut Fields, mut qfl: Qfl, tail: Option<&[u8]>) -> Status {
+fn claim_file(prefix: u8, fields: &mut Fields, qfl: Qfl, tail: Option<&[u8]>) -> Status {
     fields.valid = false;
     if fields.has_name() && !path_exists(fields.namebuf()) {
         return Status::Ok;
     }
     if fields.has_name() && prefix == b'P' {
-        qf_push_dir(fields.namebuf.as_cstr(), &mut qfl.file_stack, true);
+        qf_push_dir(fields.namebuf.as_cstr(), &mut qfl.edit().file_stack, true);
     } else if prefix == b'Q' {
-        qf_pop_dir(&mut qfl.file_stack);
+        qf_pop_dir(&mut qfl.edit().file_stack);
     }
     fields.namebuf.truncate(0);
     if tail.is_some_and(|tail| !until_nul(tail).is_empty()) {
-        qfl.multiscan = true;
+        qfl.edit().multiscan = true;
         return Status::MultiScan;
     }
     Status::Ok
@@ -546,13 +546,14 @@ fn claim_file(prefix: u8, fields: &mut Fields, mut qfl: Qfl, tail: Option<&[u8]>
 
 /// `%C` and `%Z`: fold a continuation line into the entry the opening line
 /// of the multi-line message made.
-fn continue_multiline(prefix: u8, mut qfl: Qfl, fields: &mut Fields) -> Status {
-    if !qfl.multiignore {
+fn continue_multiline(prefix: u8, qfl: Qfl, fields: &mut Fields) -> Status {
+    if !qfl.multiignore() {
         if qfl.is_empty() {
             return Status::Fail;
         }
         let needs_fnum = {
-            let prev = qfl.entries.last_mut().expect("tested above");
+            let mut edit = qfl.edit();
+            let prev = edit.entries.last_mut().expect("tested above");
             if !fields.errmsg.is_empty() {
                 // Append the continuation as a new line of the message.
                 prev.text.push_byte(b'\n');
@@ -585,14 +586,14 @@ fn continue_multiline(prefix: u8, mut qfl: Qfl, fields: &mut Fields) -> Status {
             // afterwards.
             let entry = fields.entry(qfl);
             let fnum = qf_get_fnum(qfl, entry.dir, entry.fname);
-            if let Some(prev) = qfl.entries.last_mut() {
+            if let Some(prev) = qfl.edit().entries.last_mut() {
                 prev.fnum = fnum;
             }
         }
     }
     if prefix == b'Z' {
-        qfl.multiline = false;
-        qfl.multiignore = false;
+        qfl.edit().multiline = false;
+        qfl.edit().multiignore = false;
     }
     line_breakcheck();
 
@@ -607,8 +608,12 @@ impl Fields {
     /// none at all; the list's directory and claimed file are copied into
     /// the fields first, since naming the file can change the list.
     pub(crate) fn entry(&mut self, qfl: Qfl) -> NewEntry<'_> {
-        self.directory = qfl.directory().map(|dir| XString::from_bytes(dir.bytes()));
+        self.directory = qfl
+            .read()
+            .directory()
+            .map(|dir| XString::from_bytes(dir.bytes()));
         self.current_file = qfl
+            .read()
             .current_file()
             .map(|file| XString::from_bytes(file.bytes()));
         let fname = if self.has_name() || self.directory.is_some() {

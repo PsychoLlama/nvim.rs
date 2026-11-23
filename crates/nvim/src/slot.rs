@@ -41,13 +41,14 @@
 //! guards alone (`winlayer`'s `TabPage` and `FrameRef`) are therefore
 //! sound however their copies are used: the worst a misuse does is panic.
 //!
-//! # What this does not check
+//! # Every borrow is a guard
 //!
-//! A [`SlotRef`] is `Copy`, and [`DerefMut`] through one copy while a borrow
-//! from another is held aliases, as the `winlayer` handles still built on
-//! plain `Deref`/`DerefMut` do: those check **liveness**, not exclusivity.
-//! The borrow lasts as long as the field access that asked for it; hold
-//! none across a call that may reach the same value through another copy.
+//! A [`SlotRef`] is `Copy`, so it lends nothing by itself: its value is
+//! borrowed only through [`SlotRef::read`] and [`SlotRef::edit`], the
+//! counted guards above, and a borrow held across code that reaches the
+//! same value through another copy panics there instead of aliasing. The
+//! one uncounted borrow is a pool's own ([`SlotPool::get_mut`], through
+//! `&mut` of the pool), for a table that hands out no handles at all.
 //!
 //! # Pools live in statics
 //!
@@ -76,6 +77,7 @@ use core::ptr::{self, NonNull};
 use crate::global_cell::GlobalCell;
 
 mod guards;
+pub(crate) mod id_table;
 
 use guards::refused;
 pub(crate) use guards::{
@@ -314,28 +316,30 @@ impl<T> SlotRef<T> {
     }
 }
 
-impl<T> Deref for SlotRef<T> {
-    type Target = T;
-
+impl<T> SlotRef<T> {
+    /// Borrow the value until the guard is dropped, counted: an edit, a
+    /// field write or emptying the slot through any copy panics while it is
+    /// held.
+    ///
+    /// # Panics
+    /// When the value is gone or lent to an edit.
     #[inline(always)]
     #[track_caller]
-    fn deref(&self) -> &T {
-        self.check();
-        // SAFETY: the generation matched, and a slot's generation is odd --
-        // which every handed-out generation is -- exactly while its value is
-        // initialised. The borrow lasts as long as the field access that
-        // asked for it (module docs: liveness, not exclusivity).
-        unsafe { &*value_ptr(self.slot) }
+    pub(crate) fn read<'a>(self) -> SlotRead<'a, T> {
+        // SAFETY: a handle's address is its slot's value address.
+        unsafe { read_at(self.raw(), self.generation) }
     }
-}
 
-impl<T> DerefMut for SlotRef<T> {
+    /// Lend the value mutably until the guard is dropped: every other way
+    /// to it, through any copy, panics meanwhile.
+    ///
+    /// # Panics
+    /// When the value is gone, lent to an edit, or a read of it is held.
     #[inline(always)]
     #[track_caller]
-    fn deref_mut(&mut self) -> &mut T {
-        self.check();
-        // SAFETY: as `deref`.
-        unsafe { &mut *value_ptr(self.slot) }
+    pub(crate) fn edit<'a>(self) -> SlotEdit<'a, T> {
+        // SAFETY: as `read`.
+        unsafe { edit_at(self.raw(), self.generation) }
     }
 }
 
@@ -613,14 +617,15 @@ impl<T> SlotPool<T> {
     /// # Panics
     /// When `r` is stale, or another pool's.
     #[track_caller]
-    pub(crate) fn get_mut(&mut self, r: SlotRef<T>) -> &mut T {
+    fn get_mut(&mut self, r: SlotRef<T>) -> &mut T {
         self.own(r);
-        // SAFETY: live (`own`); the borrow is the pool's, and emptying the
-        // slot needs the pool too. As with `DerefMut`, a copy of `r` used
-        // meanwhile is the aliasing the module docs leave to the caller --
-        // and so is a read guard out (only `winlayer`'s handles take those,
-        // and their pools are never borrowed through here). Not counted:
-        // the condition stacks take this path per command line.
+        // SAFETY: live and lent to no edit (`own`); the borrow is the
+        // pool's, and emptying the slot needs the pool too. Not counted (the
+        // condition stacks take this path per command line), and it need not
+        // be: private to this module and `id_table`, whose `IdTable` -- the
+        // one caller -- never lets a handle of its values out (`ViewTable`,
+        // which does, has no `get_mut`), so no guard of the value can start
+        // while this lives.
         unsafe { &mut *value_ptr(r.slot) }
     }
 
@@ -789,12 +794,12 @@ mod tests {
     #[test]
     fn a_handle_reads_its_value_until_the_slot_is_emptied() {
         static POOL: GlobalCell<SlotPool<Vec<u32>>> = GlobalCell::new(SlotPool::new());
-        let mut a = POOL.with_mut(|pool| pool.insert(vec![1]));
+        let a = POOL.with_mut(|pool| pool.insert(vec![1]));
         let b = POOL.with_mut(|pool| pool.insert(vec![2]));
         let copy = a;
-        a.push(10);
-        assert_eq!(*copy, [1, 10]);
-        assert_eq!(*b, [2]);
+        a.edit().push(10);
+        assert_eq!(*copy.read(), [1, 10]);
+        assert_eq!(*b.read(), [2]);
         assert!(a.is_live());
         assert_eq!(POOL.with_mut(|pool| pool.remove(a)), [1, 10]);
         assert!(!copy.is_live());
@@ -804,7 +809,7 @@ mod tests {
         assert_eq!(c.raw(), copy.raw());
         assert_ne!(c, copy);
         assert!(!copy.is_live());
-        assert_eq!(*c, [3]);
+        assert_eq!(*c.read(), [3]);
         POOL.with_mut(|pool| {
             drop(pool.remove(b));
             drop(pool.remove(c));
@@ -817,7 +822,7 @@ mod tests {
         static POOL: GlobalCell<SlotPool<String>> = GlobalCell::new(SlotPool::new());
         let a = POOL.with_mut(|pool| pool.insert("gone".to_owned()));
         drop(POOL.with_mut(|pool| pool.remove(a)));
-        let _ = a.len();
+        let _ = a.read().len();
     }
 
     #[test]
@@ -829,7 +834,7 @@ mod tests {
             .map(|n| POOL.with_mut(|pool| pool.insert([n; 64])))
             .collect();
         assert_eq!(first.raw(), at);
-        assert_eq!(first[63], 7);
+        assert_eq!(first.read()[63], 7);
         POOL.with_mut(|pool| {
             pool.forget(first);
             for r in rest {
@@ -851,7 +856,7 @@ mod tests {
         let b = POOL.with_mut(|pool| pool.attach(d));
         assert_eq!(b.raw(), a.raw());
         assert_ne!(a, b);
-        assert_eq!(*b, [5]);
+        assert_eq!(*b.read(), [5]);
         let d = POOL.with_mut(|pool| pool.detach(b));
         assert_eq!(POOL.with_mut(|pool| pool.release(d)), [5]);
         // Dropping a detached slot drops its value (and loses the slot).
@@ -865,7 +870,7 @@ mod tests {
         static POOL: GlobalCell<SlotPool<Box<u8>>> = GlobalCell::new(SlotPool::new());
         let mut a = POOL.with_mut(|pool| pool.insert(Box::new(1)));
         SlotPool::rewind(&mut a, GENERATION_LIMIT);
-        assert_eq!(**a, 1);
+        assert_eq!(**a.read(), 1);
         drop(POOL.with_mut(|pool| pool.remove(a)));
         assert!(!a.is_live());
         // Retired: the next value goes to a new slot, and the old one's word
@@ -879,7 +884,7 @@ mod tests {
         let d = POOL.with_mut(|pool| pool.detach(c));
         let e = POOL.with_mut(|pool| pool.attach(d));
         assert_ne!(e.raw(), c.raw());
-        assert_eq!(**e, 2);
+        assert_eq!(**e.read(), 2);
         drop(POOL.with_mut(|pool| pool.remove(e)));
     }
 
@@ -898,7 +903,7 @@ mod tests {
         static POOL: GlobalCell<SlotPool<u32>> = GlobalCell::new(SlotPool::new());
         let a = POOL.with_mut(|pool| pool.insert(1));
         POOL.with_mut(|pool| *pool.get_mut(a) += 1);
-        assert_eq!(*a, 2);
+        assert_eq!(*a.read(), 2);
         POOL.with_mut(|pool| pool.forget(a));
     }
 
@@ -906,7 +911,7 @@ mod tests {
     fn a_value_built_in_its_slot_reads_back() {
         static POOL: GlobalCell<SlotPool<[u32; 4]>> = GlobalCell::new(SlotPool::new());
         let a = POOL.with_mut(|pool| pool.insert_with(|place| place.write([1, 2, 3, 4])));
-        assert_eq!(*a, [1, 2, 3, 4]);
+        assert_eq!(*a.read(), [1, 2, 3, 4]);
         // SAFETY: `a.raw()` is a slot's value address.
         assert_eq!(unsafe { generation_at(a.raw()) }, a.generation());
         POOL.with_mut(|pool| pool.forget(a));
@@ -936,7 +941,7 @@ mod tests {
     fn dropping_a_slot_box_drops_its_value_in_place_and_frees_the_slot() {
         let owner = SlotBox::new(Counted(7));
         let handle = owner.handle();
-        assert_eq!(handle.0, 7);
+        assert_eq!(handle.read().0, 7);
         assert_eq!(DROPS.get(), 0);
         drop(owner);
         assert_eq!(DROPS.get(), 1);
@@ -944,7 +949,7 @@ mod tests {
         // The slot is reused for the next value.
         let next = SlotBox::new_with(|place| place.write(Counted(8)));
         assert_eq!(next.handle().raw(), handle.raw());
-        assert_eq!(next.handle().0, 8);
+        assert_eq!(next.handle().read().0, 8);
         drop(next);
         assert_eq!(DROPS.get(), 2);
 
@@ -999,7 +1004,7 @@ mod tests {
         // the address its slot gives, which nothing has retagged.
         unsafe { (*escaped).0 = 42 };
         assert_eq!(owned.handle().raw(), escaped);
-        assert_eq!(owned.handle().0, 42);
+        assert_eq!(owned.handle().read().0, 42);
         drop(owned);
         drop(table);
     }

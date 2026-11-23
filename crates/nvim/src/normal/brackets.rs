@@ -99,7 +99,12 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     let mut n = if method { 9999 } else { cmd_arg.count1 };
 
     while n > 0 {
-        pos = findmatchlimit(Some(&mut cmd_arg.op()), findc, match_direction(cmd_arg), 0);
+        pos = findmatchlimit(
+            Some(&mut *cmd_arg.op().edit()),
+            findc,
+            match_direction(cmd_arg),
+            0,
+        );
         let Some(found) = pos else {
             if new_pos.lnum == LineNr::ZERO {
                 // Nothing found at all. A method search says so by leaving
@@ -163,8 +168,12 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
                 } else {
                     // A brace of the other kind: step over the block it
                     // opens or closes.
-                    pos =
-                        findmatchlimit(Some(&mut cmd_arg.op()), findc, match_direction(cmd_arg), 0);
+                    pos = findmatchlimit(
+                        Some(&mut *cmd_arg.op().edit()),
+                        findc,
+                        match_direction(cmd_arg),
+                        0,
+                    );
                     match pos {
                         None => n = 0,
                         Some(found) => Win::current().set_w_cursor(found),
@@ -281,8 +290,8 @@ fn nv_bracket_spell(cmd_arg: &mut CmdArg) {
 
 /// `[` and `]`, whose second character says what kind of jump this is.
 pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = MotionType::CharWise;
-    cmd_arg.op().inclusive = false;
+    cmd_arg.op().edit().motion_type = MotionType::CharWise;
+    cmd_arg.op().edit().inclusive = false;
     let old_pos = Win::current().w_cursor();
     Win::current().cursor().set_coladd(0);
 
@@ -303,14 +312,15 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
         // end.
         let flag = if nchar == cmd_arg.cmdchar { b'{' } else { b'}' };
         Win::current().set_w_set_curswant(true);
-        let both_ways =
-            cmd_arg.op().op_type != OpType::Nop && cmd_arg.arg == FORWARD as c_int && flag == b'{';
+        let both_ways = cmd_arg.op().op_type() != OpType::Nop
+            && cmd_arg.arg == FORWARD as c_int
+            && flag == b'{';
         let (dir, n) = (cmd_arg.arg, cmd_arg.count1);
         if let Some(inclusive) = findpar(dir, n, flag, both_ways) {
             if inclusive {
-                cmd_arg.op().inclusive = true;
+                cmd_arg.op().edit().inclusive = true;
             }
-            if cmd_arg.op().op_type == OpType::Nop {
+            if cmd_arg.op().op_type() == OpType::Nop {
                 beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             }
             may_fold_open(cmd_arg, OPT_FDO_FLAG_BLOCK as c_uint);

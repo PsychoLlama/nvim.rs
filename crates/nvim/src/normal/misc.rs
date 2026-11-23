@@ -81,10 +81,10 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
         nv_operator(cmd_arg);
         return;
     }
-    let mut op = cmd_arg.op();
-    if op.op_type != OpType::Nop {
-        op.motion_type = MotionType::CharWise;
-        op.inclusive = false;
+    let op = cmd_arg.op();
+    if op.op_type() != OpType::Nop {
+        op.edit().motion_type = MotionType::CharWise;
+        op.edit().inclusive = false;
     } else if cmd_arg.count0 != 0 && !is_cmdkey && !is_lua {
         // A count in front of `:` becomes a range: `3:` is `:.,.+2`.
         stuff_readbuf_char(Key::ascii(b'.'));
@@ -107,7 +107,7 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
         } else {
             LineSource::Typed
         };
-        let opts = if op.op_type != OpType::Nop {
+        let opts = if op.op_type() != OpType::Nop {
             DoCmdOpts::KEEPLINE
         } else {
             DoCmdOpts::NONE
@@ -117,9 +117,9 @@ pub(crate) fn nv_colon(cmd_arg: &mut CmdArg) {
     msg_ext_set_trigger(c"");
     if !cmd_result {
         clear_op(op);
-    } else if op.op_type != OpType::Nop
-        && (op.start.lnum > Buf::current().line_count()
-            || op.start.col > Buf::current().lines().line_len(op.start.lnum)
+    } else if op.op_type() != OpType::Nop
+        && (op.start().lnum > Buf::current().line_count()
+            || op.start().col > Buf::current().lines().line_len(op.start().lnum)
             || DID_EMSG.get() != 0)
     {
         // The command moved or deleted the line the operator started on,
@@ -238,10 +238,10 @@ pub(crate) fn nv_normal(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_esc(cmd_arg: &mut CmdArg) {
     // Nothing was pending, so the key had no work to do and is worth a
     // beep or a hint.
-    let no_reason = cmd_arg.op().op_type == OpType::Nop
+    let no_reason = cmd_arg.op().op_type() == OpType::Nop
         && cmd_arg.opcount == 0
         && cmd_arg.count0 == 0
-        && cmd_arg.op().regname.is_unnamed();
+        && cmd_arg.op().regname().is_unnamed();
     if cmd_arg.arg != 0 {
         if RESTART_EDIT.get().is_nul() && CMDWIN_TYPE.get() == 0 && !visual_active() && no_reason {
             let hint = if any_buf_is_changed() {

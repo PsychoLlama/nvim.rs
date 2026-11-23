@@ -83,17 +83,17 @@ pub(crate) fn nv_addsub(cmd_arg: &mut CmdArg) {
     if prompt_refuses(cmd_arg) {
         return;
     }
-    if !visual_active() && cmd_arg.op().op_type == OpType::Nop {
+    if !visual_active() && cmd_arg.op().op_type() == OpType::Nop {
         // Not an operator: run it here and then put the operator back.
         prep_redo_cmd(cmd_arg);
-        cmd_arg.op().op_type = if cmd_arg.cmdchar == Key::CTRL_A {
+        cmd_arg.op().edit().op_type = if cmd_arg.cmdchar == Key::CTRL_A {
             OpType::NrAdd
         } else {
             OpType::NrSub
         };
         let (count, g_cmd) = (LineNr::new(cmd_arg.count1), cmd_arg.arg != 0);
         cmd_arg.op().on_copy(|op| op_addsub(op, count.get(), g_cmd));
-        cmd_arg.op().op_type = OpType::Nop;
+        cmd_arg.op().edit().op_type = OpType::Nop;
     } else if visual_active() {
         nv_operator(cmd_arg);
     } else {
@@ -187,7 +187,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     }
 
     prep_redo(
-        RegName::from_byte((cmd_arg.op().regname).byte()),
+        RegName::from_byte((cmd_arg.op().regname()).byte()),
         cmd_arg.count1,
         Key::NUL,
         Key::ascii(b'r'),
@@ -323,7 +323,7 @@ pub(crate) fn n_swapchar(cmd_arg: &mut CmdArg) {
     let mut did_change = false;
     let mut n = cmd_arg.count1;
     while n > 0 {
-        did_change |= swapchar(cmd_arg.op().op_type, Win::current().w_cursor());
+        did_change |= swapchar(cmd_arg.op().op_type(), Win::current().w_cursor());
         inc_cursor();
         if gchar_cursor() == Codepoint::NUL {
             if !(wraps && Win::current().cursor().lnum() < Buf::current().line_count()) {
@@ -463,7 +463,7 @@ pub(crate) fn n_opencmd(cmd_arg: &mut CmdArg) {
 
 /// `~`: swap case, or the `g~` operator when 'tildeop' is on.
 pub(crate) fn nv_tilde(cmd_arg: &mut CmdArg) {
-    if !p_to() && !visual_active() && cmd_arg.op().op_type != OpType::Tilde {
+    if !p_to() && !visual_active() && cmd_arg.op().op_type() != OpType::Tilde {
         if prompt_refuses(cmd_arg) {
             return;
         }
@@ -503,7 +503,7 @@ pub(crate) fn nv_edit(cmd_arg: &mut CmdArg) {
         return;
     }
     if (cmd_arg.cmdchar.is('a') || cmd_arg.cmdchar.is('i'))
-        && (cmd_arg.op().op_type != OpType::Nop || visual_active())
+        && (cmd_arg.op().op_type() != OpType::Nop || visual_active())
     {
         nv_object(cmd_arg);
         return;
@@ -597,7 +597,7 @@ pub(crate) fn nv_join(cmd_arg: &mut CmdArg) {
             (Buf::current().line_count() - Win::current().cursor().lnum() + 1) as c_int;
     }
     prep_redo(
-        RegName::from_byte((cmd_arg.op().regname).byte()),
+        RegName::from_byte((cmd_arg.op().regname()).byte()),
         cmd_arg.count0,
         Key::NUL,
         cmd_arg.cmdchar,
@@ -625,9 +625,9 @@ pub(crate) fn nv_put(cmd_arg: &mut CmdArg) {
 pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     let win = Win::current();
     let save_fen = win.wo_fen();
-    if cmd_arg.op().op_type != OpType::Nop {
+    if cmd_arg.op().op_type() != OpType::Nop {
         // `dp` is not "delete, then put": it is the diff command.
-        if cmd_arg.op().op_type == OpType::Delete && cmd_arg.cmdchar.is('p') {
+        if cmd_arg.op().op_type() == OpType::Delete && cmd_arg.cmdchar.is('p') {
             clear_op(cmd_arg.op());
             debug_assert!(cmd_arg.opcount >= 0);
             nv_diffgetput(true, usize::try_from(cmd_arg.opcount).unwrap_or(0));
@@ -680,7 +680,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     let mut savereg: Option<YankReg> = None;
     let mut emptied = false;
     if was_visual {
-        let regname = cmd_arg.op().regname;
+        let regname = cmd_arg.op().regname();
         let keep_registers = cmd_arg.cmdchar.is('P');
         // Putting over a selection deletes it first, and that delete would
         // otherwise overwrite the very register being put.
@@ -701,7 +701,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
         if !visual_active() || visual_mode().is_line() || regname != b'.' {
             cmd_arg.cmdchar = Key::ascii(b'd');
             cmd_arg.nchar = Key::NUL;
-            cmd_arg.op().regname = if keep_registers {
+            cmd_arg.op().edit().regname = if keep_registers {
                 RegName::BLACK_HOLE
             } else {
                 RegName::UNNAMED
@@ -713,7 +713,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
             // that the put should not keep.
             emptied = Buf::current().ml_flags().has(MlFlags::EMPTY);
             drop(silenced);
-            cmd_arg.op().regname = regname;
+            cmd_arg.op().edit().regname = regname;
         }
         if visual_mode().is_line() {
             flags |= PUT_LINE;
@@ -735,7 +735,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
     }
 
     do_put(
-        cmd_arg.op().regname,
+        cmd_arg.op().regname(),
         savereg.as_ref(),
         dir,
         cmd_arg.count1,
@@ -772,7 +772,7 @@ pub(crate) fn nv_put_opt(cmd_arg: &mut CmdArg, fix_indent: bool) {
 /// `o` and `O` -- or, with a pending delete, the diff command, and with a
 /// selection, "swap to the other corner".
 pub(crate) fn nv_open(cmd_arg: &mut CmdArg) {
-    if cmd_arg.op().op_type == OpType::Delete && cmd_arg.cmdchar.is('o') {
+    if cmd_arg.op().op_type() == OpType::Delete && cmd_arg.cmdchar.is('o') {
         // `do` is `:diffget`, not "delete, then open".
         clear_op(cmd_arg.op());
         debug_assert!(cmd_arg.opcount >= 0);

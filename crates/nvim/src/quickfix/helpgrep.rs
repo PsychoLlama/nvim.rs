@@ -207,15 +207,15 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
         // Create a new quickfix list.
         let title = qf_cmdtitle(excmd.line.line());
         qf_new_list(qi, Some(&title));
-        let mut qfl = qi.current_slot();
+        let qfl = qi.current_slot();
 
         hgr_search_in_rtp(qfl, &mut prog, lang.as_deref());
         drop(prog);
 
-        qfl.no_valid = false;
-        qfl.cursor = 0;
-        qfl.index = 1;
-        qfl.changed();
+        qfl.edit().no_valid = false;
+        qfl.edit().cursor = 0;
+        qfl.edit().index = 1;
+        qfl.edit().changed();
     }
 
     drop(cpo);
@@ -231,14 +231,14 @@ pub fn ex_helpgrep(excmd: &mut ExArg) {
         // When adding to an existing location list stack, an autocommand
         // may have made that stack invalid, in which case there is
         // nothing left to jump to.
-        if !new_qi && qi.kind == QFLT_LOCATION && qf_find_win_with_loclist(qi.id()).is_none() {
+        if !new_qi && qi.kind() == QFLT_LOCATION && qf_find_win_with_loclist(qi.id()).is_none() {
             drop(busy);
             return;
         }
     }
 
     // Jump to the first match.
-    if !qi.current_list().is_empty() {
+    if !qi.read().current_list().is_empty() {
         qf_jump(qi, 0, 0, false);
     } else {
         let arg = msg_bytes(excmd.line.arg());

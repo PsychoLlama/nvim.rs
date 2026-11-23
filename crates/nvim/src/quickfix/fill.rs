@@ -79,7 +79,7 @@ pub(crate) fn qf_update_buffer(qi: Qi, old_last: Option<usize>) {
     // A location list's window id goes to 'quickfixtextfunc'; it is the
     // window the list belongs to, not the one showing it.
     let mut qf_winid = Handle::NONE;
-    if qi.kind == QFLT_LOCATION {
+    if qi.kind() == QFLT_LOCATION {
         let win = if Win::current().w_llist() == Some(qi.id()) {
             Win::current()
         } else {
@@ -233,8 +233,8 @@ fn call_qftf_func(qfl: Qfl, qf_winid: c_int, start_idx: c_int, end_idx: c_int) -
     if RECURSIVE.get() {
         return None;
     }
-    let mut cb = if qfl.text_func.is_set() {
-        qfl.text_func.duplicate()
+    let mut cb = if qfl.read().text_func.is_set() {
+        qfl.read().text_func.duplicate()
     } else {
         QFTF_CB.with(Callback::duplicate)
     };
@@ -245,9 +245,12 @@ fn call_qftf_func(qfl: Qfl, qf_winid: c_int, start_idx: c_int, end_idx: c_int) -
 
     let dict = tv_dict_alloc_lock(VarLock::Fixed);
     let numbers = [
-        (&b"quickfix"[..], VarNumber::from(qfl.kind == QFLT_QUICKFIX)),
+        (
+            &b"quickfix"[..],
+            VarNumber::from(qfl.kind() == QFLT_QUICKFIX),
+        ),
         (b"winid", VarNumber::from(qf_winid)),
-        (b"id", VarNumber::from(qfl.id)),
+        (b"id", VarNumber::from(qfl.id())),
         (b"start_idx", VarNumber::from(start_idx)),
         (b"end_idx", VarNumber::from(end_idx)),
     ];
@@ -391,7 +394,7 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
         // that is already in the buffer.
         let (mut at, mut lnum) = match old_last {
             None => (0, LineNr::ZERO),
-            Some(last) if last + 1 < qfl.entries.len() => (last + 1, buffer.line_count()),
+            Some(last) if last + 1 < qfl.read().entries.len() => (last + 1, buffer.line_count()),
             Some(last) => (last, buffer.line_count()),
         };
 
@@ -421,25 +424,29 @@ pub(crate) fn qf_fill_buffer(qfl: Qfl, buffer: Buf, old_last: Option<usize>, qf_
                 }
             }
 
-            let Some(entry) = qfl.entries.get(at) else {
-                break;
+            let fnum = {
+                let list = qfl.read();
+                let Some(entry) = list.entries.get(at) else {
+                    break;
+                };
+                let fnum = entry.fnum;
+                line.clear();
+                qf_buf_line(
+                    &mut line,
+                    entry,
+                    &mut dir,
+                    text_func.as_deref(),
+                    prev_bufnr != Some(fnum),
+                );
+                fnum
             };
-            let fnum = entry.fnum;
-            line.clear();
-            qf_buf_line(
-                &mut line,
-                entry,
-                &mut dir,
-                text_func.as_deref(),
-                prev_bufnr != Some(fnum),
-            );
             if ml_append_bytes(buffer, lnum, &line).is_err() {
                 break;
             }
             prev_bufnr = Some(fnum);
             lnum += 1;
             at += 1;
-            if at >= qfl.entries.len() {
+            if at >= qfl.read().entries.len() {
                 break;
             }
             if have_item {

@@ -91,11 +91,11 @@ pub fn ex_cfile(excmd: &mut ExArg) {
         return;
     };
     if res.is_ok() {
-        qi.current_slot().changed();
+        qi.current_slot().edit().changed();
     }
     // Remember the current list, so that an autocommand replacing it is
     // noticed before the jump.
-    let save_qfid = qi.current_list().id;
+    let save_qfid = qi.read().current_list().id;
     if let Some(name) = au_name {
         fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, false);
     }
@@ -200,7 +200,7 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
     let errorformat = P_EFM.get();
     let mut res = qf_init_ext(
         qi,
-        qi.current,
+        qi.current(),
         Input::Lines {
             buf,
             first: excmd.line1,
@@ -219,9 +219,9 @@ pub fn ex_cbuffer(excmd: &mut ExArg) {
         return;
     }
     if res.is_ok() {
-        qi.current_slot().changed();
+        qi.current_slot().edit().changed();
     }
-    let save_qfid = qi.current_list().id;
+    let save_qfid = qi.read().current_list().id;
     if let Some(name) = au_name {
         let curbuf_old = Buf::current_or_none();
         fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
@@ -290,7 +290,7 @@ fn cexpr_core(excmd: &mut ExArg, tv: &TypVal) -> Result<(), Failed> {
     let title = qf_cmdtitle(excmd.line.line());
     let res = qf_init_ext(
         qi,
-        qi.current,
+        qi.current(),
         Input::Value(tv),
         None,
         errorformat.as_cstr(),
@@ -305,9 +305,9 @@ fn cexpr_core(excmd: &mut ExArg, tv: &TypVal) -> Result<(), Failed> {
         return Err(Failed);
     }
     if res.is_ok() {
-        qi.current_slot().changed();
+        qi.current_slot().edit().changed();
     }
-    let save_qfid = qi.current_list().id;
+    let save_qfid = qi.read().current_list().id;
     if let Some(name) = au_name {
         fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
     }

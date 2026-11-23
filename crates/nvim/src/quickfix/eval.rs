@@ -80,7 +80,7 @@ fn mark_stack(stack: &QfStack, copy_id: c_int) -> bool {
 /// Mark everything the quickfix stack and every location list stack hold,
 /// so that the garbage collector does not free it.
 pub fn set_ref_in_quickfix(copy_id: c_int) -> bool {
-    if mark_stack(&Qi::global(), copy_id) || QFTF_CB.with(|cb| cb.mark(copy_id)) {
+    if mark_stack(&Qi::global().read(), copy_id) || QFTF_CB.with(|cb| cb.mark(copy_id)) {
         return true;
     }
 
@@ -88,7 +88,7 @@ pub fn set_ref_in_quickfix(copy_id: c_int) -> bool {
     // may be the last thing referring to one.
     let aborting = |win: Win| {
         if let Some(own) = win.w_llist()
-            && mark_stack(&own.stack(), copy_id)
+            && mark_stack(&own.stack().read(), copy_id)
         {
             return true;
         }
@@ -96,8 +96,8 @@ pub fn set_ref_in_quickfix(copy_id: c_int) -> bool {
             && let Some(shown) = win.w_llist_ref()
         {
             let shown = shown.stack();
-            if shown.refcount == Refcount::one() {
-                return mark_stack(&shown, copy_id);
+            if shown.read().refcount == Refcount::one() {
+                return mark_stack(&shown.read(), copy_id);
             }
         }
         false

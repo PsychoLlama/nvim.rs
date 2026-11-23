@@ -156,18 +156,55 @@ pub struct RedoVisual {
 /// The operator a normal-mode frame is pending on: a handle to its slot in
 /// the frame table, checked at every dereference.
 ///
-/// Field access goes through `Deref`, so the borrow lasts no longer than the
-/// access that asked for it -- which matters, because `op_pending` reads the
-/// frame's operator from wherever user code runs. The operators themselves
+/// Field access goes through its counted guards (`read()`/`edit()`), so a
+/// borrow held across code that reaches the operator through another copy
+/// panics there -- which matters, because `op_pending` reads the frame's
+/// operator from wherever user code runs. The operators themselves
 /// take an `&mut OpArg`, and [`Op::on_copy`] is how a frame hands one over.
 pub(crate) type Op = crate::slot::SlotRef<OpArg>;
+
+/// A by-value getter per field of the frame's operator: each takes a read
+/// and lets it go before it returns, so a getter in a call's arguments holds
+/// no guard across the call.
+macro_rules! op_getters {
+    ($($field:ident: $ty:ty;)*) => {
+        impl Op {
+            $(
+                #[doc = concat!("The operator's `", stringify!($field), "`.")]
+                #[inline]
+                #[track_caller]
+                pub(crate) fn $field(self) -> $ty {
+                    self.read().$field
+                }
+            )*
+        }
+    };
+}
+
+op_getters! {
+    op_type: OpType;
+    regname: crate::register::RegName;
+    motion_type: crate::normal::defs::MotionType;
+    motion_force: crate::types::Key;
+    inclusive: bool;
+    end_adjusted: bool;
+    start: Pos;
+    end: Pos;
+    line_count: i32;
+    empty: bool;
+    is_visual: bool;
+    start_vcol: ColNr;
+    end_vcol: ColNr;
+    prev_opcount: ::core::ffi::c_int;
+    prev_count0: ::core::ffi::c_int;
+}
 
 impl Op {
     /// Whether an operator is pending on it, which is what every caller means
     /// by the `op_type != OpType::Nop` it used to spell out.
     #[inline(always)]
     pub(crate) fn pending(self) -> bool {
-        self.op_type != OpType::Nop
+        self.read().op_type != OpType::Nop
     }
 
     /// Run `operator` on a copy of the frame's operator, and write the copy
@@ -178,10 +215,10 @@ impl Op {
     /// editor reads the frame's operator from there (`mode()` asks
     /// `op_pending`). An `&mut` to the frame's own `OpArg` held across that
     /// would alias the read; a copy is nobody else's.
-    pub(crate) fn on_copy<R>(mut self, operator: impl FnOnce(&mut OpArg) -> R) -> R {
-        let mut arg = OpArg::clone(&self);
+    pub(crate) fn on_copy<R>(self, operator: impl FnOnce(&mut OpArg) -> R) -> R {
+        let mut arg = OpArg::clone(&self.read());
         let result = operator(&mut arg);
-        *self = arg;
+        *self.edit() = arg;
         result
     }
 }

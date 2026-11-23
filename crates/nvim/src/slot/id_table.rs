@@ -8,10 +8,13 @@
 //!   every time the slot is emptied, so an id kept past its value resolves
 //!   to a panic rather than to freed memory or to the next tenant;
 //! - the values live in a [`SlotPool`]: each in a slot that is never moved
-//!   and never given back to the allocator, so the value's address is fixed
-//!   and a [`SlotRef`] to it ([`IdTable::view`]) checks the slot's
-//!   generation at every dereference -- a view kept past its value panics
-//!   instead of reading freed memory;
+//!   and never given back to the allocator, so the value's address is fixed;
+//! - an [`IdTable`] lends a value only through `&mut` of itself
+//!   ([`IdTable::get_mut`]) and hands out no handle; a [`ViewTable`] hands
+//!   out handles ([`ViewTable::view`], a [`SlotRef`] that checks the slot's
+//!   generation and lends only through counted guards) and has no
+//!   `get_mut` -- one table never does both, so the uncounted borrow and a
+//!   guard can never meet;
 //! - emptying a slot drops nothing of the value unless the owner asks for
 //!   it back ([`IdTable::remove`]): the editor gives back what such an
 //!   object holds by hand.
@@ -35,8 +38,8 @@ use core::fmt;
 use core::marker::PhantomData;
 use core::num::NonZeroU32;
 
-use crate::slot::SlotPool;
-pub(crate) use crate::slot::{Detached, SlotRef};
+use super::SlotPool;
+pub(crate) use super::{Detached, SlotRef};
 
 /// A value's place in a [`IdTable<T>`] (or an [`RcTable<T>`]).
 pub(crate) struct TableId<T> {
@@ -155,14 +158,54 @@ impl<T> IdTable<T> {
         let r = self.live(id);
         self.pool.get_mut(r)
     }
+}
+
+/// Values of type `T`, owned at fixed addresses, named by [`TableId`], and
+/// reached through handles: [`IdTable`]'s sibling for values read from
+/// wherever user code runs (a quickfix stack, a normal-mode frame's
+/// operator). A [`ViewTable::view`] is a [`SlotRef`], which lends its value
+/// only through counted guards; there is no `get_mut`.
+#[derive(Debug)]
+pub(crate) struct ViewTable<T> {
+    table: IdTable<T>,
+}
+
+impl<T> ViewTable<T> {
+    /// An empty table.
+    pub(crate) const fn new() -> Self {
+        ViewTable {
+            table: IdTable::new(),
+        }
+    }
+
+    /// Take ownership of `value`, answering its id.
+    pub(crate) fn insert(&mut self, value: T) -> TableId<T> {
+        self.table.insert(value).0
+    }
+
+    /// Empty `id`'s slot, dropping nothing of the value.
+    ///
+    /// # Panics
+    /// When `id`'s value is gone already, or a guard of it is out.
+    pub(crate) fn free(&mut self, id: TableId<T>) {
+        self.table.free(id);
+    }
+
+    /// Empty `id`'s slot and hand its value back.
+    ///
+    /// # Panics
+    /// When `id`'s value is gone already, or a guard of it is out.
+    pub(crate) fn remove(&mut self, id: TableId<T>) -> T {
+        self.table.remove(id)
+    }
 
     /// A view of `id`'s value: a handle that may be held across code that
-    /// empties the slot, and panics at its next dereference if it was.
+    /// empties the slot, and panics at its next use if it was.
     ///
     /// # Panics
     /// When `id`'s value is gone.
     pub(crate) fn view(&self, id: TableId<T>) -> SlotRef<T> {
-        self.live(id)
+        self.table.live(id)
     }
 }
 
@@ -284,9 +327,9 @@ mod tests {
         let (a, pa) = table.insert(10);
         let (b, _) = table.insert(20);
         assert_ne!(a, b);
-        assert_eq!(table.view(a).raw(), pa);
+        assert_eq!(table.live(a).raw(), pa);
         assert_eq!(*table.get_mut(b), 20);
-        let view = table.view(a);
+        let view = table.live(a);
         table.free(a);
         assert!(!view.is_live());
         // The slot is reused, under a new generation.
@@ -304,7 +347,7 @@ mod tests {
         let (a, _) = table.insert(1);
         table.free(a);
         let _ = table.insert(2);
-        let _ = table.view(a);
+        let _ = table.live(a);
     }
 
     #[test]
@@ -315,8 +358,27 @@ mod tests {
         value.clear();
         let b = table.attach(value);
         assert_ne!(a, b);
-        assert_eq!(table.view(b).raw(), pa);
+        assert_eq!(table.live(b).raw(), pa);
         let value = table.detach(b);
         assert!(table.release(value).is_empty());
+    }
+
+    #[test]
+    fn a_view_lends_through_counted_guards() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+        static TABLE: crate::global_cell::GlobalCell<ViewTable<u64>> =
+            crate::global_cell::GlobalCell::new(ViewTable::new());
+        let id = TABLE.with_mut(|table| table.insert(1));
+        let view = TABLE.with(|table| table.view(id));
+        let copy = view;
+        *view.edit() += 1;
+        let read = copy.read();
+        assert_eq!(*read, 2);
+        assert!(catch_unwind(AssertUnwindSafe(|| drop(view.edit()))).is_err());
+        let refused = TABLE.with_mut(|t| catch_unwind(AssertUnwindSafe(|| t.remove(id))));
+        assert!(refused.is_err(), "emptied under a read");
+        drop(read);
+        assert_eq!(TABLE.with_mut(|table| table.remove(id)), 2);
+        assert!(catch_unwind(AssertUnwindSafe(|| drop(copy.read()))).is_err());
     }
 }

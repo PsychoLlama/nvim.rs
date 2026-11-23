@@ -65,7 +65,7 @@ pub(crate) fn nv_search(cmd_arg: &mut CmdArg) {
     let op = cmd_arg.op();
     let save_cursor = Win::current().w_cursor();
     // `g?` is rot13; `?` after it is the operator, not a search.
-    if cmd_arg.cmdchar.is('?') && op.op_type == OpType::Rot13 {
+    if cmd_arg.cmdchar.is('?') && op.op_type() == OpType::Rot13 {
         cmd_arg.cmdchar = Key::ascii(b'g');
         cmd_arg.nchar = Key::ascii(b'?');
         nv_operator(cmd_arg);
@@ -130,17 +130,25 @@ pub(crate) fn normal_search(
 ) -> Option<Hit> {
     let mut sia = SearchItArg::default();
     let prev_cursor = Win::current().w_cursor();
-    let mut op = cmd_arg.op();
-    op.motion_type = MotionType::CharWise;
-    op.inclusive = false;
+    let op = cmd_arg.op();
+    op.edit().motion_type = MotionType::CharWise;
+    op.edit().inclusive = false;
     // A search is one of the motions that fills the "1 last change"
     // register rather than the small-delete one.
-    op.use_reg_one = true;
+    op.edit().use_reg_one = true;
     Win::current().set_w_set_curswant(true);
 
     let flags = opt | SEARCH_OPT as c_int | SEARCH_ECHO as c_int | SEARCH_MSG as c_int;
     let n = cmd_arg.count1;
-    let i = do_search(Some(&mut *op), dir, dir, pat, n, flags, Some(&mut sia));
+    let i = do_search(
+        Some(&mut *op.edit()),
+        dir,
+        dir,
+        pat,
+        n,
+        flags,
+        Some(&mut sia),
+    );
     if let Some(wrapped) = wrapped {
         *wrapped = sia.sa_wrapped;
     }
@@ -148,10 +156,10 @@ pub(crate) fn normal_search(
     if let Some(hit) = i {
         // A `/pat/+1`-style offset makes the motion linewise.
         if hit == Hit::Linewise {
-            op.motion_type = MotionType::LineWise;
+            op.edit().motion_type = MotionType::LineWise;
         }
         Win::current().cursor().set_coladd(0);
-        if op.op_type == OpType::Nop
+        if op.op_type() == OpType::Nop
             && FDO_FLAGS.get() & OPT_FDO_FLAG_SEARCH != 0
             && KEY_TYPED.get()
         {
@@ -197,15 +205,15 @@ pub(crate) fn nv_mark_move_to(
     }
     // `'a` is linewise, `` `a `` is charwise -- and only the charwise form
     // fills the "1 last change" register.
-    cmd_arg.op().motion_type = if flags & MARK_BEGIN_LINE as MarkMove != 0 {
+    cmd_arg.op().edit().motion_type = if flags & MARK_BEGIN_LINE as MarkMove != 0 {
         MotionType::LineWise
     } else {
         MotionType::CharWise
     };
     if cmd_arg.cmdchar.is('`') {
-        cmd_arg.op().use_reg_one = true;
+        cmd_arg.op().edit().use_reg_one = true;
     }
-    cmd_arg.op().inclusive = false;
+    cmd_arg.op().edit().inclusive = false;
     Win::current().set_w_set_curswant(true);
     res
 }
@@ -225,7 +233,7 @@ fn view_flag() -> MarkMove {
 /// `old_KeyTyped` rather than the current value: the jump itself may have
 /// consumed the "typed" flag.
 fn may_open_fold(cmd_arg: &mut CmdArg, moved: bool, old_key_typed: bool) {
-    if cmd_arg.op().op_type == OpType::Nop
+    if cmd_arg.op().op_type() == OpType::Nop
         && moved
         && FDO_FLAGS.get() & OPT_FDO_FLAG_MARK != 0
         && old_key_typed
@@ -237,7 +245,7 @@ fn may_open_fold(cmd_arg: &mut CmdArg, moved: bool, old_key_typed: bool) {
 /// `'` and `` ` ``, and their `g` forms.
 pub(crate) fn nv_gomark(cmd_arg: &mut CmdArg) {
     // A mark used as an operator's motion must not restore the view.
-    let mut flags = if cmd_arg.op().op_type != OpType::Nop {
+    let mut flags = if cmd_arg.op().op_type() != OpType::Nop {
         0
     } else {
         view_flag()

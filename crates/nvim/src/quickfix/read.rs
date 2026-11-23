@@ -416,7 +416,7 @@ pub(crate) fn qf_init(
     };
     qf_init_ext(
         qi,
-        qi.current,
+        qi.current(),
         Input::File(efile),
         Some(Buf::current()),
         errorformat,
@@ -457,7 +457,7 @@ static EFM_CACHE: GlobalCell<Option<(Vec<u8>, Efm)>> = GlobalCell::new(None);
 /// the answer is a [`NotRead`], which carries nothing more to say.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn qf_init_ext(
-    mut qi: Qi,
+    qi: Qi,
     mut qf_idx: c_int,
     input: Input,
     efm_buf: Option<Buf>,
@@ -479,17 +479,17 @@ pub(crate) fn qf_init_ext(
         }
         Ok(mut reader) => {
             let mut adding = false;
-            let qfl = if newlist || qf_idx == qi.list_count {
+            let qfl = if newlist || qf_idx == qi.list_count() {
                 // Make place for a new list.
                 qf_new_list(qi, qf_title);
-                qf_idx = qi.current;
+                qf_idx = qi.current();
                 qi.slot(qf_idx)
             } else {
                 // Adding to an existing list; remember its last entry.
                 adding = true;
                 let qfl = qi.slot(qf_idx);
                 if !qfl.is_empty() {
-                    old_last = Some(qfl.entries.len() - 1);
+                    old_last = Some(qfl.read().entries.len() - 1);
                 }
                 qfl
             };
@@ -533,9 +533,9 @@ pub(crate) fn qf_init_ext(
                     if !adding {
                         // The new list came to nothing; free it again.
                         qf_free(qfl);
-                        qi.list_count -= 1;
-                        if qi.current > 0 {
-                            qi.current -= 1;
+                        qi.edit().list_count -= 1;
+                        if qi.current() > 0 {
+                            qi.edit().current -= 1;
                         }
                     }
                     Err(NotRead)
@@ -544,7 +544,7 @@ pub(crate) fn qf_init_ext(
         }
     };
 
-    if qf_idx == qi.current {
+    if qf_idx == qi.current() {
         qf_update_buffer(qi, old_last);
     }
     read
@@ -553,7 +553,7 @@ pub(crate) fn qf_init_ext(
 /// Read every line the reader has and add an entry for each one the parser
 /// accepts. A read error, or a line the parser rejected outright, means
 /// the list was not built.
-fn read_lines(mut qfl: Qfl, reader: &mut Reader, efm: &mut Efm) -> Result<(), QfError> {
+fn read_lines(qfl: Qfl, reader: &mut Reader, efm: &mut Efm) -> Result<(), QfError> {
     let mut fields = Fields::new();
     // `GOT_INT` is reset here because it was probably set when killing the
     // ":make" command, and the error file should still be read.
@@ -580,13 +580,13 @@ fn read_lines(mut qfl: Qfl, reader: &mut Reader, efm: &mut Efm) -> Result<(), Qf
     if reader.had_error() {
         return Err(QfError::ReadError);
     }
-    if qfl.index == 0 {
+    if qfl.index() == 0 {
         // No valid entry was found.
-        qfl.cursor = 0;
-        qfl.index = 1;
-        qfl.no_valid = true;
+        qfl.edit().cursor = 0;
+        qfl.edit().index = 1;
+        qfl.edit().no_valid = true;
     } else {
-        qfl.no_valid = false;
+        qfl.edit().no_valid = false;
     }
     Ok(())
 }

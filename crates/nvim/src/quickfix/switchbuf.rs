@@ -74,7 +74,7 @@ pub(crate) fn jump_to_help_window(
     }
     // A new window asked for by the user gets its own copy of the
     // location list; otherwise it shares this one.
-    let share_loclist = qi.kind == QFLT_LOCATION && !newwin;
+    let share_loclist = qi.kind() == QFLT_LOCATION && !newwin;
     if share_loclist {
         flags |= WSP_NEWLOC;
     }

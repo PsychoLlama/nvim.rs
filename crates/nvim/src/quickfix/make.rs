@@ -149,11 +149,11 @@ pub fn ex_make(excmd: &mut ExArg) {
     // which case there is nothing left to do but clean up.
     if let Some(qi) = stack_of(wp) {
         if res.is_ok() {
-            qi.current_slot().changed();
+            qi.current_slot().edit().changed();
         }
         // Remember the current quickfix list identifier, so that a
         // QuickFixCmdPost autocommand changing the list is noticed.
-        let save_qfid = qi.current_list().id;
+        let save_qfid = qi.read().current_list().id;
         if let Some(name) = au_name {
             fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
         }

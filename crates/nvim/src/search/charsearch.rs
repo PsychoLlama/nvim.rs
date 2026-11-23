@@ -154,7 +154,7 @@ pub(crate) fn searchc(cmd_arg: &mut CmdArg, t_cmd: bool) -> Result<(), NoMatch> 
         }
     }
 
-    cmd_arg.op().inclusive = dir != BACKWARD as c_int;
+    cmd_arg.op().edit().inclusive = dir != BACKWARD as c_int;
 
     let mut lines = Lines::current();
     let line = lines.line(Win::current().cursor().lnum());

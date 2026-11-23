@@ -344,6 +344,14 @@ impl<'a, T> SlotEdit<'a, T> {
 }
 
 impl<'a, T> SlotRead<'a, T> {
+    /// Narrow the read to one part of the value: the part stays counted as
+    /// the whole.
+    #[inline(always)]
+    pub(crate) fn map<U: ?Sized>(self, part: impl FnOnce(&T) -> &U) -> ReadPart<'a, T, U> {
+        let part = NonNull::from(part(&self));
+        ReadPart { _read: self, part }
+    }
+
     /// Narrow the read to one part of the value, when it has one: the part
     /// stays counted as the whole; `None` lets the read go.
     #[inline(always)]
@@ -434,7 +442,7 @@ mod tests {
             let mut edit = edit_of(a);
             edit.push(2);
             assert!(copy.is_live(), "lent out, not gone");
-            assert!(catch_unwind(AssertUnwindSafe(|| copy.len())).is_err());
+            assert!(catch_unwind(AssertUnwindSafe(|| copy.read().len())).is_err());
             assert!(catch_unwind(AssertUnwindSafe(|| drop(edit_of(a)))).is_err());
             assert!(catch_unwind(AssertUnwindSafe(|| drop(read_of(a)))).is_err());
             assert!(catch_unwind(AssertUnwindSafe(|| write_check_of(a))).is_err());
@@ -442,7 +450,7 @@ mod tests {
             assert_eq!(unsafe { generation_at(a.raw()) }, a.generation());
             edit.push(3);
         }
-        assert_eq!(*copy, [1, 2, 3]);
+        assert_eq!(*copy.read(), [1, 2, 3]);
         drop(POOL.with_mut(|pool| pool.remove(a)));
     }
 
@@ -453,7 +461,7 @@ mod tests {
         let a = POOL.with_mut(|pool| pool.insert(vec![4]));
         let first = read_of(a);
         let second = read_of(a);
-        assert_eq!((first[0], second[0], a[0]), (4, 4, 4));
+        assert_eq!((first[0], second[0], a.read()[0]), (4, 4, 4));
         assert!(catch_unwind(AssertUnwindSafe(|| drop(edit_of(a)))).is_err());
         assert!(catch_unwind(AssertUnwindSafe(|| write_check_of(a))).is_err());
         POOL.with_mut(|pool| {
@@ -463,7 +471,7 @@ mod tests {
         assert!(catch_unwind(AssertUnwindSafe(|| write_check_of(a))).is_err());
         drop(second);
         edit_of(a).push(5);
-        assert_eq!(*a, [4, 5]);
+        assert_eq!(*a.read(), [4, 5]);
         drop(POOL.with_mut(|pool| pool.remove(a)));
     }
 
@@ -504,7 +512,7 @@ mod tests {
         part.push(3);
         // The rest of the value reads on, guard or no guard.
         let read = read_of(a);
-        assert_eq!((read.head, a.head), (1, 1));
+        assert_eq!((read.head, a.read().head), (1, 1));
         assert!(catch_unwind(AssertUnwindSafe(|| drop(part_of(a)))).is_err());
         assert!(catch_unwind(AssertUnwindSafe(|| part_check_of(a))).is_err());
         assert!(catch_unwind(AssertUnwindSafe(|| drop(edit_of(a)))).is_err());
@@ -551,7 +559,7 @@ mod tests {
         edit_of(a).head = 10;
         write_check_of(b);
         part_of(c).push(5);
-        assert_eq!((a.head, b.head), (10, 2));
+        assert_eq!((a.read().head, b.read().head), (10, 2));
         assert_eq!(*edit_of(c).part.get_mut(), [5]);
         POOL.with_mut(|pool| {
             for r in [a, b, c] {

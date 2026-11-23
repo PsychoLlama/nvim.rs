@@ -62,8 +62,8 @@ const POUND_BYTE: u8 = 0xa3;
 pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
     let win = Win::current();
     let to_first_non_blank = cmd_arg.nchar.is('^');
-    cmd_arg.op().motion_type = MotionType::CharWise;
-    cmd_arg.op().inclusive = false;
+    cmd_arg.op().edit().motion_type = MotionType::CharWise;
+    cmd_arg.op().edit().inclusive = false;
     let mut i;
     if win.wo_wrap() != 0 && win.w_view_width() != 0 {
         // A wrapped line's first screen row can be narrower than the rest,
@@ -115,10 +115,10 @@ pub(crate) fn nv_g_home_m_cmd(cmd_arg: &mut CmdArg) {
 /// `g_`: the last non-blank of the line, `count1 - 1` lines down.
 pub(crate) fn nv_g_underscore_cmd(cmd_arg: &mut CmdArg) {
     let win = Win::current();
-    cmd_arg.op().motion_type = MotionType::CharWise;
-    cmd_arg.op().inclusive = true;
+    cmd_arg.op().edit().motion_type = MotionType::CharWise;
+    cmd_arg.op().edit().inclusive = true;
     win.set_w_curswant(ColNr::MAX);
-    if cursor_down(cmd_arg.count1 - 1, cmd_arg.op().op_type == OpType::Nop).is_err() {
+    if cursor_down(cmd_arg.count1 - 1, cmd_arg.op().op_type() == OpType::Nop).is_err() {
         clear_op_beep(cmd_arg.op());
         return;
     }
@@ -141,12 +141,12 @@ pub(crate) fn nv_g_underscore_cmd(cmd_arg: &mut CmdArg) {
 /// `g$` and `g<End>`: the end of the *screen* line.
 pub(crate) fn nv_g_dollar_cmd(cmd_arg: &mut CmdArg) {
     let win = Win::current();
-    let mut op = cmd_arg.op();
+    let op = cmd_arg.op();
     let col_off = win.col_off();
     // `<End>` also skips back over trailing white space.
     let to_last_non_blank = cmd_arg.nchar == SpecialKey::End || cmd_arg.nchar == SpecialKey::Kend;
-    op.motion_type = MotionType::CharWise;
-    op.inclusive = true;
+    op.edit().motion_type = MotionType::CharWise;
+    op.edit().inclusive = true;
     if win.wo_wrap() != 0 && win.w_view_width() != 0 {
         win.set_w_curswant(ColNr::MAX);
         if cmd_arg.count1 == 1 {
@@ -223,10 +223,10 @@ fn nv_g_select(cmd_arg: &mut CmdArg) {
 /// `gj` and `gk`: down and up by *screen* line -- which is the plain line move
 /// when 'wrap' is off.
 fn nv_g_screen_line(cmd_arg: &mut CmdArg, dir: c_int) {
-    let mut op = cmd_arg.op();
+    let op = cmd_arg.op();
     let moved = if Win::current().wo_wrap() == 0 {
-        op.motion_type = MotionType::LineWise;
-        let stop_at_end = op.op_type == OpType::Nop;
+        op.edit().motion_type = MotionType::LineWise;
+        let stop_at_end = op.op_type() == OpType::Nop;
         if dir == FORWARD as c_int {
             cursor_down(cmd_arg.count1, stop_at_end).is_ok()
         } else {
@@ -285,7 +285,7 @@ fn nv_g_key(cmd_arg: &mut CmdArg, nchar: Key) -> bool {
 
 /// `g`, whose second character says what the command is.
 pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
-    let mut op = cmd_arg.op();
+    let op = cmd_arg.op();
     let nchar = cmd_arg.nchar;
     if nv_g_key(cmd_arg, nchar) {
         return;
@@ -337,8 +337,8 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         // `gM`: the middle of the line by *text* width, or the count'th
         // percentage of it.
         Some(b'M') => {
-            op.motion_type = MotionType::CharWise;
-            op.inclusive = false;
+            op.edit().motion_type = MotionType::CharWise;
+            op.edit().inclusive = false;
             let width = linetabsize(Win::current(), Win::current().cursor().lnum());
             if cmd_arg.count0 > 0 && cmd_arg.count0 <= 100 {
                 coladvance(Win::current(), ColNr::new(width * cmd_arg.count0 / 100));
@@ -354,9 +354,9 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         Some(b'*' | b'#' | POUND_BYTE | CTRL_RSB | b']') => nv_ident(cmd_arg),
         // `ge`/`gE`: back to the end of the previous word.
         Some(b'e' | b'E') => {
-            op.motion_type = MotionType::CharWise;
+            op.edit().motion_type = MotionType::CharWise;
             Win::current().set_w_set_curswant(true);
-            op.inclusive = true;
+            op.edit().inclusive = true;
             if bckend_word(cmd_arg.count1, nchar.is('E'), false).is_err() {
                 clear_op_beep(op);
             }
@@ -401,7 +401,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         // `gq` and `gw` both format; `gw` returns the cursor to where it
         // was, which is what the remembered position is for.
         Some(b'q' | b'w') => {
-            op.cursor_start = Win::current().w_cursor();
+            op.edit().cursor_start = Win::current().w_cursor();
             nv_operator(cmd_arg);
         }
         // The rest of the two-character operators: `g~ gu gU g? g@`.
@@ -412,7 +412,7 @@ pub(crate) fn nv_g_cmd(cmd_arg: &mut CmdArg) {
         Some(b'p' | b'P') => nv_put(cmd_arg),
         // `go`: to a byte offset in the buffer.
         Some(b'o') => {
-            op.inclusive = false;
+            op.edit().inclusive = false;
             goto_byte(cmd_arg.count0);
         }
         // `gQ`: Ex mode.

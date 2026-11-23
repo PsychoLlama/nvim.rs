@@ -90,7 +90,7 @@ pub(crate) fn nv_at(cmd_arg: &mut CmdArg) {
 /// `u`: undo, or the `gu` operator when one is already pending or a Visual
 /// selection is up.
 pub(crate) fn nv_undo(cmd_arg: &mut CmdArg) {
-    if cmd_arg.op().op_type == OpType::Lower || visual_active() {
+    if cmd_arg.op().op_type() == OpType::Lower || visual_active() {
         as_g_operator(cmd_arg, b'u');
     } else {
         nv_kundo(cmd_arg);
@@ -108,7 +108,7 @@ pub(crate) fn nv_kundo(cmd_arg: &mut CmdArg) {
 
 /// `U`: undo the whole line, or the `gU` operator.
 pub(crate) fn nv_undo_line(cmd_arg: &mut CmdArg) {
-    if cmd_arg.op().op_type == OpType::Upper || visual_active() {
+    if cmd_arg.op().op_type() == OpType::Upper || visual_active() {
         as_g_operator(cmd_arg, b'U');
         return;
     }
@@ -131,10 +131,10 @@ pub(crate) fn nv_regname(cmd_arg: &mut CmdArg) {
     if let Some(regname) =
         register_name(cmd_arg.nchar).filter(|&name| name != 0 && name.is_valid(false))
     {
-        cmd_arg.op().regname = regname;
+        cmd_arg.op().edit().regname = regname;
         // The count so far belongs to the command, not to the `"`.
         cmd_arg.opcount = cmd_arg.count0;
-        set_reg_var((cmd_arg.op().regname).byte());
+        set_reg_var((cmd_arg.op().regname()).byte());
     } else {
         clear_op_beep(cmd_arg.op());
     }
@@ -188,11 +188,11 @@ pub(crate) fn nv_operator(cmd_arg: &mut CmdArg) {
         clear_op_beep(cmd_arg.op());
         return;
     }
-    if op_type == cmd_arg.op().op_type {
+    if op_type == cmd_arg.op().op_type() {
         nv_lineop(cmd_arg);
     } else if !check_clear_op(cmd_arg.op()) {
-        cmd_arg.op().start = Win::current().w_cursor();
-        cmd_arg.op().op_type = op_type;
+        cmd_arg.op().edit().start = Win::current().w_cursor();
+        cmd_arg.op().edit().op_type = op_type;
         set_op_var(op_type);
     }
 }
@@ -213,20 +213,20 @@ pub(crate) fn set_op_var(optype: OpType) {
 
 /// The linewise form of an operator: `count1` lines from this one.
 pub(crate) fn nv_lineop(cmd_arg: &mut CmdArg) {
-    cmd_arg.op().motion_type = MotionType::LineWise;
+    cmd_arg.op().edit().motion_type = MotionType::LineWise;
     let op = cmd_arg.op();
-    if cursor_down(cmd_arg.count1 - 1, op.op_type == OpType::Nop).is_err() {
+    if cursor_down(cmd_arg.count1 - 1, op.op_type() == OpType::Nop).is_err() {
         clear_op_beep(op);
-    } else if (op.op_type == OpType::Delete
-        && !op.motion_force.is('v')
-        && op.motion_force != Key::CTRL_V)
-        || op.op_type == OpType::Lshift
-        || op.op_type == OpType::Rshift
+    } else if (op.op_type() == OpType::Delete
+        && !op.motion_force().is('v')
+        && op.motion_force() != Key::CTRL_V)
+        || op.op_type() == OpType::Lshift
+        || op.op_type() == OpType::Rshift
     {
         // A delete or a shift leaves the cursor at the start of the line,
         // on the first non-blank only if 'startofline' says so.
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
-    } else if op.op_type != OpType::Yank {
+    } else if op.op_type() != OpType::Yank {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     }
 }
@@ -234,7 +234,7 @@ pub(crate) fn nv_lineop(cmd_arg: &mut CmdArg) {
 /// `q`: start or stop a recording -- or open the command-line window, or the
 /// `gq` operator when that is what is pending.
 pub(crate) fn nv_record(cmd_arg: &mut CmdArg) {
-    if cmd_arg.op().op_type == OpType::Format {
+    if cmd_arg.op().op_type() == OpType::Format {
         as_g_operator(cmd_arg, b'q');
         return;
     }

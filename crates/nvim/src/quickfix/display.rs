@@ -194,7 +194,7 @@ pub fn qf_list(excmd: &mut ExArg) {
     let Some(qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
-    if qi.is_empty() || qi.current_list().is_empty() {
+    if qi.is_empty() || qi.read().current_list().is_empty() {
         qf_emsg(E_NO_ERRORS);
         return;
     }
@@ -211,8 +211,8 @@ pub fn qf_list(excmd: &mut ExArg) {
     };
     let qfl = qi.current_slot();
     if plus {
-        idx2 = qfl.index + idx1;
-        idx1 = qfl.index;
+        idx2 = qfl.index() + idx1;
+        idx1 = qfl.index();
     } else {
         let count = qfl.count();
         if idx1 < 0 {
@@ -242,18 +242,19 @@ pub fn qf_list(excmd: &mut ExArg) {
 
     // Without "!" only recognised entries are listed — unless none of
     // them is recognised, when they all are.
-    let all = excmd.forceit || qfl.no_valid;
+    let all = excmd.forceit || qfl.no_valid();
     msg_ext_set_kind(c"list_cmd");
     let mut i: c_int = 1;
     while !GOT_INT.get() {
         // Re-found every time round: printing and the break check can
         // both run user code, which may have changed the list.
         let wanted = {
-            let Some(entry) = qfl.nth(i) else {
+            let list = qfl.read();
+            let Some(entry) = list.nth(i) else {
                 break;
             };
             ((entry.valid || all) && idx1 <= i && i <= idx2)
-                .then(|| (Listed::of(entry), i == qfl.index))
+                .then(|| (Listed::of(entry), i == list.index))
         };
         if let Some((listed, current)) = wanted {
             qf_list_entry(&listed, i, current);
@@ -319,7 +320,7 @@ fn decimal(text: &[u8]) -> (Option<c_int>, usize) {
 fn qf_msg(qi: Qi, which: c_int, lead: &str) {
     let (listcount, count, title) = {
         let qfl = qi.slot(which);
-        (qi.list_count, qfl.count(), qfl.title.clone())
+        (qi.list_count(), qfl.count(), qfl.read().title.clone())
     };
     let mut line = tr!(
         "{}error list {} of {}; {} errors ",
@@ -344,7 +345,7 @@ fn qf_msg(qi: Qi, which: c_int, lead: &str) {
 
 /// `:colder`/`:cnewer`/`:lolder`/`:lnewer`: move up or down the stack.
 pub fn qf_age(excmd: &mut ExArg) {
-    let Some(mut qi) = stack_for_cmd(excmd.cmdidx, true) else {
+    let Some(qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
     let count = if excmd.addr_count != 0 {
@@ -355,20 +356,20 @@ pub fn qf_age(excmd: &mut ExArg) {
     let older = excmd.cmdidx == CmdIdx::colder || excmd.cmdidx == CmdIdx::lolder;
     for _ in 0..count {
         if older {
-            if qi.current == 0 {
+            if qi.current() == 0 {
                 qf_emsg(c"E380: At bottom of quickfix stack");
                 break;
             }
-            qi.current -= 1;
+            qi.edit().current -= 1;
         } else {
-            if qi.current >= qi.list_count - 1 {
+            if qi.current() >= qi.list_count() - 1 {
                 qf_emsg(c"E381: At top of quickfix stack");
                 break;
             }
-            qi.current += 1;
+            qi.edit().current += 1;
         }
     }
-    qf_msg(qi, qi.current, "");
+    qf_msg(qi, qi.current(), "");
     qf_update_buffer(qi, None);
 }
 
@@ -379,9 +380,9 @@ pub fn qf_history(excmd: &mut ExArg) {
     if excmd.addr_count > 0 {
         match stack {
             None => qf_emsg(E_LOCLIST),
-            Some(mut qi) if excmd.number2 > 0 && excmd.number2 <= qi.list_count => {
-                qi.current = excmd.number2 - 1;
-                qf_msg(qi, qi.current, "");
+            Some(qi) if excmd.number2 > 0 && excmd.number2 <= qi.list_count() => {
+                qi.edit().current = excmd.number2 - 1;
+                qf_msg(qi, qi.current(), "");
                 qf_update_buffer(qi, None);
             }
             Some(_) => qf_emsg(E_INVRANGE),
@@ -394,8 +395,8 @@ pub fn qf_history(excmd: &mut ExArg) {
             msg(gettext(c"No entries"), 0);
         }
         Some(qi) => {
-            for i in 0..qi.list_count {
-                let lead = if i == qi.current { "> " } else { "  " };
+            for i in 0..qi.list_count() {
+                let lead = if i == qi.current() { "> " } else { "  " };
                 qf_msg(qi, i, lead);
             }
         }
@@ -451,7 +452,7 @@ pub fn qf_view_result(split: bool) {
     } else {
         Qi::global()
     };
-    if qi.current_list().is_empty() {
+    if qi.read().current_list().is_empty() {
         qf_emsg(E_NO_ERRORS);
         return;
     }

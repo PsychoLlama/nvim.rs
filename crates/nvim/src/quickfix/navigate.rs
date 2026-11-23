@@ -55,7 +55,7 @@ pub fn ex_cc(excmd: &mut ExArg) {
             1
         };
         let per_file = matches!(excmd.cmdidx, CmdIdx::cfdo | CmdIdx::lfdo);
-        let valid_entry = qf_get_nth_valid_entry(qi.current_list(), n, per_file);
+        let valid_entry = qf_get_nth_valid_entry(qi.read().current_list(), n, per_file);
         errornr = c_int::try_from(valid_entry).expect("a quickfix list is shorter than INT_MAX");
     }
 
@@ -313,7 +313,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
     let Some(qi) = stack_for_cmd(excmd.cmdidx, true) else {
         return;
     };
-    if !qi.current_list().has_valid_entries() {
+    if !qi.read().current_list().has_valid_entries() {
         qf_emsg(E_NO_ERRORS);
         return;
     }
@@ -340,7 +340,7 @@ pub fn ex_cbelow(excmd: &mut ExArg) {
         0
     };
     let errornr = Adjacent {
-        entries: &qi.current_list().entries,
+        entries: &qi.read().current_list().entries,
         bnr: Some(Buf::current().handle()),
         pos,
         linewise,

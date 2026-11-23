@@ -40,24 +40,27 @@ pub(crate) fn emsg_list_changed(kind: QfListType) {
 /// Lists newer than the current one are dropped first, so that `:colder`
 /// followed by a fresh `:grep` browses like a tree rather than growing a
 /// second branch. When the stack is full the oldest list goes instead.
-pub(crate) fn qf_new_list(mut qi: Qi, title: Option<&CStr>) {
-    while qi.list_count > qi.current + 1 {
-        qi.list_count -= 1;
-        qf_free(qi.slot(qi.list_count));
+pub(crate) fn qf_new_list(qi: Qi, title: Option<&CStr>) {
+    while qi.list_count() > qi.current() + 1 {
+        qi.edit().list_count -= 1;
+        let last = qi.list_count();
+        qf_free(qi.slot(last));
     }
-    if qi.list_count == qi.max_count() {
+    if qi.list_count() == qi.max_count() {
         pop_stack(qi, false);
-        qi.current = qi.list_count - 1;
+        let value = qi.list_count() - 1;
+        qi.edit().current = value;
     } else {
-        qi.current = qi.list_count;
-        qi.list_count += 1;
+        let value = qi.list_count();
+        qi.edit().current = value;
+        qi.edit().list_count += 1;
     }
-    let kind = qi.kind;
-    let mut qfl = qi.current_slot();
-    *qfl = QfList::new();
-    qfl.title = title.map(XString::from_cstr);
-    qfl.kind = kind;
-    qfl.id = next_list_id();
+    let kind = qi.kind();
+    let qfl = qi.current_slot();
+    *qfl.edit() = QfList::new();
+    qfl.edit().title = title.map(XString::from_cstr);
+    qfl.edit().kind = kind;
+    qfl.edit().id = next_list_id();
 }
 
 /// Everything one new entry is made of.
@@ -176,9 +179,9 @@ pub(crate) fn has_entry_flag(kind: QfListType) -> c_int {
 /// Naming the file lists a buffer, which fires `BufNew`; everything the
 /// entry is made of is copied first, and the list is written only once that
 /// is over.
-pub(crate) fn qf_add_entry(mut qfl: Qfl, new: &NewEntry) {
+pub(crate) fn qf_add_entry(qfl: Qfl, new: &NewEntry) {
     let mut entry = new.to_entry();
-    let flag = has_entry_flag(qfl.kind);
+    let flag = has_entry_flag(qfl.kind());
     let buf = if new.bufnum.is_some() {
         entry.fnum = new.bufnum;
         let buf = find_buf(new.bufnum);
@@ -206,16 +209,18 @@ pub(crate) fn qf_add_entry(mut qfl: Qfl, new: &NewEntry) {
         .is_some_and(|data| data.v_type() != VAR_UNKNOWN);
     let valid = entry.valid;
     if qfl.is_empty() {
-        qfl.cursor = 0;
-        qfl.index = 0;
+        qfl.edit().cursor = 0;
+        qfl.edit().index = 0;
     }
-    qfl.entries.push(entry);
+    qfl.edit().entries.push(entry);
     if has_user_data {
-        qfl.has_user_data = true;
+        qfl.edit().has_user_data = true;
     }
-    if qfl.index == 0 && valid {
-        qfl.index = qfl.count();
-        qfl.cursor = qfl.entries.len() - 1;
+    if qfl.index() == 0 && valid {
+        let value = qfl.count();
+        qfl.edit().index = value;
+        let value = qfl.read().entries.len() - 1;
+        qfl.edit().cursor = value;
     }
 }
 
@@ -296,10 +301,10 @@ pub(crate) fn qf_free_items(qfl: &mut QfList) {
 
 /// Free a list: its entries, its title and its context. What kind of list
 /// the slot held is kept, for a command that reports the list went away.
-pub(crate) fn qf_free(mut qfl: Qfl) {
-    let kind = qfl.kind;
-    let old = core::mem::take(&mut *qfl);
-    qfl.kind = kind;
+pub(crate) fn qf_free(qfl: Qfl) {
+    let kind = qfl.kind();
+    let old = core::mem::take(&mut *qfl.edit());
+    qfl.edit().kind = kind;
     drop(old);
 }
 
@@ -342,7 +347,7 @@ fn adjust_entries(
     amount: i32,
     amount_after: i32,
 ) -> bool {
-    let mut qi = match window {
+    let qi = match window {
         None => Qi::global(),
         Some(wp) => match wp.w_llist() {
             Some(id) => id.stack(),
@@ -351,7 +356,8 @@ fn adjust_entries(
     };
 
     // Nothing below can run user code, so the stack is borrowed whole.
-    let stack: &mut QfStack = &mut qi;
+    let mut edit = qi.edit();
+    let stack: &mut QfStack = &mut edit;
     let count = usize::try_from(stack.list_count).unwrap_or(0);
     let mut found_one = false;
     for list in &mut stack.lists[..count] {

@@ -227,17 +227,17 @@ fn qf_add_entries(
     let mut old_last = None;
 
     // Where the list was, so that 'u' can find the nearest entry again.
-    let (prev_fnum, prev_lnum, prev_col) = qfl.current().map_or((0, 0, 0), |entry| {
+    let (prev_fnum, prev_lnum, prev_col) = qfl.read().current().map_or((0, 0, 0), |entry| {
         (Handle::number_of(entry.fnum), entry.lnum.get(), entry.col)
     });
 
     let mut select_first_entry = false;
     let mut select_nearest_entry = false;
-    if action == b' ' || qf_idx == qi.list_count {
+    if action == b' ' || qf_idx == qi.list_count() {
         // Make a new list.
         select_first_entry = true;
         qf_new_list(qi, title);
-        qf_idx = qi.current;
+        qf_idx = qi.current();
         qfl = qi.slot(qf_idx);
     } else if action == b'a' {
         if qfl.is_empty() {
@@ -245,13 +245,13 @@ fn qf_add_entries(
             select_first_entry = true;
         } else {
             // Adding to an existing list, so use the last entry.
-            old_last = Some(qfl.entries.len() - 1);
+            old_last = Some(qfl.read().entries.len() - 1);
         }
     } else if action == b'r' || action == b'u' {
         select_first_entry = action == b'r';
         select_nearest_entry = action == b'u';
-        qf_free_items(&mut qfl);
-        qfl.title = title.map(XString::from_cstr);
+        qf_free_items(&mut qfl.edit());
+        qfl.edit().title = title.map(XString::from_cstr);
     }
 
     let mut valid_entry = false;
@@ -277,13 +277,13 @@ fn qf_add_entries(
                 if qf_add_entry_from_dict(qfl, from, at == 0) {
                     valid_entry = true;
                 }
-                let added = qfl.entries.len() - 1;
+                let added = qfl.read().entries.len() - 1;
                 let wanted = select_first_entry && entry_to_select.is_none()
                     || select_nearest_entry
                         && entry_to_select.is_none_or(|chosen| {
                             entry_is_closer_to_target(
-                                &qfl.entries[added],
-                                &qfl.entries[chosen],
+                                &qfl.read().entries[added],
+                                &qfl.read().entries[chosen],
                                 Handle::from_number(prev_fnum),
                                 LineNr::new(prev_lnum),
                                 prev_col,
@@ -298,13 +298,13 @@ fn qf_add_entries(
     }
 
     if valid_entry {
-        qfl.no_valid = false;
-    } else if qfl.index == 0 {
-        qfl.no_valid = true;
+        qfl.edit().no_valid = false;
+    } else if qfl.index() == 0 {
+        qfl.edit().no_valid = true;
     }
-    if let Some(chosen) = entry_to_select.filter(|&chosen| chosen < qfl.entries.len()) {
-        qfl.cursor = chosen;
-        qfl.index = c_int::try_from(chosen + 1).unwrap_or(c_int::MAX);
+    if let Some(chosen) = entry_to_select.filter(|&chosen| chosen < qfl.read().entries.len()) {
+        qfl.edit().cursor = chosen;
+        qfl.edit().index = c_int::try_from(chosen + 1).unwrap_or(c_int::MAX);
     }
 
     // Don't update the cursor in quickfix window when appending entries.
@@ -350,7 +350,7 @@ impl What {
 /// `newlist` is both an input — whether a new list is being started — and an
 /// output, since an `nr` one past the end asks for one.
 fn qf_setprop_get_qfidx(qi: Qi, what: &What, action: u8, newlist: &mut bool) -> Option<c_int> {
-    let mut qf_idx = qi.current;
+    let mut qf_idx = qi.current();
 
     if let Some(nr) = &what.nr {
         if nr.v_type() == VAR_NUMBER {
@@ -359,18 +359,22 @@ fn qf_setprop_get_qfidx(qi: Qi, what: &What, action: u8, newlist: &mut bool) -> 
             if nr != 0 {
                 qf_idx = c_int::try_from(nr - 1).ok()?;
             }
-            if (action == b' ' || action == b'a') && qf_idx == qi.list_count {
+            if (action == b' ' || action == b'a') && qf_idx == qi.list_count() {
                 // Create a new list.
                 *newlist = true;
-                qf_idx = if qi.is_empty() { 0 } else { qi.list_count - 1 };
-            } else if qf_idx < 0 || qf_idx >= qi.list_count {
+                qf_idx = if qi.is_empty() {
+                    0
+                } else {
+                    qi.list_count() - 1
+                };
+            } else if qf_idx < 0 || qf_idx >= qi.list_count() {
                 return None;
             } else if action != b' ' {
                 *newlist = false;
             }
         } else if nr.v_type() == VAR_STRING && string_bytes(nr) == b"$" {
             if !qi.is_empty() {
-                qf_idx = qi.list_count - 1;
+                qf_idx = qi.list_count() - 1;
             } else if *newlist {
                 qf_idx = 0;
             } else {
@@ -389,7 +393,7 @@ fn qf_setprop_get_qfidx(qi: Qi, what: &What, action: u8, newlist: &mut bool) -> 
         }
         return c_uint::try_from(id.number_or_zero())
             .ok()
-            .and_then(|id| qi.find_list(id));
+            .and_then(|id| qi.read().find_list(id));
     }
     Some(qf_idx)
 }
@@ -399,8 +403,8 @@ fn qf_setprop_title(qi: Qi, qf_idx: c_int, title: &TypVal) -> Result<(), QfError
     if title.v_type() != VAR_STRING {
         return Err(QfError::BadValue);
     }
-    qi.slot(qf_idx).title = Some(string_of(title));
-    if qf_idx == qi.current {
+    qi.slot(qf_idx).edit().title = Some(string_of(title));
+    if qf_idx == qi.current() {
         qf_update_win_titlevar(qi);
     }
     Ok(())
@@ -413,7 +417,7 @@ fn qf_setprop_items(qi: Qi, qf_idx: c_int, items: &TypVal, action: u8) -> Result
     }
     // The title survives the entries being replaced, so it is copied out
     // before `qf_add_entries` frees them.
-    let title_save = qi.slot(qf_idx).title.clone();
+    let title_save = qi.slot(qf_idx).read().title.clone();
     let action = if action == b' ' { b'a' } else { action };
     let list = list_of(items);
     qf_add_entries(
@@ -451,7 +455,7 @@ fn qf_setprop_items_from_lines(
     }
 
     if action == b'r' || action == b'u' {
-        qf_free_items(&mut qi.slot(qf_idx));
+        qf_free_items(&mut qi.slot(qf_idx).edit());
     }
     let parsed = qf_init_ext(
         qi,
@@ -470,15 +474,15 @@ fn qf_setprop_items_from_lines(
 
 /// Attach an arbitrary value to the list, which `getqflist({'context': 1})`
 /// hands back.
-fn qf_setprop_context(mut qfl: Qfl, context: &TypVal) {
+fn qf_setprop_context(qfl: Qfl, context: &TypVal) {
     let mut ctx = Box::new(TypVal::Unknown);
     tv_copy(context, &mut ctx);
-    let old = qfl.context.replace(ctx);
+    let old = qfl.edit().context.replace(ctx);
     drop(old);
 }
 
 /// Move the list's cursor to entry `idx`, or to the last entry for `"$"`.
-fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, idx: &TypVal) -> Result<(), QfError> {
+fn qf_setprop_curidx(qi: Qi, qfl: Qfl, idx: &TypVal) -> Result<(), QfError> {
     let mut newidx = if idx.string_ref().is_some_and(|s| s.as_bytes() == b"$") {
         // Select the last entry in the list.
         qfl.count()
@@ -494,38 +498,38 @@ fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, idx: &TypVal) -> Result<(), QfError> 
     }
     newidx = newidx.min(qfl.count());
 
-    let old_qfidx = qfl.index;
-    let Ok(at) = get_nth_entry(&qfl, newidx, &mut newidx) else {
+    let old_qfidx = qfl.index();
+    let Ok(at) = get_nth_entry(&qfl.read(), newidx, &mut newidx) else {
         return Err(QfError::BadValue);
     };
-    qfl.cursor = at;
-    qfl.index = newidx;
+    qfl.edit().cursor = at;
+    qfl.edit().index = newidx;
 
     // Update the displayed quickfix list.
-    if qi.current_list().id == qfl.id {
+    if qi.read().current_list().id == qfl.id() {
         qf_win_pos_update(qi, old_qfidx);
     }
     Ok(())
 }
 
 /// Set the list's `'quickfixtextfunc'` callback from `value`.
-fn qf_setprop_qftf(mut qfl: Qfl, value: &TypVal) -> Result<(), QfError> {
+fn qf_setprop_qftf(qfl: Qfl, value: &TypVal) -> Result<(), QfError> {
     if check_secure() {
         return Err(QfError::Forbidden);
     }
     // Made before the list's is let go: making one can evaluate a name.
     let cb = Callback::from_typval(value);
-    let mut old = core::mem::replace(&mut qfl.text_func, Callback::None);
+    let mut old = core::mem::replace(&mut qfl.edit().text_func, Callback::None);
     old.clear();
     // A value that is not a callable leaves the list without one.
     if let Ok(cb) = cb {
-        qfl.text_func = cb;
+        qfl.edit().text_func = cb;
     }
     Ok(())
 }
 
 /// `setqflist(…, {what})`: apply each property `what` names.
-fn qf_set_properties(mut qi: Qi, what: &What, action: u8, title: &CStr) -> Result<(), QfError> {
+fn qf_set_properties(qi: Qi, what: &What, action: u8, title: &CStr) -> Result<(), QfError> {
     let mut newlist = action == b' ' || qi.is_empty();
     let found = qf_setprop_get_qfidx(qi, what, action, &mut newlist);
     let Some(mut qf_idx) = found else {
@@ -533,11 +537,11 @@ fn qf_set_properties(mut qi: Qi, what: &What, action: u8, title: &CStr) -> Resul
     };
 
     if newlist {
-        qi.current = qf_idx;
+        qi.edit().current = qf_idx;
         qf_new_list(qi, Some(title));
-        qf_idx = qi.current;
+        qf_idx = qi.current();
     }
-    let mut qfl = qi.slot(qf_idx);
+    let qfl = qi.slot(qf_idx);
 
     // Each key that is present overwrites the answer, so what is
     // reported is the last one's result, not the worst. A `what` that
@@ -565,7 +569,7 @@ fn qf_set_properties(mut qi: Qi, what: &What, action: u8, title: &CStr) -> Resul
     }
 
     if newlist || retval.is_ok() {
-        qfl.changed();
+        qfl.edit().changed();
     }
     if newlist {
         qf_update_buffer(qi, None);
@@ -613,8 +617,8 @@ pub(crate) fn set_errorlist(
     let busy = QuickfixBusy::hold();
     let retval = match &what {
         None => {
-            qf_add_entries(qi, qi.current, list, Some(&title), action);
-            qi.current_slot().changed();
+            qf_add_entries(qi, qi.current(), list, Some(&title), action);
+            qi.current_slot().edit().changed();
             Ok(())
         }
         Some(what) => qf_set_properties(qi, what, action, &title),

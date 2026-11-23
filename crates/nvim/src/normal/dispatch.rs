@@ -371,7 +371,7 @@ pub(crate) fn normal_get_additional_char(ns: &mut NormalState) {
             ns.idx = find_command(ns.ca.cmdchar);
         } else if (ns.ca.nchar.is('n') || ns.ca.nchar.is('N')) && ns.ca.cmdchar.is('g') {
             // `gn`/`gN` take the operator from the character after them.
-            ns.ca.op().op_type = get_op_type(cp, Key::NUL);
+            ns.ca.op().edit().op_type = get_op_type(cp, Key::NUL);
         } else if cp == Key::CTRL_BSL {
             resolve_ctrl_backslash(ns);
         }
@@ -444,7 +444,7 @@ pub(crate) fn normal_get_command_count(ns: &mut NormalState) -> bool {
 
     // CTRL-W takes the count read so far as its own, then a second count
     // for the window command after it.
-    if ns.c == Key::CTRL_W && !ns.ctrl_w && ns.oa.op_type == OpType::Nop {
+    if ns.c == Key::CTRL_W && !ns.ctrl_w && ns.oa.op_type() == OpType::Nop {
         ns.ctrl_w = true;
         ns.ca.opcount = ns.ca.count0;
         ns.ca.count0 = 0;
@@ -465,7 +465,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
         // A command that is not itself an operator, and does not claim
         // releases the register it was given.
         if !FINISH_OP.get()
-            && ns.oa.op_type == OpType::Nop
+            && ns.oa.op_type() == OpType::Nop
             && ns
                 .idx
                 .is_none_or(|i| !NV_CMD_TABLE[i].cmd_flags.has(NvFlags::KEEPREG))
@@ -477,8 +477,9 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
             ns.old_mapped_len = typeahead().maplen();
         }
         if ns.ca.cmdchar != SpecialKey::Ignore && ns.ca.cmdchar != SpecialKey::Mousemove {
-            did_visual_op =
-                visual_active() && ns.oa.op_type != OpType::Nop && ns.oa.op_type != OpType::Colon;
+            did_visual_op = visual_active()
+                && ns.oa.op_type() != OpType::Nop
+                && ns.oa.op_type() != OpType::Colon;
             let old_col = ns.old_col;
             do_pending_operator(&mut ns.ca, old_col, false);
         }
@@ -492,7 +493,7 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
         set_reg_var(get_default_register_name().byte());
     }
     let prev_finish_op = FINISH_OP.get();
-    if ns.oa.op_type == OpType::Nop {
+    if ns.oa.op_type() == OpType::Nop {
         FINISH_OP.set(false);
         may_trigger_modechanged();
     }
@@ -501,8 +502,8 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
     if prev_finish_op || ns.ca.cmdchar.is('r') || (ns.ca.cmdchar.is('g') && ns.ca.nchar.is('r')) {
         ui_cursor_shape();
     }
-    if ns.oa.op_type == OpType::Nop
-        && ns.oa.regname.is_unnamed()
+    if ns.oa.op_type() == OpType::Nop
+        && ns.oa.regname().is_unnamed()
         && ns.ca.cmdchar != SpecialKey::Event
     {
         clear_showcmd();
@@ -523,11 +524,11 @@ pub(crate) fn normal_finish_command(ns: &mut NormalState) {
     // A command may have asked for insert mode or for Select mode to be
     // resumed; neither happens until the command is completely done.
     let want_insert = !RESTART_EDIT.get().is_nul() && !visual_active() && ns.old_mapped_len == 0;
-    if ns.oa.op_type == OpType::Nop
+    if ns.oa.op_type() == OpType::Nop
         && (want_insert || RESTART_V_ISUAL_SELECT.get() == 1)
         && !ns.ca.outcome.has(Outcome::COMMAND_BUSY)
         && stuff_empty()
-        && ns.oa.regname.is_unnamed()
+        && ns.oa.regname().is_unnamed()
     {
         if RESTART_V_ISUAL_SELECT.get() == 1 {
             set_visual_select(true);
@@ -595,8 +596,8 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
     if ns.c == SpecialKey::Event {
         // An event is not a command: the count it interrupted is stashed
         // for the real command that follows.
-        ns.oa.prev_opcount = ns.ca.opcount;
-        ns.oa.prev_count0 = ns.ca.count0;
+        ns.oa.edit().prev_opcount = ns.ca.opcount;
+        ns.oa.edit().prev_count0 = ns.ca.count0;
     } else if ns.ca.opcount != 0 {
         // An operator count and a motion count multiply, saturating.
         if ns.ca.count0 != 0 {
@@ -686,7 +687,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
 /// Record a command for `.`, taking its second character from `cmd_arg`.
 pub(crate) fn prep_redo_cmd(cmd_arg: &mut CmdArg) {
     prep_redo(
-        RegName::from_byte((cmd_arg.op().regname).byte()),
+        RegName::from_byte((cmd_arg.op().regname()).byte()),
         cmd_arg.count0,
         Key::NUL,
         cmd_arg.cmdchar,
@@ -760,7 +761,7 @@ pub(crate) fn prep_redo_num2(
 
 /// Beep and clear the operator if one is pending. Answers whether it was.
 pub(crate) fn check_clear_op(op: Op) -> bool {
-    if op.op_type == OpType::Nop {
+    if op.op_type() == OpType::Nop {
         return false;
     }
     clear_op_beep(op);
@@ -770,7 +771,7 @@ pub(crate) fn check_clear_op(op: Op) -> bool {
 /// As [`check_clear_op`], and also refuse while a Visual selection is up --
 /// for commands that make no sense applied to one.
 pub(crate) fn check_clear_op_quit(op: Op) -> bool {
-    if op.op_type == OpType::Nop && !visual_active() {
+    if op.op_type() == OpType::Nop && !visual_active() {
         return false;
     }
     clear_op_beep(op);
@@ -778,11 +779,11 @@ pub(crate) fn check_clear_op_quit(op: Op) -> bool {
 }
 
 /// Forget the pending operator, its register and its forced motion kind.
-pub(crate) fn clear_op(mut op: Op) {
-    op.op_type = OpType::Nop;
-    op.regname = RegName::UNNAMED;
-    op.motion_force = Key::NUL;
-    op.use_reg_one = false;
+pub(crate) fn clear_op(op: Op) {
+    op.edit().op_type = OpType::Nop;
+    op.edit().regname = RegName::UNNAMED;
+    op.edit().motion_force = Key::NUL;
+    op.edit().use_reg_one = false;
     MOTION_FORCE.set(Key::NUL);
 }
 
@@ -811,7 +812,7 @@ pub(crate) fn read_command_char() -> Key {
 /// of movement is set, the key was typed rather than mapped, and no operator
 /// is waiting for the motion to finish.
 pub(crate) fn may_fold_open(cmd_arg: &mut CmdArg, fdo_flag: c_uint) {
-    if FDO_FLAGS.get() & fdo_flag != 0 && KEY_TYPED.get() && cmd_arg.op().op_type == OpType::Nop {
+    if FDO_FLAGS.get() & fdo_flag != 0 && KEY_TYPED.get() && cmd_arg.op().op_type() == OpType::Nop {
         fold_open_cursor();
     }
 }

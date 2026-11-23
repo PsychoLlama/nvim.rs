@@ -89,7 +89,7 @@ pub(crate) fn qf_get_fnum(
         _ => fname,
     };
 
-    let kind = qfl.kind;
+    let kind = qfl.kind();
     let buf = buffer_for(bufname)?;
     buf.set_b_has_qf_entry(has_entry_flag(kind));
     Some(buf.handle())
@@ -154,9 +154,9 @@ pub(crate) fn qf_pop_dir(stack: &mut DirStack) {
 /// This is what recovers from `make` entering two sibling directories in a
 /// row without saying it left the first: the pushed directory is wrong, but
 /// one further down the stack holds the file.
-pub(crate) fn qf_guess_filepath(mut qfl: Qfl, filename: &CStr) -> Option<Name> {
+pub(crate) fn qf_guess_filepath(qfl: Qfl, filename: &CStr) -> Option<Name> {
     // Nothing in the walk can run user code.
-    let stack = &mut qfl.dir_stack;
+    let stack = &mut qfl.edit().dir_stack;
     if stack.dirs.is_empty() {
         return None;
     }
@@ -327,7 +327,7 @@ pub fn qf_get_size(cmdidx: CmdIdx) -> size_t {
     let Some(qi) = stack_for_cmd(cmdidx, false) else {
         return 0;
     };
-    qi.current_list().entries.len()
+    qi.read().current_list().entries.len()
 }
 
 /// How many entries `:cdo`/`:ldo` would visit, or how many files
@@ -337,7 +337,8 @@ pub fn qf_get_valid_size(cmdidx: CmdIdx) -> size_t {
         return 0;
     };
     let per_entry = cmdidx == CmdIdx::cdo || cmdidx == CmdIdx::ldo;
-    let qfl = qi.current_list();
+    let stack = qi.read();
+    let qfl = stack.current_list();
     let mut prev_fnum = None;
     let mut size: size_t = 0;
     for entry in &qfl.entries {
@@ -361,7 +362,8 @@ pub fn qf_get_cur_idx(cmdidx: CmdIdx) -> size_t {
     let Some(qi) = stack_for_cmd(cmdidx, false) else {
         return 0;
     };
-    size_t::try_from(qi.current_list().index).expect("the current entry is numbered from one")
+    size_t::try_from(qi.read().current_list().index)
+        .expect("the current entry is numbered from one")
 }
 
 /// Which entry is current, counting only the entries `:cdo` would visit —
@@ -370,7 +372,8 @@ pub fn qf_get_cur_valid_idx(cmdidx: CmdIdx) -> c_int {
     let Some(qi) = stack_for_cmd(cmdidx, false) else {
         return 1;
     };
-    let qfl = qi.current_list();
+    let stack = qi.read();
+    let qfl = stack.current_list();
     if !qfl.has_valid_entries() {
         return 1;
     }

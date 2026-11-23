@@ -109,12 +109,13 @@ pub(crate) fn get_errorlist(
         return Ok(());
     }
     if qf_idx == INVALID_QFIDX {
-        qf_idx = qi.current;
+        qf_idx = qi.current();
     }
-    if qf_idx >= qi.list_count {
+    if qf_idx >= qi.list_count() {
         return Err(QfError::NoSuchList);
     }
-    let qfl = qi.list(qf_idx);
+    let stack = qi.read();
+    let qfl = stack.list(qf_idx);
     if qfl.is_empty() {
         return Err(QfError::NoSuchList);
     }
@@ -191,7 +192,7 @@ fn qf_winid(qi: Option<Qi>) -> c_int {
 /// when there is no such buffer any more.
 fn qf_getprop_qfbufnr(qi: Option<Qi>, retdict: &mut Dict) -> Result<(), KeyTaken> {
     let bufnum = qi
-        .and_then(|qi| qi.bufnr)
+        .and_then(|qi| qi.bufnr())
         .filter(|&bufnr| find_buf(Some(bufnr)).is_some());
     add_nr(
         retdict,
@@ -243,7 +244,7 @@ fn qf_getprop_keys2flags(what: &Dict, loclist: bool) -> GetListProps {
 /// when it names neither. Answers `None` for a list that is not on the stack,
 /// and for a `nr`/`id` of the wrong type.
 fn qf_getprop_qfidx(qi: Qi, what: &Dict) -> Option<c_int> {
-    let mut qf_idx = Some(qi.current);
+    let mut qf_idx = Some(qi.current());
 
     // Use the specified list, or the last list, or the current one.
     if let Some(di) = what.find(b"nr") {
@@ -253,13 +254,13 @@ fn qf_getprop_qfidx(qi: Qi, what: &Dict) -> Option<c_int> {
             if nr != 0 {
                 qf_idx = c_int::try_from(nr - 1)
                     .ok()
-                    .filter(|&idx| idx >= 0 && idx < qi.list_count);
+                    .filter(|&idx| idx >= 0 && idx < qi.list_count());
             }
         } else if di.di_tv.v_type() == VAR_STRING
             && crate::eval::list::string_bytes(&di.di_tv) == b"$"
         {
             // Get the last list.
-            qf_idx = Some(qi.list_count - 1);
+            qf_idx = Some(qi.list_count() - 1);
         } else {
             qf_idx = None;
         }
@@ -271,7 +272,9 @@ fn qf_getprop_qfidx(qi: Qi, what: &Dict) -> Option<c_int> {
             // For zero, use the current list.
             let id = di.di_tv.number_or_zero();
             if id != 0 {
-                qf_idx = c_uint::try_from(id).ok().and_then(|id| qi.find_list(id));
+                qf_idx = c_uint::try_from(id)
+                    .ok()
+                    .and_then(|id| qi.read().find_list(id));
             }
         } else {
             qf_idx = None;
@@ -424,7 +427,7 @@ pub(crate) fn qf_get_properties(
 
     // As in `qf_getprop_defaults`: the first refused key stops the rest.
     if wanted(GetListProps::TITLE) {
-        add_str(retdict, "title", qfl.title.as_deref())?;
+        add_str(retdict, "title", qfl.read().title.as_deref())?;
     }
     if wanted(GetListProps::NR) {
         add_nr(retdict, "nr", VarNumber::from(qf_idx + 1))?;
@@ -436,19 +439,19 @@ pub(crate) fn qf_get_properties(
         qf_getprop_items(qi, qf_idx, eidx, retdict);
     }
     if wanted(GetListProps::CONTEXT) {
-        qf_getprop_ctx(&qfl, retdict)?;
+        qf_getprop_ctx(&qfl.read(), retdict)?;
     }
     if wanted(GetListProps::ID) {
-        add_nr(retdict, "id", VarNumber::from(qfl.id))?;
+        add_nr(retdict, "id", VarNumber::from(qfl.id()))?;
     }
     if wanted(GetListProps::IDX) {
-        qf_getprop_idx(&qfl, eidx, retdict)?;
+        qf_getprop_idx(&qfl.read(), eidx, retdict)?;
     }
     if wanted(GetListProps::SIZE) {
         add_nr(retdict, "size", VarNumber::from(qfl.count()))?;
     }
     if wanted(GetListProps::TICK) {
-        add_nr(retdict, "changedtick", VarNumber::from(qfl.changedtick))?;
+        add_nr(retdict, "changedtick", VarNumber::from(qfl.changedtick()))?;
     }
     if window.is_some() && wanted(GetListProps::FILEWINID) {
         qf_getprop_filewinid(window, qi.id(), retdict)?;
@@ -457,7 +460,7 @@ pub(crate) fn qf_get_properties(
         qf_getprop_qfbufnr(Some(qi), retdict)?;
     }
     if wanted(GetListProps::QFTF) {
-        qf_getprop_qftf(&qfl, retdict)?;
+        qf_getprop_qftf(&qfl.read(), retdict)?;
     }
     Ok(())
 }

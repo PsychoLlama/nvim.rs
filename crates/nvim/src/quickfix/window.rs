@@ -51,7 +51,7 @@ fn is_qf_win(win: Win, qi: Qi) -> bool {
     win.surviving_buffer().is_some()
         && win.shows_quickfix_buffer()
         && (qi.is_quickfix() && win.w_llist_ref().is_none()
-            || qi.kind == QFLT_LOCATION && win.w_llist_ref() == Some(qi.id()))
+            || qi.kind() == QFLT_LOCATION && win.w_llist_ref() == Some(qi.id()))
 }
 
 /// The window showing `qi` in the current tab page, if there is one.
@@ -60,13 +60,13 @@ pub(crate) fn qf_find_win(qi: Qi) -> Option<Win> {
 }
 
 /// The buffer the stack is shown in, from any tab page, if there is one.
-pub(crate) fn qf_find_buf(mut qi: Qi) -> Option<Buf> {
-    if qi.bufnr.is_some() {
-        if let Some(qfbuf) = find_buf(qi.bufnr) {
+pub(crate) fn qf_find_buf(qi: Qi) -> Option<Buf> {
+    if qi.bufnr().is_some() {
+        if let Some(qfbuf) = find_buf(qi.bufnr()) {
             return Some(qfbuf);
         }
         // The buffer is no longer present.
-        qi.bufnr = None;
+        qi.edit().bufnr = None;
     }
     tab_windows()
         .find(|&win| is_qf_win(win, qi))
@@ -119,7 +119,7 @@ fn set_cwindow_options() {
 
 /// Open a new quickfix or location list window, load the quickfix buffer
 /// and set the window's options. Answers false when there was no room.
-fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
+fn open_new_cwindow(qi: Qi, height: c_int) -> bool {
     let oldwin = Win::current();
     let prevtab = TabPage::current_raw();
     // Looked up before the split, and read after it: upstream does the same,
@@ -137,10 +137,10 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     new.set_wo_scb(c_int::from(false));
     new.set_wo_crb(c_int::from(false));
 
-    if qi.kind == QFLT_LOCATION {
+    if qi.kind() == QFLT_LOCATION {
         // The location list window references the stack it shows.
         new.set_w_llist_ref(Some(qi.id()));
-        qi.refcount.retain();
+        qi.read().refcount.retain();
     }
 
     // Don't store info when the split above left us in another window.
@@ -165,7 +165,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
             if edit_buffer_number(None, LineNr::ONE, hide, oldwin).is_err() {
                 return false;
             }
-            qi.bufnr = Some(Buf::current().handle());
+            qi.edit().bufnr = Some(Buf::current().handle());
         }
     }
 
@@ -214,7 +214,7 @@ fn split_flags(qi: Qi) -> c_int {
 /// Must be called with the quickfix window current.
 fn set_list_title(qi: Qi) {
     // A copy: setting a variable can run a watcher.
-    let title = qi.current_list().title.clone();
+    let title = qi.read().current_list().title.clone();
     if let Some(title) = title {
         set_internal_string_var(b"w:quickfix_title", Some(title.as_cstr().to_bytes()));
     }
@@ -261,7 +261,7 @@ pub fn ex_copen(excmd: &mut ExArg) {
 
     set_list_title(qi);
     // Save the current index here: updating the buffer may free the list.
-    let lnum = qi.current_list().index;
+    let lnum = qi.read().current_list().index;
 
     qf_fill_buffer(
         qi.current_slot(),
@@ -287,8 +287,9 @@ pub fn ex_cwindow(excmd: &mut ExArg) {
     };
     let win = qf_find_win(qi);
     let nothing = {
-        let qfl = qi.current_list();
-        qi.is_empty() || qfl.no_valid || qfl.is_empty()
+        let stack = qi.read();
+        let qfl = stack.current_list();
+        stack.is_empty() || qfl.no_valid || qfl.is_empty()
     };
     if nothing {
         if win.is_some() {
@@ -349,14 +350,14 @@ impl Win {
             Some(shown) if self.is_location_list_window() => shown.stack(),
             _ => Qi::global(),
         };
-        LineNr::new(qi.current_list().index)
+        LineNr::new(qi.read().current_list().index)
     }
 }
 
 /// Put the cursor of the quickfix window on the current entry, answering
 /// whether there is such a window.
 pub(crate) fn qf_win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
-    let qf_index = qi.current_list().index;
+    let qf_index = qi.read().current_list().index;
     let Some(win) = qf_find_win(qi) else {
         return false;
     };

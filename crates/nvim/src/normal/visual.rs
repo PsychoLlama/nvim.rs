@@ -584,9 +584,9 @@ pub(crate) fn nv_visual(cmd_arg: &mut CmdArg) {
     }
     // After an operator these are not commands but a forced motion kind:
     // `dv`, `dV`, `d CTRL-V`.
-    if cmd_arg.op().op_type != OpType::Nop {
-        cmd_arg.op().motion_force = cmd_arg.cmdchar;
-        MOTION_FORCE.set(cmd_arg.op().motion_force);
+    if cmd_arg.op().op_type() != OpType::Nop {
+        cmd_arg.op().edit().motion_force = cmd_arg.cmdchar;
+        MOTION_FORCE.set(cmd_arg.op().motion_force());
         FINISH_OP.set(false);
         return;
     }
@@ -736,13 +736,13 @@ pub(crate) fn nv_gv_cmd(cmd_arg: &mut CmdArg) {
 /// operator about to run sees what the highlight showed.
 pub(crate) fn adjust_for_sel(cmd_arg: &mut CmdArg) {
     if visual_active()
-        && cmd_arg.op().inclusive
+        && cmd_arg.op().inclusive()
         && sel_exclusive()
         && gchar_cursor() != Codepoint::NUL
         && lt(visual_anchor(), Win::current().w_cursor())
     {
         inc_cursor();
-        cmd_arg.op().inclusive = false;
+        cmd_arg.op().edit().inclusive = false;
         V_ISUAL_SELECT_EXCLU_ADJ.set(true);
     }
 }

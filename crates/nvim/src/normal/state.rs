@@ -22,7 +22,7 @@
 
 use crate::autocmd::defs::AutoEvent;
 use crate::global_cell::GlobalCell;
-use crate::id_table::{IdTable, TableId};
+use crate::id_table::{TableId, ViewTable};
 use crate::keycodes::ModMask;
 use crate::ops::Op;
 use crate::state::Step;
@@ -103,12 +103,12 @@ use crate::r#move::{update_curswant, update_topline, validate_cursor};
 /// other handle in the tree is.
 #[derive(Debug)]
 struct NormalFrames {
-    table: IdTable<OpArg>,
+    table: ViewTable<OpArg>,
     current: Option<TableId<OpArg>>,
 }
 
 static NORMAL_FRAMES: GlobalCell<NormalFrames> = GlobalCell::new(NormalFrames {
-    table: IdTable::new(),
+    table: ViewTable::new(),
     current: None,
 });
 
@@ -119,7 +119,7 @@ static NORMAL_FRAMES: GlobalCell<NormalFrames> = GlobalCell::new(NormalFrames {
 #[inline(never)]
 fn frame_insert(op: OpArg) -> (TableId<OpArg>, Op) {
     NORMAL_FRAMES.with_mut(|frames| {
-        let (id, _) = frames.table.insert(op);
+        let id = frames.table.insert(op);
         (id, frames.table.view(id))
     })
 }
@@ -251,8 +251,12 @@ pub(crate) fn op_pending() -> bool {
     let Some(op) = innermost_op() else {
         return true;
     };
-    let (prev_opcount, prev_count0, op_type, regname) =
-        (op.prev_opcount, op.prev_count0, op.op_type, op.regname);
+    let (prev_opcount, prev_count0, op_type, regname) = (
+        op.prev_opcount(),
+        op.prev_count0(),
+        op.op_type(),
+        op.regname(),
+    );
     !(!FINISH_OP.get()
         && prev_opcount == 0
         && prev_count0 == 0
@@ -291,7 +295,7 @@ pub(crate) fn normal_prepare(ns: &mut NormalState) {
 
     // 'finish_op' drives the cursor shape, so a change to it is a redraw.
     let was_finishing = FINISH_OP.get();
-    FINISH_OP.set(ns.oa.op_type != OpType::Nop);
+    FINISH_OP.set(ns.oa.op_type() != OpType::Nop);
     if FINISH_OP.get() != was_finishing {
         ui_cursor_shape();
     }
@@ -300,16 +304,16 @@ pub(crate) fn normal_prepare(ns: &mut NormalState) {
     // With no operator and no register pending, the count starts over --
     // and `set_prevcount` remembers to publish it as v:prevcount.
     ns.set_prevcount = false;
-    if !FINISH_OP.get() && ns.oa.regname.is_unnamed() {
+    if !FINISH_OP.get() && ns.oa.regname().is_unnamed() {
         ns.ca.opcount = 0;
         ns.set_prevcount = true;
     }
     // A count the previous command stashed comes back here.
-    if ns.oa.prev_opcount > 0 || ns.oa.prev_count0 > 0 {
-        ns.ca.opcount = ns.oa.prev_opcount;
-        ns.ca.count0 = ns.oa.prev_count0;
-        ns.oa.prev_opcount = 0;
-        ns.oa.prev_count0 = 0;
+    if ns.oa.prev_opcount() > 0 || ns.oa.prev_count0() > 0 {
+        ns.ca.opcount = ns.oa.prev_opcount();
+        ns.ca.count0 = ns.oa.prev_count0();
+        ns.oa.edit().prev_opcount = 0;
+        ns.oa.edit().prev_count0 = 0;
     }
 
     ns.mapped_len = typeahead().maplen();
@@ -357,7 +361,7 @@ pub(crate) fn normal_handle_special_visual_command(ns: &mut NormalState) -> bool
 /// while an operator or Visual mode is waiting for them.
 pub(crate) fn normal_need_additional_char(ns: &mut NormalState) -> bool {
     let flags = ns.row().cmd_flags;
-    let pending_op = ns.oa.op_type != OpType::Nop;
+    let pending_op = ns.oa.op_type() != OpType::Nop;
     let cmdchar = ns.ca.cmdchar;
     flags.has(NvFlags::NCH)
         && (flags.has_all(NvFlags::NCH_NOP) && !pending_op
@@ -390,14 +394,14 @@ pub(crate) fn normal_need_redraw_mode_message(ns: &mut NormalState) -> bool {
         && EMSG_ON_DISPLAY.get();
 
     (showing_mode || error_on_display)
-        && ns.oa.regname.is_unnamed()
+        && ns.oa.regname().is_unnamed()
         && !ns.ca.outcome.has(Outcome::COMMAND_BUSY)
         && stuff_empty()
         && typeahead().maplen() == 0
         && EMSG_SILENT.get() == 0
         && !IN_ASSERT_FAILS.get()
         && !DID_WAIT_RETURN.get()
-        && ns.oa.op_type == OpType::Nop
+        && ns.oa.op_type() == OpType::Nop
 }
 
 /// Redraw the screen the message was scrolled off, show the message again,

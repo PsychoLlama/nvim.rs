@@ -79,11 +79,11 @@ fn is_ex_cmdchar(cmd_arg: &CmdArg) -> bool {
 /// `gui_yank` marks the yank the clipboard does behind the user's back: it
 /// must not clear the selection, redraw, or leave a `.` behind.
 pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool) {
-    let mut op = cmd_arg.op();
+    let op = cmd_arg.op();
     let lbr_saved = Win::current().wo_lbr();
     let old_cursor = Win::current().w_cursor();
 
-    if (!FINISH_OP.get() && !visual_active()) || op.op_type == OpType::Nop {
+    if (!FINISH_OP.get() && !visual_active()) || op.op_type() == OpType::Nop {
         restore_lbr(lbr_saved != 0);
         return;
     }
@@ -94,7 +94,7 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
 
     // Unwanted line breaks would move every column measured below.
     reset_lbr();
-    op.is_visual = visual_active();
+    op.edit().is_visual = visual_active();
     apply_motion_force(op);
     record_operator_redo(cmd_arg, op, redo_yank);
 
@@ -108,30 +108,31 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     order_region(op);
 
     // Just in case lines were deleted that make the position invalid.
-    check_pos(Win::current().buffer(), &mut op.end);
-    op.line_count = op.end.lnum - op.start.lnum + 1;
+    check_pos(Win::current().buffer(), &mut op.edit().end);
+    let value = op.end().lnum - op.start().lnum + 1;
+    op.edit().line_count = value;
     // Set before `VIsual_active` is reset below.
     let virt = virtual_active(Win::current());
     VIRTUAL_OP.set(Some(virt));
 
     if visual_active() || REDO_V_ISUAL_BUSY.get() {
-        get_op_vcol(&mut op, REDO_VISUAL.get().rv_vcol, true);
+        get_op_vcol(&mut op.edit(), REDO_VISUAL.get().rv_vcol, true);
         prepare_visual_redo(cmd_arg, op, gui_yank, redo_yank);
         finish_visual_region(op, include_line_break, gui_yank, lbr_saved);
     }
 
     // Include the trailing byte of a multi-byte character.
-    if op.inclusive {
+    if op.inclusive() {
         // `op.end` is a position of the current buffer, so the cache
         // answers with the line it sits on.
         let l = {
             let mut lines = Lines::current();
-            let line = lines.line(op.end.lnum);
-            let col = usize::try_from(op.end.col).unwrap_or(0).min(line.len());
+            let line = lines.line(op.end().lnum);
+            let col = usize::try_from(op.end().col).unwrap_or(0).min(line.len());
             c_int::try_from(cluster_len(&line[col..])).unwrap_or(c_int::MAX)
         };
         if l > 1 {
-            op.end.col += l - 1;
+            op.edit().end.col += l - 1;
         }
     }
     Win::current().set_w_set_curswant(true);
@@ -141,17 +142,21 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     // The `gchar_pos` reads a live position of the current buffer,
     // and only when the operator is a yank -- the chain is left as it is so
     // that it stays as conditional as upstream wrote it.
-    op.empty = op.motion_type != MotionType::LineWise
-        && (!op.inclusive || (op.op_type == OpType::Yank && gchar_pos(&op.end) == Codepoint::NUL))
-        && equalpos(op.start, op.end)
-        && !(op_virtual() && op.start.coladd != op.end.coladd);
+    let empty = op.motion_type() != MotionType::LineWise
+        && (!op.inclusive()
+            || (op.op_type() == OpType::Yank && gchar_pos(&op.end()) == Codepoint::NUL))
+        && equalpos(op.start(), op.end())
+        && !(op_virtual() && op.start().coladd != op.end().coladd);
+    op.edit().empty = empty;
     // For delete, change and yank it is an error to operate on an empty
     // region when 'cpoptions' has `E` (Vi compatible).
-    let empty_region_error = op.empty && cpo_has(CpoFlag::EMPTYREGION);
+    let empty_region_error = op.empty() && cpo_has(CpoFlag::EMPTYREGION);
 
     // Force a redraw for an empty Visual region, an unmodifiable buffer,
     // or a fold: none of those will redraw by themselves.
-    if op.is_visual && (op.empty || Buf::current().b_p_ma() == 0 || op.op_type == OpType::Fold) {
+    if op.is_visual()
+        && (op.empty() || Buf::current().b_p_ma() == 0 || op.op_type() == OpType::Fold)
+    {
         restore_lbr(lbr_saved != 0);
         redraw_curbuf_later(UPD_INVERTED);
     }
@@ -163,11 +168,11 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
     if gui_yank {
         Win::current().set_w_cursor(old_cursor);
     } else if !p_sol()
-        && op.motion_type == MotionType::LineWise
-        && !op.end_adjusted
-        && (op.op_type == OpType::Lshift
-            || op.op_type == OpType::Rshift
-            || op.op_type == OpType::Delete)
+        && op.motion_type() == MotionType::LineWise
+        && !op.end_adjusted()
+        && (op.op_type() == OpType::Lshift
+            || op.op_type() == OpType::Rshift
+            || op.op_type() == OpType::Delete)
     {
         // 'startofline' is off: go back to the column the command started
         // in.
@@ -182,23 +187,24 @@ pub fn do_pending_operator(cmd_arg: &mut CmdArg, old_col: c_int, gui_yank: bool)
 }
 
 /// `v`, `V` or CTRL-V typed between the operator and its motion.
-fn apply_motion_force(mut op: Op) {
-    if op.motion_force.is('V') {
-        op.motion_type = MotionType::LineWise;
-    } else if op.motion_force.is('v') {
-        if op.motion_type == MotionType::LineWise {
+fn apply_motion_force(op: Op) {
+    if op.motion_force().is('V') {
+        op.edit().motion_type = MotionType::LineWise;
+    } else if op.motion_force().is('v') {
+        if op.motion_type() == MotionType::LineWise {
             // A linewise motion never set `inclusive`; "exclusive" is the
             // consistent reading, and makes `dvj` behave.
-            op.inclusive = false;
-        } else if op.motion_type == MotionType::CharWise {
-            op.inclusive = !op.inclusive;
+            op.edit().inclusive = false;
+        } else if op.motion_type() == MotionType::CharWise {
+            let value = !op.inclusive();
+            op.edit().inclusive = value;
         }
-        op.motion_type = MotionType::CharWise;
-    } else if op.motion_force == Key::CTRL_V {
+        op.edit().motion_type = MotionType::CharWise;
+    } else if op.motion_force() == Key::CTRL_V {
         // Turn a line- or charwise motion into a Visual block.
         if !visual_active() {
             set_visual_active(true);
-            set_visual_anchor(op.start);
+            set_visual_anchor(op.start());
         }
         set_visual_mode(VisualMode::BLOCK);
         set_visual_select(false);
@@ -213,7 +219,7 @@ fn apply_motion_force(mut op: Op) {
 /// text appended so that the repeat really is the same command.
 fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
     let is_fold_op = matches!(
-        op.op_type,
+        op.op_type(),
         OpType::Fold
             | OpType::Foldopen
             | OpType::Foldopenrec
@@ -222,11 +228,11 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
             | OpType::Folddel
             | OpType::Folddelrec
     );
-    let replayable = (redo_yank || op.op_type != OpType::Yank)
+    let replayable = (redo_yank || op.op_type() != OpType::Yank)
         && (!visual_active()
-            || !op.motion_force.is_nul()
+            || !op.motion_force().is_nul()
             // Also redo Operator-pending Visual mode mappings.
-            || ((is_ex_cmdchar(cmd_arg) || cmd_arg.cmdchar == SpecialKey::Lua) && op.op_type != OpType::Colon))
+            || ((is_ex_cmdchar(cmd_arg) || cmd_arg.cmdchar == SpecialKey::Lua) && op.op_type() != OpType::Colon))
         && !cmd_arg.cmdchar.is('D')
         && !is_fold_op;
     if !replayable {
@@ -234,11 +240,11 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
     }
 
     prep_redo(
-        op.regname,
+        op.regname(),
         cmd_arg.count0,
-        Key::byte(get_op_char(op.op_type)),
-        Key::byte(get_extra_op_char(op.op_type)),
-        op.motion_force,
+        Key::byte(get_op_char(op.op_type())),
+        Key::byte(get_extra_op_char(op.op_type())),
+        op.motion_force(),
         cmd_arg.cmdchar,
         cmd_arg.nchar,
     );
@@ -272,9 +278,9 @@ fn record_operator_redo(cmd_arg: &CmdArg, op: Op, redo_yank: bool) {
 
 /// `.` replaying a Visual operator: rebuild a region of the recorded size at
 /// the cursor.
-fn resume_redo_visual(cmd_arg: &mut CmdArg, mut op: Op) {
+fn resume_redo_visual(cmd_arg: &mut CmdArg, op: Op) {
     let redo = REDO_VISUAL.get();
-    op.start = Win::current().w_cursor();
+    op.edit().start = Win::current().w_cursor();
     Win::current()
         .cursor()
         .set_lnum(Win::current().cursor().lnum() + (redo.rv_line_count - 1));
@@ -313,7 +319,7 @@ fn resume_redo_visual(cmd_arg: &mut CmdArg, mut op: Op) {
 /// backed-off end lands on a line break.
 ///
 /// A Visual selection must be active.
-fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
+fn start_visual_region(op: Op, gui_yank: bool) -> bool {
     let mut include_line_break = false;
 
     if !gui_yank {
@@ -330,7 +336,7 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
     // one. `gH<Del>`, which deletes the last line, is the exception.
     // Both lines are the current buffer's -- one holds the cursor,
     // the other the Visual anchor. `unadjust_for_sel` only moves the cursor.
-    if visual_select() && visual_mode().is_line() && op.op_type != OpType::Delete {
+    if visual_select() && visual_mode().is_line() && op.op_type() != OpType::Delete {
         if lt(visual_anchor(), Win::current().w_cursor()) {
             set_visual_anchor(visual_anchor().with_col(ColNr::ZERO));
             let lnum = Win::current().cursor().lnum();
@@ -348,10 +354,10 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
         include_line_break = unadjust_for_sel();
     }
 
-    op.start = visual_anchor();
+    op.edit().start = visual_anchor();
     if visual_mode().is_line() {
-        op.start.col = ColNr::ZERO;
-        op.start.coladd = 0;
+        op.edit().start.col = ColNr::ZERO;
+        op.edit().start.coladd = 0;
     }
     include_line_break
 }
@@ -361,41 +367,42 @@ fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
 ///
 /// Outside Visual mode a closed fold at either end is swallowed whole, which
 /// is why this is more than a swap.
-fn order_region(mut op: Op) {
+fn order_region(op: Op) {
     let win = Win::current();
-    if lt(op.start, Win::current().w_cursor()) {
+    if lt(op.start(), Win::current().w_cursor()) {
         if !visual_active() {
-            if let Some(first) = win.fold_first(op.start.lnum) {
-                op.start.lnum = first;
-                op.start.col = ColNr::ZERO;
+            if let Some(first) = win.fold_first(op.start().lnum) {
+                op.edit().start.lnum = first;
+                op.edit().start.col = ColNr::ZERO;
             }
             let past_start = Win::current().cursor().col() > ColNr::ZERO
-                || op.inclusive
-                || op.motion_type == MotionType::LineWise;
+                || op.inclusive()
+                || op.motion_type() == MotionType::LineWise;
             if past_start && let Some(last) = win.fold_end(Win::current().cursor().lnum()) {
                 Win::current().cursor().set_lnum(last);
                 // The cursor line is a line of the buffer.
                 Win::current().cursor().set_col(get_cursor_line_len());
             }
         }
-        op.end = Win::current().w_cursor();
-        Win::current().set_w_cursor(op.start);
+        op.edit().end = Win::current().w_cursor();
+        Win::current().set_w_cursor(op.start());
         // `w_virtcol` was updated for the old position and is not
         // recomputed automatically when the cursor goes back.
         Win::current().set_w_valid(Win::current().w_valid().without(WinValid::VIRTCOL));
     } else {
-        if !visual_active() && op.motion_type == MotionType::LineWise {
+        if !visual_active() && op.motion_type() == MotionType::LineWise {
             if let Some(first) = win.fold_first(Win::current().cursor().lnum()) {
                 Win::current().cursor().set_lnum(first);
                 Win::current().cursor().set_col(ColNr::ZERO);
             }
-            if let Some(last) = win.fold_end(op.start.lnum) {
-                op.start.lnum = last;
-                op.start.col = Lines::current().line_len(last);
+            if let Some(last) = win.fold_end(op.start().lnum) {
+                op.edit().start.lnum = last;
+                op.edit().start.col = Lines::current().line_len(last);
             }
         }
-        op.end = op.start;
-        op.start = Win::current().w_cursor();
+        let value = op.start();
+        op.edit().end = value;
+        op.edit().start = Win::current().w_cursor();
     }
 }
 
@@ -403,31 +410,33 @@ fn order_region(mut op: Op) {
 /// build one like it.
 ///
 /// A Visual selection must be active or being replayed.
-fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: bool) {
+fn prepare_visual_redo(cmd_arg: &CmdArg, op: Op, gui_yank: bool, redo_yank: bool) {
     if !REDO_V_ISUAL_BUSY.get() && !gui_yank {
         RESEL_V_ISUAL_MODE.set(visual_mode());
         if Win::current().w_curswant() == ColNr::MAX {
             RESEL_V_ISUAL_VCOL.set(ColNr::MAX);
         } else {
             if !visual_mode().is_block() {
-                op.end_vcol = getvvcol(Win::current(), &mut op.end).2;
+                let value = getvvcol(Win::current(), &mut op.edit().end).2;
+                op.edit().end_vcol = value;
             }
-            if visual_mode().is_block() || op.line_count <= 1 {
+            if visual_mode().is_block() || op.line_count() <= 1 {
                 // A block, or a one-line region: the size is a width.
                 if !visual_mode().is_block() {
-                    op.start_vcol = getvvcol(Win::current(), &mut op.start).0;
+                    let value = getvvcol(Win::current(), &mut op.edit().start).0;
+                    op.edit().start_vcol = value;
                 }
-                RESEL_V_ISUAL_VCOL.set(ColNr::new(op.end_vcol - op.start_vcol + 1));
+                RESEL_V_ISUAL_VCOL.set(ColNr::new(op.end_vcol() - op.start_vcol() + 1));
             } else {
                 // Several lines: the size is the end column.
-                RESEL_V_ISUAL_VCOL.set(op.end_vcol);
+                RESEL_V_ISUAL_VCOL.set(op.end_vcol());
             }
         }
-        RESEL_V_ISUAL_LINE_COUNT.set(op.line_count);
+        RESEL_V_ISUAL_LINE_COUNT.set(op.line_count());
     }
 
     let is_fold_op = matches!(
-        op.op_type,
+        op.op_type(),
         OpType::Fold
             | OpType::Foldopen
             | OpType::Foldopenrec
@@ -438,10 +447,10 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
     );
     // A yank cannot be redone unless 'cpoptions' has `y`, and neither can
     // `:`.
-    if !((redo_yank || op.op_type != OpType::Yank)
-        && op.op_type != OpType::Colon
+    if !((redo_yank || op.op_type() != OpType::Yank)
+        && op.op_type() != OpType::Colon
         && !is_fold_op
-        && op.motion_force.is_nul())
+        && op.motion_force().is_nul())
     {
         return;
     }
@@ -449,20 +458,20 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
     if cmd_arg.cmdchar.is('g') && (cmd_arg.nchar.is('n') || cmd_arg.nchar.is('N')) {
         // `gn`/`gN` carry their own region, so the whole command repeats.
         prep_redo(
-            op.regname,
+            op.regname(),
             cmd_arg.count0,
-            Key::byte(get_op_char(op.op_type)),
-            Key::byte(get_extra_op_char(op.op_type)),
-            op.motion_force,
+            Key::byte(get_op_char(op.op_type())),
+            Key::byte(get_extra_op_char(op.op_type())),
+            op.motion_force(),
             cmd_arg.cmdchar,
             cmd_arg.nchar,
         );
     } else if !is_ex_cmdchar(cmd_arg) && cmd_arg.cmdchar != SpecialKey::Lua {
-        let opchar = Key::byte(get_op_char(op.op_type));
-        let extra_opchar = Key::byte(get_extra_op_char(op.op_type));
+        let opchar = Key::byte(get_op_char(op.op_type()));
+        let extra_opchar = Key::byte(get_extra_op_char(op.op_type()));
         // Only `r` uses `nchar`; for anything else it would be the
         // operator's own second character.
-        let mut nchar = if op.op_type == OpType::Replace {
+        let mut nchar = if op.op_type() == OpType::Replace {
             cmd_arg.nchar
         } else {
             Key::NUL
@@ -477,7 +486,7 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
         if opchar.is('g') && extra_opchar.is('@') {
             // `g@` also repeats the count, for 'operatorfunc'.
             prep_redo_num2(
-                op.regname,
+                op.regname(),
                 0,
                 Key::NUL,
                 Key::ascii(b'v'),
@@ -488,7 +497,7 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
             );
         } else {
             prep_redo(
-                op.regname,
+                op.regname(),
                 0,
                 Key::NUL,
                 Key::ascii(b'v'),
@@ -515,35 +524,35 @@ fn prepare_visual_redo(cmd_arg: &CmdArg, mut op: Op, gui_yank: bool, redo_yank: 
 /// Visual goes off *now* rather than after the operator so that the screen
 /// update does not show inverted text. `OpType::Yank`, `OpType::Colon`, `OpType::Function`
 /// and `OpType::Filter` do not redraw by themselves, so they get one here.
-fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lbr_saved: c_int) {
+fn finish_visual_region(op: Op, include_line_break: bool, gui_yank: bool, lbr_saved: c_int) {
     // `inclusive` defaults to true; an end on a NUL (an empty line) makes
     // it false, which is what makes `d}P` and `v}dP` behave the same.
-    if op.motion_force.is_nul() || op.motion_type == MotionType::LineWise {
-        op.inclusive = true;
+    if op.motion_force().is_nul() || op.motion_type() == MotionType::LineWise {
+        op.edit().inclusive = true;
     }
     if visual_mode().is_line() {
-        op.motion_type = MotionType::LineWise;
+        op.edit().motion_type = MotionType::LineWise;
     } else if visual_mode().is_char() {
-        op.motion_type = MotionType::CharWise;
+        op.edit().motion_type = MotionType::CharWise;
         // `op.end` is a position of the current buffer, so the cache answers
         // with the line it sits on; a column past its end reads as the NUL.
         let ends_on_nul = {
             let mut lines = Lines::current();
-            let line = lines.line(op.end.lnum);
-            byte_at(line, usize::try_from(op.end.col).unwrap_or(0)) == 0
+            let line = lines.line(op.end().lnum);
+            byte_at(line, usize::try_from(op.end().col).unwrap_or(0)) == 0
         };
         if ends_on_nul && (include_line_break || !op_virtual()) {
-            op.inclusive = false;
+            op.edit().inclusive = false;
             // Take the line break too, unless the operator only works on
             // whole lines anyway.
             if P_SEL.first_byte() != b'o'
-                && !op_on_lines(op.op_type)
-                && op.end.lnum < Buf::current().line_count()
+                && !op_on_lines(op.op_type())
+                && op.end().lnum < Buf::current().line_count()
             {
-                op.end.lnum += 1;
-                op.end.col = ColNr::ZERO;
-                op.end.coladd = 0;
-                op.line_count += 1;
+                op.edit().end.lnum += 1;
+                op.edit().end.col = ColNr::ZERO;
+                op.edit().end.coladd = 0;
+                op.edit().line_count += 1;
             }
         }
     }
@@ -555,11 +564,11 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
         setmouse();
         MOUSE_DRAGGING.set(0);
         may_clear_cmdline();
-        if (op.op_type == OpType::Yank
-            || op.op_type == OpType::Colon
-            || op.op_type == OpType::Function
-            || op.op_type == OpType::Filter)
-            && op.motion_force.is_nul()
+        if (op.op_type() == OpType::Yank
+            || op.op_type() == OpType::Colon
+            || op.op_type() == OpType::Function
+            || op.op_type() == OpType::Filter)
+            && op.motion_force().is_nul()
         {
             restore_lbr(lbr_saved != 0);
             redraw_curbuf_later(UPD_INVERTED);
@@ -571,30 +580,31 @@ fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lb
 ///
 /// And if the start is on or before that line's first non-blank, the operator
 /// becomes linewise -- strange, but that is what vi does.
-fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
-    if !(op.motion_type == MotionType::CharWise
-        && !op.inclusive
+fn adjust_region_end(cmd_arg: &CmdArg, op: Op) {
+    if !(op.motion_type() == MotionType::CharWise
+        && !op.inclusive()
         && !cmd_arg.outcome.has(Outcome::NO_ADJ_OP_END)
-        && op.end.col == ColNr::ZERO
-        && (!op.is_visual || P_SEL.first_byte() == b'o')
-        && op.line_count > 1)
+        && op.end().col == ColNr::ZERO
+        && (!op.is_visual() || P_SEL.first_byte() == b'o')
+        && op.line_count() > 1)
     {
-        op.end_adjusted = false;
+        op.edit().end_adjusted = false;
         return;
     }
 
     // Remembered, because the cursor column is restored differently after
     // an adjusted region.
-    op.end_adjusted = true;
-    op.line_count -= 1;
-    op.end.lnum -= 1;
+    op.edit().end_adjusted = true;
+    op.edit().line_count -= 1;
+    op.edit().end.lnum -= 1;
     if inindent(0) {
-        op.motion_type = MotionType::LineWise;
+        op.edit().motion_type = MotionType::LineWise;
     } else {
-        op.end.col = Lines::current().line_len(op.end.lnum);
-        if op.end.col != ColNr::ZERO {
-            op.end.col -= 1;
-            op.inclusive = true;
+        let value = Lines::current().line_len(op.end().lnum);
+        op.edit().end.col = value;
+        if op.end().col != ColNr::ZERO {
+            op.edit().end.col -= 1;
+            op.edit().inclusive = true;
         }
     }
 }
@@ -608,7 +618,7 @@ fn adjust_region_end(cmd_arg: &CmdArg, mut op: Op) {
 /// put it back first, because the user is about to look at the screen.
 fn run_operator(
     cmd_arg: &mut CmdArg,
-    mut op: Op,
+    op: Op,
     empty_region_error: bool,
     gui_yank: bool,
     lbr_saved: c_int,
@@ -621,20 +631,21 @@ fn run_operator(
 
     // Each operator works on a copy of the frame's operator (`Op::on_copy`):
     // every one of them may run user code.
-    match op.op_type {
+    match op.op_type() {
         OpType::Lshift | OpType::Rshift => {
-            let amount = if op.is_visual { cmd_arg.count1 } else { 1 };
+            let amount = if op.is_visual() { cmd_arg.count1 } else { 1 };
             op.on_copy(|arg| op_shift(arg, true, amount));
             auto_format(false, true);
         }
 
         OpType::JoinNs | OpType::Join => {
-            op.line_count = op.line_count.max(2);
-            if Win::current().cursor().lnum() + op.line_count - 1 > Buf::current().line_count() {
+            let value = op.line_count().max(2);
+            op.edit().line_count = value;
+            if Win::current().cursor().lnum() + op.line_count() - 1 > Buf::current().line_count() {
                 beep_flush();
             } else {
-                let count = size_t::try_from(op.line_count).unwrap_or(0);
-                let _ = do_join(count, op.op_type == OpType::Join, true, true, true);
+                let count = size_t::try_from(op.line_count()).unwrap_or(0);
+                let _ = do_join(count, op.op_type() == OpType::Join, true, true, true);
                 auto_format(false, true);
             }
         }
@@ -649,7 +660,7 @@ fn run_operator(
                 // the buffer is untouched.
                 let _ = op.on_copy(op_delete);
                 // Save the cursor line for undo if that has not happened.
-                if op.motion_type == MotionType::LineWise
+                if op.motion_type() == MotionType::LineWise
                     && has_format_option(FoFlag::AUTO)
                     && u_save_cursor().is_ok()
                 {
@@ -666,9 +677,9 @@ fn run_operator(
             } else {
                 restore_lbr(lbr_saved != 0);
                 // `zy` yanks without the trailing white space.
-                op.excl_tr_ws = cmd_arg.cmdchar.is('z');
+                op.edit().excl_tr_ws = cmd_arg.cmdchar.is('z');
                 // A copy: TextYankPost runs user code.
-                let arg = OpArg::clone(&op);
+                let arg = OpArg::clone(&op.read());
                 op_yank(&arg, !gui_yank);
             }
             check_cursor_col(Win::current());
@@ -708,20 +719,20 @@ fn run_operator(
         OpType::Format => {
             if c_int::from(Buf::current().read().b_p_fex.first_byte()) != 0 {
                 // A copy: the expression is user code.
-                let arg = OpArg::clone(&op);
+                let arg = OpArg::clone(&op.read());
                 op_formatexpr(&arg);
             } else if P_FP.first_byte() != 0
                 || c_int::from(Buf::current().read().b_p_fp.first_byte()) != 0
             {
                 // An external program.
-                op_colon(&op);
+                op_colon(&op.read());
             } else {
-                let arg = OpArg::clone(&op);
+                let arg = OpArg::clone(&op.read());
                 op_format(&arg, false);
             }
         }
         OpType::Format2 => {
-            let arg = OpArg::clone(&op);
+            let arg = OpArg::clone(&op.read());
             op_format(&arg, true);
         }
 
@@ -731,7 +742,7 @@ fn run_operator(
             let saved = REDO_VISUAL.get();
             restore_lbr(lbr_saved != 0);
             // A copy: the function is user code.
-            let arg = OpArg::clone(&op);
+            let arg = OpArg::clone(&op.read());
             op_function(&arg);
             REDO_VISUAL.set(saved);
         }
@@ -757,20 +768,21 @@ fn run_operator(
 
         OpType::Fold => {
             V_ISUAL_RESELECT.set(0);
-            fold_create(Win::current(), op.start, op.end);
+            fold_create(Win::current(), op.start(), op.end());
         }
         OpType::Foldopen | OpType::Foldopenrec | OpType::Foldclose | OpType::Foldcloserec => {
             V_ISUAL_RESELECT.set(0);
-            let opening = op.op_type == OpType::Foldopen || op.op_type == OpType::Foldopenrec;
-            let recursive = op.op_type == OpType::Foldopenrec || op.op_type == OpType::Foldcloserec;
-            let (start, end, visual) = (op.start, op.end, op.is_visual);
+            let opening = op.op_type() == OpType::Foldopen || op.op_type() == OpType::Foldopenrec;
+            let recursive =
+                op.op_type() == OpType::Foldopenrec || op.op_type() == OpType::Foldcloserec;
+            let (start, end, visual) = (op.start(), op.end(), op.is_visual());
             let (opening, recursive) = (c_int::from(opening), c_int::from(recursive));
             op_fold_range(start, end, opening, recursive, visual);
         }
         OpType::Folddel | OpType::Folddelrec => {
             V_ISUAL_RESELECT.set(0);
-            let recursive = c_int::from(op.op_type == OpType::Folddelrec);
-            let (first, last, visual) = (op.start.lnum, op.end.lnum, op.is_visual);
+            let recursive = c_int::from(op.op_type() == OpType::Folddelrec);
+            let (first, last, visual) = (op.start().lnum, op.end().lnum, op.is_visual());
             delete_fold(Win::current(), first, last, recursive, visual);
         }
 
@@ -799,8 +811,8 @@ fn run_operator(
 /// With an empty 'equalprg' the indenting is done internally; otherwise the
 /// region is handed to a `:` command line.
 fn indent_or_colon(op: Op) {
-    if op.op_type != OpType::Indent || !get_equalprg().is_empty() {
-        op_colon(&op);
+    if op.op_type() != OpType::Indent || !get_equalprg().is_empty() {
+        op_colon(&op.read());
         return;
     }
     if Buf::current().b_p_lisp() != 0 {
@@ -809,7 +821,7 @@ fn indent_or_colon(op: Op) {
         } else {
             Indenter::Lisp
         };
-        let arg = OpArg::clone(&op);
+        let arg = OpArg::clone(&op.read());
         op_reindent(&arg, indent);
         return;
     }
@@ -818,7 +830,7 @@ fn indent_or_colon(op: Op) {
     } else {
         Indenter::C
     };
-    let arg = OpArg::clone(&op);
+    let arg = OpArg::clone(&op.read());
     op_reindent(&arg, indent);
 }
 

@@ -231,7 +231,7 @@ fn bytes(texts: &[&str]) -> Vec<Vec<u8>> {
 /// `dir`, or entry `errornr` itself when `dir` is 0.
 fn walk(errornr: c_int, dir: c_int) -> Option<c_int> {
     let mut idx = 0;
-    let found = qf_get_entry(Qi::global().current_list(), errornr, dir, &mut idx);
+    let found = qf_get_entry(Qi::global().read().current_list(), errornr, dir, &mut idx);
     found.ok().map(|_| idx)
 }
 

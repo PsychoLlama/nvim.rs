@@ -103,7 +103,7 @@ pub(crate) fn nv_z_get_count(cmd_arg: &mut CmdArg, nchar_arg: &mut Key) -> bool 
             break;
         }
     }
-    cmd_arg.op().op_type = OpType::Nop;
+    cmd_arg.op().edit().op_type = OpType::Nop;
     false
 }
 
@@ -253,7 +253,7 @@ fn nv_zet_fold(cmd_arg: &mut CmdArg, nchar: Key, old_fdl: &mut Option<OptInt>) -
                 cmd_arg.nchar = Key::ascii(b'f');
                 nv_operator(cmd_arg);
                 win.set_wo_fen(1);
-                if nchar.is('F') && cmd_arg.op().op_type == OpType::Fold {
+                if nchar.is('F') && cmd_arg.op().op_type() == OpType::Fold {
                     nv_operator(cmd_arg);
                     FINISH_OP.set(true);
                 }

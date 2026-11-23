@@ -35,21 +35,20 @@
 )]
 
 use super::*;
-use crate::deref::deref_to_field;
-use crate::id_table::IdTable;
+use crate::id_table::ViewTable;
 use crate::memory::XString;
 use crate::quickfix::model::QfId;
 use crate::slot::SlotRef;
+use crate::slot::{EditPart, ReadPart, SlotEdit, SlotRead};
 use crate::types::Handle;
 use crate::types::{CmdIdx, Failed, Refcount};
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{CStr, c_int, c_uint};
-use core::ops::{Deref, DerefMut};
 
 /// Every stack, and what the table's owner keeps beside them.
 #[derive(Debug)]
 struct QfStacks {
-    table: IdTable<QfStack>,
+    table: ViewTable<QfStack>,
     /// The quickfix stack, made the first time anything asks for it.
     global: Option<QfId>,
     /// How many commands are holding a stack across code that can fire
@@ -62,7 +61,7 @@ struct QfStacks {
 }
 
 static QF_STACKS: GlobalCell<QfStacks> = GlobalCell::new(QfStacks {
-    table: IdTable::new(),
+    table: ViewTable::new(),
     global: None,
     busy: 0,
     pending_free: Vec::new(),
@@ -92,8 +91,6 @@ pub(crate) struct Qi {
     live: SlotRef<QfStack>,
 }
 
-deref_to_field!(Qi => mut QfStack, live);
-
 impl QfId {
     /// The stack this id names.
     ///
@@ -108,6 +105,20 @@ impl QfId {
 }
 
 impl Qi {
+    /// Borrow the stack until the guard is dropped. Counted: an edit of it,
+    /// or freeing it, through any copy panics while the guard is held.
+    #[track_caller]
+    pub(crate) fn read<'a>(self) -> SlotRead<'a, QfStack> {
+        self.live.read()
+    }
+
+    /// Lend the stack mutably until the guard is dropped: every other way to
+    /// it panics meanwhile.
+    #[track_caller]
+    pub(crate) fn edit<'a>(self) -> SlotEdit<'a, QfStack> {
+        self.live.edit()
+    }
+
     /// The quickfix stack.
     pub(crate) fn global() -> Qi {
         global_id().stack()
@@ -119,13 +130,13 @@ impl Qi {
 
     /// The list in slot `idx`, which must be one the stack has room for.
     pub(crate) fn slot(self, idx: c_int) -> Qfl {
-        debug_assert!(idx >= 0 && idx < self.max_count(), "a list slot");
+        debug_assert!(idx >= 0 && idx < self.read().max_count(), "a list slot");
         Qfl { qi: self, idx }
     }
 
     /// The list `:cc` and friends work on.
     pub(crate) fn current_slot(self) -> Qfl {
-        self.slot(self.current)
+        self.slot(self.read().current)
     }
 }
 
@@ -140,21 +151,64 @@ pub(crate) struct Qfl {
     idx: c_int,
 }
 
-impl Deref for Qfl {
-    type Target = QfList;
-
-    fn deref(&self) -> &QfList {
-        self.qi.live.list(self.idx)
-    }
+/// By-value getters, each a read let go before it returns (a getter in a
+/// call's arguments holds no guard across the call).
+macro_rules! copy_getters {
+    ($ty:ident { $($name:ident $(($($call:tt)*))?: $ret:ty;)* }) => {
+        impl $ty {
+            $(
+                #[doc = concat!("The `", stringify!($name), "` of what this names, by value.")]
+                #[inline]
+                #[track_caller]
+                pub(crate) fn $name(self) -> $ret {
+                    self.read().$name $(($($call)*))?
+                }
+            )*
+        }
+    };
 }
 
-impl DerefMut for Qfl {
-    fn deref_mut(&mut self) -> &mut QfList {
-        self.qi.live.list_mut(self.idx)
-    }
-}
+copy_getters!(Qi {
+    list_count: c_int;
+    current: c_int;
+    kind: QfListType;
+    bufnr: Option<Handle>;
+    is_empty(): bool;
+    max_count(): c_int;
+    is_quickfix(): bool;
+});
+
+copy_getters!(Qfl {
+    id: c_uint;
+    kind: QfListType;
+    cursor: usize;
+    index: c_int;
+    no_valid: bool;
+    multiline: bool;
+    multiignore: bool;
+    multiscan: bool;
+    changedtick: c_int;
+    is_empty(): bool;
+    count(): c_int;
+});
 
 impl Qfl {
+    /// Borrow the list until the guard is dropped: a read of its stack,
+    /// counted ([`Qi::read`]).
+    #[track_caller]
+    pub(crate) fn read<'a>(self) -> ReadPart<'a, QfStack, QfList> {
+        let idx = self.idx;
+        self.qi.read().map(|stack| stack.list(idx))
+    }
+
+    /// Lend the list mutably until the guard is dropped: an edit of its
+    /// stack ([`Qi::edit`]).
+    #[track_caller]
+    pub(crate) fn edit<'a>(self) -> EditPart<'a, QfStack, QfList> {
+        let idx = self.idx;
+        self.qi.edit().map(|stack| stack.list_mut(idx))
+    }
+
     /// The stack the list is on.
     pub(crate) fn stack(self) -> Qi {
         self.qi
@@ -169,7 +223,7 @@ fn global_id() -> QfId {
     let mut stack = QfStack::new(QFLT_QUICKFIX);
     stack.bufnr = None;
     QF_STACKS.with_mut(|stacks| {
-        let (id, _) = stacks.table.insert(stack);
+        let id = stacks.table.insert(stack);
         stacks.global = Some(id);
         id
     })
@@ -294,7 +348,7 @@ impl Win {
     pub(crate) fn set_location_list(self, qi: Qi) {
         debug_assert!(self.w_llist().is_none(), "the window already holds a list");
         self.set_w_llist(Some(qi.id()));
-        qi.refcount.retain();
+        qi.read().refcount.retain();
     }
 
     /// Drop the window's references to its own location list stack and the
@@ -315,15 +369,15 @@ impl Win {
         let qi = from.stack();
         let id = new_location_stack(QFLT_LOCATION, self.wo_lhi());
         to.set_w_llist(Some(id));
-        let mut copy = id.stack();
-        to.set_wo_lhi(OptInt::from(copy.max_count()));
-        copy.list_count = qi.list_count;
-        for idx in 0..qi.list_count {
+        let copy = id.stack();
+        to.set_wo_lhi(OptInt::from(copy.read().max_count()));
+        copy.edit().list_count = qi.list_count();
+        for idx in 0..qi.list_count() {
             // Two stacks, so the borrows are of two different objects; and
             // copying runs nothing that could reach either.
-            copy_loclist(&qi.slot(idx), &mut copy.slot(idx));
+            copy_loclist(&qi.slot(idx).read(), &mut copy.slot(idx).edit());
         }
-        copy.current = qi.current;
+        copy.edit().current = qi.current();
     }
 
     /// Give the window's location list stack room for `n` lists
@@ -437,15 +491,15 @@ pub(crate) fn new_location_stack(kind: QfListType, n: OptInt) -> QfId {
     stack.refcount = Refcount::one();
     stack.bufnr = None;
     stack.lists = new_slots(n);
-    QF_STACKS.with_mut(|stacks| stacks.table.insert(stack).0)
+    QF_STACKS.with_mut(|stacks| stacks.table.insert(stack))
 }
 
 /// Give the quickfix stack its `'chistory'` slots. Called once, during
 /// startup.
 pub fn qf_init_stack() {
-    let mut qi = Qi::global();
-    qi.bufnr = None;
-    qi.lists = new_slots(p_chi());
+    let qi = Qi::global();
+    qi.edit().bufnr = None;
+    qi.edit().lists = new_slots(p_chi());
 }
 
 /// Give the quickfix stack room for `n` lists (`'chistory'`).
@@ -454,22 +508,22 @@ pub fn qf_resize_stack(n: c_int) {
 }
 
 /// Resize a stack, dropping the oldest lists if they no longer fit.
-fn resize_stack(mut qi: Qi, n: c_int) {
+fn resize_stack(qi: Qi, n: c_int) {
     let max = qi.max_count();
     if n == max {
         return;
     }
-    if n < max && n < qi.list_count {
-        for _ in 0..qi.list_count - n {
+    if n < max && n < qi.list_count() {
+        for _ in 0..qi.list_count() - n {
             pop_stack(qi, true);
         }
     }
     let n = usize::try_from(n.max(0)).expect("clamped above");
     // Lists past the new end go, and their values with them.
-    let dropped = if n < qi.lists.len() {
-        qi.lists.split_off(n)
+    let dropped = if n < qi.read().lists.len() {
+        qi.edit().lists.split_off(n)
     } else {
-        qi.lists.resize_with(n, QfList::new);
+        qi.edit().lists.resize_with(n, QfList::new);
         Vec::new()
     };
     drop(dropped);
@@ -481,32 +535,33 @@ fn resize_stack(mut qi: Qi, n: c_int) {
 ///
 /// With `adjust`, the stack also shrinks and the current list follows the
 /// list it pointed at — or, if that was the one dropped, the newest.
-pub(crate) fn pop_stack(mut qi: Qi, adjust: bool) {
-    let count = usize::try_from(qi.list_count).expect("a list count is never negative");
-    let oldest = qi.lists.remove(0);
-    qi.lists.insert(count - 1, QfList::new());
+pub(crate) fn pop_stack(qi: Qi, adjust: bool) {
+    let count = usize::try_from(qi.list_count()).expect("a list count is never negative");
+    let oldest = qi.edit().lists.remove(0);
+    qi.edit().lists.insert(count - 1, QfList::new());
     drop(oldest);
     if adjust {
-        qi.list_count -= 1;
-        qi.current = if qi.current == 0 {
-            qi.list_count - 1
+        qi.edit().list_count -= 1;
+        let current = if qi.current() == 0 {
+            qi.list_count() - 1
         } else {
-            qi.current - 1
+            qi.current() - 1
         };
+        qi.edit().current = current;
     }
 }
 
 /// The buffer the quickfix window shows, or `None`.
 pub fn qf_stack_get_bufnr() -> c_int {
-    Handle::number_of(Qi::global().bufnr)
+    Handle::number_of(Qi::global().read().bufnr)
 }
 
 /// Wipe the quickfix window's buffer, if it is not displayed anywhere.
-fn wipe_qf_buffer(mut qi: Qi) {
-    if qi.bufnr.is_none() {
+fn wipe_qf_buffer(qi: Qi) {
+    if qi.bufnr().is_none() {
         return;
     }
-    let Some(qfbuf) = find_buf(qi.bufnr).filter(|b| b.b_nwindows() == 0) else {
+    let Some(qfbuf) = find_buf(qi.bufnr()).filter(|b| b.b_nwindows() == 0) else {
         return;
     };
     // `close_buffer` insists that `curwin->w_buffer == CURBUF`, and it
@@ -517,7 +572,7 @@ fn wipe_qf_buffer(mut qi: Qi) {
         Win::current().set_w_buffer(Buf::current_or_none().unwrap_or(Buf::NULL));
     }
     close_buffer(None, qfbuf, DOBUF_WIPE, false, false);
-    qi.bufnr = None;
+    qi.edit().bufnr = None;
     if buf_was_null {
         Win::current().set_w_buffer(Buf::NULL);
     }
@@ -544,7 +599,7 @@ pub(crate) fn drop_stack_ref(id: Option<QfId>) {
 /// Drop one reference, freeing the stack at the last.
 fn release(id: QfId) {
     let qi = id.stack();
-    if qi.refcount.release() < 1 {
+    if qi.read().refcount.release() < 1 {
         wipe_qf_buffer(qi);
         free_stack(id);
     }
@@ -567,7 +622,7 @@ pub(crate) fn free_unreferenced_stack(id: QfId) {
 /// Free the lists of the quickfix stack, leaving the stack itself.
 pub fn free_quickfix_lists() {
     let qi = Qi::global();
-    for idx in 0..qi.list_count {
+    for idx in 0..qi.list_count() {
         qf_free(qi.slot(idx));
     }
 }
@@ -576,10 +631,10 @@ pub fn free_quickfix_lists() {
 /// was showing it a fresh empty stack to show.
 ///
 /// `window` is `None` for the quickfix stack, which belongs to no window.
-pub(crate) fn qf_free_stack(window: Option<Win>, mut qi: Qi) {
+pub(crate) fn qf_free_stack(window: Option<Win>, qi: Qi) {
     let qfwin = qf_find_win(qi);
     if qfwin.is_some() {
-        if qi.current < qi.list_count {
+        if qi.current() < qi.list_count() {
             qf_free(qi.current_slot());
         }
         qf_update_buffer(qi, None);
@@ -592,14 +647,14 @@ pub(crate) fn qf_free_stack(window: Option<Win>, mut qi: Qi) {
     }
     let Some(wp) = window else {
         free_quickfix_lists();
-        qi.current = 0;
-        qi.list_count = 0;
+        qi.edit().current = 0;
+        qi.edit().list_count = 0;
         return;
     };
     wp.free_location_lists();
     if let Some(qfwin) = qfwin {
         let fresh = new_location_stack(QFLT_LOCATION, wp.wo_lhi());
-        fresh.stack().bufnr = Some(qfwin.buffer().handle());
+        fresh.stack().edit().bufnr = Some(qfwin.buffer().handle());
         let shown = qfwin.edit().w_llist_ref.take();
         drop_stack_ref(shown);
         qfwin.set_w_llist_ref(Some(fresh));
@@ -614,12 +669,12 @@ pub(crate) fn qf_free_stack(window: Option<Win>, mut qi: Qi) {
 
 /// Make the list with the given id current again, after autocommands may
 /// have pushed others. Answers `Err` when it is gone.
-pub(crate) fn qf_restore_list(mut qi: Qi, save_qfid: c_uint) -> Result<(), Failed> {
-    if qi.current_list().id == save_qfid {
+pub(crate) fn qf_restore_list(qi: Qi, save_qfid: c_uint) -> Result<(), Failed> {
+    if qi.read().current_list().id == save_qfid {
         return Ok(());
     }
-    let curlist = qi.find_list(save_qfid).ok_or(Failed)?;
-    qi.current = curlist;
+    let curlist = qi.read().find_list(save_qfid).ok_or(Failed)?;
+    qi.edit().current = curlist;
     Ok(())
 }
 
@@ -636,7 +691,7 @@ pub(crate) fn qflist_valid(window: Option<Win>, qf_id: c_uint) -> bool {
         Some(wp) if win_valid(wp.id()) => wp.location_list().map(QfId::stack),
         Some(_) => None,
     };
-    qi.is_some_and(|qi| qi.find_list(qf_id).is_some())
+    qi.is_some_and(|qi| qi.read().find_list(qf_id).is_some())
 }
 
 #[cfg(test)]
@@ -652,10 +707,10 @@ mod tests {
         let _held = editor_state_lock();
         let id = new_location_stack(QFLT_LOCATION, 3);
         let qi = id.stack();
-        assert_eq!(qi.refcount, Refcount::one());
-        assert_eq!(qi.kind, QFLT_LOCATION);
-        assert_eq!(qi.bufnr, None);
-        assert_eq!(qi.list_count, 0);
+        assert_eq!(qi.read().refcount, Refcount::one());
+        assert_eq!(qi.kind(), QFLT_LOCATION);
+        assert_eq!(qi.bufnr(), None);
+        assert_eq!(qi.list_count(), 0);
         assert_eq!(qi.max_count(), 3);
         assert!(qi != Qi::global());
         drop_stack_ref(Some(id));
@@ -668,16 +723,16 @@ mod tests {
     fn popping_the_stack_shifts_the_rest_down() {
         let _held = editor_state_lock();
         let id = new_location_stack(QFLT_LOCATION, 4);
-        let mut qi = id.stack();
-        for (nr, list) in qi.lists.iter_mut().enumerate() {
+        let qi = id.stack();
+        for (nr, list) in qi.edit().lists.iter_mut().enumerate() {
             list.id = c_uint::try_from(nr).unwrap() + 1;
         }
-        qi.list_count = 3;
-        qi.current = 2;
+        qi.edit().list_count = 3;
+        qi.edit().current = 2;
         pop_stack(qi, true);
-        let ids: Vec<c_uint> = qi.lists.iter().map(|list| list.id).collect();
+        let ids: Vec<c_uint> = qi.read().lists.iter().map(|list| list.id).collect();
         assert_eq!(ids, vec![2, 3, 0, 4]);
-        assert_eq!((qi.list_count, qi.current), (2, 1));
+        assert_eq!((qi.list_count(), qi.current()), (2, 1));
         drop_stack_ref(Some(id));
     }
 }

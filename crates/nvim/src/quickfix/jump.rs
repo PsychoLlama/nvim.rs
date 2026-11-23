@@ -61,8 +61,8 @@ impl Started {
         let qfl = qi.current_slot();
         Started {
             qfl,
-            curlist: qi.current,
-            changedtick: qfl.changedtick,
+            curlist: qi.current(),
+            changedtick: qfl.changedtick(),
         }
     }
 
@@ -70,13 +70,13 @@ impl Started {
     /// holds entry `at`. Reports E925 or E926 when it is not.
     fn still_current(&self, at: usize) -> Result<(), Failed> {
         let qi = self.qfl.stack();
-        if self.curlist == qi.current
-            && self.changedtick == self.qfl.changedtick
-            && is_qf_entry_present(&self.qfl, at)
+        if self.curlist == qi.current()
+            && self.changedtick == self.qfl.changedtick()
+            && is_qf_entry_present(&self.qfl.read(), at)
         {
             return Ok(());
         }
-        emsg_list_changed(self.qfl.kind);
+        emsg_list_changed(self.qfl.kind());
         Err(Failed)
     }
 }
@@ -90,9 +90,12 @@ fn qf_jump_edit_buffer(
     opened_window: &mut bool,
 ) -> Jumped {
     let started = Started::now(qi);
-    let (kind, save_qfid) = (started.qfl.kind, started.qfl.id);
-    let entry = &started.qfl.entries[at];
-    let (entry_kind, fnum) = (entry.kind, entry.fnum);
+    let (kind, save_qfid) = (started.qfl.kind(), started.qfl.id());
+    let (entry_kind, fnum) = {
+        let list = started.qfl.read();
+        let entry = &list.entries[at];
+        (entry.kind, entry.fnum)
+    };
 
     let opened = if entry_kind == 1 {
         // A help file: `do_ecmd` sets 'buftype', `readfile` sets
@@ -163,7 +166,7 @@ fn escape_winfixbuf(
     if forceit || Win::current().wo_wfb() == 0 || Some(Buf::current().handle()) == fnum {
         return Some(true);
     }
-    if qi.kind == QFLT_LOCATION {
+    if qi.kind() == QFLT_LOCATION {
         // A location list cannot split or reassign its window.
         qf_emsg(E_WINFIXBUF_CANNOT_GO_TO_BUFFER);
         return None;
@@ -247,7 +250,8 @@ fn qf_jump_print_msg(qi: Qi, qf_index: c_int, at: usize, old_curbuf: Buf, old_ln
     // Copied out: building the text runs nothing, but showing it can. A
     // redraw can run user code too, so the entry may have gone.
     let (count, cleared, types, text) = {
-        let qfl = qi.current_list();
+        let stack = qi.read();
+        let qfl = stack.current_list();
         let Some(entry) = qfl.entries.get(at) else {
             return;
         };
@@ -297,7 +301,7 @@ fn qf_jump_open_window(qi: Qi, at: usize, newwin: bool, opened_window: &mut bool
     let started = Started::now(qi);
 
     // A `:helpgrep` entry wants a help window.
-    if started.qfl.entries[at].kind == 1
+    if started.qfl.read().entries[at].kind == 1
         && (!buf_is_help(Win::current().buffer_or_none()) || cmdmod_tab() != 0)
         && jump_to_help_window(qi, newwin, opened_window).is_err()
     {
@@ -308,7 +312,7 @@ fn qf_jump_open_window(qi: Qi, at: usize, newwin: bool, opened_window: &mut bool
     }
 
     if buf_is_quickfix(current_buf()) && !*opened_window {
-        let fnum = started.qfl.entries[at].fnum;
+        let fnum = started.qfl.read().entries[at].fnum;
         if fnum.is_none() {
             return Jumped::Nowhere;
         }
@@ -339,7 +343,7 @@ fn qf_jump_to_buffer(
     let old_curbuf = Buf::current();
     let old_lnum = Win::current().cursor().lnum();
 
-    if qi.current_list().entries[at].fnum.is_some() {
+    if qi.read().current_list().entries[at].fnum.is_some() {
         let edited = qf_jump_edit_buffer(qi, at, forceit, prev_winid, opened_window);
         if edited != Jumped::Done {
             return edited;
@@ -350,7 +354,8 @@ fn qf_jump_to_buffer(
         setpcmark();
     }
     let position = {
-        let entry = &qi.current_list().entries[at];
+        let stack = qi.read();
+        let entry = &stack.current_list().entries[at];
         Position {
             lnum: entry.lnum,
             col: entry.col,
@@ -387,7 +392,7 @@ pub fn qf_jump_to_current() {
 /// `forceit` allows abandoning a changed buffer, and `newwin` always splits
 /// a new window.
 pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, newwin: bool) {
-    if qi.is_empty() || qi.current_list().is_empty() {
+    if qi.is_empty() || qi.read().current_list().is_empty() {
         qf_emsg(E_NO_ERRORS);
         return;
     }
@@ -400,11 +405,11 @@ pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, 
     let old_key_typed = KEY_TYPED.get();
 
     let busy = QuickfixBusy::hold();
-    let mut qfl = qi.current_slot();
-    let old_cursor = qfl.cursor;
-    let old_index = qfl.index;
+    let qfl = qi.current_slot();
+    let old_cursor = qfl.cursor();
+    let old_index = qfl.index();
     let mut qf_index = old_index;
-    let found = qf_get_entry(&qfl, errornr, dir, &mut qf_index);
+    let found = qf_get_entry(&qfl.read(), errornr, dir, &mut qf_index);
     if found == Err(NoEntry::NoMoreItems) {
         emsg(gettext(E_NO_MORE_ITEMS));
     }
@@ -413,14 +418,14 @@ pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, 
     // list is not ours to write to any more.
     let mut settle = Some((old_cursor, old_index));
     if let Ok(at) = found {
-        qfl.index = qf_index;
-        qfl.cursor = at;
+        qfl.edit().index = qf_index;
+        qfl.edit().cursor = at;
         settle = Some((at, qf_index));
 
         // No need to print the message when the quickfix window shows it.
         let print_message = !qf_win_pos_update(qi, old_index);
         let prev_winid = Win::current().handle();
-        let names_a_file = qfl.entries[at].fnum.is_some();
+        let names_a_file = qfl.read().entries[at].fnum.is_some();
         let mut opened_window = false;
 
         match qf_jump_open_window(qi, at, newwin, &mut opened_window) {
@@ -459,8 +464,8 @@ pub(crate) fn qf_jump_newwin(qi: Qi, dir: c_int, errornr: c_int, forceit: bool, 
         }
     }
     if let Some((cursor, index)) = settle {
-        qfl.cursor = cursor;
-        qfl.index = index;
+        qfl.edit().cursor = cursor;
+        qfl.edit().index = index;
     }
 
     // Put 'switchbuf' back, unless an autocommand or a modeline changed
@@ -479,7 +484,7 @@ pub(crate) fn qf_jump_first(qi: Qi, save_qfid: c_uint, forceit: bool) {
         return;
     }
     // Autocommands may have cleared the list.
-    if !qi.current_list().is_empty() {
+    if !qi.read().current_list().is_empty() {
         qf_jump(qi, 0, 0, forceit);
     }
 }

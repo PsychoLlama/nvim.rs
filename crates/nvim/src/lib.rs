@@ -64,7 +64,7 @@ pub mod hashtab;
 pub(crate) mod help;
 pub mod highlight;
 pub(crate) mod highlight_group;
-pub(crate) mod id_table;
+pub(crate) use slot::id_table;
 pub mod indent;
 pub mod indent_c;
 pub(crate) mod input;

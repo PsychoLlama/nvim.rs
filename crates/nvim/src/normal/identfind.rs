@@ -261,7 +261,7 @@ pub(crate) fn nv_gd(op: Op, nchar: Key, thisblock: bool) {
     }
     if FDO_FLAGS.get() & OPT_FDO_FLAG_SEARCH as c_uint != 0
         && KEY_TYPED.get()
-        && op.op_type == OpType::Nop
+        && op.op_type() == OpType::Nop
     {
         fold_open_cursor();
     }

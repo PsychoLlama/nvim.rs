@@ -146,7 +146,7 @@ pub(crate) fn do_mouse(
         return answer;
     }
 
-    let regname = op.map_or(RegName::UNNAMED, |o| o.regname);
+    let regname = op.map_or(RegName::UNNAMED, |o| o.read().regname);
     if which_button == MOUSE_MIDDLE
         && let Some(answer) = middle_button_insert(op, regname, fixindent)
     {
@@ -185,9 +185,9 @@ pub(crate) fn do_mouse(
 
     // If an operator is pending, ignore all drags and releases until the next
     // mouse click.
-    if let Some(mut op) = op.filter(|o| !is_drag && o.pending()) {
+    if let Some(op) = op.filter(|o| !is_drag && o.pending()) {
         GOT_CLICK.set(false);
-        op.motion_type = MotionType::CharWise;
+        op.edit().motion_type = MotionType::CharWise;
     }
 
     // When releasing the button let jump_to_mouse() know.
@@ -204,10 +204,10 @@ pub(crate) fn do_mouse(
     if !visual_active() || mouse_can_visual {
         // Through a copy, put back after the jump: the jump can run
         // autocommands, which may read the pending operator.
-        let mut inclusive = op.map(|op| op.inclusive);
+        let mut inclusive = op.map(|op| op.inclusive());
         jump_flags = jump_to_mouse(jump_flags, inclusive.as_mut(), which_button);
-        if let (Some(mut op), Some(inclusive)) = (op, inclusive) {
-            op.inclusive = inclusive;
+        if let (Some(op), Some(inclusive)) = (op, inclusive) {
+            op.edit().inclusive = inclusive;
         }
     }
 
@@ -876,10 +876,10 @@ impl Win {
             inc(&mut probe);
         }
 
-        let Some(mut op) = op else {
+        let Some(op) = op else {
             return false;
         };
-        op.motion_type = MotionType::CharWise;
+        op.edit().motion_type = MotionType::CharWise;
 
         if !visual_mode().is_char() {
             return false;
@@ -890,12 +890,12 @@ impl Win {
         if !equalpos(self.w_cursor(), visual_anchor()) {
             return false;
         }
-        let Some(pos) = findmatch(Some(&mut op), Codepoint::NUL) else {
+        let Some(pos) = findmatch(Some(&mut *op.edit()), Codepoint::NUL) else {
             return false;
         };
 
         self.set_w_cursor(pos);
-        if op.motion_type == MotionType::LineWise {
+        if op.motion_type() == MotionType::LineWise {
             set_visual_mode(VisualMode::LINE);
         } else if sel_exclusive() {
             if lt(self.w_cursor(), visual_anchor()) {

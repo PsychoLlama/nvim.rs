@@ -347,7 +347,7 @@ fn process_files(
     files: &[XString],
     out: &mut Outcome,
 ) -> bool {
-    let mut save_qfid = qi.current_list().id;
+    let mut save_qfid = qi.read().current_list().id;
     let dirname_start = current_dir().unwrap_or_default();
     let mut dirname_now = None;
 
@@ -381,7 +381,7 @@ fn process_files(
         if !list_still_usable(window, qi, save_qfid, title.as_cstr()) {
             return false;
         }
-        save_qfid = qi.current_list().id;
+        save_qfid = qi.read().current_list().id;
 
         if let Some(buf) = buf {
             let found_match = match_buflines(
@@ -542,17 +542,17 @@ pub fn ex_vimgrep(excmd: &mut ExArg) {
         return;
     }
 
-    let mut qfl = qi.current_slot();
-    qfl.no_valid = false;
-    qfl.cursor = 0;
-    qfl.index = 1;
-    qfl.changed();
+    let qfl = qi.current_slot();
+    qfl.edit().no_valid = false;
+    qfl.edit().cursor = 0;
+    qfl.edit().index = 1;
+    qfl.edit().changed();
 
     qf_update_buffer(qi, None);
 
     // Remember the current list, so that an autocommand replacing it is
     // noticed before the jump.
-    let save_qfid = qi.current_list().id;
+    let save_qfid = qi.read().current_list().id;
     if let Some(name) = au_name {
         fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
     }
@@ -561,7 +561,7 @@ pub fn ex_vimgrep(excmd: &mut ExArg) {
         return;
     }
 
-    if qi.current_list().is_empty() {
+    if qi.read().current_list().is_empty() {
         let spat = msg_bytes(&search.spat);
         semsg!("E480: No match: {spat}");
     } else if search.flags & VGR_NOJUMP == 0 {
