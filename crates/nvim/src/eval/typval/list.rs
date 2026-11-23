@@ -241,7 +241,7 @@ impl TypVal {
     ///
     /// Only the tests still ask for the pointer.
     #[cfg(test)]
-    pub(crate) fn list_or_null(&self) -> *mut List {
+    pub(crate) fn list_or_null(&self) -> *mut ListBox {
         match self {
             TypVal::List(list) => list
                 .as_ref()
@@ -390,22 +390,11 @@ pub fn list_free_contents(list: &ListRef) {
     drop(items);
 }
 
-impl ListRef {
-    /// Mark this list as copied to `copy` under `copy_id`: the deep copy's
-    /// memo, which [`List::copy_under`] reads back.
-    pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &ListRef) {
-        let mut this = self.edit();
-        this.lv_copy_id = copy_id;
-        this.lv_copylist = copy.as_ptr();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::eval::collect::var_item_copy;
     use crate::global_cell::editor_state_lock;
-    use ::core::mem::ManuallyDrop;
 
     /// The safe layer these cases are written against, so that a case reads
     /// as ordinary code and says only what it is about.
@@ -782,91 +771,6 @@ mod tests {
         l::done(list, &lws);
     }
 
-    /// The reference count of `l`.
-    fn refs(l: &List) -> i32 {
-        l.lv_refcount.get()
-    }
-
-    /// A handle over `list` that owns no reference -- what the collector
-    /// holds while it frees a list nobody references.
-    fn view(list: &ListRef) -> ManuallyDrop<ListRef> {
-        let view = ManuallyDrop::new(list.clone());
-        view.edit().lv_refcount.release();
-        view
-    }
-
-    /// Give `view` a reference of its own again and let it go: the release
-    /// that frees whatever is left of the list.
-    fn free(view: ManuallyDrop<ListRef>) {
-        view.edit().lv_refcount.retain();
-        drop(ManuallyDrop::into_inner(view));
-    }
-
-    /// Hold `TV_IN_FREE_UNREF_ITEMS` up for a scope, and put it down even
-    /// when an assertion unwinds through it -- a flag left up would turn
-    /// every later case's frees into leaks.
-    #[derive(Debug)]
-    struct Collecting;
-    impl Collecting {
-        fn start() -> Collecting {
-            TV_IN_FREE_UNREF_ITEMS.set(true);
-            Collecting
-        }
-    }
-    impl Drop for Collecting {
-        fn drop(&mut self) {
-            TV_IN_FREE_UNREF_ITEMS.set(false);
-        }
-    }
-
-    /// While the collector is freeing, the last reference going does not
-    /// free the list: the collector frees the whole graph itself, and a
-    /// free from inside it would free something twice.
-    #[test]
-    fn a_list_released_mid_collection_waits_for_the_collector() {
-        let _serial = editor_state_lock();
-        let list = l::counted(3);
-        let held = view(&list);
-        assert_eq!(refs(&held.read()), 1);
-        {
-            let _collecting = Collecting::start();
-            drop(list);
-            // Still allocated, still holding its items, at zero.
-            assert_eq!(refs(&held.read()), 0);
-            assert_eq!(l::numbers(&held.read()), [0, 1, 2]);
-        }
-        // What `free_unref_items` does with it: contents, then the list.
-        list_free_contents(&held);
-        free(held);
-    }
-
-    /// A list that holds itself never reaches zero by itself; the
-    /// collector's two passes are what free it.
-    ///
-    /// Pass 1 is `list_free_contents`, exactly as `free_unref_items` calls
-    /// it, and dropping the self-reference walks the list again -- which is
-    /// why the items are taken out under a borrow that has ended by then.
-    #[test]
-    fn a_self_cycle_is_freed_by_the_collectors_two_passes() {
-        let _serial = editor_state_lock();
-        let list = l::counted(1);
-        let itself = list.clone();
-        list.edit().push_list(Some(itself));
-        assert_eq!(refs(&list.read()), 2);
-        let held = view(&list);
-        drop(list);
-        assert_eq!(refs(&held.read()), 1, "the cycle keeps it alive");
-
-        let collecting = Collecting::start();
-        // Pass 1: the contents.  The self-reference goes to zero, and the
-        // flag keeps that from freeing the list under the walk.
-        list_free_contents(&held);
-        assert_eq!(refs(&held.read()), 0);
-        drop(collecting);
-        // Pass 2: the structure.
-        free(held);
-    }
-
     /// A deep copy of a list that holds itself: the copy's item names the
     /// *copy*, and the original's count is what it was.
     #[test]
@@ -876,21 +780,23 @@ mod tests {
         let itself = list.clone();
         list.edit().push_list(Some(itself));
         let from = TypVal::list(Some(list.clone()));
-        let before = refs(&list.read());
+        let before = list.refcount();
 
         let mut to = TypVal::Unknown;
-        let copy_id = crate::eval::get_copy_id();
-        let copied = var_item_copy(None, &from, &mut to, true, copy_id);
+        let walk = CopyWalk::new();
+        let copied = var_item_copy(None, &from, &mut to, true, Some(&walk));
         assert_eq!(copied, Ok(()));
+        // The walk held a reference to its copy until it ended.
+        drop(walk);
         let copy = to.list_shared().expect("a list").clone();
         assert!(!copy.ptr_eq(&list));
         assert_eq!(l::numbers(&copy.read())[0], 0);
         let held = copy.read();
         let inner = held.items()[1].li_tv.list_shared().expect("a list");
         assert!(inner.ptr_eq(&copy), "the cycle followed the original");
-        assert_eq!(refs(&list.read()), before);
+        assert_eq!(list.refcount(), before);
         // The value `to` holds, the copy's item, and `copy` here.
-        assert_eq!(refs(&copy.read()), 3);
+        assert_eq!(copy.refcount(), 3);
 
         // Break both cycles, then let the values go.
         drop(held);
@@ -915,9 +821,9 @@ mod tests {
         let list = l::counted(1);
         let itself = list.clone();
         list.edit().push_list(Some(itself));
-        assert_eq!(refs(&list.read()), 2);
+        assert_eq!(list.refcount(), 2);
         list.remove_at(1);
-        assert_eq!(refs(&list.read()), 1);
+        assert_eq!(list.refcount(), 1);
         assert_eq!(l::numbers(&list.read()), [0]);
         l::done(list, &[]);
     }
@@ -936,9 +842,9 @@ mod tests {
         let from = TypVal::list(Some(outer.clone()));
         let item = |l: &List, at: usize| l.items()[at].li_tv.list_or_null();
 
-        for (copy_id, shares) in [(crate::eval::get_copy_id(), true), (0, false)] {
+        for (walk, shares) in [(Some(CopyWalk::new()), true), (None, false)] {
             let mut to = TypVal::Unknown;
-            let copied = var_item_copy(None, &from, &mut to, true, copy_id);
+            let copied = var_item_copy(None, &from, &mut to, true, walk.as_ref());
             assert_eq!(copied, Ok(()));
             let copy = to.list_ref().expect("a list");
             assert_ne!(item(&copy, 0), shared.as_ptr());
@@ -949,7 +855,7 @@ mod tests {
             drop(copy);
             tv_clear(&mut to);
         }
-        assert_eq!(refs(&shared.read()), 3);
+        assert_eq!(shared.refcount(), 3);
 
         let mut from = from;
         tv_clear(&mut from);

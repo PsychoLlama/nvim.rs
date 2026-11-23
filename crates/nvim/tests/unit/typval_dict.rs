@@ -13,10 +13,10 @@ use std::ptr;
 
 use neovim::eval::typval::DictItem;
 use neovim::eval::typval::{
-    CallbackRefused, DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX, DictRef, ListRef, NumBuf,
-    callback_free, dict_clear, dict_copy, dict_equal, dict_extend, dict_find, dict_get_callback,
-    dict_get_number, dict_get_string_alloc, dict_get_string_buf, dict_get_string_buf_chk, tv_clear,
-    tv_dict_alloc,
+    CallbackRefused, CopyWalk, DI_FLAGS_FIX, DI_FLAGS_RO, DI_FLAGS_RO_SBX, DictRef, ListRef,
+    NumBuf, callback_free, dict_clear, dict_copy, dict_equal, dict_extend, dict_find,
+    dict_get_callback, dict_get_number, dict_get_string_alloc, dict_get_string_buf,
+    dict_get_string_buf_chk, tv_clear, tv_dict_alloc,
 };
 use neovim::guard::{SANDBOX, Suppress};
 use neovim::mbyte::CONV_NONE_INIT;
@@ -43,12 +43,14 @@ unsafe fn dict_copied(
     copy_id: c_int,
 ) -> *mut Dict {
     // A view of the case's dict that takes no reference.
-    let orig = ManuallyDrop::new(unsafe { DictRef::owning(orig) });
+    let orig = ManuallyDrop::new(unsafe { DictRef::owning(tv::dbox(orig)) });
     let Some(orig) = orig.as_ref() else {
         return ptr::null_mut();
     };
-    dict_copy(unsafe { conv.as_ref() }, orig, deep, copy_id)
-        .map_or(ptr::null_mut(), DictRef::into_raw)
+    // A non-zero id asks for the memo: a walk of its own.
+    let walk = (copy_id != 0).then(CopyWalk::new);
+    dict_copy(unsafe { conv.as_ref() }, orig, deep, walk.as_ref())
+        .map_or(ptr::null_mut(), |d| tv::dval(d.into_raw()))
 }
 
 /// A view of the case's dict as a handle, which takes no reference.
@@ -56,7 +58,7 @@ unsafe fn dict_copied(
 /// # Safety
 /// `d` is a live dict.
 unsafe fn view(d: *mut Dict) -> ManuallyDrop<DictRef> {
-    ManuallyDrop::new(unsafe { DictRef::owning(d) }.expect("a live dict"))
+    ManuallyDrop::new(unsafe { DictRef::owning(tv::dbox(d)) }.expect("a live dict"))
 }
 use crate::support::{check_emsg, cstr};
 
@@ -101,7 +103,7 @@ fn a_zero_length_watch_pattern_matches_anything() {
         log.check(&[]);
         assert_eq!(tv::dict_watchers(d), []);
 
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }
 
@@ -146,7 +148,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
         let pt_arg = pt.pt_argv[0].string();
         log.check(&[
             alloc::string(pt_arg, "test".len()),
-            alloc::dict(pt_dict),
+            alloc::dict(tv::dval(pt_dict)),
             alloc::string(pt_name, "tr".len()),
         ]);
 
@@ -202,7 +204,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
         assert!(!(*d).watcher_remove(b"te", &registered[0].1));
         assert_eq!(tv::dict_watchers(d), []);
 
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }
 
@@ -277,7 +279,7 @@ fn finding_reads_exactly_the_key_length_asked_for() {
         assert_eq!(find(b"testt"), Some((f(5.0), b"testt".to_vec())));
         log.check(&[]);
 
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }
 
@@ -304,7 +306,7 @@ fn getting_a_number_reads_through_strings_and_reports_otherwise() {
             get(d, "test", Some("E728: Using a Dictionary as a Number")),
             0
         );
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
         log.clear();
 
         let d = tv::new_dict(&[("tes", Tv::Int(42)), ("t", f(44.0)), ("te", Tv::s("43"))]);
@@ -315,7 +317,7 @@ fn getting_a_number_reads_through_strings_and_reports_otherwise() {
         log.check(&[]);
         assert_eq!(get(d, "t", Some("E805: Using a Float as a Number")), 0);
         log.clear();
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }
 
@@ -356,7 +358,7 @@ fn getting_a_string_renders_a_scalar_into_the_lent_buffer() {
             )),
             ""
         );
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
         log.clear();
 
         let d = tv::new_dict(&[
@@ -391,7 +393,7 @@ fn getting_a_string_renders_a_scalar_into_the_lent_buffer() {
         assert_eq!(text(get(d, "t", None, &mut buf1)), "44.0");
         log.check(&[]);
 
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }
 
@@ -429,7 +431,7 @@ fn getting_a_string_with_save_allocates_the_answer() {
             get(d, "test", Some("E731: Using a Dictionary as a String"),).as_deref(),
             Some("")
         );
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
         log.clear();
 
         let d = tv::new_dict(&[
@@ -443,7 +445,7 @@ fn getting_a_string_with_save_allocates_the_answer() {
         assert_eq!(get(d, "xx", None).as_deref(), Some("45"));
         assert_eq!(get(d, "te", None).as_deref(), Some("43"));
         assert_eq!(get(d, "t", None).as_deref(), Some("44.0"));
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }
 
@@ -504,7 +506,7 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
         assert_eq!(get(d, "t"), Some(("1.0".into(), true)));
         assert_eq!(get(d, "te"), Some(("2".into(), true)));
 
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
         // `scratch` is this frame's own; nothing to free.
     }
 }
@@ -571,7 +573,7 @@ fn getting_a_checked_string_falls_back_to_the_default() {
             "keys are case-sensitive"
         );
 
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
         // `scratch` is this frame's own; nothing to free.
         xfree(def.cast());
     }
@@ -594,7 +596,7 @@ fn getting_a_callback_accepts_a_name_a_funcref_or_a_partial() {
                 log.editor(),
                 || {
                     // The refusal is said by whoever asked, as the builtins do.
-                    dict_get_callback(DictRef::retained(d).as_ref(), key, &mut *slot)
+                    dict_get_callback(DictRef::retained(tv::dbox(d)).as_ref(), key, &mut *slot)
                         .map_err(CallbackRefused::report)
                         .is_ok()
                 },
@@ -687,7 +689,7 @@ fn getting_a_callback_accepts_a_name_a_funcref_or_a_partial() {
             );
         }
 
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }
 
@@ -727,7 +729,7 @@ fn adding_an_item_transfers_it_and_refuses_a_duplicate() {
         drop(refused);
 
         log.clear();
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }
 
@@ -757,13 +759,13 @@ fn adding_a_typed_value_takes_the_key_by_length() {
         let adds: Vec<(&str, Add, Tv, bool)> = vec![
             (
                 "list",
-                Box::new(move |d, _| (*d).add_list(b"tes", ListRef::retained(l))),
+                Box::new(move |d, _| (*d).add_list(b"tes", ListRef::retained(tv::lbox(l)))),
                 Tv::List(vec![f(1.0), f(2.0), f(3.0)]),
                 false,
             ),
             (
                 "dict",
-                Box::new(move |d, _| (*d).add_dict(b"tes", DictRef::retained(d2))),
+                Box::new(move |d, _| (*d).add_dict(b"tes", DictRef::retained(tv::dbox(d2)))),
                 Tv::dict([("foo", f(42.0))]),
                 false,
             ),
@@ -839,15 +841,15 @@ fn adding_a_typed_value_takes_the_key_by_length() {
                 log.check_net(false, &[]);
             }
 
-            drop(DictRef::owning(d));
+            drop(DictRef::owning(tv::dbox(d)));
             let _ = n;
         }
 
         // Each container is still held by nothing but this case.
-        assert_eq!((*l).lv_refcount.get(), 1);
-        assert_eq!((*d2).dv_refcount.get(), 1);
-        drop(ListRef::owning(l));
-        drop(DictRef::owning(d2));
+        assert_eq!(tv::lrefs(l), 1);
+        assert_eq!(tv::drefs(d2), 1);
+        drop(ListRef::owning(tv::lbox(l)));
+        drop(DictRef::owning(tv::dbox(d2)));
     }
 }
 
@@ -859,7 +861,7 @@ fn clearing_a_dict_frees_its_items() {
     let log = AllocLog::start();
     // SAFETY: the dict is this case's own.
     unsafe {
-        let d = tv_dict_alloc().into_raw();
+        let d = tv::dval(tv_dict_alloc().into_raw());
         log.check(&[alloc::dict(d)]);
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
@@ -877,7 +879,7 @@ fn clearing_a_dict_frees_its_items() {
         log.check(&[alloc::freed(value)]);
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }
 
@@ -897,16 +899,16 @@ fn extending_a_dict_keeps_forces_or_reports() {
             );
         };
 
-        let d1 = tv_dict_alloc().into_raw();
+        let d1 = tv::dval(tv_dict_alloc().into_raw());
         log.check(&[alloc::dict(d1)]);
-        let d2 = tv_dict_alloc().into_raw();
+        let d2 = tv::dval(tv_dict_alloc().into_raw());
         log.check(&[alloc::dict(d2)]);
         for action in ["error", "keep", "force"] {
             extend(d1, d2, action, None);
         }
         log.check(&[]);
-        drop(DictRef::owning(d1));
-        drop(DictRef::owning(d2));
+        drop(DictRef::owning(tv::dbox(d1)));
+        drop(DictRef::owning(tv::dbox(d2)));
         log.clear();
 
         let d1 = tv::new_dict(&[("a", Tv::s("TEST"))]);
@@ -936,8 +938,8 @@ fn extending_a_dict_keeps_forces_or_reports() {
         assert_eq!(tv::read_dict(d1), Tv::dict([("a", Tv::s("TSET"))]));
         assert_eq!(tv::read_dict(d2), Tv::dict([("a", Tv::s("TSET"))]));
 
-        drop(DictRef::owning(d1));
-        drop(DictRef::owning(d2));
+        drop(DictRef::owning(tv::dbox(d1)));
+        drop(DictRef::owning(tv::dbox(d2)));
     }
 }
 
@@ -1012,9 +1014,9 @@ fn extending_a_dict_refuses_locked_and_read_only_items() {
         SANDBOX.set(saved_sandbox);
 
         log.clear();
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
         for (source, _) in sources {
-            drop(DictRef::owning(source));
+            drop(DictRef::owning(tv::dbox(source)));
         }
     }
 }
@@ -1029,11 +1031,11 @@ fn comparing_dicts_folds_the_values_case_but_never_the_keys() {
     // SAFETY: every dict is this case's own.
     unsafe {
         assert!(dict_equal(None, None, false));
-        let d1 = tv_dict_alloc().into_raw();
+        let d1 = tv::dval(tv_dict_alloc().into_raw());
         log.check(&[alloc::dict(d1)]);
         // The allocator hands out one reference, which `into_raw` gave to
         // this case; the `DictRef` dropped at the bottom gives it back.
-        assert_eq!((*d1).dv_refcount.get(), 1);
+        assert_eq!(tv::drefs(d1), 1);
         assert!(dict_equal(None, (d1).as_ref(), false));
         assert!(dict_equal((d1).as_ref(), None, false));
         assert!(dict_equal((d1).as_ref(), (d1).as_ref(), false));
@@ -1075,9 +1077,9 @@ fn comparing_dicts_folds_the_values_case_but_never_the_keys() {
         );
         log.check(&[]);
 
-        drop(DictRef::owning(d1));
+        drop(DictRef::owning(tv::dbox(d1)));
         for d in [upper, lower, kupper_upper, kupper_lower] {
-            drop(DictRef::owning(d));
+            drop(DictRef::owning(tv::dbox(d)));
         }
     }
 }
@@ -1131,30 +1133,26 @@ fn copying_a_dict_shares_or_rebuilds_its_containers() {
         let inner_dict = (*tv::di_of(d, "a")).di_tv.dict();
         let inner_list = (*tv::di_of(d, "b")).di_tv.list();
 
-        assert_eq!((*inner_dict).dv_refcount.get(), 1);
-        assert_eq!((*inner_list).lv_refcount.get(), 1);
+        assert_eq!(tv::drefs(inner_dict), 1);
+        assert_eq!(tv::lrefs(inner_list), 1);
         let shallow = dict_copied(ptr::null(), d, false, 0);
-        assert_eq!((*inner_dict).dv_refcount.get(), 2);
-        assert_eq!((*inner_list).lv_refcount.get(), 2);
+        assert_eq!(tv::drefs(inner_dict), 2);
+        assert_eq!(tv::lrefs(inner_list), 2);
         assert_eq!((*tv::di_of(shallow, "a")).di_tv.dict(), inner_dict);
         assert_eq!((*tv::di_of(shallow, "b")).di_tv.list(), inner_list);
         assert_eq!(tv::read_dict(shallow), expected);
-        drop(DictRef::owning(shallow));
-        assert_eq!((*inner_dict).dv_refcount.get(), 1);
-        assert_eq!((*inner_list).lv_refcount.get(), 1);
+        drop(DictRef::owning(tv::dbox(shallow)));
+        assert_eq!(tv::drefs(inner_dict), 1);
+        assert_eq!(tv::lrefs(inner_list), 1);
         let deep = dict_copied(ptr::null(), d, true, 0);
         assert!(!deep.is_null());
-        assert_eq!(
-            (*inner_dict).dv_refcount.get(),
-            1,
-            "a deep copy shares nothing"
-        );
-        assert_eq!((*inner_list).lv_refcount.get(), 1);
+        assert_eq!(tv::drefs(inner_dict), 1, "a deep copy shares nothing");
+        assert_eq!(tv::lrefs(inner_list), 1);
         assert_ne!((*tv::di_of(deep, "a")).di_tv.dict(), inner_dict);
         assert_ne!((*tv::di_of(deep, "b")).di_tv.list(), inner_list);
         assert_eq!(tv::read_dict(deep), expected);
-        drop(DictRef::owning(deep));
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(deep)));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }
 
@@ -1174,8 +1172,8 @@ fn a_converting_dict_copy_rewrites_the_keys_as_well() {
 
         let deep = dict_copied(&raw const vc, d, true, 0);
         assert!(!deep.is_null());
-        assert_eq!((*inner_dict).dv_refcount.get(), 1);
-        assert_eq!((*inner_list).lv_refcount.get(), 1);
+        assert_eq!(tv::drefs(inner_dict), 1);
+        assert_eq!(tv::lrefs(inner_list), 1);
         assert_ne!((*tv::di_of(deep, "a")).di_tv.dict(), inner_dict);
         assert_ne!((*tv::di_of(deep, "b")).di_tv.list(), inner_list);
         assert_eq!(
@@ -1194,8 +1192,8 @@ fn a_converting_dict_copy_rewrites_the_keys_as_well() {
             ])
         );
 
-        drop(DictRef::owning(deep));
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(deep)));
+        drop(DictRef::owning(tv::dbox(d)));
         drop(vc);
     }
 }
@@ -1214,7 +1212,7 @@ fn a_dict_copy_id_preserves_sharing() {
         ])
         .build();
         let inner = inner_tv.dict();
-        assert_eq!((*inner).dv_refcount.get(), 3);
+        assert_eq!(tv::drefs(inner), 3);
         let d = d_tv.dict();
         assert_eq!(
             (*tv::di_of(d, "a")).di_tv.dict(),
@@ -1241,9 +1239,9 @@ fn a_dict_copy_id_preserves_sharing() {
             Tv::dict([("a", Tv::Dict(vec![])), ("b", Tv::Dict(vec![]))])
         );
 
-        assert_eq!((*inner).dv_refcount.get(), 3);
-        drop(DictRef::owning(without));
-        drop(DictRef::owning(with));
+        assert_eq!(tv::drefs(inner), 3);
+        drop(DictRef::owning(tv::dbox(without)));
+        drop(DictRef::owning(tv::dbox(with)));
         tv_clear(&mut d_tv);
         tv_clear(&mut inner_tv);
     }
@@ -1257,20 +1255,20 @@ fn a_self_referencing_dict_copies_into_a_self_referencing_copy() {
     unsafe {
         let mut d_tv = Tv::Dict(vec![]).build();
         let d = d_tv.dict();
-        assert_eq!((*d).dv_refcount.get(), 1);
-        let _ = (*d).add_dict(b"test", DictRef::retained(d));
-        assert_eq!((*d).dv_refcount.get(), 2);
+        assert_eq!(tv::drefs(d), 1);
+        let _ = (*d).add_dict(b"test", DictRef::retained(tv::dbox(d)));
+        assert_eq!(tv::drefs(d), 2);
 
         let copy = dict_copied(ptr::null(), d, true, 2);
-        assert_eq!((*copy).dv_refcount.get(), 2, "the copy holds itself");
+        assert_eq!(tv::drefs(copy), 2, "the copy holds itself");
         assert_eq!(tv::read_dict(copy), Tv::dict([("test", Tv::Cycle(0))]));
 
         dict_clear(&view(d));
-        assert_eq!((*d).dv_refcount.get(), 1);
+        assert_eq!(tv::drefs(d), 1);
         dict_clear(&view(copy));
-        assert_eq!((*copy).dv_refcount.get(), 1);
+        assert_eq!(tv::drefs(copy), 1);
 
-        drop(DictRef::owning(copy));
+        drop(DictRef::owning(tv::dbox(copy)));
         tv_clear(&mut d_tv);
     }
 }
@@ -1294,6 +1292,6 @@ fn making_keys_read_only_sets_both_flags_on_every_item() {
         assert_eq!((*di).di_flags & ro, ro);
         assert_eq!((*di).di_flags & fix, fix);
 
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }

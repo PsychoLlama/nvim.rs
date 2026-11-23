@@ -11,6 +11,7 @@
 
 use super::wrappers::{arg_copy, arg_number_chk};
 use crate::eval::funcs::builtin::EvalFuncData;
+use crate::eval::typval::CopyWalk;
 use crate::eval::typval::{
     BlobRef, ListRef, LockName, NumBuf, dict_get_number_def, dict_len, index_of, list_copy,
     list_flatten, list_index, list_len, list_uidx, tv_check_for_list_or_blob_arg,
@@ -23,7 +24,7 @@ use crate::eval::vars::{
     clear_vimvar, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type, with_vim_var,
     with_vim_var_mut,
 };
-use crate::eval::{eval_expr_typval, get_copy_id, partial_name, var_item_copy};
+use crate::eval::{eval_expr_typval, partial_name, var_item_copy};
 use crate::memory::ThinCString;
 use crate::message::E_LISTBLOBREQ;
 use crate::message::state::{CALLED_EMSG, DID_EMSG};
@@ -43,21 +44,22 @@ use core::ffi::{CStr, c_int};
 /// `copy({expr})` — one level deep.
 pub fn f_copy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `&args[0]` and `result` are live typvals.
-    let _ = var_item_copy(None, &args[0], result, false, 0);
+    let _ = var_item_copy(None, &args[0], result, false, None);
 }
 
 /// `deepcopy({expr} [, {noref}])`.
 ///
-/// Without `noref` the copy is given a copy id, which is what lets it
-/// reproduce a self-referential structure rather than recursing forever.
+/// Without `noref` the copy is given a walk ([`CopyWalk`]), which is what
+/// lets it reproduce a self-referential structure rather than recursing
+/// forever.
 pub fn f_deepcopy(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: the arguments and `result` are live typvals.
     if tv_check_for_opt_bool_arg(args, 1).is_err() {
         return;
     }
     let noref = args.len() > 1 && tv_get_bool_chk(&args[1]).unwrap_or(-1) != 0;
-    let copy_id = if noref { 0 } else { get_copy_id() };
-    let _ = var_item_copy(None, &args[0], result, true, copy_id);
+    let walk = (!noref).then(CopyWalk::new);
+    let _ = var_item_copy(None, &args[0], result, true, walk.as_ref());
 }
 
 /// `empty({expr})` — what "empty" means for each type.
@@ -131,8 +133,8 @@ fn flatten_common(args: &[TypVal], result: &mut TypVal, make_copy: bool) {
     // Read before the check's message, which writes `v:errmsg`.
     let lock = list.read().lock();
     if make_copy {
-        // No conversion, a fresh copyID.
-        let copy = list_copy(None, list, false, get_copy_id());
+        // No conversion, a walk of its own.
+        let copy = list_copy(None, list, false, Some(&CopyWalk::new()));
         // The reference taken above goes back: the answer is the copy.
         drop(result.take_list());
         let found = copy.is_some();

@@ -11,8 +11,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
-use crate::eval::gc::RootId;
-use crate::eval::typval::{BlobRef, DictRef, DictTab, Lent, ListRef, PartialRef};
+use crate::eval::typval::{BlobRef, DictRef, DictTab, ListRef, PartialRef};
 use crate::eval::userfunc::FcId;
 use crate::memory::ThinCString;
 use crate::os::libc::{int64_t, size_t, uint64_t};
@@ -228,15 +227,6 @@ impl Refcount {
         left
     }
 
-    /// Release `n` owners at once. Only `unref_var_dict` needs it: a
-    /// scope dictionary is seeded with `DO_NOT_FREE_CNT` so nothing can
-    /// free it mid-scope, and giving it up is one bulk release.
-    pub fn release_many(&self, n: ::core::ffi::c_int) -> ::core::ffi::c_int {
-        let left = self.0.get() - n;
-        self.0.set(left);
-        left
-    }
-
     /// Overwrite the count. Only for an object whose holders are being
     /// re-established wholesale: a function defined over an old one's
     /// record takes the table's one reference, whatever it counted before.
@@ -351,15 +341,6 @@ mod refcount_tests {
         assert_eq!(sized, RefcountSize::ZERO);
     }
 
-    /// `unref_var_dict`'s bulk release: a scope dictionary is seeded with
-    /// `DO_NOT_FREE_CNT` and gives all but one of them up at once.
-    #[test]
-    fn release_many_gives_up_a_run_of_references() {
-        let count = Refcount::new(1_073_741_823);
-        assert_eq!(count.release_many(1_073_741_822), 1);
-        assert_eq!(count, Refcount::one());
-    }
-
     /// `CHANGE_LOCK`: `:unlockvar` cannot reach a `VAR_FIXED` slot, which
     /// is what keeps `v:` variables and `a:` arguments read-only.
     #[test]
@@ -376,34 +357,29 @@ mod refcount_tests {
     }
 }
 
-/// A `Blob`: a byte vector with a reference count and a lock.
+/// A `Blob`: a byte vector and a lock. Its reference count and borrow word
+/// sit beside it, in the [`Counted`](crate::eval::typval::Counted) a
+/// [`BlobRef`] points at.
 #[derive(Debug)]
 pub struct Blob {
     pub bv_data: Vec<u8>,
-    pub bv_refcount: Refcount,
     pub bv_lock: VarLock,
-    /// Whether an [`Edit`](crate::eval::typval::Edit) holds it.
-    pub bv_lent: Lent,
 }
 /// A `Dict`.
 ///
 /// Neither `Copy` nor `Clone`: it owns its hashtab -- and through it the
 /// items every key points into -- its watchers and a Lua table
-/// reference, none of which a second holder may free.
+/// reference, none of which a second holder may free. What says who holds
+/// it -- the reference count, the borrow word, the collector's registry slot,
+/// the deep copy's memo -- sits beside it, in the
+/// [`DictBox`](crate::eval::typval::DictBox) a [`DictRef`] points at.
 #[derive(Debug)]
 pub struct Dict {
     pub dv_lock: VarLock,
-    /// Whether an [`Edit`](crate::eval::typval::Edit) holds it.
-    pub dv_lent: Lent,
     pub dv_scope: ScopeType,
-    pub dv_refcount: Refcount,
+    /// The garbage collector's mark.
     pub dv_copy_id: ::core::ffi::c_int,
     pub dv_hashtab: DictTab,
-    pub dv_copydict: *mut Dict,
-    /// Where the collector's registry holds this dictionary, or
-    /// `RootId::NONE` for one the allocator never handed out -- every scope
-    /// dictionary initialised in place.
-    pub dv_root: RootId,
     pub watchers: Vec<::std::rc::Rc<DictWatcher>>,
     pub lua_table_ref: LuaRef,
 }
@@ -482,8 +458,10 @@ impl ListItem {
     }
 }
 
-/// A Vimscript List: an array of values, reference counted, and the cursors
-/// (`lv_watch`) of whatever `:for` loops are walking it.
+/// A Vimscript List: an array of values and the cursors (`lv_watch`) of
+/// whatever `:for` loops are walking it. What says who holds it sits beside
+/// it, in the [`ListBox`](crate::eval::typval::ListBox) a [`ListRef`] points
+/// at.
 ///
 /// The items are owned outright -- dropping the list drops them -- which is
 /// why an item's identity outside the array is an *index* and not an
@@ -494,37 +472,23 @@ pub struct List {
     pub lv_items: Vec<ListItem>,
     /// The `:for` cursors on this list, each named by its `id`.
     pub lv_watch: Vec<ListWatch>,
-    pub lv_copylist: *mut List,
-    /// Where the collector's registry holds this list, or `RootId::NONE`
-    /// for one the allocator never handed out.
-    pub lv_root: RootId,
-    pub lv_refcount: Refcount,
+    /// The garbage collector's mark.
     pub lv_copy_id: ::core::ffi::c_int,
     pub lv_lock: VarLock,
-    /// Whether an [`Edit`](crate::eval::typval::Edit) holds it.
-    pub lv_lent: Lent,
     pub lua_table_ref: LuaRef,
 }
 
 impl List {
-    /// An empty, unreferenced list on no chain: what a fresh allocation is
-    /// written with, and what a `List` embedded in another structure
-    /// (`FuncCall`'s `a:000`, a `\=` expression's submatch list) starts as.
+    /// An empty list: what a fresh allocation is written with.
     ///
-    /// A `const` and not `Default` because the embedders reach it from a
-    /// `const` context, and because a zeroed allocation is *not* a valid
-    /// `List` any more -- `lv_items` is a `Vec`, whose pointer is never
-    /// null.
+    /// A `const` and not `Default` because a zeroed allocation is *not* a
+    /// valid `List` -- `lv_items` is a `Vec`, whose pointer is never null.
     pub const fn empty() -> List {
         List {
             lv_items: Vec::new(),
             lv_watch: Vec::new(),
-            lv_copylist: ::core::ptr::null_mut(),
-            lv_root: RootId::NONE,
-            lv_refcount: Refcount::zero(),
             lv_copy_id: 0,
             lv_lock: VarLock::Unlocked,
-            lv_lent: Lent::new(),
             // `LUA_NOREF`: no Lua table mirrors this list.
             lua_table_ref: -2,
         }
@@ -563,7 +527,6 @@ impl ListWatch {
 /// handle ([`PartialRef::get_mut`]).
 #[derive(Debug)]
 pub struct Partial {
-    pub pt_refcount: Refcount,
     pub pt_copy_id: ::core::cell::Cell<::core::ffi::c_int>,
     /// The function's name, holding a reference to it by name. `None` when
     /// `pt_func` is the function instead.

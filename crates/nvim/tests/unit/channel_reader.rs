@@ -64,7 +64,7 @@ fn delivered(chunks: &[&[u8]]) -> Vec<Tv> {
         // built from.
         let list = reader_lines(&reader);
         // SAFETY: the list just built, referenced while it is read.
-        out.push(unsafe { tv::read_list(list.as_ptr()) });
+        out.push(unsafe { tv::read_list(tv::lval(list.as_ptr())) });
         drop(list);
         reader.buffer.clear();
     }
@@ -179,7 +179,7 @@ fn the_accumulator_is_a_byte_buffer_however_the_chunks_fall() {
     assert_eq!(reader.buffer.len(), "one\ntwo".len());
     let list = reader_lines(&reader);
     // SAFETY: the list just built, referenced while it is read.
-    let got = unsafe { tv::read_list(list.as_ptr()) };
+    let got = unsafe { tv::read_list(tv::lval(list.as_ptr())) };
     drop(list);
     reader.buffer.clear();
     callback_reader_free(&mut reader);
@@ -223,7 +223,7 @@ fn a_delivered_list_is_freed_again_when_the_callback_stores_nothing() {
             // `channel_callback_call` around a callback that reads the list
             // and keeps no reference to it.
             let list = reader_lines(at);
-            let _ = tv::read_list(list.as_ptr());
+            let _ = tv::read_list(tv::lval(list.as_ptr()));
             drop(list);
             at.buffer.clear();
             assert_eq!(
@@ -276,7 +276,7 @@ fn a_delivered_list_the_callback_stored_stays_on_the_chain() {
             "a stored list was freed anyway"
         );
         assert_eq!(
-            tv::read_list(at_list),
+            tv::read_list(tv::lval(at_list)),
             Tv::List(vec![line("one"), opened()])
         );
 

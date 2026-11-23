@@ -42,8 +42,8 @@
 
 use core::ptr::NonNull;
 
+use crate::eval::typval::{DictBox, ListBox, RootKey};
 use crate::global_cell::GlobalCell;
-use crate::types::{Dict, List};
 
 pub(crate) static MAY_GARBAGE_COLLECT: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static WANT_GARBAGE_COLLECT: GlobalCell<bool> = GlobalCell::new(false);
@@ -119,26 +119,30 @@ impl<T> Registry<T> {
     }
 }
 
-static LIVE_LISTS: GlobalCell<Registry<List>> = GlobalCell::new(Registry::new());
-static LIVE_DICTS: GlobalCell<Registry<Dict>> = GlobalCell::new(Registry::new());
+static LIVE_LISTS: GlobalCell<Registry<ListBox>> = GlobalCell::new(Registry::new());
+static LIVE_DICTS: GlobalCell<Registry<DictBox>> = GlobalCell::new(Registry::new());
+
+// Entering and leaving the registry takes the value handles' `RootKey`: a
+// container enters at its allocation and leaves at its free, both in
+// `eval/typval/handle.rs`, so a slot never names a freed container.
 
 /// Register `l` as a live list, answering the id it must carry.
-pub(crate) fn root_list(l: NonNull<List>) -> RootId {
+pub(crate) fn root_list(_: &RootKey, l: NonNull<ListBox>) -> RootId {
     LIVE_LISTS.with_mut(|reg| reg.insert(l))
 }
 
 /// Take `id` out of the list registry. A no-op for [`RootId::NONE`].
-pub(crate) fn unroot_list(id: RootId) {
+pub(crate) fn unroot_list(_: &RootKey, id: RootId) {
     LIVE_LISTS.with_mut(|reg| reg.remove(id));
 }
 
 /// Register `d` as a live dictionary, answering the id it must carry.
-pub(crate) fn root_dict(d: NonNull<Dict>) -> RootId {
+pub(crate) fn root_dict(_: &RootKey, d: NonNull<DictBox>) -> RootId {
     LIVE_DICTS.with_mut(|reg| reg.insert(d))
 }
 
 /// Take `id` out of the dictionary registry. A no-op for [`RootId::NONE`].
-pub(crate) fn unroot_dict(id: RootId) {
+pub(crate) fn unroot_dict(_: &RootKey, id: RootId) {
     LIVE_DICTS.with_mut(|reg| reg.remove(id));
 }
 
@@ -157,12 +161,12 @@ pub(crate) fn dict_slots() -> usize {
 /// A walk reads one slot at a time rather than borrowing the table, because
 /// what it does with each container re-enters: emptying a dictionary runs
 /// its watchers' teardown, and freeing one can allocate.
-pub(crate) fn list_at(idx: usize) -> Option<NonNull<List>> {
+pub(crate) fn list_at(idx: usize) -> Option<NonNull<ListBox>> {
     LIVE_LISTS.with(|reg| reg.slots.get(idx).copied().flatten())
 }
 
 /// The dictionary in slot `idx`, or `None` for a hole or a slot past the end.
-pub(crate) fn dict_at(idx: usize) -> Option<NonNull<Dict>> {
+pub(crate) fn dict_at(idx: usize) -> Option<NonNull<DictBox>> {
     LIVE_DICTS.with(|reg| reg.slots.get(idx).copied().flatten())
 }
 
@@ -173,6 +177,6 @@ pub(crate) fn dict_at(idx: usize) -> Option<NonNull<Dict>> {
 /// callback and not stored is freed again, which nothing reachable can see
 /// -- `garbagecollect()` would collect a leaked one and no Vimscript, Lua or
 /// API call names it.
-pub fn rooted_lists() -> Vec<*mut List> {
+pub fn rooted_lists() -> Vec<*mut ListBox> {
     LIVE_LISTS.with(|reg| reg.slots.iter().flatten().map(|l| l.as_ptr()).collect())
 }

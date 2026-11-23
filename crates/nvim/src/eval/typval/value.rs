@@ -272,19 +272,19 @@ fn lock_slot(
     *slot_lock = slot_lock.changed(lock);
     // The count without a read: the slot is under an edit of its own
     // container, which may be the very container the slot holds.
-    let skip = |count: &crate::types::Refcount| check_refcount && count.is_shared();
+    let skip = |count: ::core::ffi::c_int| check_refcount && count > 1;
     match tv {
         TypVal::Blob(blob) => blob
             .as_ref()
-            .filter(|b| !skip(b.count()))
+            .filter(|b| !skip(b.refcount()))
             .map(|b| Held::Blob(b.clone())),
         TypVal::List(list) => list
             .as_ref()
-            .filter(|l| !skip(l.count()))
+            .filter(|l| !skip(l.refcount()))
             .map(|l| Held::List(l.clone())),
         TypVal::Dict(dict) => dict
             .as_ref()
-            .filter(|d| !skip(d.count()))
+            .filter(|d| !skip(d.refcount()))
             .map(|d| Held::Dict(d.clone())),
         TypVal::Unknown => ::std::process::abort(),
         _ => None,
@@ -555,19 +555,19 @@ mod tests {
             TypVal::dict(Some(d)),
             TypVal::list(Some(inner.clone())),
         ]);
-        assert_eq!(inner.read().lv_refcount.get(), 3);
+        assert_eq!(inner.refcount(), 3);
 
         let mut held = TypVal::list(Some(outer.clone()));
         tv_clear(&mut held);
         // `outer` is still ours, so nothing below it went.
-        assert_eq!(outer.read().lv_refcount.get(), 1);
-        assert_eq!(inner.read().lv_refcount.get(), 3);
+        assert_eq!(outer.refcount(), 1);
+        assert_eq!(inner.refcount(), 3);
 
         // Now the last reference: the dictionary goes, and both references
         // it and the list held on `inner` with it.
         let mut last = TypVal::list(Some(outer));
         tv_clear(&mut last);
-        assert_eq!(inner.read().lv_refcount.get(), 1);
+        assert_eq!(inner.refcount(), 1);
         assert_eq!(inner.read().items()[0].li_tv.string_bytes(), b"kept");
     }
 
@@ -590,9 +590,9 @@ mod tests {
                 TypVal::dict(Some(d))
             };
         }
-        assert_eq!(bottom.read().lv_refcount.get(), 2);
+        assert_eq!(bottom.refcount(), 2);
         drop(tv);
-        assert_eq!(bottom.read().lv_refcount.get(), 1);
+        assert_eq!(bottom.refcount(), 1);
     }
 
     /// A list that holds itself is a cycle: clearing the variable gives up
@@ -604,13 +604,13 @@ mod tests {
         let again = l.clone();
         l.edit().push(TypVal::list(Some(again)));
         let mut held = TypVal::list(Some(l.clone()));
-        assert_eq!(l.read().lv_refcount.get(), 3);
+        assert_eq!(l.refcount(), 3);
         tv_clear(&mut held);
-        assert_eq!(l.read().lv_refcount.get(), 2);
+        assert_eq!(l.refcount(), 2);
         assert_eq!(l.read().items().len(), 2);
         // Break the cycle, which is what the collector would do.
         l.remove_range(1, 1);
-        assert_eq!(l.read().lv_refcount.get(), 1);
+        assert_eq!(l.refcount(), 1);
     }
 
     /// A partial's arguments and self dictionary are released with its last
@@ -628,15 +628,9 @@ mod tests {
             ..Partial::empty()
         });
         let mut held = TypVal::partial(Some(pt));
-        assert_eq!(
-            (arg.read().lv_refcount.get(), d.read().dv_refcount.get()),
-            (2, 2)
-        );
+        assert_eq!((arg.refcount(), d.refcount()), (2, 2));
         tv_clear(&mut held);
-        assert_eq!(
-            (arg.read().lv_refcount.get(), d.read().dv_refcount.get()),
-            (1, 1)
-        );
+        assert_eq!((arg.refcount(), d.refcount()), (1, 1));
 
         let pt = PartialRef::new(Partial {
             pt_name: Some(ThinCString::from_bytes(b"tr")),
@@ -648,8 +642,8 @@ mod tests {
             .expect("fresh key");
         let mut held = TypVal::partial(Some(pt));
         tv_clear(&mut held);
-        assert_eq!(d.read().dv_refcount.get(), 2);
+        assert_eq!(d.refcount(), 2);
         drop(d.edit().remove_key(b"p"));
-        assert_eq!(d.read().dv_refcount.get(), 1);
+        assert_eq!(d.refcount(), 1);
     }
 }

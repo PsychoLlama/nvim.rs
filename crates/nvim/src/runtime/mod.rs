@@ -43,14 +43,15 @@ use crate::cmdexpand::globpath;
 use crate::debugger::state::{DEBUG_BREAK_LEVEL, DEBUG_TICK};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint_named, profiling_forced};
 use crate::env::{get_appname, install_prefix};
+use crate::eval::eval_to_number;
 use crate::eval::funcs::builtin::EvalFuncData;
+use crate::eval::typval::CopyWalk;
 use crate::eval::typval::{
     dict_copy, dict_find, dict_get_string_alloc, tv_check_for_opt_dict_arg, tv_dict_alloc,
     tv_dict_alloc_lock, tv_get_number_chk, tv_list_alloc, tv_list_alloc_ret,
 };
 use crate::eval::userfunc::{CallStackAside, all_funcs};
 use crate::eval::vars::new_script_vars;
-use crate::eval::{eval_to_number, get_copy_id};
 use crate::ex_docmd::state::{CMDMOD, EX_NESTING_LEVEL, GLOBAL_BUSY, LISTCMD_BUSY};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
 use crate::ex_eval::flag::CSTP_FINISH;

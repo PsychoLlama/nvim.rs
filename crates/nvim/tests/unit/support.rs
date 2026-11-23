@@ -464,6 +464,7 @@ pub(crate) mod alloc {
     use std::ffi::{c_char, c_void};
     use std::mem::size_of;
 
+    use neovim::eval::typval::{DictBox, ListBox};
     use neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
     use neovim::types::{Dict, List};
 
@@ -522,21 +523,22 @@ pub(crate) mod alloc {
         }
     }
 
-    /// `tv_list_alloc`'s allocation: `a.list(l)`.
+    /// `tv_list_alloc`'s allocation: `a.list(l)`, for the value at `l`
+    /// (the allocation is the object around it).
     pub(crate) fn list(l: *const List) -> AllocEvent {
         AllocEvent::Calloc {
             count: 1,
-            size: size_of::<List>(),
-            ret: l as *mut c_void,
+            size: size_of::<ListBox>(),
+            ret: super::tv::lbox(l.cast_mut()).cast(),
         }
     }
 
-    /// `tv_dict_alloc`'s allocation: `a.dict(d)`.
+    /// `tv_dict_alloc`'s allocation: `a.dict(d)`, as [`list`].
     pub(crate) fn dict(d: *const Dict) -> AllocEvent {
         AllocEvent::Calloc {
             count: 1,
-            size: size_of::<Dict>(),
-            ret: d as *mut c_void,
+            size: size_of::<DictBox>(),
+            ret: super::tv::dbox(d.cast_mut()).cast(),
         }
     }
 
@@ -548,11 +550,63 @@ pub(crate) mod alloc {
         }
     }
 
-    /// A release: `a.freed(p)`.
-    pub(crate) fn freed<T>(p: *const T) -> AllocEvent {
-        AllocEvent::Free {
-            ptr: p as *mut c_void,
+    /// What a release names: the address itself, or for a list or a
+    /// dictionary value the object around it, which is what is freed.
+    pub(crate) trait Freed {
+        fn freed_at(self) -> *mut c_void;
+    }
+
+    impl Freed for *mut List {
+        fn freed_at(self) -> *mut c_void {
+            super::tv::lbox(self).cast()
         }
+    }
+
+    impl Freed for *mut Dict {
+        fn freed_at(self) -> *mut c_void {
+            super::tv::dbox(self).cast()
+        }
+    }
+
+    impl Freed for *mut ListBox {
+        fn freed_at(self) -> *mut c_void {
+            self.cast()
+        }
+    }
+
+    impl Freed for *mut DictBox {
+        fn freed_at(self) -> *mut c_void {
+            self.cast()
+        }
+    }
+
+    impl Freed for *mut c_char {
+        fn freed_at(self) -> *mut c_void {
+            self.cast()
+        }
+    }
+
+    impl Freed for *const c_char {
+        fn freed_at(self) -> *mut c_void {
+            self.cast_mut().cast()
+        }
+    }
+
+    impl Freed for *const u8 {
+        fn freed_at(self) -> *mut c_void {
+            self.cast_mut().cast()
+        }
+    }
+
+    impl Freed for *mut c_void {
+        fn freed_at(self) -> *mut c_void {
+            self
+        }
+    }
+
+    /// A release: `a.freed(p)`.
+    pub(crate) fn freed(p: impl Freed) -> AllocEvent {
+        AllocEvent::Free { ptr: p.freed_at() }
     }
 }
 

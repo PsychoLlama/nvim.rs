@@ -14,12 +14,13 @@
 //! watchers `event/` registers with libuv by address, plus the queued
 //! [`Event`].
 
+use crate::eval::typval::DictBox;
 use crate::event::uv::{
     addrinfo, uv_async_t, uv_buf_t, uv_file, uv_idle_t, uv_loop_t, uv_pipe_t, uv_signal_t,
     uv_stream_t, uv_tcp_t, uv_timer_t,
 };
 use crate::os::libc::{int64_t, size_t, uint8_t, uint64_t};
-use crate::types::{Dict, Refcount};
+use crate::types::Refcount;
 
 /// One queued event, run once when its queue reaches it.
 ///
@@ -91,7 +92,7 @@ pub struct proc {
     pub cwd: *const ::core::ffi::c_char,
     pub argv: *mut *mut ::core::ffi::c_char,
     pub exepath: *const ::core::ffi::c_char,
-    pub env: *mut Dict,
+    pub env: *mut DictBox,
     pub in_0: Stream,
     pub out: RStream,
     pub err: RStream,

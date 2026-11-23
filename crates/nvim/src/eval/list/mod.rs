@@ -46,7 +46,9 @@ use crate::eval::typval::{Edit, Read};
 use crate::strings::reversed_text;
 use core::ffi::{CStr, c_int};
 
+use crate::eval::eval_expr_typval;
 use crate::eval::funcs::builtin::EvalFuncData;
+use crate::eval::typval::CopyWalk;
 use crate::eval::typval::DictItem;
 use crate::eval::typval::{
     BlobRef, DictCursor, DictRef, ListRef, LockName, NumBuf, blob_copy, blob_remove, dict_copy,
@@ -59,7 +61,6 @@ use crate::eval::vars::{
     clear_vimvar, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_string,
     set_vim_var_tv, set_vim_var_type, var_check_fixed_named, var_check_ro_named, with_vim_var,
 };
-use crate::eval::{eval_expr_typval, get_copy_id};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::mbyte::{cluster_len, strnicmp_in};
 use crate::memory::ThinCString;
@@ -279,8 +280,8 @@ impl<'a> ListArg<'a> {
     /// A shallow copy, for `extendnew()`.  `None` when the copy failed.
     #[inline(always)]
     pub(crate) fn copy(self) -> Option<ListRef> {
-        // No conversion, and a fresh copyID.
-        list_copy(None, self.0?, false, get_copy_id())
+        // No conversion, and a walk of its own.
+        list_copy(None, self.0?, false, Some(&CopyWalk::new()))
     }
 }
 
@@ -511,8 +512,8 @@ impl<'a> DictArg<'a> {
     /// A shallow copy, for `extendnew()`.  `None` when the copy failed.
     #[inline(always)]
     pub(crate) fn copy(self) -> Option<DictRef> {
-        // No conversion, and a fresh copyID.
-        dict_copy(None, self.0?, false, get_copy_id())
+        // No conversion, and a walk of its own.
+        dict_copy(None, self.0?, false, Some(&CopyWalk::new()))
     }
 
     /// Allocate a fresh dict into `result`, for `mapnew()`.
@@ -984,7 +985,7 @@ mod tests {
         arg.insert_tv(&tv, arg.first());
         assert_eq!(list.read().len(), 2);
         // The handle, the value, and the two items.
-        assert_eq!(list.read().lv_refcount.get(), 4);
+        assert_eq!(list.refcount(), 4);
         assert!(
             list.read()
                 .items()
@@ -993,6 +994,6 @@ mod tests {
         );
         // Break the cycle so that the last handle frees it.
         list.remove_range(0, 1);
-        assert_eq!(list.read().lv_refcount.get(), 2);
+        assert_eq!(list.refcount(), 2);
     }
 }

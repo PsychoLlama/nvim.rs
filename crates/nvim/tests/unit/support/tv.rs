@@ -22,22 +22,125 @@
 //! is the same answer for every structure in the specs and a shorter one
 //! to write down.
 
-use std::ffi::{c_char, c_void};
+use std::ffi::{c_char, c_int, c_void};
 use std::mem::ManuallyDrop;
 use std::ptr;
 
 use neovim::eval::typval::DictItem;
 use neovim::eval::typval::{
-    BlobRef, DictRef, ListRef, PartialRef, list_find, list_len, tv_blob_alloc, tv_clear, tv_copy,
-    tv_dict_alloc, tv_list_alloc,
+    BlobRef, Counted, DictBox, DictRef, ListBox, ListRef, PartialRef, list_find, list_len,
+    tv_blob_alloc, tv_clear, tv_copy, tv_dict_alloc, tv_list_alloc,
 };
 use neovim::memory::ThinCString;
 use neovim::types::{
-    BOOL_VAR_FALSE, BOOL_VAR_TRUE, Blob, Callback, Dict, List, ListItem, Object, Partial, Refcount,
+    BOOL_VAR_FALSE, BOOL_VAR_TRUE, Blob, Callback, Dict, List, ListItem, Object, Partial,
     SPECIAL_VAR_NULL, TypVal, VarNumber,
 };
 
 use super::cstr;
+
+// The cases are written against value pointers (`*mut List`); a handle
+// points at the object around the value (`ListBox`), which also holds the
+// reference count. These convert, NULL kept.
+
+/// The value of the list object at `l`.
+pub(crate) fn lval(l: *mut ListBox) -> *mut List {
+    if l.is_null() {
+        ptr::null_mut()
+    } else {
+        Counted::value_ptr(l)
+    }
+}
+
+/// The list object around the value at `l`.
+pub(crate) fn lbox(l: *mut List) -> *mut ListBox {
+    if l.is_null() {
+        ptr::null_mut()
+    } else {
+        Counted::from_value_ptr(l)
+    }
+}
+
+/// The value of the dictionary object at `d`.
+pub(crate) fn dval(d: *mut DictBox) -> *mut Dict {
+    if d.is_null() {
+        ptr::null_mut()
+    } else {
+        Counted::value_ptr(d)
+    }
+}
+
+/// The dictionary object around the value at `d`.
+pub(crate) fn dbox(d: *mut Dict) -> *mut DictBox {
+    if d.is_null() {
+        ptr::null_mut()
+    } else {
+        Counted::from_value_ptr(d)
+    }
+}
+
+/// A handle's value, as the pointer the cases are written against.
+pub(crate) trait ValuePtr {
+    type Value;
+    fn value(&self) -> *mut Self::Value;
+}
+
+impl ValuePtr for ListRef {
+    type Value = List;
+    fn value(&self) -> *mut List {
+        Counted::value_ptr(self.as_ptr())
+    }
+}
+
+impl ValuePtr for DictRef {
+    type Value = Dict;
+    fn value(&self) -> *mut Dict {
+        Counted::value_ptr(self.as_ptr())
+    }
+}
+
+impl ValuePtr for BlobRef {
+    type Value = Blob;
+    fn value(&self) -> *mut Blob {
+        Counted::value_ptr(self.as_ptr())
+    }
+}
+
+impl ValuePtr for PartialRef {
+    type Value = Partial;
+    fn value(&self) -> *mut Partial {
+        Counted::value_ptr(self.as_ptr())
+    }
+}
+
+/// How many references the list at `l` has.
+///
+/// # Safety
+/// `l` points at a live list.
+pub(crate) unsafe fn lrefs(l: *const List) -> c_int {
+    // SAFETY: the caller's promise; the view owns no reference.
+    ManuallyDrop::new(unsafe { ListRef::owning(lbox(l.cast_mut())) }.expect("a list")).refcount()
+}
+
+/// How many references the container `tv` holds has.
+pub(crate) fn refs_of(tv: &TypVal) -> c_int {
+    match tv {
+        TypVal::List(l) => l.as_ref().expect("a list").refcount(),
+        TypVal::Dict(d) => d.as_ref().expect("a dict").refcount(),
+        TypVal::Blob(b) => b.as_ref().expect("a blob").refcount(),
+        TypVal::Partial(p) => p.as_ref().expect("a partial").refcount(),
+        other => panic!("not a container: v_type {}", other.v_type()),
+    }
+}
+
+/// How many references the dictionary at `d` has.
+///
+/// # Safety
+/// `d` points at a live dictionary.
+pub(crate) unsafe fn drefs(d: *const Dict) -> c_int {
+    // SAFETY: the caller's promise; the view owns no reference.
+    ManuallyDrop::new(unsafe { DictRef::owning(dbox(d.cast_mut())) }.expect("a dict")).refcount()
+}
 
 /// A Vimscript value, as the spec's Lua tables spelled one.
 #[derive(Clone, Debug, PartialEq)]
@@ -141,7 +244,7 @@ impl Tv {
             Tv::NullBlob => blob_tv(None),
             Tv::Blob(bytes) => {
                 let held = tv_blob_alloc();
-                let b = held.as_ptr();
+                let b = held.value();
                 for byte in bytes {
                     unsafe { (*b).push(*byte) };
                 }
@@ -149,7 +252,7 @@ impl Tv {
             }
             Tv::List(items) => {
                 let list = tv_list_alloc(items.len() as isize);
-                let l = list.as_ptr();
+                let l = list.value();
                 path.push(Container::List(l));
                 for item in items {
                     let item_tv = unsafe { item.build_at(path) };
@@ -160,7 +263,7 @@ impl Tv {
             }
             Tv::Dict(entries) => {
                 let dict = tv_dict_alloc();
-                let d = dict.as_ptr();
+                let d = dict.value();
                 path.push(Container::Dict(d));
                 for (key, value) in entries {
                     let mut di = DictItem::boxed(cstr(key.clone()).to_bytes());
@@ -180,8 +283,8 @@ impl Tv {
                 match path[*up] {
                     // SAFETY: the container is already live, and this is
                     // a second reference to it.
-                    Container::List(l) => list_tv(unsafe { ListRef::retained(l) }),
-                    Container::Dict(d) => dict_tv(unsafe { DictRef::retained(d) }),
+                    Container::List(l) => list_tv(unsafe { ListRef::retained(lbox(l)) }),
+                    Container::Dict(d) => dict_tv(unsafe { DictRef::retained(dbox(d)) }),
                 }
             }
             Tv::Copied(from) => {
@@ -211,7 +314,6 @@ impl Pt {
                 other => panic!("a partial's dict is a dict, not {}", other.v_type()),
             });
         PartialRef::new(Partial {
-            pt_refcount: Refcount::zero(),
             pt_copy_id: ::core::cell::Cell::new(0),
             pt_name: Some(ThinCString::from_bytes(&self.value)),
             pt_func: None,
@@ -247,28 +349,28 @@ pub(crate) trait Payload {
 impl Payload for TypVal {
     fn list(&self) -> *mut List {
         match self {
-            TypVal::List(l) => l.as_ref().map_or(ptr::null_mut(), ListRef::as_ptr),
+            TypVal::List(l) => l.as_ref().map_or(ptr::null_mut(), ListRef::value),
             other => panic!("not a list: v_type {}", other.v_type()),
         }
     }
 
     fn dict(&self) -> *mut Dict {
         match self {
-            TypVal::Dict(d) => d.as_ref().map_or(ptr::null_mut(), DictRef::as_ptr),
+            TypVal::Dict(d) => d.as_ref().map_or(ptr::null_mut(), DictRef::value),
             other => panic!("not a dictionary: v_type {}", other.v_type()),
         }
     }
 
     fn blob(&self) -> *mut Blob {
         match self {
-            TypVal::Blob(b) => b.as_ref().map_or(ptr::null_mut(), BlobRef::as_ptr),
+            TypVal::Blob(b) => b.as_ref().map_or(ptr::null_mut(), BlobRef::value),
             other => panic!("not a blob: v_type {}", other.v_type()),
         }
     }
 
     fn partial(&self) -> *mut Partial {
         match self {
-            TypVal::Partial(pt) => pt.as_ref().map_or(ptr::null_mut(), PartialRef::as_ptr),
+            TypVal::Partial(pt) => pt.as_ref().map_or(ptr::null_mut(), PartialRef::value),
             other => panic!("not a partial: v_type {}", other.v_type()),
         }
     }
@@ -372,17 +474,17 @@ unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
             Some(s) => Tv::Func(s.as_bytes().to_vec()),
         },
         TypVal::Blob(b) if b.is_none() => Tv::NullBlob,
-        TypVal::Blob(b) => Tv::Blob(unsafe { blob_bytes(b.as_ref().expect("a blob").as_ptr()) }),
+        TypVal::Blob(b) => Tv::Blob(unsafe { blob_bytes(b.as_ref().expect("a blob").value()) }),
         TypVal::List(l) => {
-            let at: *const List = l.as_ref().map_or(ptr::null(), |l| l.as_ptr().cast_const());
+            let at: *const List = l.as_ref().map_or(ptr::null(), |l| l.value().cast_const());
             unsafe { read_list_at(at, path) }
         }
         TypVal::Dict(d) => {
-            let at: *const Dict = d.as_ref().map_or(ptr::null(), |d| d.as_ptr().cast_const());
+            let at: *const Dict = d.as_ref().map_or(ptr::null(), |d| d.value().cast_const());
             unsafe { read_dict_at(at, path) }
         }
         TypVal::Partial(pt) => {
-            let at: *const Partial = pt.as_ref().map_or(ptr::null(), |p| p.as_ptr().cast_const());
+            let at: *const Partial = pt.as_ref().map_or(ptr::null(), |p| p.value().cast_const());
             Tv::Partial(Box::new(unsafe { read_partial(at, path) }))
         }
     }
@@ -459,7 +561,7 @@ unsafe fn read_partial(pt: *const Partial, path: &mut Vec<Container>) -> Pt {
         dict: pt
             .pt_dict
             .as_ref()
-            .map(|d| unsafe { read_dict_at(d.as_ptr(), path) }),
+            .map(|d| unsafe { read_dict_at(d.value(), path) }),
     }
 }
 
@@ -516,7 +618,7 @@ pub(crate) unsafe fn list_items(l: *const List) -> Vec<*mut ListItem> {
 /// `l` points at a live list.
 pub(crate) unsafe fn handle(l: *mut List) -> ListRef {
     // SAFETY: the caller's promise: a live list.
-    unsafe { ListRef::retained(l) }.expect("a live list")
+    unsafe { ListRef::retained(lbox(l)) }.expect("a live list")
 }
 
 /// `l` as the handle the handle-taking functions want, *without* a
@@ -528,7 +630,7 @@ pub(crate) unsafe fn handle(l: *mut List) -> ListRef {
 pub(crate) unsafe fn view(l: *mut List) -> Option<ManuallyDrop<ListRef>> {
     // SAFETY: the caller's promise; the `ManuallyDrop` keeps the handle
     // from giving back a reference it never took.
-    unsafe { ListRef::owning(l) }.map(ManuallyDrop::new)
+    unsafe { ListRef::owning(lbox(l)) }.map(ManuallyDrop::new)
 }
 
 /// The item a lookup (`list_find`, `list_first`, `list_last`) answered, as
@@ -595,7 +697,7 @@ pub(crate) unsafe fn read_callback(cb: *const Callback) -> Cb {
         Callback::None => Cb::None,
         Callback::Funcref(name) => Cb::Fref(name.as_bytes().to_vec()),
         Callback::Partial(partial) => Cb::Pt(Box::new(unsafe {
-            read_partial(partial.as_ptr(), &mut path)
+            read_partial(partial.value(), &mut path)
         })),
         Callback::Lua(_) => panic!("a Lua callback is not implemented"),
     }

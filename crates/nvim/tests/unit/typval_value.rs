@@ -144,14 +144,14 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
         log.check(&[alloc::list(l)]);
         tv_clear(&mut tv);
         log.check(&[]);
-        assert_eq!((*l).lv_refcount.get(), 1);
+        assert_eq!(tv::lrefs(l), 1);
 
         let mut tv = Tv::Dict(vec![(b"dd".to_vec(), Tv::Cycle(0))]).build();
         let d = tv.dict();
         log.check(&[alloc::dict(d)]);
         tv_clear(&mut tv);
         log.check(&[]);
-        assert_eq!((*d).dv_refcount.get(), 1);
+        assert_eq!(tv::drefs(d), 1);
     }
 }
 
@@ -232,7 +232,7 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
         tv_copy(&from, &mut to);
         assert_eq!(tv::read(&raw const to), Tv::Dict(vec![]));
         log.check(&[]);
-        assert_eq!((*to.dict()).dv_refcount.get(), 2);
+        assert_eq!(tv::drefs(to.dict()), 2);
         assert_eq!(to.dict(), from.dict());
         tv_clear(&mut from);
         tv_clear(&mut to);
@@ -244,7 +244,7 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
         tv_copy(&from, &mut to);
         assert_eq!(tv::read(&raw const to), Tv::List(vec![]));
         log.check(&[]);
-        assert_eq!((*to.list()).lv_refcount.get(), 2);
+        assert_eq!(tv::lrefs(to.list()), 2);
         assert_eq!(to.list(), from.list());
         tv_clear(&mut from);
         tv_clear(&mut to);
@@ -276,10 +276,7 @@ fn copying_a_container_is_shallow() {
         let mut from = Tv::List(vec![Tv::List(vec![Tv::Int(1)])]).build();
         let outer = from.list();
         let inner = list_first(outer.as_mut()).unwrap().li_tv.list();
-        assert_eq!(
-            ((*outer).lv_refcount.get(), (*inner).lv_refcount.get()),
-            (1, 1)
-        );
+        assert_eq!((tv::lrefs(outer), tv::lrefs(inner)), (1, 1));
 
         let mut to = TypVal::Unknown;
         tv_copy(&from, &mut to);
@@ -291,7 +288,7 @@ fn copying_a_container_is_shallow() {
             "and the same list inside it",
         );
         assert_eq!(
-            ((*outer).lv_refcount.get(), (*inner).lv_refcount.get()),
+            (tv::lrefs(outer), tv::lrefs(inner)),
             (2, 1),
             "only the container named by the value gained a reference",
         );
@@ -305,11 +302,7 @@ fn copying_a_container_is_shallow() {
         );
 
         tv_clear(&mut from);
-        assert_eq!(
-            (*outer).lv_refcount.get(),
-            1,
-            "the other copy still holds it"
-        );
+        assert_eq!(tv::lrefs(outer), 1, "the other copy still holds it");
         tv_clear(&mut to);
     }
 }
@@ -354,9 +347,9 @@ fn copying_a_partial_or_a_blob_takes_a_reference() {
         let mut to = TypVal::Unknown;
         tv_copy(&from, &mut to);
         assert_eq!(to.partial(), pt);
-        assert_eq!((*pt).pt_refcount.get(), 2);
+        assert_eq!(tv::refs_of(&to), 2);
         tv_clear(&mut from);
-        assert_eq!((*pt).pt_refcount.get(), 1, "one clear freed the partial");
+        assert_eq!(tv::refs_of(&to), 1, "one clear freed the partial");
         assert_eq!(tv::read(&raw const to), tv::read(&raw const to));
         tv_clear(&mut to);
 
@@ -365,9 +358,9 @@ fn copying_a_partial_or_a_blob_takes_a_reference() {
         let mut to = TypVal::Unknown;
         tv_copy(&from, &mut to);
         assert_eq!(to.blob(), blob);
-        assert_eq!((*blob).bv_refcount.get(), 2);
+        assert_eq!(tv::refs_of(&to), 2);
         tv_clear(&mut from);
-        assert_eq!((*blob).bv_refcount.get(), 1);
+        assert_eq!(tv::refs_of(&to), 1);
         assert_eq!(tv::read(&raw const to), Tv::Blob(vec![0x00, 0xff]));
         tv_clear(&mut to);
     }
@@ -769,7 +762,7 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
         // A second name for the outer list, as an argument binding is.
         let mut other = TypVal::Unknown;
         tv_copy(&tv.tv, &mut other);
-        assert_eq!((*outer).lv_refcount.get(), 2);
+        assert_eq!(tv::lrefs(outer), 2);
 
         tv.item_lock(-1, true, true);
         assert_eq!((*outer).lv_lock, VarLock::Unlocked, "a shared list locked");
@@ -783,7 +776,7 @@ fn locking_leaves_a_shared_container_alone_when_asked() {
 
         // Unshared, the same call reaches both.
         tv_clear(&mut other);
-        assert_eq!((*outer).lv_refcount.get(), 1);
+        assert_eq!(tv::lrefs(outer), 1);
         tv.item_lock(-1, true, true);
         assert_eq!(
             ((*outer).lv_lock, (*inner).lv_lock),
@@ -982,11 +975,11 @@ fn comparing_dict_values_folds_values_but_never_keys() {
 
         let mut d1 = Tv::Dict(vec![]).build();
         log.check(&[alloc::dict(d1.dict())]);
-        assert_eq!((*d1.dict()).dv_refcount.get(), 1);
+        assert_eq!(tv::drefs(d1.dict()), 1);
         assert!(tv_equal(&nd, &d1, false));
         assert!(tv_equal(&d1, &nd, false));
         assert!(tv_equal(&d1, &d1, false));
-        assert_eq!((*d1.dict()).dv_refcount.get(), 1);
+        assert_eq!(tv::drefs(d1.dict()), 1);
         log.check(&[]);
 
         let build = |key: &str, value: &str| {

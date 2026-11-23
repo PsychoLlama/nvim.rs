@@ -558,34 +558,31 @@ impl DictCursor {
 /// key is the empty string, which is inline, so nothing is leaked by not
 /// dropping it.
 ///
-/// `#[repr(transparent)]`: the scopes hand their own entry around as a bare
-/// `*mut DictItem`, and the collector names its value by adding
-/// `offset_of!(DictItem, di_tv)` to the field's offset in a buffer, a window
-/// or a tab page.  Both are casts through this wrapper.
-#[repr(transparent)]
+/// The entry of a scope that seeds its dictionary also holds the [`DictSeed`]:
+/// `release_var_scope` gives both back.
 #[derive(Debug)]
-pub struct ScopeDictItem(pub ManuallyDrop<DictItem>);
+pub struct ScopeDictItem(pub ManuallyDrop<DictItem>, Option<DictSeed>);
 
 impl ScopeDictItem {
     /// A scope's entry before its dictionary exists.
-    pub const EMPTY: Self = ScopeDictItem(ManuallyDrop::new(DictItem {
-        di_tv: TypVal::empty(VAR_UNKNOWN),
-        di_lock: VarLock::Unlocked,
-        di_flags: 0,
-        di_key: DictKey::EMPTY,
-    }));
+    pub const EMPTY: Self = ScopeDictItem(
+        ManuallyDrop::new(DictItem {
+            di_tv: TypVal::empty(VAR_UNKNOWN),
+            di_lock: VarLock::Unlocked,
+            di_flags: 0,
+            di_key: DictKey::EMPTY,
+        }),
+        None,
+    );
 
-    /// The item itself, which is what a hashtab slot names.
-    pub fn item(&mut self) -> *mut DictItem {
-        &raw mut *self.0
+    /// The entry `item`, holding `seed` on its dictionary when it has one.
+    pub(crate) fn new(item: DictItem, seed: Option<DictSeed>) -> ScopeDictItem {
+        ScopeDictItem(ManuallyDrop::new(item), seed)
     }
 
-    /// The scope dictionary's address, for `vim.b`/`vim.w`/`vim.t`; null
-    /// before the scope exists.
-    pub fn dict_ptr(&self) -> *mut Dict {
-        self.di_tv
-            .dict_shared()
-            .map_or(::core::ptr::null_mut(), DictRef::as_ptr)
+    /// Give the seed back, if the entry holds one.
+    pub(crate) fn release_seed(&mut self) {
+        drop(self.1.take());
     }
 }
 

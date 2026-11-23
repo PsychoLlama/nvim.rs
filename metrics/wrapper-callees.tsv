@@ -3,8 +3,8 @@ count	callee	no_raw	defs	def
 31	CStr::from_ptr	0	0	
 20	from_raw_parts	0	0	
 17	zeroed	0	0	
-16	.as_ref	0	0	
 16	Reader::new	0	1	crates/nvim/src/event/rstream.rs
+15	.as_ref	0	0	
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
 10	notify	0	0	
 9	Box::from_raw	0	6	
@@ -41,6 +41,8 @@ count	callee	no_raw	defs	def
 4	uv_timer_start	0	0	
 3	.get_unchecked_mut	0	0	
 3	.next_arg::<::core::ffi::c_int>	0	0	
+3	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
+3	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 3	RawEvent::event	0	1	crates/nvim/src/event/loop.rs
 3	Self::new	0	11	
 3	Stack::above_top	0	1	crates/nvim/src/lua/stack/mod.rs
@@ -68,8 +70,6 @@ count	callee	no_raw	defs	def
 2	.offset	0	0	
 2	.read	0	0	
 2	.write	0	0	
-2	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
-2	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 2	File::from_raw_fd	0	0	
 2	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 2	Stack::entry	0	1	crates/nvim/src/lua/stack/dispatch.rs
@@ -139,6 +139,7 @@ count	callee	no_raw	defs	def
 1	BorrowedFd::borrow_raw	0	0	
 1	Box::new	0	11	
 1	CollectedMark	0	0	
+1	ListRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
 1	Ok	0	0	
 1	OwnedFd::from_raw_fd	0	0	
 1	SlotRef::from_parts	0	1	crates/nvim/src/slot.rs

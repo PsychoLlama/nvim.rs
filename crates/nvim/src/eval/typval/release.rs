@@ -71,15 +71,15 @@ fn release_slot(tv: &mut TypVal) -> Option<Owned> {
         VAR_LIST => {
             let list = tv.take_list()?;
             // Another holder keeps the items; dropping is giving up ours.
-            return (!list.count().is_shared()).then(|| Owned::List { list, at: 0 });
+            return (list.refcount() <= 1).then(|| Owned::List { list, at: 0 });
         }
         VAR_DICT => {
             let dict = tv.take_dict()?;
-            return (!dict.count().is_shared()).then(|| Owned::Dict { dict, slot: 0 });
+            return (dict.refcount() <= 1).then(|| Owned::Dict { dict, slot: 0 });
         }
         VAR_PARTIAL => {
             let partial = tv.take_partial()?;
-            return (!partial.pt_refcount.is_shared()).then(|| Owned::Partial { partial, arg: 0 });
+            return (partial.refcount() <= 1).then(|| Owned::Partial { partial, arg: 0 });
         }
         // `VAR_UNKNOWN` holds nothing.
         _ => {}

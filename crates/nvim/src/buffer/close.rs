@@ -745,12 +745,8 @@ fn free_buffer(buffer: Buf) {
     let owned = forget_handle(buffer);
     note_buffer_freed();
     free_buffer_stuff(buffer, BFF_CLEAR_WIN_INFO);
-    let shared = buffer
-        .read()
-        .b_bufvar
-        .di_tv
-        .dict_ref()
-        .is_some_and(|dict| dict.dv_refcount.get() > DO_NOT_FREE_CNT);
+    let vars = buffer.read().b_bufvar.di_tv.dict_handle();
+    let shared = vars.is_some_and(|dict| dict.refcount() > DO_NOT_FREE_CNT);
     if shared {
         rescue_changedtick(buffer);
     }

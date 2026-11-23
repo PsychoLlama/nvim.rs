@@ -630,7 +630,6 @@ const TYPE_HOMES: &[&str] = &[
     "src/edit/mod.rs::InscharFlags",
     "src/eval/funcs/builtin.rs",
     "src/eval/typval/dictitem.rs::DictKey",
-    "src/eval/typval/dictitem.rs::ScopeDictItem",
     "src/eval/userfunc/mod.rs::ArgvFunc",
     "src/eval/userfunc/mod.rs::FcId",
     "src/event/libuv_proc.rs",

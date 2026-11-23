@@ -21,7 +21,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::eval::typval::dict_to_env;
+use crate::eval::typval::{DictRef, dict_to_env};
 use crate::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn};
 use crate::event::r#loop::{loop_poll_events, main_loop_raw};
 use crate::event::objects::Loop;
@@ -231,9 +231,10 @@ pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
     opts.env = if uvproc.proc.env.is_null() {
         ptr::null_mut()
     } else {
-        let env = uvproc.proc.env;
-        // SAFETY: the caller's dictionary of environment variables.
-        dict_to_env(unsafe { &*(env) })
+        // SAFETY: the reference the job's spawn holds (`into_raw`), taken
+        // again for the read.
+        let env = unsafe { DictRef::retained(uvproc.proc.env) };
+        dict_to_env(&env.expect("checked non-null").read())
     };
 
     // The parent's copies of the descriptors the child inherits. They are

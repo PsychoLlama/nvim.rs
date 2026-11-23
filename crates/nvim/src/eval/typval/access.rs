@@ -74,7 +74,7 @@ impl TypVal {
     /// The dictionary this value holds, or NULL unless it is a dictionary
     /// holding one.  A **borrow**; see [`TypVal::list_or_null`].
     #[inline(always)]
-    pub(crate) fn dict_or_null(&self) -> *mut Dict {
+    pub(crate) fn dict_or_null(&self) -> *mut DictBox {
         match self {
             TypVal::Dict(dict) => dict
                 .as_ref()

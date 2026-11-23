@@ -18,9 +18,7 @@ use crate::eval::typval::DO_NOT_FREE_CNT;
 use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER, OPT_VAL_TYPE_STRING};
 use crate::runtime::{SID_LUA, SID_STR};
 use core::ffi::CStr;
-use core::mem::ManuallyDrop;
 
-use crate::eval::gc::{RootId, unroot_dict};
 use crate::eval::typval::{DictCursor, ListRef, RemovedItem};
 
 use crate::ascii::ascii_iswhite;

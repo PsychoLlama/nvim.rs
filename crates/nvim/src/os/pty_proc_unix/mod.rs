@@ -27,7 +27,7 @@
 mod termios;
 mod wait_status;
 
-use crate::eval::typval::dict_to_env;
+use crate::eval::typval::{DictRef, dict_to_env};
 use crate::event::libuv::{uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open};
 use crate::event::r#loop::{loop_children, start_children_watcher};
 use crate::event::objects::{Loop, Proc};
@@ -344,9 +344,11 @@ fn init_child(ptyproc: &PtyProc) -> ! {
     // SAFETY: the parent's copy of the child, whose argv it filled in.
     let prog = unsafe { proc_get_exepath(ptr::from_ref(proc).cast_mut()) };
     debug_assert!(!proc.env.is_null());
-    // SAFETY: the parent's dictionary of variables; `environ` is this
-    // process's own, about to be replaced by the exec.
-    unsafe { environ = dict_to_env(&*proc.env) };
+    // SAFETY: the parent's dictionary of variables, read through a second
+    // reference to the one the spawn holds (given back at the statement's
+    // end, which cannot free it); `environ` is this process's own, about to
+    // be replaced by the exec.
+    unsafe { environ = dict_to_env(&DictRef::retained(proc.env).expect("an environment").read()) };
     // SAFETY: the program and the NULL-terminated argv the parent built;
     // `execvp` replaces the image or returns having done nothing.
     unsafe { execvp(prog, proc.argv.cast::<*const c_char>()) };

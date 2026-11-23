@@ -17,7 +17,6 @@
 
 use super::*;
 use crate::eval::userfunc::{func_ptr_unref, func_unref_name};
-use crate::types::Refcount;
 use ::core::ffi::CStr;
 
 /// The `TypVal` readers and writers for the partial arm.
@@ -91,7 +90,6 @@ impl Partial {
     /// [`PartialRef::new`] to build on.
     pub(crate) const fn empty() -> Partial {
         Partial {
-            pt_refcount: Refcount::zero(),
             pt_copy_id: ::core::cell::Cell::new(0),
             pt_name: None,
             pt_func: None,
@@ -170,7 +168,7 @@ mod tests {
         let _serial = editor_state_lock();
         let d = tv_dict_alloc();
         let inner = tv_list_alloc(1);
-        let (d_before, i_before) = (d.read().dv_refcount.get(), inner.read().lv_refcount.get());
+        let (d_before, i_before) = (d.refcount(), inner.refcount());
         let args = tv_list_alloc(2);
         args.edit().push_number(1);
         args.edit().push_list(Some(inner.clone()));
@@ -180,7 +178,7 @@ mod tests {
             .partial_shared()
             .expect("function() answered a partial")
             .clone();
-        assert_eq!(held.pt_refcount.get(), 2);
+        assert_eq!(held.refcount(), 2);
         assert_eq!(held.pt_argv.len(), 2);
         assert!(held.pt_dict.as_ref().is_some_and(|pd| pd.ptr_eq(&d)));
         assert!(!held.pt_auto, "an explicit dict is not auto-bound");
@@ -195,8 +193,8 @@ mod tests {
             argv[1].list_shared().is_some_and(|l| l.ptr_eq(&inner)),
             "an argument is shared, not copied"
         );
-        assert_eq!(d.read().dv_refcount.get(), d_before + 1);
-        assert_eq!(inner.read().lv_refcount.get(), i_before + 1);
+        assert_eq!(d.refcount(), d_before + 1);
+        assert_eq!(inner.refcount(), i_before + 1);
 
         let mut copy = TypVal::Unknown;
         tv_copy(&pt, &mut copy);
@@ -204,15 +202,15 @@ mod tests {
             copy.partial_shared().is_some_and(|c| c.ptr_eq(&held)),
             "a copy shares the partial"
         );
-        assert_eq!(held.pt_refcount.get(), 3);
-        assert_eq!(d.read().dv_refcount.get(), d_before + 1);
+        assert_eq!(held.refcount(), 3);
+        assert_eq!(d.refcount(), d_before + 1);
 
         tv_clear(&mut pt);
-        assert_eq!(held.pt_refcount.get(), 2);
+        assert_eq!(held.refcount(), 2);
         tv_clear(&mut copy);
         drop(held);
-        assert_eq!(d.read().dv_refcount.get(), d_before);
-        assert_eq!(inner.read().lv_refcount.get(), i_before);
+        assert_eq!(d.refcount(), d_before);
+        assert_eq!(inner.refcount(), i_before);
     }
 
     /// A partial lends `&mut` only to its one holder: a second handle (or
@@ -258,11 +256,11 @@ mod tests {
         assert_eq!(numbers, [1, 2]);
         assert_eq!(first.partial_binding().1.len(), 1);
         // The handle, and one per partial.
-        assert_eq!(d.read().dv_refcount.get(), 3);
+        assert_eq!(d.refcount(), 3);
 
         tv_clear(&mut first);
         tv_clear(&mut second);
-        assert_eq!(d.read().dv_refcount.get(), 1);
+        assert_eq!(d.refcount(), 1);
     }
 
     /// A partial whose bound dictionary holds the partial: neither count
@@ -276,20 +274,20 @@ mod tests {
         // The dictionary's item takes a reference of its own.
         d.edit().add_tv(b"p", &pt).expect("a key used once");
         tv_clear(&mut pt);
-        assert_eq!(held.pt_refcount.get(), 2);
+        assert_eq!(held.refcount(), 2);
         drop(held);
         // The handle and the partial.
-        assert_eq!(d.read().dv_refcount.get(), 2);
+        assert_eq!(d.refcount(), 2);
         let view = ::core::mem::ManuallyDrop::new(d.clone());
         drop(d);
-        assert_eq!(view.read().dv_refcount.get(), 2, "the cycle keeps it alive");
+        assert_eq!(view.refcount(), 2, "the cycle keeps it alive");
 
         TV_IN_FREE_UNREF_ITEMS.set(true);
         // Pass 1: the item goes, the partial goes with it, and the partial
         // gives back the dictionary's last reference -- which must not
         // free the dictionary under the walk.
         tv_dict_free_contents(&view);
-        assert_eq!(view.read().dv_refcount.get(), 1);
+        assert_eq!(view.refcount(), 1);
         TV_IN_FREE_UNREF_ITEMS.set(false);
         // Pass 2: the view's own reference, the last.
         drop(::core::mem::ManuallyDrop::into_inner(view));
@@ -308,9 +306,10 @@ mod tests {
         assert_eq!(partial_name(&Partial::empty()).to_bytes(), b"");
     }
 
-    /// The partial's own size, which every bound callable pays.
+    /// The partial's allocation -- the value and its count -- which every
+    /// bound callable pays.
     #[test]
     fn a_partial_is_sixty_four_bytes() {
-        assert_eq!(::core::mem::size_of::<Partial>(), 64);
+        assert_eq!(::core::mem::size_of::<Counted<Partial>>(), 64);
     }
 }

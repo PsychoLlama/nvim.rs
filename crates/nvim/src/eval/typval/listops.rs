@@ -113,27 +113,24 @@ impl List {
 
 /// Copy `orig`, deeply when `deep`, converting strings through `conv`.
 ///
-/// `copy_id` is the garbage collector's mark: non-zero records the copy on the
-/// original *before* any item is added, so a list containing itself resolves
-/// to the same copy.  Answers `None` when a deep copy of an item failed.
-/// A non-zero `copy_id` must be one the caller reserved from `get_copyID`:
-/// a stale one makes an unrelated walk believe this list is already visited.
+/// A `walk` records the copy on the original *before* any item is added, so
+/// a list containing itself resolves to the same copy ([`CopyWalk`]).
+/// Answers `None` when a deep copy of an item failed.
 ///
 /// A deep copy re-enters through `var_item_copy`, and a list that holds
-/// itself is read again from in there -- through the mark this call has just
-/// written onto it -- so the walk is by index over the handle, each item read
-/// through a fresh borrow.
+/// itself is read again from in there, so the walk is by index over the
+/// handle, each item read through a fresh borrow.
 pub fn list_copy(
     conv: Option<&VimConv>,
     orig: &ListRef,
     deep: bool,
-    copy_id: ::core::ffi::c_int,
+    walk: Option<&CopyWalk>,
 ) -> Option<ListRef> {
     let copy = tv_list_alloc(ptrdiff_t::try_from(orig.read().len()).unwrap_or(-1));
-    if copy_id != 0 {
+    if let Some(walk) = walk {
         // Do this before adding the items, because one of the items may
         // refer back to this list.
-        orig.remember_copy(copy_id, &copy);
+        orig.remember_copy(walk, &copy);
     }
     // The count is taken once, as upstream's walk over the original links
     // effectively did.
@@ -143,12 +140,12 @@ pub fn list_copy(
             break;
         }
         let mut value = TV_INITIAL_VALUE;
-        // Held across the deep copy: the mark above is the only edit a copy
-        // makes to the lists it walks, made before each is first read.
+        // Held across the deep copy, which edits none of the lists it walks
+        // (the memo is a word beside the list, not in it).
         let read = orig.read();
         let from = &read.items()[at].li_tv;
         if deep {
-            if var_item_copy(conv, from, &mut value, deep, copy_id).is_err() {
+            if var_item_copy(conv, from, &mut value, deep, walk).is_err() {
                 // `tv_list_copy_error`: the partial copy goes with the
                 // handle, which is the only reference to it.
                 return None;
@@ -210,9 +207,9 @@ pub fn list_concat(
     tv.write_empty(VAR_LIST);
     let l = match (l1, l2) {
         (None, None) => None,
-        (None, Some(l2)) => list_copy(None, l2, false, 0),
+        (None, Some(l2)) => list_copy(None, l2, false, None),
         (Some(l1), l2) => {
-            let l = list_copy(None, l1, false, 0);
+            let l = list_copy(None, l1, false, None);
             if let Some(l) = &l {
                 // The copy is a list of this call's own, so it is never `l2`.
                 list_extend(l, l2, None);

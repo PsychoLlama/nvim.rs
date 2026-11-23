@@ -346,7 +346,7 @@ fn report_scripts(list: &ListRef, query: &mut ScriptQuery) {
         if let ScriptQuery::Sid(_) = *query {
             let sv_dict = crate::eval::vars::script_scope_dict(sid)
                 .expect("a sourced script has an s: scope");
-            let vars = dict_copy(None, &sv_dict, true, get_copy_id());
+            let vars = dict_copy(None, &sv_dict, true, Some(&CopyWalk::new()));
             let _ = d.edit().add_dict(b"variables", vars);
             let funcs = get_script_local_funcs(sid);
             let _ = d.edit().add_list(b"functions", Some(funcs));

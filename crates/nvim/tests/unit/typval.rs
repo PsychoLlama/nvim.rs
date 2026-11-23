@@ -50,7 +50,7 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
     // SAFETY: the list is this case's own, freed at the end; the strings
     // outlive every call that reads them.
     unsafe {
-        let l = tv_list_alloc(LIST_LEN_UNKNOWN as isize).into_raw();
+        let l = tv::lval(tv_list_alloc(LIST_LEN_UNKNOWN as isize).into_raw());
         log.check(&[alloc::list(l)]);
 
         let test = cstr("test");
@@ -83,7 +83,7 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
             .map(|&s| alloc::freed(s))
             .collect();
         expected.push(alloc::freed(l));
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         log.check(&expected);
     }
 }
@@ -182,7 +182,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
     // SAFETY: the dict and the item are this case's own; the item is handed
     // to the dict, which then owns it, and the dict is freed at the end.
     unsafe {
-        let d = tv_dict_alloc().into_raw();
+        let d = tv::dval(tv_dict_alloc().into_raw());
         log.check(&[alloc::dict(d)]);
 
         let mut di = DictItem::boxed(b"");
@@ -205,7 +205,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         log.clear();
 
         // A view of the case's dict, which takes no reference.
-        let held = ManuallyDrop::new(DictRef::owning(d).expect("a live dict"));
+        let held = ManuallyDrop::new(DictRef::owning(tv::dbox(d)).expect("a live dict"));
         tv_dict_item_remove(&held, b"");
         log.check(&[alloc::freed(value)]);
 
@@ -214,7 +214,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         // `check_net`, the twin of the spec's `clear_tmp_allocs`: with every
         // matched allocate/release pair dropped, what remains is the release
         // of something allocated before this stretch of the log.
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
         log.check_net(true, &[alloc::freed(d)]);
     }
 }
@@ -232,7 +232,7 @@ fn removing_a_run_shortens_the_list() {
     let _editor = editor_lock();
     // SAFETY: the list is this case's own, freed below.
     unsafe {
-        let l = tv_list_alloc(LIST_LEN_UNKNOWN as ptrdiff_t).into_raw();
+        let l = tv::lval(tv_list_alloc(LIST_LEN_UNKNOWN as ptrdiff_t).into_raw());
         for n in 1..=4 {
             (*l).push_number(n);
         }
@@ -251,7 +251,7 @@ fn removing_a_run_shortens_the_list() {
             4,
             "the gap closed"
         );
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
     }
 }
 
@@ -268,7 +268,7 @@ fn a_watcher_on_a_removed_item_advances_past_it() {
     let _editor = editor_lock();
     // SAFETY: as above.
     unsafe {
-        let l = tv_list_alloc(LIST_LEN_UNKNOWN as ptrdiff_t).into_raw();
+        let l = tv::lval(tv_list_alloc(LIST_LEN_UNKNOWN as ptrdiff_t).into_raw());
         for n in 1..=3 {
             (*l).push_number(n);
         }
@@ -283,7 +283,7 @@ fn a_watcher_on_a_removed_item_advances_past_it() {
         assert_eq!(list_find(l.as_mut(), at).unwrap().li_tv.number(), 3);
 
         (*l).watch_remove(lw);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
     }
 }
 
@@ -300,7 +300,7 @@ fn a_watcher_is_removed_only_by_its_own_pattern() {
     // SAFETY: the dict is this case's own and is freed below; a
     // `kCallbackNone` callback owns nothing.
     unsafe {
-        let d = tv_dict_alloc().into_raw();
+        let d = tv::dval(tv_dict_alloc().into_raw());
         let callback = Callback::None;
         let pattern = cstr("key*");
         (*d).watcher_add(pattern.to_bytes(), Callback::None);
@@ -321,6 +321,6 @@ fn a_watcher_is_removed_only_by_its_own_pattern() {
             !dict_is_watched(d.as_ref()),
             "its own pattern did not match"
         );
-        drop(DictRef::owning(d));
+        drop(DictRef::owning(tv::dbox(d)));
     }
 }

@@ -23,18 +23,16 @@ use crate::eval::typval::DI_FLAGS_FIX;
 use crate::eval::typval::DI_FLAGS_RO;
 use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_int};
-use core::mem::ManuallyDrop;
 use core::ptr;
 use std::rc::{Rc, Weak};
 
 use super::*;
-use crate::eval::gc::{RootId, unroot_dict, unroot_list};
 use crate::eval::typval::{CallFrame, DictRef, ListRef, RemovedItem, tv_dict_alloc, tv_list_alloc};
-use crate::eval::typval::{DictKey, ScopeDictItem};
+use crate::eval::typval::{DictKey, DictSeed, ListSeed, ScopeDictItem};
 use crate::eval::vars::list_dict_vars;
 use crate::hashtab::HashItem;
 use crate::hashtab::{HT_INIT_SIZE, hash_reset};
-use crate::types::{Refcount, ScopeType};
+use crate::types::ScopeType;
 
 /// A funccall's three scopes: `l:`, `a:` and `a:000`, with the entries that
 /// name `l:` and `a:` themselves (what `l:` alone evaluates to).
@@ -60,8 +58,8 @@ pub(crate) struct FrameScopes {
     pub(crate) a_vars: DictRef,
     a_vars_var: RefCell<ScopeDictItem>,
     pub(crate) a_list: ListRef,
-    /// Whether the counts carry the `DO_NOT_FREE_CNT` seed.
-    active: Cell<bool>,
+    /// The `DO_NOT_FREE_CNT` seeds, while a call is using the scopes.
+    seeds: RefCell<Option<([DictSeed; 2], ListSeed)>>,
     /// Emptied entries of earlier calls, for this call's. Boxed on
     /// purpose: a dictionary takes its items as boxes, and keeping the
     /// allocations is the point.
@@ -79,19 +77,18 @@ const LIST_HOLDERS: c_int = 1;
 /// A scope dictionary and the entry that names it.
 fn scope_dict(scope: ScopeType) -> (DictRef, RefCell<ScopeDictItem>) {
     let dict = tv_dict_alloc();
-    {
-        let d = &mut dict.edit();
-        // Out of the collector's registry: the funccall marks it.
-        unroot_dict(d.dv_root);
-        d.dv_root = RootId::NONE;
-        d.dv_scope = scope;
-    }
-    let entry = ScopeDictItem(ManuallyDrop::new(DictItem {
-        di_tv: TypVal::dict(Some(dict.clone())),
-        di_lock: VarLock::Fixed,
-        di_flags: DI_FLAGS_RO | DI_FLAGS_FIX,
-        di_key: DictKey::EMPTY,
-    }));
+    // Out of the collector's registry: the funccall marks it.
+    dict.unroot();
+    dict.edit().dv_scope = scope;
+    let entry = ScopeDictItem::new(
+        DictItem {
+            di_tv: TypVal::dict(Some(dict.clone())),
+            di_lock: VarLock::Fixed,
+            di_flags: DI_FLAGS_RO | DI_FLAGS_FIX,
+            di_key: DictKey::EMPTY,
+        },
+        None,
+    );
     (dict, RefCell::new(entry))
 }
 
@@ -101,67 +98,61 @@ impl FrameScopes {
         let (l_vars, l_vars_var) = scope_dict(VAR_DEF_SCOPE);
         let (a_vars, a_vars_var) = scope_dict(VAR_SCOPE);
         let a_list = tv_list_alloc(-1);
-        {
-            let l = &mut a_list.edit();
-            unroot_list(l.lv_root);
-            l.lv_root = RootId::NONE;
-        }
+        a_list.unroot();
         FrameScopes {
             l_vars,
             l_vars_var,
             a_vars,
             a_vars_var,
             a_list,
-            active: Cell::new(false),
+            seeds: RefCell::new(None),
             spare: RefCell::new(Vec::new()),
         }
     }
 
     /// Seed the counts for a call: from here until the call is done a count
     /// other than `DO_NOT_FREE_CNT` means something else holds the scope.
+    /// The scopes hold exactly their holders here (fresh, or `reusable`).
     fn activate(&self) {
-        for dict in [&self.l_vars, &self.a_vars] {
-            let mut d = dict.edit();
-            d.dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
-            d.dv_lock = VarLock::Unlocked;
-            d.dv_copy_id = 0;
+        let mut seeds = self.seeds.borrow_mut();
+        debug_assert!(seeds.is_none(), "a call's scopes are seeded once");
+        let dicts = [&self.l_vars, &self.a_vars].map(|dict| {
+            {
+                let mut d = dict.edit();
+                d.dv_lock = VarLock::Unlocked;
+                d.dv_copy_id = 0;
+            }
+            debug_assert_eq!(dict.refcount(), DICT_HOLDERS);
+            dict.seed(DO_NOT_FREE_CNT - DICT_HOLDERS)
+        });
+        {
+            let mut l = self.a_list.edit();
+            l.lv_lock = VarLock::Fixed;
+            l.lv_copy_id = 0;
         }
-        let mut l = self.a_list.edit();
-        l.lv_refcount = Refcount::new(DO_NOT_FREE_CNT);
-        l.lv_lock = VarLock::Fixed;
-        l.lv_copy_id = 0;
-        self.active.set(true);
+        debug_assert_eq!(self.a_list.refcount(), LIST_HOLDERS);
+        *seeds = Some((dicts, self.a_list.seed(DO_NOT_FREE_CNT - LIST_HOLDERS)));
     }
 
-    /// Give the seed back: what is left is the holders and any escape.
+    /// Give the seeds back: what is left is the holders and any escape.
     fn deactivate(&self) {
-        if !self.active.replace(false) {
-            return;
-        }
-        for dict in [&self.l_vars, &self.a_vars] {
-            dict.edit()
-                .dv_refcount
-                .release_many(DO_NOT_FREE_CNT - DICT_HOLDERS);
-        }
-        self.a_list
-            .edit()
-            .lv_refcount
-            .release_many(DO_NOT_FREE_CNT - LIST_HOLDERS);
+        let seeds = self.seeds.borrow_mut().take();
+        drop(seeds);
     }
 
     /// Whether anything besides the funccall holds one of the three.
     fn referenced(&self) -> bool {
-        self.a_list.read().lv_refcount != Refcount::new(DO_NOT_FREE_CNT)
-            || self.l_vars.read().dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
-            || self.a_vars.read().dv_refcount != Refcount::new(DO_NOT_FREE_CNT)
+        self.a_list.refcount() != DO_NOT_FREE_CNT
+            || self.l_vars.refcount() != DO_NOT_FREE_CNT
+            || self.a_vars.refcount() != DO_NOT_FREE_CNT
     }
 
     /// Whether these can start another call: nothing else holds them, and
     /// no Lua table mirrors them.
     fn reusable(&self) -> bool {
-        self.l_vars.read().dv_refcount == Refcount::new(DICT_HOLDERS)
-            && self.a_vars.read().dv_refcount == Refcount::new(DICT_HOLDERS)
-            && self.a_list.read().lv_refcount == Refcount::new(LIST_HOLDERS)
+        self.l_vars.refcount() == DICT_HOLDERS
+            && self.a_vars.refcount() == DICT_HOLDERS
+            && self.a_list.refcount() == LIST_HOLDERS
             && self.l_vars.read().lua_table_ref == LUA_NOREF
             && self.a_vars.read().lua_table_ref == LUA_NOREF
             && self.a_list.read().lua_table_ref == LUA_NOREF
@@ -298,7 +289,7 @@ pub(crate) fn cleanup_function_call(frame: Rc<FuncCall>) {
 
     let mut free_fc = true;
     // Free all l: variables if not referred to.
-    if may_free_fc && scopes.l_vars.read().dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
+    if may_free_fc && scopes.l_vars.refcount() == DO_NOT_FREE_CNT {
         clear_scope(&scopes.l_vars, &scopes.spare);
     } else {
         free_fc = false;
@@ -308,13 +299,13 @@ pub(crate) fn cleanup_function_call(frame: Rc<FuncCall>) {
     // closure is using them, the funccall and what is in it can go.
     // The a: variables and the a:000 items are copies of their own, so a
     // scope that outlives the call keeps them as they are.
-    if may_free_fc && scopes.a_vars.read().dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
+    if may_free_fc && scopes.a_vars.refcount() == DO_NOT_FREE_CNT {
         clear_scope(&scopes.a_vars, &scopes.spare);
     } else {
         free_fc = false;
     }
 
-    if may_free_fc && scopes.a_list.read().lv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
+    if may_free_fc && scopes.a_list.refcount() == DO_NOT_FREE_CNT {
         clear_list(&scopes.a_list);
     } else {
         free_fc = false;
@@ -645,8 +636,7 @@ pub(crate) fn with_funccal_scope_entry<R>(
 
 /// Whether `dict` is the `l:` scope of the call a variable lookup sees.
 pub(crate) fn is_funccal_local_dict(dict: &Dict) -> bool {
-    with_scope_funccal(|frame| ptr::eq(frame.scopes.l_vars.as_ptr().cast_const(), dict))
-        .unwrap_or(false)
+    with_scope_funccal(|frame| frame.scopes.l_vars.holds(dict)).unwrap_or(false)
 }
 
 /// List the `l:` variables, when there is a function running.

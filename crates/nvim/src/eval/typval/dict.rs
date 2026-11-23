@@ -404,23 +404,21 @@ pub fn dict_equal(d1: Option<&Dict>, d2: Option<&Dict>, ic: bool) -> bool {
 
 /// Copy `orig`, deeply when `deep`, converting keys through `conv`.
 ///
-/// `copy_id` is the garbage collector's mark: non-zero records the copy on
-/// the original so a self-referencing dictionary resolves to the same copy.
-/// A non-zero one must be one the caller reserved from `get_copyID`: a stale
-/// one makes an unrelated walk think this dictionary is already visited.
+/// A `walk` records the copy on the original so a self-referencing
+/// dictionary resolves to the same copy ([`CopyWalk`]).
 ///
 /// A deep copy re-enters through `var_item_copy`, and a dictionary that
-/// holds itself is read again from in there -- through the mark this call
-/// has just written onto it -- so the walk is a slot cursor over the handle.
+/// holds itself is read again from in there, so the walk is a slot cursor
+/// over the handle.
 pub fn dict_copy(
     conv: Option<&VimConv>,
     orig: &DictRef,
     deep: bool,
-    copy_id: ::core::ffi::c_int,
+    walk: Option<&CopyWalk>,
 ) -> Option<DictRef> {
     let copy = tv_dict_alloc();
-    if copy_id != 0 {
-        orig.remember_copy(copy_id, &copy);
+    if let Some(walk) = walk {
+        orig.remember_copy(walk, &copy);
     }
     let conv = conv.filter(|conv| conv.vc_type != CONV_NONE);
     let mut cursor = DictCursor::new(&orig.read());
@@ -428,9 +426,9 @@ pub fn dict_copy(
         if GOT_INT.get() {
             break;
         }
-        // Held across the deep copy below: the mark written above is the
-        // only edit a copy makes to the dictionaries it walks, made before
-        // each is first read, so a cycle back here only reads.
+        // Held across the deep copy below, which edits none of the
+        // dictionaries it walks (the memo is a word beside each), so a cycle
+        // back here only reads.
         let read = orig.read();
         let Some(item) = read.item_at(slot) else {
             continue;
@@ -445,7 +443,7 @@ pub fn dict_copy(
             },
         };
         if deep {
-            if var_item_copy(conv, &item.di_tv, &mut new_item.di_tv, deep, copy_id).is_err() {
+            if var_item_copy(conv, &item.di_tv, &mut new_item.di_tv, deep, walk).is_err() {
                 drop(new_item);
                 break;
             }
@@ -592,16 +590,6 @@ impl Dict {
     #[inline]
     pub(crate) fn unlock_table(&mut self) {
         self.dv_hashtab.unlock();
-    }
-}
-
-impl DictRef {
-    /// Mark this dictionary as copied to `copy` under `copy_id`: the deep
-    /// copy's memo, which [`Dict::copy_under`] reads back.
-    pub(crate) fn remember_copy(&self, copy_id: ::core::ffi::c_int, copy: &DictRef) {
-        let mut this = self.edit();
-        this.dv_copy_id = copy_id;
-        this.dv_copydict = copy.as_ptr();
     }
 }
 
@@ -791,9 +779,9 @@ mod tests {
             .add_dict(b"self", Some(held))
             .expect("a key used once");
 
-        let copy_id = crate::eval::get_copy_id();
-        // No conversion, and a fresh copy id.
-        let copy = dict_copy(None, &d, true, copy_id).expect("the copy was not interrupted");
+        // No conversion, and a walk of its own.
+        let copy = dict_copy(None, &d, true, Some(&CopyWalk::new()))
+            .expect("the copy was not interrupted");
         assert_eq!(copy.read().len(), 2);
         assert_eq!(number_at(&copy.read(), b"n"), Some(0));
         let held = copy.read();
@@ -827,11 +815,11 @@ mod tests {
 
         let copies: Vec<TypVal> = d.read().items().map(|di| di.di_tv.clone()).collect();
         assert_eq!(copies.len(), 2);
-        assert_eq!(refs(&d.read()), 3, "the handle, the entry and the copy");
+        assert_eq!(d.refcount(), 3, "the handle, the entry and the copy");
         drop(copies);
         // A release mid-walk is the same touch the other way.
         d.read().items().for_each(|di| drop(di.di_tv.clone()));
-        assert_eq!(refs(&d.read()), 2);
+        assert_eq!(d.refcount(), 2);
 
         dict_clear(&d);
     }
@@ -879,9 +867,23 @@ mod tests {
         assert_eq!(slot_order(&d.read()), slot_order(&refilled.read()));
     }
 
-    /// The reference count of `d`.
-    fn refs(d: &Dict) -> i32 {
-        d.dv_refcount.get()
+    /// Two edits lend two values, not two objects: swapping them moves the
+    /// tables and leaves each object's count and borrow word with it.
+    #[test]
+    fn swapping_two_edited_bodies_moves_values_not_counts() {
+        let _held = editor_state_lock();
+        let a = dict_of(&["x"]);
+        let b = tv_dict_alloc();
+        let b2 = b.clone();
+        {
+            let mut ea = a.edit();
+            let mut eb = b.edit();
+            ::core::mem::swap(&mut *ea, &mut *eb);
+            assert!(!a.is_free() && !b.is_free(), "both edits still held");
+        }
+        assert_eq!((a.refcount(), b.refcount()), (1, 2));
+        assert!(a.is_free() && b.is_free());
+        assert_eq!((a.read().len(), b2.read().len()), (0, 1));
     }
 
     /// Hold `TV_IN_FREE_UNREF_ITEMS` up for a scope, and put it down even
@@ -912,13 +914,13 @@ mod tests {
         d.edit()
             .add_list(b"l", Some(l.clone()))
             .expect("a key used once");
-        assert_eq!((l.read().lv_refcount.get(), refs(&d.read())), (2, 2));
+        assert_eq!((l.refcount(), d.refcount()), (2, 2));
 
         let from = TypVal::list(Some(l.clone()));
         let mut to = TypVal::Unknown;
-        let copy_id = crate::eval::get_copy_id();
-        // No conversion, a fresh copy id.
-        let copied = var_item_copy(None, &from, &mut to, true, copy_id);
+        // No conversion, a walk of its own.
+        let walk = CopyWalk::new();
+        let copied = var_item_copy(None, &from, &mut to, true, Some(&walk));
         assert_eq!(copied, Ok(()));
         let cl = to.list_handle().expect("the copy is a list");
         let cd = list_items(Some(&cl.read()))[0]
@@ -936,7 +938,7 @@ mod tests {
         assert_eq!(back, cl.as_ptr(), "the cycle followed the original");
         assert_eq!(number_at(&cd.read(), b"n"), Some(0));
         // The extra reference of the value `from` holds is the list's.
-        assert_eq!((l.read().lv_refcount.get(), refs(&d.read())), (3, 2));
+        assert_eq!((l.refcount(), d.refcount()), (3, 2));
 
         // Break both cycles at the dictionary, then let everything go.
         dict_clear(&d);
@@ -960,12 +962,12 @@ mod tests {
         d.edit()
             .add_dict(b"self", Some(held))
             .expect("a key used once");
-        assert_eq!(refs(&d.read()), 2, "the handle and the cycle");
+        assert_eq!(d.refcount(), 2, "the handle and the cycle");
 
         let collecting = Collecting::start();
         tv_dict_free_contents(&d);
         // Released by its own item, and still allocated.
-        assert_eq!(refs(&d.read()), 1);
+        assert_eq!(d.refcount(), 1);
         assert_eq!(d.read().len(), 0);
         drop(collecting);
         drop(d);

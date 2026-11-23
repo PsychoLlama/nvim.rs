@@ -616,13 +616,13 @@ mod tests {
         let mut two = TypVal::Unknown;
         tv_copy(&one, &mut two);
         assert!(two.blob_shared().is_some_and(|two| two.ptr_eq(&b)));
-        assert_eq!(b.read().bv_refcount.get(), 3);
+        assert_eq!(b.refcount(), 3);
         two.blob_mut().expect("a blob").push(b'c');
         assert_eq!(&*one.blob_bytes(), b"abc");
         tv_clear(&mut one);
-        assert_eq!(b.read().bv_refcount.get(), 2);
+        assert_eq!(b.refcount(), 2);
         tv_clear(&mut two);
-        assert_eq!(b.read().bv_refcount.get(), 1);
+        assert_eq!(b.refcount(), 1);
         assert_eq!(b.read().bytes(), b"abc");
     }
 
@@ -632,13 +632,13 @@ mod tests {
     fn a_blob_handle_counts_its_references() {
         let _held = editor_state_lock();
         let b = tv_blob_alloc();
-        assert_eq!(b.read().bv_refcount.get(), 1);
+        assert_eq!(b.refcount(), 1);
         let c = b.clone();
-        assert_eq!(c.read().bv_refcount.get(), 2);
+        assert_eq!(c.refcount(), 2);
         drop(b);
-        assert_eq!(c.read().bv_refcount.get(), 1);
+        assert_eq!(c.refcount(), 1);
         let d = c.clone();
-        assert_eq!(d.read().bv_refcount.get(), 2);
+        assert_eq!(d.refcount(), 2);
         drop(c);
         drop(d);
     }

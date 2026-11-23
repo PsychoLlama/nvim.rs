@@ -47,6 +47,7 @@ use neovim::eval::typval::{ListRef, list_free_contents, list_free_list, tv_clear
 use neovim::msgpack_rpc::packer::pack_to_bytes;
 use neovim::types::TypVal;
 
+use crate::support::tv;
 use crate::support::tv::{Payload, Pt, Tv};
 use crate::support::{Editor, check_emsg, editor_lock, internalize};
 
@@ -452,8 +453,10 @@ fn a_cycle_met_twice_is_reported_once_per_dump() {
         // Its contents first, which gives back the two references it holds
         // to itself, then the list.
         let l = tv.list();
-        list_free_contents(&ManuallyDrop::new(ListRef::owning(l).expect("a list")));
-        list_free_list(l);
+        list_free_contents(&ManuallyDrop::new(
+            ListRef::owning(tv::lbox(l)).expect("a list"),
+        ));
+        list_free_list(tv::lbox(l));
     }
 }
 

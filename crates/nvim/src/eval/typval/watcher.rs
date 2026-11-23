@@ -306,9 +306,9 @@ mod tests {
         let d = tv_dict_alloc();
         d.edit().watcher_add(b"x", never_called(c"NeverCalledA"));
         watcher_of(&d, b"x").needs_free.set(true);
-        let refs = d.read().dv_refcount.get();
+        let refs = d.refcount();
         dict_watcher_notify(&d, c"other", Some(&TypVal::Number(1)), None);
-        assert_eq!(d.read().dv_refcount.get(), refs);
+        assert_eq!(d.refcount(), refs);
         assert_eq!(patterns(&d), [b"x".to_vec()]);
         drop(d);
     }

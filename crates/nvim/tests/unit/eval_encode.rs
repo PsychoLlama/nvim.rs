@@ -8,11 +8,11 @@
 use std::mem::ManuallyDrop;
 
 use neovim::eval::encode::encode_list_write;
-use neovim::eval::typval::{list_first, tv_clear, tv_list_alloc};
+use neovim::eval::typval::{DictRef, list_first, tv_clear, tv_list_alloc};
 use neovim::types::{List, TypVal};
 
 use crate::support::alloc::{self, AllocLog};
-use crate::support::tv::{self, Payload, Tv};
+use crate::support::tv::{self, Payload, Tv, ValuePtr};
 
 // -------------------------------------------------------------- encode
 
@@ -109,9 +109,9 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
             let list = tv_list_alloc(0);
             let l = list.as_ptr();
             for (chunk, expected) in row {
-                write(l, chunk);
+                write(tv::lval(l), chunk);
                 assert_eq!(
-                    tv::read_list(l),
+                    tv::read_list(tv::lval(l)),
                     Tv::List(expected),
                     "after writing {chunk:?}"
                 );
@@ -135,15 +135,15 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
     // SAFETY: the caller's.
     unsafe {
         let list = tv_list_alloc(n as isize);
-        let outer = list.as_ptr();
+        let outer = list.value();
         // The items share this reference -- item 0 *is* it -- so the value
         // that built it must not release it on the way out.
         let inner_tv = ManuallyDrop::new(inner.build());
         for i in 0..n {
             if i > 0 {
                 match inner_tv.v_type() {
-                    neovim::types::VAR_LIST => (*inner_tv.list()).lv_refcount.retain(),
-                    _ => (*inner_tv.dict()).dv_refcount.retain(),
+                    neovim::types::VAR_LIST => std::mem::forget(tv::handle(inner_tv.list())),
+                    _ => std::mem::forget(DictRef::retained(tv::dbox(inner_tv.dict()))),
                 }
             }
             // Every item names the same container; the retain above is
@@ -169,7 +169,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         // Two lists and nothing per item: the items are the lists' own
         // arrays, whose growth this log does not see.
         log.check(&[alloc::list(outer), alloc::list(inner)]);
-        assert_eq!((*inner).lv_refcount.get(), 3);
+        assert_eq!(tv::lrefs(inner), 3);
         tv_clear(&mut tv);
         log.check(&[alloc::freed(inner), alloc::freed(outer)]);
 
@@ -178,7 +178,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         let outer = tv.list();
         let inner = list_first(outer.as_mut()).unwrap().li_tv.list();
         log.check(&[alloc::list(outer), alloc::list(inner)]);
-        assert_eq!((*inner).lv_refcount.get(), 3);
+        assert_eq!(tv::lrefs(inner), 3);
         tv_clear(&mut tv);
         log.check(&[alloc::freed(inner), alloc::freed(outer)]);
 
@@ -187,7 +187,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         let outer = tv.list();
         let inner = list_first(outer.as_mut()).unwrap().li_tv.dict();
         log.check(&[alloc::list(outer), alloc::dict(inner)]);
-        assert_eq!((*inner).dv_refcount.get(), 2);
+        assert_eq!(tv::drefs(inner), 2);
         tv_clear(&mut tv);
         log.check(&[alloc::freed(inner), alloc::freed(outer)]);
 
@@ -196,7 +196,7 @@ fn clearing_releases_a_shared_container_exactly_once() {
         let outer = tv.list();
         let inner = list_first(outer.as_mut()).unwrap().li_tv.dict();
         log.check(&[alloc::list(outer), alloc::dict(inner)]);
-        assert_eq!((*inner).dv_refcount.get(), 2);
+        assert_eq!(tv::drefs(inner), 2);
         tv_clear(&mut tv);
         log.check(&[alloc::freed(inner), alloc::freed(outer)]);
     }

@@ -42,7 +42,7 @@ use crate::channel::CHANNELS;
 use crate::eval::gc::{GARBAGE_COLLECT_AT_EXIT, MAY_GARBAGE_COLLECT, WANT_GARBAGE_COLLECT};
 use crate::eval::gc::{dict_slots, list_slots};
 use crate::eval::typval::{
-    DictRef, ListRef, TV_IN_FREE_UNREF_ITEMS, blob_copy, dict_copy, free_registered_dict,
+    CopyWalk, DictRef, ListRef, TV_IN_FREE_UNREF_ITEMS, blob_copy, dict_copy, free_registered_dict,
     free_registered_list, list_copy, list_free_contents, registered_dict, registered_list, tv_copy,
     tv_dict_free_contents,
 };
@@ -552,16 +552,16 @@ pub fn set_ref_in_item(
 
 /// Copy a value, optionally deeply and optionally converting its strings.
 ///
-/// `copy_id` is what makes a *deep* copy of a self-referential structure
-/// terminate: a container already copied under this id answers with the
-/// copy it made rather than making another. `to` is overwritten without
+/// `walk` is what makes a *deep* copy of a self-referential structure
+/// terminate: a container already copied under it answers with the copy it
+/// made rather than making another. `to` is overwritten without
 /// being released.
 pub(crate) fn var_item_copy(
     conv: Option<&VimConv>,
     from: &TypVal,
     to: &mut TypVal,
     deep: bool,
-    copy_id: c_int,
+    walk: Option<&CopyWalk>,
 ) -> Result<(), Failed> {
     static RECURSE: GlobalCell<c_int> = GlobalCell::new(0);
 
@@ -591,8 +591,8 @@ pub(crate) fn var_item_copy(
             let copied = orig.and_then(|orig| {
                 // The copy it was given under this id, which gains this
                 // reference, or a fresh one.
-                // (The read ends before the copy, which marks `orig`.)
-                { orig.read().copy_under(copy_id) }.or_else(|| list_copy(conv, orig, deep, copy_id))
+                walk.and_then(|walk| orig.copy_under(walk))
+                    .or_else(|| list_copy(conv, orig, deep, walk))
             });
             let failed = orig.is_some() && copied.is_none();
             to.write_list(copied);
@@ -605,8 +605,8 @@ pub(crate) fn var_item_copy(
             let copied = orig.and_then(|orig| {
                 // The copy it was given under this id, which gains this
                 // reference, or a fresh one.
-                // (The read ends before the copy, which marks `orig`.)
-                { orig.read().copy_under(copy_id) }.or_else(|| dict_copy(conv, orig, deep, copy_id))
+                walk.and_then(|walk| orig.copy_under(walk))
+                    .or_else(|| dict_copy(conv, orig, deep, walk))
             });
             let failed = orig.is_some() && copied.is_none();
             to.write_dict(copied);

@@ -31,17 +31,17 @@ use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
 use neovim::eval::typval::{
-    DictRef, ListRef, NumBuf, list_concat, list_copy, list_equal, list_extend, list_find,
+    CopyWalk, DictRef, ListRef, NumBuf, list_concat, list_copy, list_equal, list_extend, list_find,
     list_find_nr, list_find_str, list_first, list_free_contents, list_free_list, list_join,
     list_last, list_len, tv_clear, tv_list_alloc,
 };
 use neovim::mbyte::CONV_NONE_INIT;
 use neovim::mbyte::VimConv;
 use neovim::memory::{XString, xstrdup};
-use neovim::types::{List, Refcount, TypVal, VAR_LIST, VarLock};
+use neovim::types::{List, TypVal, VAR_LIST, VarLock};
 
 use crate::support::alloc::{self, AllocLog};
-use crate::support::tv::{self, Payload, Tv};
+use crate::support::tv::{self, Payload, Tv, ValuePtr};
 use crate::support::{check_emsg, cstr};
 
 /// [`list_copy`] answering the pointer these cases are written against.
@@ -53,11 +53,13 @@ use crate::support::{check_emsg, cstr};
 /// # Safety
 /// As [`list_copy`].
 unsafe fn copied(conv: Option<&VimConv>, orig: *mut List, deep: bool, copy_id: c_int) -> *mut List {
-    let Some(held) = (unsafe { ListRef::retained(orig) }) else {
+    let Some(held) = (unsafe { ListRef::retained(tv::lbox(orig)) }) else {
         // A NULL list copies to a NULL list.
         return ptr::null_mut();
     };
-    list_copy(conv, &held, deep, copy_id).map_or(ptr::null_mut(), ListRef::into_raw)
+    // A non-zero id asks for the memo: a walk of its own.
+    let walk = (copy_id != 0).then(CopyWalk::new);
+    list_copy(conv, &held, deep, walk.as_ref()).map_or(ptr::null_mut(), |l| tv::lval(l.into_raw()))
 }
 
 /// The spec's bare Lua numbers, which `lua2typvalt` made floats.
@@ -157,7 +159,7 @@ fn removing_an_item_answers_the_index_that_followed_it() {
         );
         log.check(&[]);
 
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         log.check(&[alloc::freed(l)]);
     }
 }
@@ -187,7 +189,7 @@ fn removing_an_item_frees_its_value() {
             assert_eq!(tv::read_list(l), Tv::List(left.iter().map(Tv::s).collect()));
         }
 
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         log.check(&[alloc::freed(strings.remove(0)), alloc::freed(l)]);
     }
 }
@@ -246,7 +248,7 @@ fn removing_an_item_moves_the_watchers_standing_on_it() {
 
         unwatch(l, &lws);
         // Floats cost nothing, so the list header is all there is to free.
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         log.check(&[alloc::freed(l)]);
     }
 }
@@ -282,7 +284,7 @@ fn removing_a_watch_unlinks_it_without_freeing() {
         assert!(watchers(l).is_empty());
         log.check(&[]);
 
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
     }
 }
 
@@ -300,7 +302,7 @@ fn removing_an_unregistered_watch_is_a_no_op() {
         assert_eq!(watchers(l), [lw], "the registered watcher stays");
         log.check(&[]);
         unwatch(l, &[lw]);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
     }
 }
 
@@ -346,7 +348,7 @@ fn freeing_a_list_frees_its_contents_then_itself() {
     // SAFETY: the three lists are this case's own and are freed here.
     unsafe {
         for (l, allocated) in three_lists(&log) {
-            drop(ListRef::owning(l));
+            drop(ListRef::owning(tv::lbox(l)));
             log.check(
                 &allocated
                     .iter()
@@ -375,7 +377,7 @@ fn freeing_only_the_list_frees_the_items_with_it() {
     // SAFETY: the lists are this case's own and go here.
     unsafe {
         for (l, allocated) in three_lists(&log) {
-            list_free_list(l);
+            list_free_list(tv::lbox(l));
             log.check(
                 &allocated
                     .iter()
@@ -407,7 +409,7 @@ fn freeing_only_the_contents_leaves_the_list() {
                 0,
                 "the list is still there, and empty"
             );
-            list_free_list(l);
+            list_free_list(tv::lbox(l));
             log.check(&[alloc::freed(*allocated.last().expect("the list itself"))]);
         }
     }
@@ -425,10 +427,11 @@ fn unref_frees_only_at_the_last_reference() {
         let inner = list_first(l.as_mut()).unwrap().li_tv.list();
         log.check(&[alloc::list(l), alloc::list(inner)]);
 
-        (*l).lv_refcount = Refcount::new(2);
-        drop(ListRef::owning(l));
+        // A second reference, given back by the first drop below.
+        std::mem::forget(tv::handle(l));
+        drop(ListRef::owning(tv::lbox(l)));
         log.check(&[]);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         log.check(&[alloc::freed(inner), alloc::freed(l)]);
     }
 }
@@ -502,7 +505,7 @@ fn moving_a_run_of_items_takes_them_without_freeing_and_moves_the_watchers() {
         // Thirteen items changed hands and not one allocation moved.
         log.check(&[]);
 
-        drop(ListRef::owning(tgt));
+        drop(ListRef::owning(tv::lbox(tgt)));
         log.check(&[alloc::freed(tgt)]);
         tv_clear(&mut l_tv);
     }
@@ -671,9 +674,9 @@ fn inserting_a_value_copies_it() {
         let mut inner_tv = Tv::List(vec![]).build();
         log.clear();
         let inner = inner_tv.list();
-        assert_eq!((*inner).lv_refcount.get(), 1);
+        assert_eq!(tv::lrefs(inner), 1);
         (*l).insert_copy(&inner_tv, None);
-        assert_eq!((*inner).lv_refcount.get(), 2, "the copy holds a reference");
+        assert_eq!(tv::lrefs(inner), 2, "the copy holds a reference");
         assert_eq!(list_first(l.as_mut()).unwrap().li_tv.list(), inner);
         log.check(&[]);
 
@@ -719,9 +722,9 @@ fn appending_a_list_takes_a_reference() {
 
         let inner = tv::new_list(&[f(1.0)]);
         log.clear();
-        assert_eq!((*inner).lv_refcount.get(), 1);
-        (*l).push_list(ListRef::retained(inner));
-        assert_eq!((*inner).lv_refcount.get(), 2);
+        assert_eq!(tv::lrefs(inner), 1);
+        (*l).push_list(ListRef::retained(tv::lbox(inner)));
+        assert_eq!(tv::lrefs(inner), 2);
         assert_eq!(list_first(l.as_mut()).unwrap().li_tv.list(), inner);
         log.check(&[]);
 
@@ -734,8 +737,8 @@ fn appending_a_list_takes_a_reference() {
         );
 
         tv_clear(&mut l_tv);
-        assert_eq!((*inner).lv_refcount.get(), 1, "the list gave its back");
-        drop(ListRef::owning(inner));
+        assert_eq!(tv::lrefs(inner), 1, "the list gave its back");
+        drop(ListRef::owning(tv::lbox(inner)));
     }
 }
 
@@ -751,9 +754,9 @@ fn appending_a_dict_takes_a_reference() {
         let mut d_tv = Tv::dict([("test", f(1.0))]).build();
         let d = d_tv.dict();
         log.clear();
-        assert_eq!((*d).dv_refcount.get(), 1);
-        (*l).push_dict(DictRef::retained(d));
-        assert_eq!((*d).dv_refcount.get(), 2);
+        assert_eq!(tv::drefs(d), 1);
+        (*l).push_dict(DictRef::retained(tv::dbox(d)));
+        assert_eq!(tv::drefs(d), 2);
         assert_eq!(list_first(l.as_mut()).unwrap().li_tv.dict(), d);
         log.check(&[]);
 
@@ -766,7 +769,7 @@ fn appending_a_dict_takes_a_reference() {
         );
 
         tv_clear(&mut l_tv);
-        assert_eq!((*d).dv_refcount.get(), 1, "the list gave its back");
+        assert_eq!(tv::drefs(d), 1, "the list gave its back");
         tv_clear(&mut d_tv);
     }
 }
@@ -900,9 +903,9 @@ fn appending_a_value_copies_it() {
         let mut inner_tv = Tv::List(vec![]).build();
         log.clear();
         let inner = inner_tv.list();
-        assert_eq!((*inner).lv_refcount.get(), 1);
+        assert_eq!(tv::lrefs(inner), 1);
         (*l).push_copy(&inner_tv);
-        assert_eq!((*inner).lv_refcount.get(), 2);
+        assert_eq!(tv::lrefs(inner), 2);
         assert_eq!(list_first(l.as_mut()).unwrap().li_tv.list(), inner);
         log.check(&[]);
 
@@ -943,13 +946,9 @@ fn appending_an_owned_value_moves_it() {
         let inner_tv = Tv::List(vec![]).build();
         log.clear();
         let inner = inner_tv.list();
-        assert_eq!((*inner).lv_refcount.get(), 1);
+        assert_eq!(tv::lrefs(inner), 1);
         (*l).push(inner_tv);
-        assert_eq!(
-            (*inner).lv_refcount.get(),
-            1,
-            "the reference moved, not copied"
-        );
+        assert_eq!(tv::lrefs(inner), 1, "the reference moved, not copied");
         assert_eq!(list_first(l.as_mut()).unwrap().li_tv.list(), inner);
         log.check(&[]);
 
@@ -1025,11 +1024,11 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
         let inner_list = (*lis[1]).li_tv.list();
         log.clear();
 
-        assert_eq!((*inner_dict).dv_refcount.get(), 1);
-        assert_eq!((*inner_list).lv_refcount.get(), 1);
+        assert_eq!(tv::drefs(inner_dict), 1);
+        assert_eq!(tv::lrefs(inner_list), 1);
         let shallow = copied(None, l, false, 0);
-        assert_eq!((*inner_dict).dv_refcount.get(), 2);
-        assert_eq!((*inner_list).lv_refcount.get(), 2);
+        assert_eq!(tv::drefs(inner_dict), 2);
+        assert_eq!(tv::lrefs(inner_list), 2);
         let copies = tv::list_items(shallow);
         assert_eq!((*copies[0]).li_tv.dict(), inner_dict);
         assert_eq!((*copies[1]).li_tv.list(), inner_list);
@@ -1040,19 +1039,15 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
             alloc::list(shallow),
             alloc::string((*copies[3]).li_tv.string(), "“".len()),
         ]);
-        drop(ListRef::owning(shallow));
+        drop(ListRef::owning(tv::lbox(shallow)));
         log.clear();
 
-        assert_eq!((*inner_dict).dv_refcount.get(), 1);
-        assert_eq!((*inner_list).lv_refcount.get(), 1);
+        assert_eq!(tv::drefs(inner_dict), 1);
+        assert_eq!(tv::lrefs(inner_list), 1);
         let deep = copied(None, l, true, 0);
         assert!(!deep.is_null());
-        assert_eq!(
-            (*inner_dict).dv_refcount.get(),
-            1,
-            "a deep copy shares nothing"
-        );
-        assert_eq!((*inner_list).lv_refcount.get(), 1);
+        assert_eq!(tv::drefs(inner_dict), 1, "a deep copy shares nothing");
+        assert_eq!(tv::lrefs(inner_list), 1);
         let copies = tv::list_items(deep);
         assert_ne!((*copies[0]).li_tv.dict(), inner_dict);
         assert_ne!((*copies[1]).li_tv.list(), inner_list);
@@ -1073,7 +1068,7 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
             alloc::string((*copies[3]).li_tv.string(), "“".len()),
         ]);
 
-        drop(ListRef::owning(deep));
+        drop(ListRef::owning(tv::lbox(deep)));
         tv_clear(&mut l_tv);
     }
 }
@@ -1100,8 +1095,8 @@ fn a_converting_copy_rewrites_every_string() {
 
         let deep = copied(Some(&vc), l, true, 0);
         assert!(!deep.is_null());
-        assert_eq!((*inner_dict).dv_refcount.get(), 1);
-        assert_eq!((*inner_list).lv_refcount.get(), 1);
+        assert_eq!(tv::drefs(inner_dict), 1);
+        assert_eq!(tv::lrefs(inner_list), 1);
         let copies = tv::list_items(deep);
         assert_ne!((*copies[0]).li_tv.dict(), inner_dict);
         assert_ne!((*copies[1]).li_tv.list(), inner_list);
@@ -1136,7 +1131,7 @@ fn a_converting_copy_rewrites_every_string() {
             ],
         );
 
-        drop(ListRef::owning(deep));
+        drop(ListRef::owning(tv::lbox(deep)));
         tv_clear(&mut l_tv);
         drop(vc);
     }
@@ -1156,7 +1151,7 @@ fn a_copy_id_preserves_sharing() {
         ])
         .build();
         let inner = inner_tv.list();
-        assert_eq!((*inner).lv_refcount.get(), 3);
+        assert_eq!(tv::lrefs(inner), 3);
         let l = l_tv.list();
         assert_eq!(
             list_first(l.as_mut()).unwrap().li_tv.list(),
@@ -1185,9 +1180,9 @@ fn a_copy_id_preserves_sharing() {
             Tv::List(vec![Tv::List(vec![]), Tv::List(vec![])])
         );
 
-        assert_eq!((*inner).lv_refcount.get(), 3);
-        drop(ListRef::owning(without));
-        drop(ListRef::owning(with));
+        assert_eq!(tv::lrefs(inner), 3);
+        drop(ListRef::owning(tv::lbox(without)));
+        drop(ListRef::owning(tv::lbox(with)));
         tv_clear(&mut l_tv);
         tv_clear(&mut inner_tv);
     }
@@ -1201,21 +1196,21 @@ fn a_self_referencing_list_copies_into_a_self_referencing_copy() {
     unsafe {
         let mut l_tv = Tv::List(vec![]).build();
         let l = l_tv.list();
-        assert_eq!((*l).lv_refcount.get(), 1);
-        (*l).push_list(ListRef::retained(l));
-        assert_eq!((*l).lv_refcount.get(), 2);
+        assert_eq!(tv::lrefs(l), 1);
+        (*l).push_list(ListRef::retained(tv::lbox(l)));
+        assert_eq!(tv::lrefs(l), 2);
 
         let copy = copied(None, l, true, 2);
-        assert_eq!((*copy).lv_refcount.get(), 2, "the copy holds itself");
+        assert_eq!(tv::lrefs(copy), 2, "the copy holds itself");
         assert_eq!(tv::read_list(copy), Tv::List(vec![Tv::Cycle(0)]));
 
         // Break both cycles so the lists can go.
         tv::handle(l).remove_at(0);
-        assert_eq!((*l).lv_refcount.get(), 1);
+        assert_eq!(tv::lrefs(l), 1);
         tv::handle(copy).remove_at(0);
-        assert_eq!((*copy).lv_refcount.get(), 1);
+        assert_eq!(tv::lrefs(copy), 1);
 
-        drop(ListRef::owning(copy));
+        drop(ListRef::owning(tv::lbox(copy)));
         tv_clear(&mut l_tv);
     }
 }
@@ -1243,18 +1238,18 @@ fn a_list_can_be_extended_with_itself() {
             let l = tv::new_list(&[f(1.0), Tv::Dict(vec![])]);
             log.clear();
             let d = list_last(l.as_mut()).unwrap().li_tv.dict();
-            assert_eq!((*l).lv_refcount.get(), 1);
-            assert_eq!((*d).dv_refcount.get(), 1);
+            assert_eq!(tv::lrefs(l), 1);
+            assert_eq!(tv::drefs(d), 1);
 
             list_extend(&tv::view(l).unwrap(), tv::view(l).as_deref(), bef);
 
             // A float and a reference to a dict: neither allocates.
             log.check(&[]);
-            assert_eq!((*l).lv_refcount.get(), 1);
-            assert_eq!((*d).dv_refcount.get(), 2, "the dict gained one reference");
+            assert_eq!(tv::lrefs(l), 1);
+            assert_eq!(tv::drefs(d), 2, "the dict gained one reference");
             assert_eq!(tv::read_list(l), Tv::List(expected), "bef {bef:?}");
 
-            drop(ListRef::owning(l));
+            drop(ListRef::owning(tv::lbox(l)));
             log.check(&[alloc::freed(d), alloc::freed(l)]);
         }
     }
@@ -1279,14 +1274,14 @@ fn extending_with_an_empty_list_does_nothing() {
         for bef in [None, Some(0), Some(1)] {
             list_extend(&tv::view(l).unwrap(), tv::view(empty).as_deref(), bef);
             log.check(&[]);
-            assert_eq!((*l).lv_refcount.get(), 1);
-            assert_eq!((*d).dv_refcount.get(), 1);
-            assert_eq!((*empty).lv_refcount.get(), 1);
+            assert_eq!(tv::lrefs(l), 1);
+            assert_eq!(tv::drefs(d), 1);
+            assert_eq!(tv::lrefs(empty), 1);
             assert_eq!(tv::read_list(l), Tv::List(vec![f(1.0), DICT]));
         }
 
-        drop(ListRef::owning(l));
-        drop(ListRef::owning(empty));
+        drop(ListRef::owning(tv::lbox(l)));
+        drop(ListRef::owning(tv::lbox(empty)));
     }
 }
 
@@ -1308,11 +1303,11 @@ fn extending_with_a_null_list_does_nothing() {
         for bef in [None, Some(0), Some(1)] {
             list_extend(&tv::view(l).unwrap(), None, bef);
             log.check(&[]);
-            assert_eq!((*l).lv_refcount.get(), 1);
+            assert_eq!(tv::lrefs(l), 1);
             assert_eq!(tv::read_list(l), Tv::List(vec![f(1.0), f(2.0)]));
         }
 
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
     }
 }
 
@@ -1330,8 +1325,8 @@ fn extending_with_another_list_copies_its_items() {
     unsafe {
         let l2 = tv::new_list(&[f(42.0), Tv::List(vec![])]);
         let inner = list_last(l2.as_mut()).unwrap().li_tv.list();
-        assert_eq!((*l2).lv_refcount.get(), 1);
-        assert_eq!((*inner).lv_refcount.get(), 1);
+        assert_eq!(tv::lrefs(l2), 1);
+        assert_eq!(tv::lrefs(inner), 1);
 
         for (bef, expected) in [
             (None, vec![f(1.0), DICT, f(42.0), LIST]),
@@ -1341,25 +1336,21 @@ fn extending_with_another_list_copies_its_items() {
             let l = tv::new_list(&[f(1.0), Tv::Dict(vec![])]);
             log.clear();
             let d = list_last(l.as_mut()).unwrap().li_tv.dict();
-            assert_eq!((*l).lv_refcount.get(), 1);
-            assert_eq!((*d).dv_refcount.get(), 1);
+            assert_eq!(tv::lrefs(l), 1);
+            assert_eq!(tv::drefs(d), 1);
 
             list_extend(&tv::view(l).unwrap(), tv::view(l2).as_deref(), bef);
 
             log.check(&[]);
-            assert_eq!(
-                (*l2).lv_refcount.get(),
-                1,
-                "the source list itself is not held"
-            );
-            assert_eq!((*inner).lv_refcount.get(), 2, "but its list item is");
+            assert_eq!(tv::lrefs(l2), 1, "the source list itself is not held");
+            assert_eq!(tv::lrefs(inner), 2, "but its list item is");
             assert_eq!(tv::read_list(l), Tv::List(expected), "bef {bef:?}");
 
-            drop(ListRef::owning(l));
-            assert_eq!((*inner).lv_refcount.get(), 1);
+            drop(ListRef::owning(tv::lbox(l)));
+            assert_eq!(tv::lrefs(inner), 1);
         }
 
-        drop(ListRef::owning(l2));
+        drop(ListRef::owning(tv::lbox(l2)));
     }
 }
 
@@ -1381,8 +1372,8 @@ fn concatenating_with_a_null_list_copies_the_other_one() {
         let l = tv::new_list(&[f(1.0), Tv::Dict(vec![])]);
         log.clear();
         let d = list_last(l.as_mut()).unwrap().li_tv.dict();
-        assert_eq!((*l).lv_refcount.get(), 1);
-        assert_eq!((*d).dv_refcount.get(), 1);
+        assert_eq!(tv::lrefs(l), 1);
+        assert_eq!(tv::drefs(d), 1);
 
         let mut refs = 1;
         let mut results = Vec::new();
@@ -1392,14 +1383,14 @@ fn concatenating_with_a_null_list_copies_the_other_one() {
                 list_concat(tv::view(l1).as_deref(), tv::view(l2).as_deref(), &mut rettv),
                 Ok(())
             );
-            assert_eq!((*l).lv_refcount.get(), 1);
+            assert_eq!(tv::lrefs(l), 1);
             assert_eq!(rettv.v_type(), VAR_LIST);
             assert_eq!(tv::read(&raw const rettv), Tv::List(vec![f(1.0), DICT]));
             let out = rettv.list();
-            assert_eq!((*out).lv_refcount.get(), 1);
+            assert_eq!(tv::lrefs(out), 1);
             log.check(&[alloc::list(out)]);
             refs += 1;
-            assert_eq!((*d).dv_refcount.get(), refs);
+            assert_eq!(tv::drefs(d), refs);
             results.push(rettv);
         }
 
@@ -1412,7 +1403,7 @@ fn concatenating_with_a_null_list_copies_the_other_one() {
         for mut rettv in results {
             tv_clear(&mut rettv);
         }
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
     }
 }
 
@@ -1427,11 +1418,8 @@ fn concatenating_two_lists_copies_both() {
         let l2 = tv::new_list(&[f(3.0), Tv::List(vec![])]);
         let d = list_last(l1.as_mut()).unwrap().li_tv.dict();
         let inner = list_last(l2.as_mut()).unwrap().li_tv.list();
-        assert_eq!(((*l1).lv_refcount.get(), (*d).dv_refcount.get()), (1, 1));
-        assert_eq!(
-            ((*l2).lv_refcount.get(), (*inner).lv_refcount.get()),
-            (1, 1)
-        );
+        assert_eq!((tv::lrefs(l1), tv::drefs(d)), (1, 1));
+        assert_eq!((tv::lrefs(l2), tv::lrefs(inner)), (1, 1));
         log.clear();
 
         let mut rettv = Tv::Unknown.build();
@@ -1439,11 +1427,8 @@ fn concatenating_two_lists_copies_both() {
             list_concat(tv::view(l1).as_deref(), tv::view(l2).as_deref(), &mut rettv),
             Ok(())
         );
-        assert_eq!(((*l1).lv_refcount.get(), (*d).dv_refcount.get()), (1, 2));
-        assert_eq!(
-            ((*l2).lv_refcount.get(), (*inner).lv_refcount.get()),
-            (1, 2)
-        );
+        assert_eq!((tv::lrefs(l1), tv::drefs(d)), (1, 2));
+        assert_eq!((tv::lrefs(l2), tv::lrefs(inner)), (1, 2));
         let out = rettv.list();
         log.check(&[alloc::list(out)]);
         assert_eq!(list_len(out.as_ref()), 4);
@@ -1453,8 +1438,8 @@ fn concatenating_two_lists_copies_both() {
         );
 
         tv_clear(&mut rettv);
-        drop(ListRef::owning(l1));
-        drop(ListRef::owning(l2));
+        drop(ListRef::owning(tv::lbox(l1)));
+        drop(ListRef::owning(tv::lbox(l2)));
     }
 }
 
@@ -1467,7 +1452,7 @@ fn concatenating_a_list_with_itself_copies_it_twice() {
     unsafe {
         let l = tv::new_list(&[f(1.0), Tv::Dict(vec![])]);
         let d = list_last(l.as_mut()).unwrap().li_tv.dict();
-        assert_eq!(((*l).lv_refcount.get(), (*d).dv_refcount.get()), (1, 1));
+        assert_eq!((tv::lrefs(l), tv::drefs(d)), (1, 1));
         log.clear();
 
         let mut rettv = Tv::Unknown.build();
@@ -1475,7 +1460,7 @@ fn concatenating_a_list_with_itself_copies_it_twice() {
             list_concat(tv::view(l).as_deref(), tv::view(l).as_deref(), &mut rettv),
             Ok(())
         );
-        assert_eq!(((*l).lv_refcount.get(), (*d).dv_refcount.get()), (1, 3));
+        assert_eq!((tv::lrefs(l), tv::drefs(d)), (1, 3));
         let out = rettv.list();
         log.check(&[alloc::list(out)]);
         assert_eq!(list_len(out.as_ref()), 4);
@@ -1485,7 +1470,7 @@ fn concatenating_a_list_with_itself_copies_it_twice() {
         );
 
         tv_clear(&mut rettv);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
     }
 }
 
@@ -1512,8 +1497,8 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
                 list_concat(tv::view(l1).as_deref(), tv::view(l2).as_deref(), &mut rettv),
                 Ok(())
             );
-            assert_eq!(((*l).lv_refcount.get(), (*d).dv_refcount.get()), (1, refs));
-            assert_eq!(((*le).lv_refcount.get(), (*le2).lv_refcount.get()), (1, 1));
+            assert_eq!((tv::lrefs(l), tv::drefs(d)), (1, refs));
+            assert_eq!((tv::lrefs(le), tv::lrefs(le2)), (1, 1));
             let out = rettv.list();
             log.check(&[alloc::list(out)]);
             assert_eq!(list_len(out.as_ref()), 2);
@@ -1527,7 +1512,7 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
                 list_concat(tv::view(l1).as_deref(), tv::view(l2).as_deref(), &mut rettv),
                 Ok(())
             );
-            assert_eq!(((*l).lv_refcount.get(), (*d).dv_refcount.get()), (1, 3));
+            assert_eq!((tv::lrefs(l), tv::drefs(d)), (1, 3));
             log.check(&[alloc::list(rettv.list())]);
             assert_eq!(tv::read(&raw const rettv), Tv::List(vec![]));
             kept.push(rettv);
@@ -1536,9 +1521,9 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
         for mut rettv in kept {
             tv_clear(&mut rettv);
         }
-        drop(ListRef::owning(l));
-        drop(ListRef::owning(le));
-        drop(ListRef::owning(le2));
+        drop(ListRef::owning(tv::lbox(l)));
+        drop(ListRef::owning(tv::lbox(le)));
+        drop(ListRef::owning(tv::lbox(le2)));
     }
 }
 
@@ -1559,23 +1544,23 @@ fn joining_a_list_renders_every_item() {
         let l = tv::new_list(&[Tv::s("boo"), Tv::s("far")]);
         assert_eq!(join(l, " "), "boo far");
         assert_eq!(join(l, ""), "boofar");
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         let l = tv::new_list(&[Tv::s("boo")]);
         assert_eq!(join(l, " "), "boo");
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         let l = tv::new_list(&[]);
         assert_eq!(join(l, " "), "");
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         let l = tv::new_list(&[Tv::Dict(vec![]), Tv::s("far")]);
         assert_eq!(join(l, " "), "{} far");
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         // A recursive list renders as the marker `string()` uses, not by
         // looping.
         let l = tv::new_list(&[Tv::List(vec![Tv::Cycle(1)]), Tv::s("far")]);
         assert_eq!(join(l, " "), "[[...@0]] far");
         let recursive = list_first(l.as_mut()).unwrap().li_tv.list();
         tv::handle(recursive).remove_at(0);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         log.clear();
     }
 }
@@ -1654,8 +1639,8 @@ fn a_null_list_equals_an_empty_one() {
             assert!(list_equal(l2.as_ref(), l.as_ref(), ic));
         }
 
-        drop(ListRef::owning(l));
-        drop(ListRef::owning(l2));
+        drop(ListRef::owning(tv::lbox(l)));
+        drop(ListRef::owning(tv::lbox(l2)));
     }
 }
 
@@ -1694,7 +1679,7 @@ fn comparing_lists_folds_case_only_when_asked() {
             );
         }
         for l in ls {
-            drop(ListRef::owning(l));
+            drop(ListRef::owning(tv::lbox(l)));
         }
     }
 }
@@ -1744,7 +1729,7 @@ fn finding_an_item_by_index_works_from_either_end() {
         assert_eq!(tv::item_ptr(list_last(l.as_mut())), lis[4]);
 
         log.check(&[]);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
     }
 }
 
@@ -1775,7 +1760,7 @@ fn finding_a_number_by_index_reads_through_strings() {
                 assert_eq!(find_nr(l, n, None), (false, want));
             }
             log.check(&[]);
-            drop(ListRef::owning(l));
+            drop(ListRef::owning(tv::lbox(l)));
         }
 
         // A NULL string is zero, not an error.
@@ -1783,7 +1768,7 @@ fn finding_a_number_by_index_reads_through_strings() {
         log.clear();
         assert_eq!(find_nr(l, 0, None), (false, 0));
         log.check(&[]);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         // A NULL list and an out-of-range index both set the error flag and
         // answer -1 without a message.
         for n in [-5, 4, 2, -3] {
@@ -1795,7 +1780,7 @@ fn finding_a_number_by_index_reads_through_strings() {
             assert_eq!(find_nr(l, n, None), (true, -1));
         }
         log.check(&[]);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         // An item that is not a number reports, and answers 0.
         let l = tv::new_list(&[f(1.0), Tv::List(vec![]), Tv::Dict(vec![])]);
         for (n, msg) in [
@@ -1809,7 +1794,7 @@ fn finding_a_number_by_index_reads_through_strings() {
             assert_eq!(find_nr(l, n, Some(msg)), (true, 0));
             log.clear();
         }
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
     }
 }
 
@@ -1839,7 +1824,7 @@ fn finding_a_string_by_index_renders_scalars() {
         assert_eq!(find_str(l, 2, None).as_deref(), Some("3"));
         assert_eq!(find_str(l, -3, None).as_deref(), Some("3"));
         log.check(&[]);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         // A string item is answered in place.
         let l = tv::new_list(&(1..=5).map(|n| Tv::s(n.to_string())).collect::<Vec<_>>());
         log.clear();
@@ -1847,13 +1832,13 @@ fn finding_a_string_by_index_renders_scalars() {
             assert_eq!(find_str(l, n, None).as_deref(), Some(want));
         }
         log.check(&[]);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         // A NULL string reads as empty.
         let l = tv::new_list(&[Tv::NullStr]);
         log.clear();
         assert_eq!(find_str(l, 0, None).as_deref(), Some(""));
         log.check(&[]);
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         // Out of range answers NULL and reports the index.
         let l = tv::new_list(&(1..=5).map(|n| Tv::Int(i64::from(n))).collect::<Vec<_>>());
         assert_eq!(
@@ -1866,7 +1851,7 @@ fn finding_a_string_by_index_renders_scalars() {
             None
         );
         log.clear();
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
         // A container answers the empty string and reports.
         let l = tv::new_list(&[Tv::List(vec![]), Tv::Dict(vec![])]);
         for (n, msg) in [
@@ -1878,7 +1863,7 @@ fn finding_a_string_by_index_renders_scalars() {
             assert_eq!(find_str(l, n, Some(msg)).as_deref(), Some(""));
             log.clear();
         }
-        drop(ListRef::owning(l));
+        drop(ListRef::owning(tv::lbox(l)));
     }
 }
 
@@ -1926,8 +1911,8 @@ fn an_items_identity_is_its_index_into_one_list() {
         assert!(list_first(None).is_none());
         assert!(list_last(None).is_none());
 
-        drop(ListRef::owning(l));
-        drop(ListRef::owning(l2));
+        drop(ListRef::owning(tv::lbox(l)));
+        drop(ListRef::owning(tv::lbox(l2)));
     }
 }
 
@@ -1953,12 +1938,12 @@ fn a_fresh_list_is_empty_and_owned_by_its_handle() {
     unsafe {
         for len in [0, 10, -1] {
             let list = tv_list_alloc(len);
-            let l = list.as_ptr();
+            let l = list.value();
             log.check(&[alloc::list(l)]);
             assert_eq!(list_len(l.as_ref()), 0, "len {len}");
             assert!(list_first(l.as_mut()).is_none());
             assert!(list_last(l.as_mut()).is_none());
-            assert_eq!((*l).lv_refcount.get(), 1);
+            assert_eq!(tv::lrefs(l), 1);
             assert_eq!((*l).lv_lock, VarLock::Unlocked);
             drop(list);
             log.check(&[alloc::freed(l)]);

@@ -39,7 +39,8 @@ use crate::eval::typval::{
     ListRef, TV_INITIAL_VALUE, callback_free, list_copy, list_find, list_iter, list_len, tv_clear,
 };
 
-use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
+use crate::eval::typval::CopyWalk;
+use crate::eval::{callback_call, set_ref_in_callback};
 use crate::ex_docmd::{FFU_CB, PREV_DIR};
 use crate::ex_getln::allbuf_locked;
 
@@ -111,10 +112,10 @@ pub(crate) fn call_findfunc(pat: &[u8], cmdcomplete: BoolVarValue) -> Option<Lis
     let mut retlist = None;
     if called {
         if rettv.v_type() as c_uint == VAR_LIST as c_uint {
-            // No conversion, a fresh copyID.
+            // No conversion, a walk of its own.
             retlist = rettv
                 .list_shared()
-                .and_then(|list| list_copy(None, list, false, get_copy_id()));
+                .and_then(|list| list_copy(None, list, false, Some(&CopyWalk::new())));
         } else {
             emsg(gettext(E_INVALID_RETURN_TYPE_FROM_FINDFUNC));
         }

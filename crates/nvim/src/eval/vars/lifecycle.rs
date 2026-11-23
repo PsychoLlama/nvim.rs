@@ -26,7 +26,7 @@ use super::*;
 use crate::eval::typval::{DictRef, ListRef};
 use crate::message_fmt::msg_bytes;
 use crate::semsg;
-use crate::types::{Failed, MessagePackType, Refcount};
+use crate::types::{Failed, MessagePackType};
 
 /// Build the `g:` and `v:` scopes and give the `v:` variables their first
 /// values.  Called once, at startup.
@@ -219,7 +219,7 @@ pub(crate) fn is_globvar_dict(dict: &Dict) -> bool {
         entry
             .di_tv
             .dict_shared()
-            .is_some_and(|globals| ::core::ptr::eq(globals.as_ptr().cast_const(), dict))
+            .is_some_and(|globals| globals.holds(dict))
     })
 }
 
@@ -228,7 +228,7 @@ pub(crate) fn msgpack_type_list_is(type_: MessagePackType, list: &List) -> bool 
     MSGPACK_TYPE_LISTS.with(|lists| {
         lists[type_ as usize]
             .as_ref()
-            .is_some_and(|l| ::core::ptr::eq(l.as_ptr().cast_const(), list))
+            .is_some_and(|l| l.holds(list))
     })
 }
 
@@ -236,10 +236,9 @@ pub(crate) fn msgpack_type_list_is(type_: MessagePackType, list: &List) -> bool 
 /// order.
 pub(crate) fn msgpack_type_of(list: &List) -> Option<usize> {
     MSGPACK_TYPE_LISTS.with(|lists| {
-        lists.iter().position(|l| {
-            l.as_ref()
-                .is_some_and(|l| ::core::ptr::eq(l.as_ptr().cast_const(), list))
-        })
+        lists
+            .iter()
+            .position(|l| l.as_ref().is_some_and(|l| l.holds(list)))
     })
 }
 
@@ -274,17 +273,16 @@ pub(crate) fn script_scope_dict(sid: ScriptId) -> Option<DictRef> {
 /// dictionary, whose reference count is seeded with `DO_NOT_FREE_CNT` so
 /// that nothing frees it until [`release_var_scope`].
 fn scope_entry(dict: DictRef, scope: ScopeType) -> ScopeDictItem {
-    {
-        let mut d = dict.edit();
-        d.dv_scope = scope;
-        d.dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
-    }
-    ScopeDictItem(ManuallyDrop::new(DictItem {
+    dict.edit().dv_scope = scope;
+    // The entry's handle is one of the `DO_NOT_FREE_CNT`.
+    let seed = dict.seed(DO_NOT_FREE_CNT - 1);
+    let item = DictItem {
         di_tv: TypVal::dict(Some(dict)),
         di_lock: VarLock::Fixed,
         di_flags: DI_FLAGS_RO | DI_FLAGS_FIX,
         di_key: DictKey::EMPTY,
-    }))
+    };
+    ScopeDictItem::new(item, Some(seed))
 }
 
 /// A fresh `b:`, `w:` or `t:` scope: its dictionary stays in the
@@ -298,20 +296,14 @@ pub fn new_var_scope(scope: ScopeType) -> ScopeDictItem {
 /// collector's registry, which only marks its items.
 pub(crate) fn new_unrooted_var_scope(scope: ScopeType) -> ScopeDictItem {
     let dict = tv_dict_alloc();
-    {
-        let d = &mut dict.edit();
-        unroot_dict(d.dv_root);
-        d.dv_root = RootId::NONE;
-    }
+    dict.unroot();
     scope_entry(dict, scope)
 }
 
 /// Undo [`new_var_scope`]'s reference count and give the entry's reference
 /// back, so that the dictionary is freed when nothing else holds it.
 pub fn release_var_scope(entry: &mut ScopeDictItem) {
-    if let Some(dict) = entry.di_tv.dict_shared() {
-        dict.edit().dv_refcount.release_many(DO_NOT_FREE_CNT - 1);
-    }
+    entry.release_seed();
     drop(entry.0.di_tv.take());
 }
 
