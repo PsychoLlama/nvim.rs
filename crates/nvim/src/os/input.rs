@@ -110,6 +110,13 @@ pub fn input_start() {
         return;
     }
     USED_STDIN.set(true);
+    // A stop's close finishes on a later loop turn, and the handle cannot
+    // be opened again before then.
+    if READ_STREAM.with(ReadStream::is_closing) {
+        wait_on_main_loop(Drain::Nothing, -1, || {
+            !READ_STREAM.with(ReadStream::is_closing)
+        });
+    }
     READ_STREAM.with(|stream| {
         // SAFETY: stdin is open, and `READ_STREAM` is a static nothing
         // replaces: the stream stays at its address for the process.

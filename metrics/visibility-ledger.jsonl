@@ -381,6 +381,10 @@
 {"path":"neovim::os::fs::os_rmdir","kind":"fn","file":"crates/nvim/src/os/fs/dir.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::os_setperm","kind":"fn","file":"crates/nvim/src/os/fs/meta.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
 {"path":"neovim::os::fs::path_exists","kind":"fn","file":"crates/nvim/src/os/fs/dir.rs","tests":["crates/nvim/tests/unit/fs.rs"]}
+{"path":"neovim::os::input::input_available","kind":"fn","file":"crates/nvim/src/os/input.rs","tests":["crates/nvim/tests/unit/os_input.rs"]}
+{"path":"neovim::os::input::input_start","kind":"fn","file":"crates/nvim/src/os/input.rs","tests":["crates/nvim/tests/unit/os_input.rs"]}
+{"path":"neovim::os::input::input_stop","kind":"fn","file":"crates/nvim/src/os/input.rs","tests":["crates/nvim/tests/unit/os_input.rs"]}
+{"path":"neovim::os::input::os_char_avail","kind":"fn","file":"crates/nvim/src/os/input.rs","tests":["crates/nvim/tests/unit/os_input.rs"]}
 {"path":"neovim::os::input::refuse_endless_waits","kind":"fn","file":"crates/nvim/src/os/input.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::os::libc::ptrdiff_t","kind":"type","file":"crates/nvim/src/os/libc.rs","tests":["crates/nvim/tests/unit/typval.rs"]}
 {"path":"neovim::os::users::os_get_usernames","kind":"fn","file":"crates/nvim/src/os/users.rs","tests":["crates/nvim/tests/unit/users.rs"]}

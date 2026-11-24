@@ -86,6 +86,7 @@ mod options;
 mod options_oracle;
 mod optionstr;
 mod optionstr_oracle;
+mod os_input;
 mod packer;
 mod parser;
 mod path;

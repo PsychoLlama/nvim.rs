@@ -300,11 +300,18 @@ impl ReadStream {
     /// Open the stream over `fd` on the editor's loop, and give it its
     /// block.
     ///
+    /// # Panics
+    /// When the stream still has its block: it is open, or closed but not
+    /// yet through its close callback ([`ReadStream::is_closing`]).
+    /// Reinitialising a handle libuv is still closing would corrupt its
+    /// handle list, and the old close callback would release the new block.
+    ///
     /// # Safety
     /// `fd` is open. The stream stays at this address, alive, until its
     /// close callback has run (after [`ReadStream::close`] and the loop
     /// turn that finishes it).
     pub(crate) unsafe fn open_fd(&self, fd: c_int) {
+        self.refuse_reopen();
         // SAFETY: the editor's loop, live for the process, and the caller's
         // promise about the stream and the descriptor.
         unsafe { rstream_init_fd(main_loop_raw(), self.as_ptr(), fd) };
@@ -313,12 +320,31 @@ impl ReadStream {
     /// Give the stream its block, once its common half is connected (a
     /// socket the stream layer opened by connecting or accepting).
     ///
+    /// # Panics
+    /// As [`ReadStream::open_fd`].
+    ///
     /// # Safety
     /// The common half has been through `stream_init`; and as
     /// [`ReadStream::open_fd`].
     pub(crate) unsafe fn open(&self) {
+        self.refuse_reopen();
         // SAFETY: the caller's promise.
         unsafe { rstream_init(self.as_ptr()) };
+    }
+
+    /// The open step's guard: the stream has no block, so libuv is not
+    /// holding it.
+    fn refuse_reopen(&self) {
+        assert!(
+            self.opened().is_none(),
+            "a read stream is opened only once its last close callback has run"
+        );
+    }
+
+    /// Marked closed, but libuv has not finished closing the handle: the
+    /// close callback, which gives the block back, is still to run.
+    pub(crate) fn is_closing(&self) -> bool {
+        self.is_closed() && self.opened().is_some()
     }
 
     /// Deliver reads to `consume`, told `data` each time.
