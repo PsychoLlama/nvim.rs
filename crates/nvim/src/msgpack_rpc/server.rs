@@ -25,15 +25,8 @@ use crate::path::fix_fname;
 use crate::types::Vv;
 use std::ffi::CString;
 
-/// Values these belong to other modules.
-mod known {
-    use core::ffi::c_int;
-
-    /// How many connections the kernel may queue behind a listening socket.
-    pub(super) const MAX_CONNECTIONS: c_int = 32;
-}
-
-use known::*;
+/// How many connections the kernel may queue behind a listening socket.
+const MAX_CONNECTIONS: c_int = 32;
 
 const ENV_LISTEN: &CStr = c"NVIM_LISTEN_ADDRESS";
 

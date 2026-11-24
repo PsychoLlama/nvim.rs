@@ -18,11 +18,8 @@
 
 use crate::os::libc::uint64_t;
 
-mod sizes {
-    /// How many ids a set holds before it goes to the heap.
-    pub(super) const INTERSECT_INLINE: usize = 4;
-}
-use sizes::INTERSECT_INLINE;
+/// How many ids a set holds before it goes to the heap.
+const INTERSECT_INLINE: usize = 4;
 
 /// One node's set of covering mark ids.
 #[derive(Clone, Debug)]

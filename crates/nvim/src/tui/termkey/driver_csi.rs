@@ -30,26 +30,21 @@ use core::ffi::c_int;
 /// parameter, which reads as -1.
 type Params<'a> = [Option<&'a [u8]>; CSI_MAX_PARAMS];
 
-/// Sequence introducers and terminators, in both their seven-bit (an escape
-/// then a character) and eight-bit (a single C1 byte) spellings.
-mod byte {
-    pub(super) const BEL: u8 = 0x07;
-    pub(super) const SS3_7BIT: u8 = b'O';
-    pub(super) const CSI_7BIT: u8 = b'[';
-    pub(super) const DCS_7BIT: u8 = b'P';
-    pub(super) const OSC_7BIT: u8 = b']';
-    pub(super) const APC_7BIT: u8 = b'_';
-    pub(super) const SS3_8BIT: u8 = 0x8f;
-    pub(super) const DCS_8BIT: u8 = 0x90;
-    pub(super) const CSI_8BIT: u8 = 0x9b;
-    pub(super) const STRING_TERMINATOR_8BIT: u8 = 0x9c;
-    pub(super) const OSC_8BIT: u8 = 0x9d;
-}
 use crate::ascii::ESC;
-use byte::{
-    APC_7BIT, BEL, CSI_7BIT, CSI_8BIT, DCS_7BIT, DCS_8BIT, OSC_7BIT, OSC_8BIT, SS3_7BIT, SS3_8BIT,
-    STRING_TERMINATOR_8BIT,
-};
+
+// Sequence introducers and terminators, in both their seven-bit (an escape
+// then a character) and eight-bit (a single C1 byte) spellings.
+const BEL: u8 = 0x07;
+const SS3_7BIT: u8 = b'O';
+const CSI_7BIT: u8 = b'[';
+const DCS_7BIT: u8 = b'P';
+const OSC_7BIT: u8 = b']';
+const APC_7BIT: u8 = b'_';
+const SS3_8BIT: u8 = 0x8f;
+const DCS_8BIT: u8 = 0x90;
+const CSI_8BIT: u8 = 0x9b;
+const STRING_TERMINATOR_8BIT: u8 = 0x9c;
+const OSC_8BIT: u8 = 0x9d;
 
 /// The driver's per-reader state: the last control string's payload, and
 /// the serial number that ties it to the key that reported it.

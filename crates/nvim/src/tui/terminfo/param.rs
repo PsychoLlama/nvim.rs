@@ -27,18 +27,14 @@ use core::ffi::c_int;
 
 use crate::narrow::number_as_int;
 
-mod limits {
-    /// How deep the operand stack goes. Overflowing it fails the whole
-    /// expansion, which is the only way a well-formed capability can fail
-    /// without running out of output room.
-    pub(super) const STACK_DEPTH: usize = 20;
+/// How deep the operand stack goes. Overflowing it fails the whole
+/// expansion, which is the only way a well-formed capability can fail
+/// without running out of output room.
+const STACK_DEPTH: usize = 20;
 
-    /// The widest a rendered `long` can be, which upstream used as the floor
-    /// for how much room a numeric conversion demands.
-    pub(super) const LONG_STR_MAX: usize = 21;
-}
-
-use limits::{LONG_STR_MAX, STACK_DEPTH};
+/// The widest a rendered `long` can be, which upstream used as the floor
+/// for how much room a numeric conversion demands.
+const LONG_STR_MAX: usize = 21;
 
 /// One of the nine parameters a capability is expanded with.
 #[derive(Clone, Copy, Default, Debug)]

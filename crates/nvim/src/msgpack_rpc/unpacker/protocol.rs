@@ -10,40 +10,35 @@ use core::ffi::c_int;
 
 use crate::mpack::token::Kind;
 
-/// Parse stages. The unpacker resumes mid-message whenever the stream runs
-/// out, so its position is one of these plus the byte offset it stopped at.
-mod stage {
-    use core::ffi::c_int;
+// Parse stages. The unpacker resumes mid-message whenever the stream runs
+// out, so its position is one of these plus the byte offset it stopped at.
 
-    /// The stream is not msgpack-rpc and the channel is finished.
-    pub const INVALID: c_int = -1;
+/// The stream is not msgpack-rpc and the channel is finished.
+pub(crate) const INVALID: c_int = -1;
 
-    /// Between messages: expecting `[type, ...]`.
-    pub const HEADER: c_int = 0;
-    /// A response's error slot, which is followed by its result.
-    pub const RESPONSE_ERROR: c_int = 1;
-    /// A request's arguments, a notification's arguments, or a response's
-    /// result — whatever the header left to read.
-    pub const BODY: c_int = 2;
+/// Between messages: expecting `[type, ...]`.
+pub(crate) const HEADER: c_int = 0;
+/// A response's error slot, which is followed by its result.
+pub(crate) const RESPONSE_ERROR: c_int = 1;
+/// A request's arguments, a notification's arguments, or a response's
+/// result — whatever the header left to read.
+pub(crate) const BODY: c_int = 2;
 
-    /// The array of events in a `redraw` notification.
-    pub const REDRAW_EVENTS: c_int = 10;
-    /// One event: its name, then one call's worth of arguments.
-    pub const REDRAW_CALL: c_int = 11;
-    /// A non-`grid_line` event's arguments, still to be read.
-    pub const REDRAW_ARGS: c_int = 12;
-    /// A non-`grid_line` event's arguments, now unpacked.
-    pub const REDRAW_ARGS_DONE: c_int = 13;
+/// The array of events in a `redraw` notification.
+pub(crate) const REDRAW_EVENTS: c_int = 10;
+/// One event: its name, then one call's worth of arguments.
+pub(crate) const REDRAW_CALL: c_int = 11;
+/// A non-`grid_line` event's arguments, still to be read.
+pub(crate) const REDRAW_ARGS: c_int = 12;
+/// A non-`grid_line` event's arguments, now unpacked.
+pub(crate) const REDRAW_ARGS_DONE: c_int = 13;
 
-    /// A `grid_line` event's fixed leading arguments.
-    pub const GRID_LINE_EVENT: c_int = 14;
-    /// Its cell array, decoded straight into the shared line buffers.
-    pub const GRID_LINE_CELLS: c_int = 15;
-    /// Its trailing `wrap` flag; the event is complete once it is read.
-    pub const GRID_LINE_WRAP: c_int = 16;
-}
-
-pub use stage::*;
+/// A `grid_line` event's fixed leading arguments.
+pub(crate) const GRID_LINE_EVENT: c_int = 14;
+/// Its cell array, decoded straight into the shared line buffers.
+pub(crate) const GRID_LINE_CELLS: c_int = 15;
+/// Its trailing `wrap` flag; the event is complete once it is read.
+pub(crate) const GRID_LINE_WRAP: c_int = 16;
 
 /// Whether a token of type `actual` satisfies a demand for `expected`.
 ///
@@ -69,13 +64,9 @@ pub fn header_shape_is_valid(array_length: usize, message_type: u32) -> bool {
     }
 }
 
-mod limit {
-    /// The longest method name the header parser will look at. A longer one
-    /// is treated as a decoding failure rather than an unknown method.
-    pub const METHOD_NAME_MAX: u32 = 100;
-}
-
-pub use limit::METHOD_NAME_MAX;
+/// The longest method name the header parser will look at. A longer one
+/// is treated as a decoding failure rather than an unknown method.
+pub(crate) const METHOD_NAME_MAX: u32 = 100;
 
 /// Where the unpacker goes after finishing one redraw call.
 ///

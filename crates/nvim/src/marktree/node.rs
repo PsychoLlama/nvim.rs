@@ -34,18 +34,14 @@ use super::intersect::IdSet;
 use super::key::{MT_BRANCH_FACTOR, MT_LOG2_BRANCH, MtFlags, key_cmp, mt_lookup_key};
 use super::meta::{META_COUNT, MetaCount, meta_add, meta_add_key};
 
-/// Sizes that are part of the node layout.
-mod sizes {
-    use super::MT_BRANCH_FACTOR;
+// Sizes that are part of the node layout.
 
-    /// The most keys a node can hold. A node is legal down to
-    /// `MT_BRANCH_FACTOR - 1` keys, except the root, which may hold none.
-    pub const MAX_KEYS: usize = 2 * MT_BRANCH_FACTOR as usize - 1;
-    /// The most children an internal node can hold: one more than its keys,
-    /// since every key separates two subtrees.
-    pub const MAX_CHILDREN: usize = MAX_KEYS + 1;
-}
-pub use sizes::{MAX_CHILDREN, MAX_KEYS};
+/// The most keys a node can hold. A node is legal down to
+/// `MT_BRANCH_FACTOR - 1` keys, except the root, which may hold none.
+pub(crate) const MAX_KEYS: usize = 2 * MT_BRANCH_FACTOR as usize - 1;
+/// The most children an internal node can hold: one more than its keys,
+/// since every key separates two subtrees.
+pub(crate) const MAX_CHILDREN: usize = MAX_KEYS + 1;
 
 /// A node's slot in its tree's [`NodeSlab`].
 ///

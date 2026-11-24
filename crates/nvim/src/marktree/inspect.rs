@@ -20,14 +20,11 @@ use crate::marktree::{MTPos, MarkTree};
 use crate::os::libc::uint64_t;
 use crate::types::ApiString;
 
-mod sizes {
-    /// The most bytes a node's Graphviz identifier can occupy. The C formatted
-    /// it with `snprintf` into a 64-byte buffer, and since each level appends
-    /// to its parent's name a deep tree really does hit the limit — the
-    /// truncation is part of the output, not an accident of the buffer.
-    pub(super) const DOT_NAME_MAX: usize = 63;
-}
-use sizes::DOT_NAME_MAX;
+/// The most bytes a node's Graphviz identifier can occupy. The C formatted
+/// it with `snprintf` into a 64-byte buffer, and since each level appends
+/// to its parent's name a deep tree really does hit the limit — the
+/// truncation is part of the output, not an accident of the buffer.
+const DOT_NAME_MAX: usize = 63;
 
 /// Dump the whole tree, as text or as a Graphviz digraph.
 ///

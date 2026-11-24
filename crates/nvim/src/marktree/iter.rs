@@ -33,13 +33,10 @@ use crate::os::libc::int32_t;
 
 use super::marktree_lookup;
 
-mod sizes {
-    /// The deepest the tree can get: the C's `MT_MAX_DEPTH`, which is also the
-    /// length of `MarkTreeIter::path` and so the range `MarkTreeIter::depth`
-    /// indexes. It bounds an `oldbase` array for the same reason.
-    pub const MT_MAX_DEPTH: usize = 20;
-}
-pub use sizes::MT_MAX_DEPTH;
+/// The deepest the tree can get: the C's `MT_MAX_DEPTH`, which is also the
+/// length of `MarkTreeIter::path` and so the range `MarkTreeIter::depth`
+/// indexes. It bounds an `oldbase` array for the same reason.
+pub const MT_MAX_DEPTH: usize = 20;
 
 /// A bare key at `pos`, for [`find_key`] to compare against.
 ///

@@ -17,11 +17,9 @@ use crate::os::libc::uint32_t;
 
 use super::key::{MtFlags, mt_end, mt_invalid};
 
-mod count {
-    pub const META_COUNT: usize = super::MT_META_COUNT as usize;
-}
 use crate::decoration::MT_META_COUNT;
-pub use count::META_COUNT;
+
+pub const META_COUNT: usize = MT_META_COUNT as usize;
 
 /// One count per meta kind, indexed by `kMTMeta*`.
 pub type MetaCount = [uint32_t; META_COUNT];
