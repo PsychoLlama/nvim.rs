@@ -1952,17 +1952,12 @@ fn main() {
             skipped_statics.join(" ")
         );
     }
-    if !emitter.unknown.is_empty() {
-        eprintln!(
-            "ffigen: unknown types: {}",
-            emitter
-                .unknown
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-    }
+    // The `unknown` types (plain Rust structs a rendered type points at, such
+    // as the emulator's `VTermInner` behind `VTerm.inner`) are not listed:
+    // behind a pointer an incomplete declaration is exactly right, and a
+    // by-value use already reports itself below ("field skipped", "type left
+    // incomplete"). Listing them printed the same three names on every run,
+    // which taught readers to skip ffigen's output. The summary line counts them.
     for n in &emitter.notes {
         eprintln!("ffigen: note: {}", n);
     }
