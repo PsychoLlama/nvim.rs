@@ -9,8 +9,8 @@
 //! Rust's safe vocabulary says that, so what does is concentrated here, where
 //! one reading covers it:
 //!
-//! 1. **The four handles** -- [`ListRef`], [`DictRef`], [`BlobRef`],
-//!    [`PartialRef`]: a `NonNull` to a [`Counted`] -- the reference count,
+//! 1. **The handle** -- [`ObjRef`], over a [`ListRef`], [`DictRef`],
+//!    [`BlobRef`] or [`PartialRef`]: a `NonNull` to a [`Counted`] -- the reference count,
 //!    the [`Lent`] word and, for a list or a dictionary, the registry slot
 //!    and the deep copy's memo, beside the value -- plus the reference it
 //!    owns. `Clone` retains, `Drop` releases and frees with the last one. A
@@ -161,29 +161,131 @@ fn value_addr<T, H>(at: &NonNull<Counted<T, H>>) -> *const T {
 #[derive(Debug)]
 pub(crate) struct RootKey(());
 
-/// An owning reference to a heap-allocated [`List`].
+/// An owning reference to a heap-allocated value object: a [`List`], a
+/// [`Dict`], a [`Blob`] or a [`Partial`] ([`ListRef`], [`DictRef`],
+/// [`BlobRef`], [`PartialRef`]).
 ///
 /// This is the reference count, as a type: [`Clone`] takes a reference and
-/// [`Drop`] gives one back, freeing the list when the last one goes.  What
+/// [`Drop`] gives one back, freeing the object when the last one goes.  What
 /// it replaces is upstream's `tv_list_ref`/`list_unref` pair, which every
 /// call site had to remember to write, in the right order, on every path.
 ///
 /// **A fresh handle owns one reference.**  [`tv_list_alloc`] answers a
 /// `ListRef` at a count of one, where upstream handed back a list at *zero*
 /// and left the first storer to raise it. The count is exactly the number of
-/// live holders, and there is no state in which a list is alive with none.
+/// live holders, and there is no state in which an object is alive with
+/// none.
 ///
-/// The list itself is borrowed only through [`ListRef::read`] and
-/// [`ListRef::edit`].
+/// A list, a dictionary or a blob is borrowed only through `read()` and
+/// `edit()`; a partial is fixed once built ([`PartialRef`]).
 ///
-/// The two constructors are the two things a raw pointer can mean.  A handle
-/// is not null: `v:_null_list` is `TypVal::list(None)`, which
-/// [`TypVal::list_ref`] answers as `None`.
+/// The two raw constructors (a list's or a dictionary's) are the two
+/// things a raw pointer can mean.  A handle is not null: `v:_null_list` is
+/// `TypVal::list(None)`, which [`TypVal::list_ref`] answers as `None`.
 #[repr(transparent)]
 #[derive(Debug)]
-pub struct ListRef(NonNull<ListBox>);
+pub struct ObjRef<T: Object>(NonNull<Counted<T, T::Head>>);
 
-impl ListRef {
+/// An owning reference to a heap-allocated [`List`].
+pub type ListRef = ObjRef<List>;
+
+/// An owning reference to a heap-allocated [`Dict`].
+///
+/// **The scope dictionaries are heap dictionaries too.** `b:`, `w:`, `t:`,
+/// `g:`, `v:` and a funccall's `l:`/`a:` hold a [`DictSeed`] of
+/// `DO_NOT_FREE_CNT` references while their scope lives, and `g:`, `v:`,
+/// `s:`, `l:` and `a:` leave the collector's registry, which only marks
+/// their items.
+pub type DictRef = ObjRef<Dict>;
+
+/// One reference to a [`Blob`]; a blob is only ever made by
+/// [`tv_blob_alloc`].
+pub type BlobRef = ObjRef<Blob>;
+
+/// One reference to a [`Partial`]; a partial is only ever made by
+/// [`PartialRef::new`].
+pub type PartialRef = ObjRef<Partial>;
+
+/// The traits naming what a handle can hold, unnameable outside this file:
+/// a handle's release is this file's business alone.
+mod object {
+    use super::{Node, ObjRef, RootId};
+    use crate::eval::typval::CopyWalk;
+    use ::core::cell::RefCell;
+
+    /// A value an [`ObjRef`] can name.
+    pub trait Object: Sized {
+        /// The object's words beside the count, the borrow word and the
+        /// value ([`Node`] for a list or a dictionary).
+        type Head;
+
+        /// Free `at`'s object: its last reference has just gone.
+        fn free(at: &ObjRef<Self>);
+    }
+
+    /// A list or a dictionary: an object in the collector's registry and
+    /// the deep copy's memo, and reached through raw bridges.
+    pub trait Container: Object<Head = Node<Self>> {
+        /// Take registry slot `root` out of the collector's registry.
+        fn unroot(root: RootId);
+
+        /// The copies of this kind `walk` holds.
+        fn copies(walk: &CopyWalk) -> &RefCell<Vec<ObjRef<Self>>>;
+    }
+}
+use object::{Container, Object};
+
+impl<T: Object> ObjRef<T> {
+    /// The object, as the pointer a callee outside the container
+    /// model still takes. A **borrow**: live only while the handle is.
+    #[inline(always)]
+    pub fn as_ptr(&self) -> *mut Counted<T, T::Head> {
+        self.0.as_ptr()
+    }
+
+    /// Whether the two handles name the same object.
+    #[inline(always)]
+    pub fn ptr_eq(&self, other: &ObjRef<T>) -> bool {
+        self.0 == other.0
+    }
+
+    /// How many references the object has, for messages, tests and the
+    /// scopes' seed comparisons. Not for arithmetic: nothing writes it back.
+    #[inline(always)]
+    pub fn refcount(&self) -> i32 {
+        count(&self.0).get()
+    }
+
+    /// A fresh object owning `value`, owned by the handle (a count of one).
+    fn alloc(value: T, head: T::Head) -> ObjRef<T> {
+        ObjRef(NonNull::from(Box::leak(Box::new(Counted::new(
+            value, head,
+        )))))
+    }
+}
+
+impl<T: Object> Clone for ObjRef<T> {
+    /// One more owner of the same object.
+    #[inline(always)]
+    fn clone(&self) -> ObjRef<T> {
+        count(&self.0).retain();
+        ObjRef(self.0)
+    }
+}
+
+impl<T: Object> Drop for ObjRef<T> {
+    /// Give the reference back, freeing the object with the last one.
+    #[inline(always)]
+    fn drop(&mut self) {
+        if count(&self.0).release() <= 0 {
+            T::free(self);
+        }
+    }
+}
+
+/// A list's or a dictionary's: the raw bridges, the borrows, the scopes'
+/// seeds, the collector's registry and the deep copy's memo.
+impl<T: Container> ObjRef<T> {
     /// Take over the caller's reference, or answer `None` for NULL.
     ///
     /// # Safety
@@ -192,8 +294,8 @@ impl ListRef {
     /// reference to it -- one this handle now owns and eventually gives
     /// back.
     #[inline(always)]
-    pub unsafe fn owning(at: *mut ListBox) -> Option<ListRef> {
-        NonNull::new(at).map(ListRef)
+    pub unsafe fn owning(at: *mut Counted<T, T::Head>) -> Option<ObjRef<T>> {
+        NonNull::new(at).map(ObjRef)
     }
 
     /// Take *another* reference: the caller keeps its own. `None` for
@@ -203,38 +305,25 @@ impl ListRef {
     ///
     /// `at` is null or points at a live object.
     #[inline(always)]
-    pub unsafe fn retained(at: *mut ListBox) -> Option<ListRef> {
+    pub unsafe fn retained(at: *mut Counted<T, T::Head>) -> Option<ObjRef<T>> {
         let at = NonNull::new(at)?;
         count(&at).retain();
-        Some(ListRef(at))
-    }
-
-    /// The object, as the pointer a callee outside the container
-    /// model still takes. A **borrow**: live only while the handle is.
-    #[inline(always)]
-    pub fn as_ptr(&self) -> *mut ListBox {
-        self.0.as_ptr()
+        Some(ObjRef(at))
     }
 
     /// Give the reference up without releasing it: something else
     /// owns it now.
     #[inline(always)]
-    pub fn into_raw(self) -> *mut ListBox {
+    pub fn into_raw(self) -> *mut Counted<T, T::Head> {
         let at = self.0;
         ::core::mem::forget(self);
         at.as_ptr()
     }
 
-    /// Whether the two handles name the same object.
+    /// Whether `value` is this handle's value (a borrow taken through it,
+    /// or a clone of it).
     #[inline(always)]
-    pub fn ptr_eq(&self, other: &ListRef) -> bool {
-        self.0 == other.0
-    }
-
-    /// Whether `value` is this handle's list (a borrow taken through it, or
-    /// a clone of it).
-    #[inline(always)]
-    pub fn holds(&self, value: &List) -> bool {
+    pub fn holds(&self, value: &T) -> bool {
         ::core::ptr::eq(value_addr(&self.0), value)
     }
 
@@ -242,84 +331,72 @@ impl ListRef {
     /// asked: **never across a call that can run user code**, which reaches
     /// it through every other holder. Every build checks it: see [`Edit`].
     #[inline(always)]
-    pub fn edit(&self) -> Edit<'_, List> {
+    pub fn edit(&self) -> Edit<'_, T> {
         lend(&self.0)
     }
 
     /// The object, shared while the [`Read`] lives: an `edit()` through any
     /// handle meanwhile panics, so a body running user code lets it go.
     #[inline(always)]
-    pub fn read(&self) -> Read<'_, List> {
+    pub fn read(&self) -> Read<'_, T> {
         share(&self.0)
     }
 
-    /// How many references the list has, for messages, tests and the
-    /// scopes' seed comparisons. Not for arithmetic: nothing writes it back.
-    #[inline(always)]
-    pub fn refcount(&self) -> i32 {
-        count(&self.0).get()
+    /// Hold `n` references as one ([`Seed`]).
+    pub(crate) fn seed(&self, n: ::core::ffi::c_int) -> Seed<T> {
+        Seed(self.clone(), seed_extra(count(&self.0), n))
     }
 
-    /// Hold `n` references as one ([`ListSeed`]).
-    pub(crate) fn seed(&self, n: ::core::ffi::c_int) -> ListSeed {
-        ListSeed(self.clone(), seed_extra(count(&self.0), n))
-    }
-
-    /// Take the list out of the collector's registry: the holder marks it
-    /// itself (a funccall's `a:000`, a submatch list).
+    /// Take the object out of the collector's registry: the holder marks it
+    /// itself (`g:`, `v:`, `s:`, a funccall's scopes and `a:000`, a
+    /// submatch list).
     pub(crate) fn unroot(&self) {
         let root = &node(&self.0).root;
-        unroot_list(&RootKey(()), root.replace(RootId::NONE));
+        T::unroot(root.replace(RootId::NONE));
     }
 
-    /// Record `copy` as this list's copy under `walk`: the deep copy's
-    /// memo, which [`ListRef::copy_under`] reads back. The walk keeps a
+    /// Record `copy` as this object's copy under `walk`: the deep copy's
+    /// memo, which [`ObjRef::copy_under`] reads back. The walk keeps a
     /// reference to the copy until it ends.
-    pub(crate) fn remember_copy(&self, walk: &CopyWalk, copy: &ListRef) {
+    pub(crate) fn remember_copy(&self, walk: &CopyWalk, copy: &ObjRef<T>) {
         node(&self.0).memo.set(Some((walk.id, copy.0)));
-        walk.lists.borrow_mut().push(copy.clone());
+        T::copies(walk).borrow_mut().push(copy.clone());
     }
 
-    /// The copy `walk` made of this list, with a reference of its own.
-    pub(crate) fn copy_under(&self, walk: &CopyWalk) -> Option<ListRef> {
+    /// The copy `walk` made of this object, with a reference of its own.
+    pub(crate) fn copy_under(&self, walk: &CopyWalk) -> Option<ObjRef<T>> {
         let (id, at) = node(&self.0).memo.get()?;
         // SAFETY: a memo under `walk`'s id names a copy `walk` holds a
         // reference to (`remember_copy`); ids are never reused.
-        (id == walk.id).then(|| unsafe { ListRef::retained(at.as_ptr()) })?
+        (id == walk.id).then(|| unsafe { ObjRef::retained(at.as_ptr()) })?
     }
 }
 
-impl Clone for ListRef {
-    /// One more owner of the same object.
-    #[inline(always)]
-    fn clone(&self) -> ListRef {
-        count(&self.0).retain();
-        ListRef(self.0)
-    }
-}
+impl Object for List {
+    type Head = Node<List>;
 
-impl Drop for ListRef {
-    /// Give the reference back, freeing the object with the last one.
-    #[inline(always)]
-    fn drop(&mut self) {
-        if count(&self.0).release() <= 0 {
-            free_list(self);
+    /// Free the list and everything in it. A no-op while
+    /// `free_unref_items()` is walking, which frees the whole graph itself.
+    fn free(list: &ListRef) {
+        if TV_IN_FREE_UNREF_ITEMS.get() {
+            return;
         }
+        // The handle is the view the contents are freed through: it owns
+        // the reference that was the last, and gives it back by freeing.
+        list_free_contents(list);
+        // SAFETY: a live list, which nothing references any more.
+        unsafe { list_free_list(list.as_ptr()) };
     }
 }
 
-/// Free `list` and everything in it: its last reference has just gone.
-/// A no-op while `free_unref_items()` is walking, which frees the whole
-/// graph itself.
-fn free_list(list: &ListRef) {
-    if TV_IN_FREE_UNREF_ITEMS.get() {
-        return;
+impl Container for List {
+    fn unroot(root: RootId) {
+        unroot_list(&RootKey(()), root);
     }
-    // The handle is the view the contents are freed through: it owns the
-    // reference that was the last, and gives it back by freeing.
-    list_free_contents(list);
-    // SAFETY: a live list, which nothing references any more.
-    unsafe { list_free_list(list.as_ptr()) };
+
+    fn copies(walk: &CopyWalk) -> &RefCell<Vec<ListRef>> {
+        &walk.lists
+    }
 }
 
 /// The most [`tv_list_alloc`] reserves up front.
@@ -340,11 +417,10 @@ pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
         lv_items: Vec::with_capacity(reserve),
         ..List::empty()
     };
-    let at = NonNull::from(Box::leak(Box::new(Counted::new(list, Node::new()))));
+    let list = ListRef::alloc(list, Node::new());
     // The collector reaches every live list through its registry.
-    node(&at).root.set(root_list(&RootKey(()), at));
-    // The reference just seeded is the one this handle owns.
-    ListRef(at)
+    node(&list.0).root.set(root_list(&RootKey(()), list.0));
+    list
 }
 
 /// Take `l` out of the garbage collector's registry and free the `List`,
@@ -369,100 +445,8 @@ pub unsafe fn list_free_list(l: *mut ListBox) {
     drop(list);
 }
 
-/// An owning reference to a heap-allocated [`Dict`]: [`ListRef`]'s
-/// counterpart, and the same statement about a reference count.
-///
-/// **The scope dictionaries are heap dictionaries too.** `b:`, `w:`, `t:`,
-/// `g:`, `v:` and a funccall's `l:`/`a:` hold a [`DictSeed`] of
-/// `DO_NOT_FREE_CNT` references while their scope lives, and `g:`, `v:`,
-/// `s:`, `l:` and `a:` leave the collector's registry, which only marks
-/// their items.
-#[repr(transparent)]
-#[derive(Debug)]
-pub struct DictRef(NonNull<DictBox>);
-
-/// The same API as [`ListRef`]'s, method for method.
+/// A dictionary's own: whether a borrow holds it.
 impl DictRef {
-    /// # Safety
-    /// As [`ListRef::owning`].
-    #[inline(always)]
-    pub unsafe fn owning(at: *mut DictBox) -> Option<DictRef> {
-        NonNull::new(at).map(DictRef)
-    }
-
-    /// # Safety
-    /// As [`ListRef::retained`].
-    #[inline(always)]
-    pub unsafe fn retained(at: *mut DictBox) -> Option<DictRef> {
-        let at = NonNull::new(at)?;
-        count(&at).retain();
-        Some(DictRef(at))
-    }
-
-    #[inline(always)]
-    pub fn as_ptr(&self) -> *mut DictBox {
-        self.0.as_ptr()
-    }
-
-    #[inline(always)]
-    pub fn into_raw(self) -> *mut DictBox {
-        let at = self.0;
-        ::core::mem::forget(self);
-        at.as_ptr()
-    }
-
-    #[inline(always)]
-    pub fn ptr_eq(&self, other: &DictRef) -> bool {
-        self.0 == other.0
-    }
-
-    /// As [`ListRef::holds`].
-    #[inline(always)]
-    pub fn holds(&self, value: &Dict) -> bool {
-        ::core::ptr::eq(value_addr(&self.0), value)
-    }
-
-    #[inline(always)]
-    pub fn edit(&self) -> Edit<'_, Dict> {
-        lend(&self.0)
-    }
-
-    /// As [`ListRef::read`].
-    #[inline(always)]
-    pub fn read(&self) -> Read<'_, Dict> {
-        share(&self.0)
-    }
-
-    /// As [`ListRef::refcount`].
-    #[inline(always)]
-    pub fn refcount(&self) -> i32 {
-        count(&self.0).get()
-    }
-
-    /// Hold `n` references as one ([`DictSeed`]).
-    pub(crate) fn seed(&self, n: ::core::ffi::c_int) -> DictSeed {
-        DictSeed(self.clone(), seed_extra(count(&self.0), n))
-    }
-
-    /// As [`ListRef::unroot`]: `g:`, `v:`, `s:` and the funccall scopes.
-    pub(crate) fn unroot(&self) {
-        let root = &node(&self.0).root;
-        unroot_dict(&RootKey(()), root.replace(RootId::NONE));
-    }
-
-    /// As [`ListRef::remember_copy`].
-    pub(crate) fn remember_copy(&self, walk: &CopyWalk, copy: &DictRef) {
-        node(&self.0).memo.set(Some((walk.id, copy.0)));
-        walk.dicts.borrow_mut().push(copy.clone());
-    }
-
-    /// As [`ListRef::copy_under`].
-    pub(crate) fn copy_under(&self, walk: &CopyWalk) -> Option<DictRef> {
-        let (id, at) = node(&self.0).memo.get()?;
-        // SAFETY: as `ListRef::copy_under`'s.
-        (id == walk.id).then(|| unsafe { DictRef::retained(at.as_ptr()) })?
-    }
-
     /// Whether no borrow holds it: an `edit()` now would not be refused.
     pub(crate) fn is_free(&self) -> bool {
         let offset = ::core::mem::offset_of!(DictBox, lent);
@@ -470,32 +454,29 @@ impl DictRef {
     }
 }
 
-impl Clone for DictRef {
-    #[inline(always)]
-    fn clone(&self) -> DictRef {
-        count(&self.0).retain();
-        DictRef(self.0)
-    }
-}
+impl Object for Dict {
+    type Head = Node<Dict>;
 
-impl Drop for DictRef {
-    #[inline(always)]
-    fn drop(&mut self) {
-        if count(&self.0).release() <= 0 {
-            free_dict(self);
+    /// [`List`]'s counterpart: free the dictionary and everything in it.
+    fn free(dict: &DictRef) {
+        if TV_IN_FREE_UNREF_ITEMS.get() {
+            return;
         }
+        tv_dict_free_contents(dict);
+        // SAFETY: a live dictionary whose contents are gone, which nothing
+        // references any more.
+        unsafe { tv_dict_free_dict(dict.as_ptr()) };
     }
 }
 
-/// [`free_list`]'s counterpart: free `dict` and everything in it.
-fn free_dict(dict: &DictRef) {
-    if TV_IN_FREE_UNREF_ITEMS.get() {
-        return;
+impl Container for Dict {
+    fn unroot(root: RootId) {
+        unroot_dict(&RootKey(()), root);
     }
-    tv_dict_free_contents(dict);
-    // SAFETY: a live dictionary whose contents are gone, which nothing
-    // references any more.
-    unsafe { tv_dict_free_dict(dict.as_ptr()) };
+
+    fn copies(walk: &CopyWalk) -> &RefCell<Vec<DictRef>> {
+        &walk.dicts
+    }
 }
 
 /// Allocate an empty dictionary, **owned by the handle it answers**; see
@@ -509,11 +490,10 @@ pub fn tv_dict_alloc() -> DictRef {
         watchers: Vec::new(),
         lua_table_ref: LUA_NOREF as LuaRef,
     };
-    let at = NonNull::from(Box::leak(Box::new(Counted::new(dict, Node::new()))));
+    let dict = DictRef::alloc(dict, Node::new());
     // The collector reaches every live dictionary through its registry.
-    node(&at).root.set(root_dict(&RootKey(()), at));
-    // The reference just seeded is the one this handle owns.
-    DictRef(at)
+    node(&dict.0).root.set(root_dict(&RootKey(()), dict.0));
+    dict
 }
 
 /// Unlink `d` from the garbage collector's chain and free the `Dict` itself.
@@ -543,11 +523,13 @@ pub unsafe fn tv_dict_free_dict(d: *mut DictBox) {
 /// the release; nothing but a seed and a handle writes the count. (Zeroed,
 /// an `Option<DictSeed>` is `None`: a zeroed buffer's scope entry.)
 #[derive(Debug)]
-pub(crate) struct DictSeed(DictRef, ::core::ffi::c_int);
+pub(crate) struct Seed<T: Container>(ObjRef<T>, ::core::ffi::c_int);
 
-/// [`DictSeed`] on a list: a funccall's `a:000`.
-#[derive(Debug)]
-pub(crate) struct ListSeed(ListRef, ::core::ffi::c_int);
+/// A scope's [`Seed`] on its dictionary.
+pub(crate) type DictSeed = Seed<Dict>;
+
+/// A [`Seed`] on a list: a funccall's `a:000`.
+pub(crate) type ListSeed = Seed<List>;
 
 /// Take the `n - 1` references a seed of `n` holds beside its handle.
 fn seed_extra(count: &Refcount, n: ::core::ffi::c_int) -> ::core::ffi::c_int {
@@ -562,13 +544,7 @@ fn unseed(count: &Refcount, extra: ::core::ffi::c_int) {
     count.reset(count.get() - extra);
 }
 
-impl Drop for DictSeed {
-    fn drop(&mut self) {
-        unseed(count(&(self.0).0), self.1);
-    }
-}
-
-impl Drop for ListSeed {
+impl<T: Container> Drop for Seed<T> {
     fn drop(&mut self) {
         unseed(count(&(self.0).0), self.1);
     }
@@ -576,7 +552,7 @@ impl Drop for ListSeed {
 
 /// One deep copy, for the memo that makes a self-referencing container
 /// resolve to the same copy: each original copied under it records the copy
-/// ([`ListRef::remember_copy`]), and the walk holds a reference to every
+/// ([`ObjRef::remember_copy`]), and the walk holds a reference to every
 /// copy until it ends, so a memo under its id names a live object. Ids come
 /// from a 64-bit counter and are never reused, so a memo left by an
 /// earlier walk never matches.
@@ -665,25 +641,8 @@ pub(crate) fn free_registered_list(idx: usize) -> bool {
     true
 }
 
-/// One reference to a [`Blob`], given back when the handle goes: the blob
-/// half of [`ListRef`].
-#[repr(transparent)]
-#[derive(Debug)]
-pub struct BlobRef(NonNull<BlobBox>);
-
-/// The same API as [`ListRef`]'s, less the raw bridges: a blob is only
-/// ever made by [`tv_blob_alloc`].
+/// A blob's borrows, as a list's.
 impl BlobRef {
-    #[inline(always)]
-    pub fn as_ptr(&self) -> *mut BlobBox {
-        self.0.as_ptr()
-    }
-
-    #[inline(always)]
-    pub fn ptr_eq(&self, other: &BlobRef) -> bool {
-        self.0 == other.0
-    }
-
     #[inline(always)]
     pub fn edit(&self) -> Edit<'_, Blob> {
         lend(&self.0)
@@ -693,30 +652,16 @@ impl BlobRef {
     pub fn read(&self) -> Read<'_, Blob> {
         share(&self.0)
     }
-
-    /// As [`ListRef::refcount`].
-    #[inline(always)]
-    pub fn refcount(&self) -> i32 {
-        count(&self.0).get()
-    }
 }
 
-impl Clone for BlobRef {
-    #[inline(always)]
-    fn clone(&self) -> BlobRef {
-        count(&self.0).retain();
-        BlobRef(self.0)
-    }
-}
+impl Object for Blob {
+    type Head = ();
 
-impl Drop for BlobRef {
-    /// Give the reference back; the last one frees the blob.
+    /// Give the blob back.
     #[inline(always)]
-    fn drop(&mut self) {
-        if count(&self.0).release() <= 0 {
-            // SAFETY: the last reference to the `Box` `tv_blob_alloc` leaked.
-            drop(unsafe { Box::from_raw(self.as_ptr()) });
-        }
+    fn free(blob: &BlobRef) {
+        // SAFETY: the last reference to the `Box` `tv_blob_alloc` leaked.
+        drop(unsafe { Box::from_raw(blob.as_ptr()) });
     }
 }
 
@@ -731,40 +676,15 @@ pub fn tv_blob_alloc() -> BlobRef {
         bv_data: Vec::new(),
         bv_lock: VarLock::Unlocked,
     };
-    BlobRef(NonNull::from(Box::leak(Box::new(Counted::new(blob, ())))))
+    BlobRef::alloc(blob, ())
 }
 
-/// One reference to a [`Partial`], given back when the handle goes: the
-/// partial half of [`ListRef`].
-#[repr(transparent)]
-#[derive(Debug)]
-pub struct PartialRef(NonNull<PartialBox>);
-
-/// The same API as [`ListRef`]'s, less the raw bridges: a partial is only
-/// ever made by [`PartialRef::new`].
+/// A partial is fixed once built: `Deref` only, and `get_mut` for its last
+/// holder.
 impl PartialRef {
     /// A partial built in place, owned by the handle (a count of one).
     pub fn new(partial: Partial) -> PartialRef {
-        PartialRef(NonNull::from(Box::leak(Box::new(Counted::new(
-            partial,
-            (),
-        )))))
-    }
-
-    #[inline(always)]
-    pub fn as_ptr(&self) -> *mut PartialBox {
-        self.0.as_ptr()
-    }
-
-    #[inline(always)]
-    pub fn ptr_eq(&self, other: &PartialRef) -> bool {
-        self.0 == other.0
-    }
-
-    /// As [`ListRef::refcount`].
-    #[inline(always)]
-    pub fn refcount(&self) -> i32 {
-        count(&self.0).get()
+        PartialRef::alloc(partial, ())
     }
 
     /// The partial, writable, while this handle is its only holder:
@@ -782,21 +702,13 @@ impl PartialRef {
     }
 }
 
-impl Clone for PartialRef {
-    #[inline(always)]
-    fn clone(&self) -> PartialRef {
-        count(&self.0).retain();
-        PartialRef(self.0)
-    }
-}
+impl Object for Partial {
+    type Head = ();
 
-impl Drop for PartialRef {
-    /// Give the reference back; the last one frees the partial.
-    fn drop(&mut self) {
-        if count(&self.0).release() <= 0 {
-            // SAFETY: the last reference to the `Box` `new` leaked.
-            partial_free(unsafe { Box::from_raw(self.as_ptr()) }.value);
-        }
+    /// Give the partial back, and what it holds.
+    fn free(partial: &PartialRef) {
+        // SAFETY: the last reference to the `Box` `new` leaked.
+        partial_free(unsafe { Box::from_raw(partial.as_ptr()) }.value);
     }
 }
 
@@ -805,7 +717,8 @@ impl ::core::ops::Deref for PartialRef {
 
     #[inline(always)]
     fn deref(&self) -> &Partial {
-        // SAFETY: as `ListRef`'s.
+        // SAFETY: the handle holds a reference, so the object is live, and
+        // nothing writes a partial with another holder (`get_mut`).
         unsafe { &(*self.0.as_ptr()).value }
     }
 }
