@@ -36,9 +36,8 @@ use crate::event::libuv::{
     uv_close, uv_timer_get_due_in, uv_timer_init, uv_timer_start, uv_timer_stop,
 };
 use crate::event::r#loop::{main_loop_raw, schedule_fast_job};
-use crate::event::objects::RStream;
 use crate::event::rstream::{
-    rstream_available, rstream_consume, rstream_init_fd, rstream_may_close, rstream_start,
+    Arrived, rstream_consume_unread, rstream_init_fd, rstream_may_close, rstream_start,
     rstream_stop,
 };
 use crate::event::uv::{uv_handle_t, uv_timer_t};
@@ -46,7 +45,7 @@ use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message_fmt::msg_bytes;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::option::vars::{p_ttimeout, p_ttm};
-use crate::os::libc::{STDIN_FILENO, size_t, termios};
+use crate::os::libc::{STDIN_FILENO, termios};
 use crate::startup::{UI_CLIENT_CHANNEL_ID, os_exit};
 use crate::tui::keys::{KEYMOD_RECOGNIZED, modified_utf8, mouse_event, simple_utf8};
 use crate::tui::negotiate::{
@@ -67,7 +66,7 @@ use crate::tui::tui::{Handles, tui_set_size, with_started_tui};
 use crate::types::builders::ArrayBuf;
 use crate::types::{ApiString, Array, Integer, Object};
 use ::libc::tcgetattr;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::fmt::Write;
 
 // ------------------------------------------------------------------ the state
@@ -278,21 +277,10 @@ fn send_term_event(response: &mut [u8]) {
 
 // -------------------------------------------------------------------- reading
 
-/// The read callback: take what arrived, and ask for the rest.
-///
-/// # Safety
-/// The read stream's callback: `buf` is `count` readable bytes of the
-/// stream's own block, which is not part of the TUI's state.
-unsafe fn tinput_read_cb(
-    _stream: *mut RStream,
-    buf: *const c_char,
-    count: size_t,
-    _data: *mut c_void,
-    eof: bool,
-) -> size_t {
-    // SAFETY: the caller's contract.
-    let arrived = unsafe { bytes(buf, count) };
-    with_started_tui(|tui| take_arrived(tui, arrived, eof))
+/// The read callback: take what arrived, and ask for the rest. The bytes
+/// are the stream's own block, which is not part of the TUI's state.
+fn tinput_read_cb(arrived: &Arrived<'_>) -> usize {
+    with_started_tui(|tui| take_arrived(tui, arrived.bytes, arrived.eof))
 }
 
 /// [`tinput_read_cb`] on the TUI's state: hand on what `arrived` holds, and
@@ -338,15 +326,16 @@ fn restart_timer(handles: &Handles, ms: u64) {
 unsafe extern "C" fn tinput_timer_cb(_handle: *mut uv_timer_t) {
     with_started_tui(|tui| {
         let stream = tui.handles.read_stream();
-        // SAFETY: the input layer's own read stream.
-        let available = unsafe { rstream_available(stream) };
-        if available > 0 {
-            // SAFETY: the stream's unread bytes, in its own block, which is
-            // not part of the TUI's state and is not written while this runs.
-            let unread = unsafe { bytes((*stream).read_pos, available) };
-            let consumed = handle_raw_buffer(tui, true, unread);
-            // SAFETY: as above; `consumed` is no more than was available.
-            unsafe { rstream_consume(stream, consumed) };
+        // SAFETY: the input layer's own read stream. Its unread bytes are in
+        // its own block, which is not part of the TUI's state.
+        unsafe {
+            rstream_consume_unread(stream, |unread| {
+                if unread.is_empty() {
+                    0
+                } else {
+                    handle_raw_buffer(tui, true, unread)
+                }
+            });
         }
         tk_getkeys(tui, true);
         tinput_flush(&mut tui.input);
@@ -443,20 +432,6 @@ fn shrink_parser_buffer(tk: &mut TermKey) {
     if used < INPUT_BUFFER_SIZE && size > INPUT_BUFFER_SIZE {
         tk.set_buffer_size(INPUT_BUFFER_SIZE);
     }
-}
-
-/// The bytes at `data`, or none at all.
-///
-/// # Safety
-/// `data` must be valid for reads of `len` bytes.
-unsafe fn bytes<'a>(data: *const c_char, len: usize) -> &'a [u8] {
-    if len == 0 {
-        // A length of zero says nothing about the pointer, and
-        // `from_raw_parts` will not take a null one even so.
-        return &[];
-    }
-    // SAFETY: the caller guarantees the pointer and the length.
-    unsafe { core::slice::from_raw_parts(data.cast::<u8>(), len) }
 }
 
 // ----------------------------------------------------------------- whole keys

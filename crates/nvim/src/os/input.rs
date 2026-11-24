@@ -26,8 +26,10 @@ use crate::autocmd::state::DID_CURSORHOLD;
 use crate::autocmd::{fire_autocmds, trigger_cursorhold};
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{Drain, loop_poll_events, wait_on_main_loop};
-use crate::event::objects::{Event, RStream, Stream};
-use crate::event::rstream::{rstream_init_fd, rstream_may_close, rstream_start, rstream_stop};
+use crate::event::objects::{Event, RStream};
+use crate::event::rstream::{
+    Arrived, closed_rstream, rstream_init_fd, rstream_may_close, rstream_start, rstream_stop,
+};
 use crate::event::uv::UV_TTY;
 use crate::event_queue::{self, ChildQueue, QueueId, queue_in};
 use crate::getchar::state::{CTRL_C_INTERRUPTS, GOT_INT, MAPPED_CTRL_C, TYPEBUF_WAS_FILLED};
@@ -56,8 +58,7 @@ use crate::state::{MODE_INSERT, get_real_state};
 use crate::types::ApiString;
 use crate::ui::state::{COLUMNS, CURRENT_UI, ROWS};
 use crate::winlayer::Buf;
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::mem::MaybeUninit;
+use core::ffi::{c_int, c_uint};
 use core::ptr;
 use std::sync::atomic::{AtomicI32, Ordering};
 
@@ -67,23 +68,8 @@ const MAX_KEY_CODE_LEN: usize = 6;
 const READ_BUFFER_SIZE: usize = 0xfff;
 const INPUT_BUFFER_SIZE: usize = READ_BUFFER_SIZE * 4 + MAX_KEY_CODE_LEN;
 
-/// Upstream writes `{ .s.closed = true }`, which C defines as zero-filling
-/// every other field — eighty lines of `NULL`/`None`/`0` if transcribed.
-///
-/// SAFETY: every field of an [`RStream`] is a raw pointer, an integer, a
-/// `bool`, an `Option<fn>` or a `#[repr(C)]` union of those, and the all-zero
-/// bit pattern is a valid value of each (null, 0, false, and `None` by the
-/// null-pointer optimisation).
-const ZEROED_RSTREAM: RStream = unsafe { MaybeUninit::zeroed().assume_init() };
-
 /// stdin. Starts closed, because nothing is read until a UI attaches.
-static READ_STREAM: GlobalCell<RStream> = GlobalCell::new(RStream {
-    s: Stream {
-        closed: true,
-        ..ZEROED_RSTREAM.s
-    },
-    ..ZEROED_RSTREAM
-});
+static READ_STREAM: GlobalCell<RStream> = GlobalCell::new(closed_rstream());
 
 /// Bytes read from the OS and not yet handed to the typeahead.
 ///
@@ -776,25 +762,15 @@ fn inbuf_poll(ms: c_int, events: InputEvents) -> InputAvail {
     }
 }
 
-/// libuv's read callback: everything that arrives on stdin lands here.
-///
-/// # Safety
-/// An `stream_read_cb`; `buf` must be readable for `count` bytes.
-unsafe fn input_read_cb(
-    _stream: *mut RStream,
-    buf: *const c_char,
-    count: size_t,
-    _data: *mut c_void,
-    at_eof: bool,
-) -> size_t {
-    if at_eof {
+/// The read stream's consumer: everything that arrives on stdin lands here.
+fn input_read_cb(arrived: &Arrived<'_>) -> usize {
+    if arrived.eof {
         INPUT_EOF.set(true);
     }
     // The stream's own buffer is smaller than ours, so a read always fits.
-    debug_assert!(input_space() >= count);
-    // SAFETY: the caller's contract -- `buf` is `count` readable bytes.
-    input_enqueue_raw(unsafe { core::slice::from_raw_parts(buf.cast::<u8>(), count) });
-    count
+    debug_assert!(input_space() >= arrived.bytes.len());
+    input_enqueue_raw(arrived.bytes);
+    arrived.bytes.len()
 }
 
 /// Reverse-search the buffered input for a CTRL-C, and discard everything

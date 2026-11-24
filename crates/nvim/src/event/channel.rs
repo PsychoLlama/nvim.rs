@@ -31,7 +31,7 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::pin::Pin;
 use core::ptr;
 
@@ -45,14 +45,13 @@ use crate::event::r#loop::{Drain, main_loop_raw, wait_on_main_loop};
 use crate::event::objects::{Proc, RStream, Stream};
 use crate::event::proc::{proc_free, proc_spawn, proc_stop, proc_wait};
 use crate::event::rstream::{
-    rstream_init, rstream_init_fd, rstream_may_close, rstream_start, rstream_start_inner,
+    Arrived, rstream_init, rstream_init_fd, rstream_may_close, rstream_start, rstream_start_inner,
     rstream_stop_inner,
 };
 use crate::event::socket::socket_connect;
 use crate::event::stream::stream_may_close;
 use crate::event::wstream::{SharedBuffer, wstream_init, wstream_init_fd, wstream_write};
 use crate::event_queue::{self, ParkingQueue, QueueId};
-use crate::os::libc::size_t;
 use crate::os::pty_proc_unix::PtyProc;
 use crate::os::pty_proc_unix::{
     pty_proc_close_master, pty_proc_resize, pty_proc_resume, pty_proc_tty_name,
@@ -426,12 +425,11 @@ pub(crate) fn start_reads(id: u64, reads: Reads) {
             _ => unreachable!("channel {id} has nothing to read"),
         }
     });
-    let shim: unsafe fn(*mut RStream, *const c_char, size_t, *mut c_void, bool) -> size_t =
-        match reads {
-            Reads::Output => output_shim,
-            Reads::Stderr => stderr_shim,
-            Reads::Rpc => rpc_shim,
-        };
+    let shim: fn(&Arrived<'_>) -> usize = match reads {
+        Reads::Output => output_shim,
+        Reads::Stderr => stderr_shim,
+        Reads::Rpc => rpc_shim,
+    };
     if init {
         // SAFETY: the job's stderr, at its fixed address, connected by the
         // spawn and given its buffer here.
@@ -542,14 +540,6 @@ pub(crate) fn open_stdio(id: u64, stdin_fd: c_int, stdout_fd: c_int) {
     unsafe { wstream_init_fd(main_loop_raw(), stdout, stdout_fd, 0) };
 }
 
-/// A transport before it is opened: every handle unregistered, every
-/// pointer null, which is what the setup functions above expect to fill.
-pub(crate) fn unopened_rstream() -> RStream {
-    // SAFETY: a stream is plain C data -- pointers, integers, flags and
-    // libuv handles -- for all of which all-zero is the unset value.
-    unsafe { core::mem::zeroed() }
-}
-
 /// [`unopened_rstream`], for a stdio pair.
 pub(crate) fn unopened_stdio() -> StdioPair {
     // SAFETY: as above.
@@ -618,52 +608,27 @@ pub(crate) fn park_channel_events(id: u64, parking: Option<&ParkingQueue>) {
 // ---------------------------------------------------------------------------
 
 /// A job's stdout, a socket's or stdio's data arrived.
-///
-/// # Safety
-/// `RStream`'s read callback: `buf` is `count` readable bytes.
-unsafe fn output_shim(
-    _stream: *mut RStream,
-    buf: *const c_char,
-    count: size_t,
-    data: *mut c_void,
-    eof: bool,
-) -> size_t {
-    // SAFETY: the caller's readable span, borrowed for the call.
-    let bytes = unsafe { core::slice::from_raw_parts(buf.cast::<u8>(), count) };
-    crate::channel::reader::on_channel_output(owner_id(data), false, bytes, eof)
+fn output_shim(arrived: &Arrived<'_>) -> usize {
+    let id = owner_id(arrived.data);
+    crate::channel::reader::on_channel_output(id, false, arrived.bytes, arrived.eof)
 }
 
 /// An RPC channel's bytes arrived.
-///
-/// # Safety
-/// As [`output_shim`].
-unsafe fn rpc_shim(
-    stream: *mut RStream,
-    buf: *const c_char,
-    count: size_t,
-    data: *mut c_void,
-    eof: bool,
-) -> size_t {
-    // SAFETY: as above.
-    let bytes = unsafe { core::slice::from_raw_parts(buf.cast::<u8>(), count) };
-    let from = stream.cast_const().cast::<c_void>();
-    crate::msgpack_rpc::channel::receive::receive_msgpack(owner_id(data), from, bytes, eof)
+fn rpc_shim(arrived: &Arrived<'_>) -> usize {
+    let Arrived {
+        bytes,
+        eof,
+        data,
+        stream,
+        ..
+    } = *arrived;
+    crate::msgpack_rpc::channel::receive::receive_msgpack(owner_id(data), stream, bytes, eof)
 }
 
 /// A job's stderr arrived.
-///
-/// # Safety
-/// As [`output_shim`].
-unsafe fn stderr_shim(
-    _stream: *mut RStream,
-    buf: *const c_char,
-    count: size_t,
-    data: *mut c_void,
-    eof: bool,
-) -> size_t {
-    // SAFETY: as above.
-    let bytes = unsafe { core::slice::from_raw_parts(buf.cast::<u8>(), count) };
-    crate::channel::reader::on_channel_output(owner_id(data), true, bytes, eof)
+fn stderr_shim(arrived: &Arrived<'_>) -> usize {
+    let id = owner_id(arrived.data);
+    crate::channel::reader::on_channel_output(id, true, arrived.bytes, arrived.eof)
 }
 
 /// A socket channel's stream finished closing: it held a reference.

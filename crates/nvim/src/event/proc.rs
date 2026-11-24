@@ -54,7 +54,7 @@ use crate::event::r#loop::{
 };
 use crate::event::objects::Loop;
 use crate::event::objects::{Event, Proc, ProcType, Stream};
-use crate::event::rstream::{Reader, rstream_may_close};
+use crate::event::rstream::{Reader, deliver_eof, rstream_may_close};
 use crate::event::stream::{stream_init, stream_may_close};
 use crate::event::uv::{uv_loop_t, uv_timer_t};
 use crate::event_queue::{self, QueueId};
@@ -727,11 +727,8 @@ fn flush_stream(child: Child, stream: Reader) {
         }
         // Nothing arrived, so the stream is empty. A child that keeps it open
         // would otherwise deny the reader its end-of-file.
-        if let Some(read) = stream.read_cb
-            && !stream.did_eof
-        {
-            // SAFETY: the stream's own reader, given the stream's own buffer.
-            unsafe { read(stream.as_ptr(), stream.buffer, 0, stream.s.cb_data, true) };
+        if !stream.did_eof {
+            deliver_eof(stream);
         }
         break;
     }

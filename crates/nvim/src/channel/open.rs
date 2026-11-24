@@ -28,11 +28,12 @@ use crate::channel::defs::{
 use crate::eval::typval::DictRef;
 use crate::event::channel::{
     JobSpawn, Reads, accept_socket, attach_socket, connect_socket, init_job_streams, open_stdio,
-    owner_data, spawn_job, start_reads, unopened_rstream, unopened_stdio,
+    owner_data, spawn_job, start_reads, unopened_stdio,
 };
 use crate::event::libuv_proc::libuv_proc_init;
 use crate::event::r#loop::main_loop_raw;
 use crate::event::proc::exit_on_closed_chan;
+use crate::event::rstream::unopened_rstream;
 use crate::event::socket::Incoming;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};

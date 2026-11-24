@@ -510,13 +510,6 @@ pub(crate) mod alloc {
             assert_eq!(actual, expected, "net allocation sequence");
         }
 
-        /// Everything recorded since the last check, oldest first, leaving
-        /// the log empty. For a case whose assertion is not a fixed
-        /// sequence — "did this allocate at all".
-        pub(crate) fn take(&self) -> Vec<AllocEvent> {
-            self.recorder.take()
-        }
-
         /// Forget everything recorded so far — `alloc_log:clear()`.
         pub(crate) fn clear(&self) {
             self.recorder.clear();

@@ -25,11 +25,11 @@ use crate::eval::typval::{DictRef, dict_to_env};
 use crate::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn};
 use crate::event::r#loop::{loop_poll_events, main_loop_raw};
 use crate::event::objects::Loop;
-use crate::event::objects::{Proc, RStream, Stream, stream_read_cb};
+use crate::event::objects::{Proc, Stream, stream_read_cb};
 use crate::event::proc::{
     PROC_TYPE_UV, proc_get_exepath, proc_init, proc_spawn, proc_stop, proc_wait,
 };
-use crate::event::rstream::{rstream_init, rstream_start};
+use crate::event::rstream::{Arrived, rstream_init, rstream_start};
 use crate::event::stream::stream_may_close;
 use crate::event::uv::{
     uv_file, uv_handle_t, uv_loop_t, uv_pipe_t, uv_process_options_t, uv_process_t,
@@ -44,7 +44,6 @@ use crate::message_fmt::{msg_cstr, msg_cstr_opt};
 use crate::narrow::number_as_int;
 use crate::os::fs::os_strerror;
 use crate::os::libc::STDERR_FILENO;
-use crate::os::libc::size_t;
 use crate::shell::Argv;
 use crate::startup::UI_CLIENT_FORWARD_STDIN;
 use ::libc::close;
@@ -502,31 +501,19 @@ pub(crate) fn run_to_exit(
     ChildRun::Exited(code)
 }
 
-/// [`run_to_exit`]'s read callback: hand the chunk to the caller's sink.
-///
-/// # Safety
-/// A `stream_read_cb` started by `run_to_exit`: `buf` is `count` readable
-/// bytes, `data` that frame's `Option<OutputSink>`, which outlives the read.
-unsafe fn sink_shim(
-    stream: *mut RStream,
-    buf: *const c_char,
-    count: size_t,
-    data: *mut c_void,
-    eof: bool,
-) -> size_t {
+/// [`run_to_exit`]'s read callback: hand the chunk to the caller's sink,
+/// the frame's `Option<OutputSink>` that `data` points at.
+fn sink_shim(arrived: &Arrived<'_>) -> usize {
+    let count = arrived.bytes.len();
     if count == 0 {
         return count;
     }
-    // SAFETY: the caller's contract; the sink is not otherwise borrowed
-    // while the child runs.
-    let (sink, bytes, fd) = unsafe {
-        (
-            &mut *data.cast::<Option<OutputSink<'_>>>(),
-            core::slice::from_raw_parts(buf.cast::<u8>(), count),
-            (*stream).s.fd,
-        )
-    };
-    sink.as_mut().map_or(count, |sink| sink(bytes, fd, eof))
+    // SAFETY: `run_to_exit` started the read with its frame's sink as the
+    // data word; the frame outlives the read, and the sink is not otherwise
+    // borrowed while the child runs.
+    let sink = unsafe { &mut *arrived.data.cast::<Option<OutputSink<'_>>>() };
+    sink.as_mut()
+        .map_or(count, |sink| sink(arrived.bytes, arrived.fd, arrived.eof))
 }
 
 /// [`run_to_exit`]'s write callback: tell the caller's hook, and close

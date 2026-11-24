@@ -80,12 +80,12 @@ unsafe_placement` lists any misplaced attribute (none);
 | `lua/ffi.rs`, `lua/executor/{luv,state}.rs` | foreign  |     3 |        104 |            8 | LuaJIT's declarations, luv's hooks, state making |
 | `lua/stack/`                                | foreign  |     5 |        111 |            7 | the typed Lua stack                              |
 | `lua/treesitter/`                           | foreign  |    10 |        204 |            9 | the tree-sitter library                          |
-| `event/`                                    | foreign  |    11 |        510 |           83 | libuv: loop, streams, timers, signals, children  |
-| `tui/{tui,input,output,events}.rs`          | foreign  |     4 |         69 |            6 | the terminal's libuv handles                     |
+| `event/`                                    | foreign  |    11 |        497 |           77 | libuv: loop, streams, timers, signals, children  |
+| `tui/{tui,input,output,events}.rs`          | foreign  |     4 |         68 |            4 | the terminal's libuv handles                     |
 | `xdiff/`                                    | foreign  |     1 |          1 |            0 | `isspace(3)`'s table                             |
-| `os/`                                       | OS       |    14 |        237 |           15 | system calls                                     |
+| `os/`                                       | OS       |    14 |        235 |           14 | system calls                                     |
 | `allocator.rs`                              | memory   |     1 |         16 |            4 | the global allocator                             |
-| `memory/`                                   | memory   |     4 |         73 |           21 | `xmalloc`, the block pool, owned C strings       |
+| `memory/`                                   | memory   |     3 |         66 |           19 | `xmalloc`, owned C strings                       |
 | `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
 | `slot.rs`, `slot/`                          | memory   |     2 |         41 |            7 | type-stable slots and their checked handles      |
 | `winlayer.rs`, `winlayer/`                  | memory   |     6 |         49 |            9 | window, buffer, grid and terminal handles        |
@@ -155,7 +155,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 
 - **What:** libuv's loop, streams, timers, signal watchers and child
   processes are C objects libuv holds _by address_ (`libuv.rs` 93 — mostly the declarations — `proc.rs` 70, `socket/mod.rs` 69,
-  `loop.rs` 58, `channel.rs` 50, `libuv_proc.rs` 48, `rstream.rs` 41, `stream.rs` 34,
+  `loop.rs` 58, `channel.rs` 46, `libuv_proc.rs` 48, `rstream.rs` 32, `stream.rs` 34,
   `signal.rs` 17, `time.rs` 16, `wstream.rs` 14). Each region is a libuv
   call, a handle rebuilt from the address libuv hands back to a callback, or
   a pin projection.
@@ -169,11 +169,11 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   code. The `# Safety` sections say the rest: "`stream` has been through
   `rstream_init`", "`uv_loop` is live and `stream` points at storage that
   does not move afterwards".
-- **Editor-shaped, still here:** the read stream's block positions,
-  raw pointers into a pool block; a spawned child's `char **` argv and
-  environment. Each is listed for later work (see below).
-- **Retires:** with libuv. Not planned; the two items above can leave
-  without that.
+- **Editor-shaped, still here:** a spawned child's `char **` argv and
+  environment, listed for later work (see below). (A read stream's block is
+  a pool block with two offsets, and its consumer takes a slice.)
+- **Retires:** with libuv. Not planned; the item above can leave without
+  that.
 
 ### `tui/{tui,input,output,events}.rs` — the terminal's libuv handles
 
@@ -203,7 +203,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   (`fs/` 43), the environment, `uv_random`, `uname` and the `environ` walk
   (`env/mod.rs` 13), `setlocale`/`nl_langinfo`/gettext's binds (`lang.rs` 5),
   the `getpw*` family (`users.rs` 8), the clocks and `strftime`/`strptime`
-  (`time.rs` 10), stdin's read stream and the loop polls (`input.rs` 10), the
+  (`time.rs` 10), stdin's read stream and the loop polls (`input.rs` 8), the
   PTY — `forkpty`, `ioctl`, `ptsname`, and in the forked child
   `setsid`/`execvp` (`pty_proc_unix/mod.rs` 38) — signals (`signal.rs` 11),
   `dlopen` for `libcall()` (`dl.rs` 13), `iconv` (`iconv.rs` 7), process
@@ -232,16 +232,16 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   state, so that exit may allocate through it again.
 - **Retires:** never.
 
-### `memory/` — `xmalloc`, the block pool, owned C strings
+### `memory/` — `xmalloc`, owned C strings
 
 - **What:** the `xmalloc` family with its out-of-memory retry and the
   allocation log the unit suite asserts sequences against, and the C-shaped
   string helpers (`xstrdup`, `xmemdupz`, …) the perimeter's
   callers and the unit specs still call (`mod.rs` 65); `XString` and
   `ThinCString`, the owned NUL-terminated strings that adopt a `malloc`
-  block from C and hand one back (`thin_cstring.rs` 18, `xstring.rs` 9); the
-  block pool the event loop reads into, whose reuse list is chained through
-  each spent block's first bytes (`blocks.rs` 7).
+  block from C and hand one back (`thin_cstring.rs` 18, `xstring.rs` 9). The
+  block pool (`blocks.rs`) is safe Rust beside them: a list of spent
+  `Vec<u8>` blocks.
 - **Contract:** a block from the family is freed once, with `xfree`; the
   retry frees the scrollback and memfile caches, so no borrow of them may be
   live across an allocation (`try_to_free_memory`'s `# Safety`); a string
@@ -466,9 +466,7 @@ each is its section in [safe-surface.md](safe-surface.md).
 
 ## Listed for later
 
-Editor-shaped residue on the perimeter, each with what removes it: the
-read stream's block positions (a read callback that
-hands a slice), a child's `char **` argv/environment (an owned argv type
+Editor-shaped residue on the perimeter, each with what removes it: a child's `char **` argv/environment (an owned argv type
 handed to libuv at the one spawn call), `handle.rs`'s `Box` allocation and
 generic handle, and the emulator's
 offset keepers.

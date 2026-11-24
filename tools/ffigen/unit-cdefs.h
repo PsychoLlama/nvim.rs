@@ -6,6 +6,7 @@ typedef struct ApiString ApiString;
 typedef struct Array Array;
 typedef struct Expand Expand;
 typedef struct OptSet OptSet;
+typedef struct ReadBuffer ReadBuffer;
 typedef struct ScreenOwned ScreenOwned;
 typedef struct StateOwned StateOwned;
 typedef struct VTermInner VTermInner;
@@ -32,7 +33,6 @@ typedef union uv_tcp_s_u uv_tcp_s_u;
 typedef struct uv_tcp_s uv_tcp_s;
 typedef union stream_uv stream_uv;
 typedef struct stream stream;
-typedef struct uv_buf_t uv_buf_t;
 typedef struct rstream rstream;
 typedef struct proc proc;
 typedef struct uv_process_options_s uv_process_options_s;
@@ -94,6 +94,7 @@ typedef struct sockaddr sockaddr;
 typedef struct uv__work uv__work;
 typedef union uv_async_s_u uv_async_s_u;
 typedef struct uv_async_s uv_async_s;
+typedef struct uv_buf_t uv_buf_t;
 typedef struct uv_connect_s uv_connect_s;
 typedef struct uv_dirent_s uv_dirent_s;
 typedef struct uv_timespec_t uv_timespec_t;
@@ -326,7 +327,7 @@ typedef void (*signal_cb)(SignalWatcher *, int, void *);
 typedef void (*signal_close_cb)(SignalWatcher *, void *);
 typedef unsigned int socklen_t;
 typedef void (*stream_close_cb)(Stream *, void *);
-typedef size_t (*stream_read_cb)(RStream *, const char *, size_t, void *, bool);
+typedef struct stream_read_cb stream_read_cb;
 typedef void (*stream_write_cb)(Stream *, void *, int);
 typedef void (*terminal_close_cb)(uint64_t);
 typedef void (*terminal_read_pause_cb)(bool, uint64_t);
@@ -505,23 +506,6 @@ struct stream {
   stream_write_cb write_cb;
   size_t curmem;
   size_t maxmem;
-};
-struct uv_buf_t {
-  char *base;
-  size_t len;
-};
-struct rstream {
-  Stream s;
-  bool did_eof;
-  bool want_read;
-  bool pending_read;
-  bool paused_full;
-  char *buffer;
-  char *read_pos;
-  char *write_pos;
-  uv_buf_t uvbuf;
-  stream_read_cb read_cb;
-  size_t num_bytes;
 };
 struct uv_process_options_s {
   uv_exit_cb exit_cb;
@@ -984,6 +968,10 @@ struct uv_async_s {
   uv_async_cb async_cb;
   uv__queue queue;
   int pending;
+};
+struct uv_buf_t {
+  char *base;
+  size_t len;
 };
 struct uv_connect_s {
   void *data;

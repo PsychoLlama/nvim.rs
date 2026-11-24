@@ -16,8 +16,8 @@
 
 use crate::eval::typval::DictBox;
 use crate::event::uv::{
-    uv_async_t, uv_buf_t, uv_file, uv_idle_t, uv_loop_t, uv_pipe_t, uv_signal_t, uv_stream_t,
-    uv_tcp_t, uv_timer_t,
+    uv_async_t, uv_file, uv_idle_t, uv_loop_t, uv_pipe_t, uv_signal_t, uv_stream_t, uv_tcp_t,
+    uv_timer_t,
 };
 use crate::os::libc::{int64_t, size_t, uint8_t, uint64_t};
 use crate::types::Refcount;
@@ -122,11 +122,8 @@ pub struct rstream {
     pub want_read: bool,
     pub pending_read: bool,
     pub paused_full: bool,
-    pub buffer: *mut ::core::ffi::c_char,
-    pub read_pos: *mut ::core::ffi::c_char,
-    pub write_pos: *mut ::core::ffi::c_char,
-    pub uvbuf: uv_buf_t,
-    pub read_cb: stream_read_cb,
+    pub(crate) buf: crate::event::rstream::ReadBuffer,
+    pub(crate) read_cb: stream_read_cb,
     pub num_bytes: size_t,
 }
 pub type signal_cb =
@@ -169,15 +166,9 @@ pub struct stream {
     pub _pinned: ::core::marker::PhantomPinned,
 }
 pub type stream_close_cb = Option<unsafe fn(*mut Stream, *mut ::core::ffi::c_void) -> ()>;
-pub type stream_read_cb = Option<
-    unsafe fn(
-        *mut RStream,
-        *const ::core::ffi::c_char,
-        size_t,
-        *mut ::core::ffi::c_void,
-        bool,
-    ) -> size_t,
->;
+/// A read stream's consumer: handed what arrived, it answers how many of
+/// those bytes it took.
+pub(crate) type stream_read_cb = Option<fn(&crate::event::rstream::Arrived<'_>) -> usize>;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union stream_uv {

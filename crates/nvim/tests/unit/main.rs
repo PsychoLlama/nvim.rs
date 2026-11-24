@@ -19,7 +19,6 @@ mod support;
 
 mod api_converter;
 mod arglist;
-mod blocks;
 mod buffer;
 mod bufwrite;
 mod change;
