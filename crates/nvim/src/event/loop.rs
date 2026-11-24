@@ -177,6 +177,13 @@ pub(crate) fn main_loop_raw() -> *mut Loop {
     crate::startup::MAIN_LOOP.ptr()
 }
 
+/// The libuv loop inside the editor's own, which every handle `event/`
+/// registers on the main thread belongs to.
+pub(super) fn main_uv_loop() -> *mut uv_loop_t {
+    // SAFETY: the editor's loop, a static live from startup to exit.
+    unsafe { EventLoop::new(main_loop_raw()) }.uv()
+}
+
 /// Run the next event on the editor's main queue, if it holds one, and
 /// answer whether the queue is empty afterwards: one step of the main
 /// loop's `K_EVENT` drain, which checks for input between steps.
@@ -464,6 +471,11 @@ pub(crate) enum Drain {
     FastOnly,
     /// Nothing but what the poll itself runs.
     Nothing,
+    /// A queue of the caller's own, such as a channel's, which it keeps
+    /// alive for the wait. The id is generation-checked, so a queue freed
+    /// under the wait anyway fails that check rather than reading freed
+    /// memory.
+    Queue(QueueId),
 }
 
 /// [`process_events_until`] on the editor's own loop: the safe spelling for
@@ -484,6 +496,7 @@ impl Drain {
             Drain::Events => Some(QueueId::MAIN),
             Drain::FastOnly => Some(QueueId::FAST),
             Drain::Nothing => None,
+            Drain::Queue(queue) => Some(*queue),
         }
     }
 }

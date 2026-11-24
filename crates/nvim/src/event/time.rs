@@ -33,7 +33,7 @@
 use core::ffi::c_void;
 
 use crate::event::libuv::{uv_close, uv_timer_init, uv_timer_start, uv_timer_stop, uv_update_time};
-use crate::event::r#loop::{RawEvent, main_loop_raw};
+use crate::event::r#loop::{RawEvent, main_loop_raw, main_uv_loop};
 use crate::event::uv::{uv_handle_t, uv_timer_t};
 use crate::event_queue::{self, ChildQueue, QueueId};
 
@@ -162,7 +162,7 @@ impl OwnedTimer {
         let handle = unsafe { Handle::new(watcher) };
         // SAFETY: the box's own timer, on the editor's loop, live from
         // startup until exit.
-        unsafe { uv_timer_init(&raw mut (*main_loop_raw()).uv, handle.uv()) };
+        unsafe { uv_timer_init(main_uv_loop(), handle.uv()) };
         handle.set_uv_data(watcher.cast());
         OwnedTimer(handle)
     }
@@ -187,7 +187,7 @@ impl OwnedTimer {
         // SAFETY: the editor's loop, live from startup until exit, and the
         // box's own timer, open.
         unsafe {
-            uv_update_time(&raw mut (*main_loop_raw()).uv);
+            uv_update_time(main_uv_loop());
             uv_timer_start(self.0.uv(), Some(time_watcher_cb), timeout, repeat);
         }
     }

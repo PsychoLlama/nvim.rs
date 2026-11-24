@@ -1,18 +1,19 @@
 //! Listening on and connecting to sockets — TCP endpoints and local pipes.
 //!
-//! A [`SocketWatcher`] is a listening socket. Its address decides which kind:
-//! anything that parses as `host:port` becomes a `uv_tcp_t`, everything else
-//! a `uv_pipe_t` (a Unix domain socket). Incoming connections are reported as
-//! events, like every other watcher here.
+//! A [`Listener`] is a listening socket. Its address decides which kind
+//! ([`Endpoint::parse`]): anything that parses as `host:port` becomes a
+//! `uv_tcp_t`, everything else a `uv_pipe_t` (a Unix domain socket).
+//! Incoming connections are reported to the callback it was started with.
 //!
 //! [`socket_connect`] is the other direction, and is *synchronous*: it drives
 //! the main loop itself until the connection succeeds, fails or times out.
 //!
-//! libuv holds the address of a watcher in its handle's `data` for as long as
-//! the watcher listens, so a watcher is always reached through a raw pointer
-//! that outlives any borrow of it. [`Watcher`] wraps that pointer once —
-//! paying the `unsafe` at construction — and leaves the field accesses below
-//! as ordinary Rust.
+//! libuv holds the address of a listener's handle, and the handle's `data`
+//! points back at the listener, for as long as it listens, so a listener is
+//! always reached through a raw pointer that outlives any borrow of it.
+//! [`Watcher`] wraps that pointer once — paying the `unsafe` at construction
+//! — and reaches each field by place, never through a reference to the whole
+//! watcher, whose handle libuv writes behind any such borrow.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `event/` row in docs/perimeter.md.
@@ -27,37 +28,31 @@
 
 pub mod address;
 
-use crate::event::uv::UV_TCP;
-use crate::message_fmt::msg_cstr;
+use crate::message_fmt::{msg_bytes, msg_cstr};
 use crate::os::uv_error::{UV_EACCES, UV_EADDRINUSE, UV_EINVAL, UV_ENOENT};
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ops::Deref;
+use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::{mem, ptr};
 
-use crate::charset::try_getdigits_at;
 use crate::event::libuv::{
     uv_accept, uv_close, uv_freeaddrinfo, uv_getaddrinfo, uv_listen, uv_pipe_bind2,
     uv_pipe_connect, uv_pipe_init, uv_tcp_bind, uv_tcp_connect, uv_tcp_getsockname, uv_tcp_init,
     uv_tcp_nodelay,
 };
-use crate::event::r#loop::process_events_until;
-use crate::event::objects::Loop;
-use crate::event::objects::{RStream, SocketWatcher, Stream, socket_cb, socket_close_cb};
+use crate::event::r#loop::{Drain, main_uv_loop, wait_on_main_loop};
+use crate::event::objects::{RStream, Stream};
 use crate::event::rstream::Reader;
-use crate::event::socket::address::{SOCKET_ADDR_LEN, port_suffix, tcp_host_end};
+use crate::event::socket::address::{Endpoint, InvalidPort, tcp_host_end};
 use crate::event::stream::{may_close, stream_init, stream_may_close};
 use crate::event::uv::{
-    addrinfo, uv_connect_t, uv_getaddrinfo_t, uv_handle_t, uv_loop_t, uv_pipe_t, uv_stream_t,
+    addrinfo, sockaddr, uv_connect_t, uv_getaddrinfo_t, uv_handle_t, uv_pipe_t, uv_stream_t,
     uv_tcp_t,
 };
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
-use crate::memory::xstrlcpy;
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_remove, os_strerror, path_exists};
-use crate::os::libc::{intmax_t, sa_family_t};
+use crate::os::libc::sa_family_t;
 use crate::path::tail_index;
-use crate::startup::MAIN_LOOP;
 use ::libc::ntohs;
 use std::ffi::CString;
 
@@ -69,23 +64,96 @@ const AF_UNSPEC: c_int = 0;
 const SOCK_STREAM: c_int = 1;
 const AI_NUMERICSERV: c_int = 0x400;
 
-/// The buffer `uv_tcp_getsockname` fills in.
-#[repr(C)]
-#[derive(Debug)]
-pub struct sockaddr_storage {
-    pub ss_family: sa_family_t,
-    pub __ss_padding: [c_char; 118],
-    pub __ss_align: ::core::ffi::c_ulong,
-}
-
 /// Just enough of `sockaddr_in`/`sockaddr_in6` to read a bound port: both put
 /// it, in network order, immediately after the address family. Nothing here
 /// looks any further, so the family does not have to be inspected at all.
 #[repr(C)]
 #[derive(Debug)]
-pub struct sockaddr_head {
-    pub family: sa_family_t,
-    pub port: u16,
+struct SockaddrHead {
+    family: sa_family_t,
+    port: u16,
+}
+
+/// A finished host lookup: the list `uv_getaddrinfo` allocated, freed when
+/// this is dropped.
+#[derive(Debug)]
+struct Lookup(*mut addrinfo);
+
+impl Lookup {
+    /// Resolve `host` and `service` (a null one when `None`) on the editor's
+    /// loop, synchronously; libuv's error otherwise.
+    fn resolve(host: &CStr, service: Option<&CStr>, flags: c_int) -> Result<Self, c_int> {
+        // SAFETY: `addrinfo` is inhabited by the all-zero bit pattern.
+        let zeroed: addrinfo = unsafe { mem::zeroed() };
+        let hints = addrinfo {
+            ai_flags: flags,
+            ai_family: AF_UNSPEC,
+            ai_socktype: SOCK_STREAM,
+            ..zeroed
+        };
+        // SAFETY: as above, for the request block.
+        let mut request: uv_getaddrinfo_t = unsafe { mem::zeroed() };
+        let service = service.map_or(ptr::null(), CStr::as_ptr);
+        // SAFETY: the editor's loop, a request on this frame that libuv fills
+        // before returning (no callback), and strings the caller holds.
+        let result = unsafe {
+            let (uv, node) = (main_uv_loop(), host.as_ptr());
+            uv_getaddrinfo(uv, &raw mut request, None, node, service, &raw const hints)
+        };
+        if result == 0 {
+            Ok(Lookup(request.addrinfo))
+        } else {
+            Err(result)
+        }
+    }
+
+    /// Each address the lookup produced, in the resolver's order.
+    fn addresses(&self) -> impl Iterator<Item = *const sockaddr> + '_ {
+        let mut next = self.0.cast_const();
+        core::iter::from_fn(move || {
+            // SAFETY: null, or an entry of the list this lookup owns.
+            let entry = unsafe { next.as_ref() }?;
+            next = entry.ai_next;
+            Some(entry.ai_addr.cast_const())
+        })
+    }
+}
+
+impl Drop for Lookup {
+    fn drop(&mut self) {
+        // SAFETY: the list `resolve` made, which nothing else frees.
+        unsafe { uv_freeaddrinfo(self.0) };
+    }
+}
+
+/// A listener's libuv handle; [`SocketWatcher::tcp`] says which arm.
+#[repr(C)]
+union ListenHandle {
+    tcp: uv_tcp_t,
+    pipe: uv_pipe_t,
+}
+crate::untagged_union_debug!(ListenHandle);
+
+/// What a connection is reported to: the listener lent for the call, and
+/// libuv's status for the connection.
+type ConnectionCb = fn(&Incoming<'_>, c_int);
+
+/// A listening socket, boxed by [`Listener::new`] and never moved: libuv
+/// holds the address of `uv`, whose `data` points back here.
+#[derive(Debug)]
+struct SocketWatcher {
+    /// The address it reports (`v:servername`, `serverlist()`): a local
+    /// socket's path; a TCP endpoint's host, and from the bind on
+    /// `host:port` with the port the kernel assigned.
+    address: CString,
+    uv: ListenHandle,
+    /// Whether `uv` holds a TCP handle rather than a pipe.
+    tcp: bool,
+    /// A TCP endpoint's resolved addresses, until [`Listener::start`] binds
+    /// one of them.
+    lookup: Option<Lookup>,
+    /// Told of each connection, from [`Listener::start`] on.
+    cb: Option<ConnectionCb>,
 }
 
 /// A listening socket this module is working with, plus the promise that the
@@ -102,27 +170,58 @@ impl Watcher {
         Watcher(watcher)
     }
 
-    /// The pointer back, for the C-shaped callees that still want one.
+    /// The pointer back, for libuv's `data`.
     fn as_ptr(self) -> *mut SocketWatcher {
         self.0
     }
 
-    /// The address buffer, as the NUL-terminated string everything here
-    /// treats it as.
-    fn addr_ptr(self) -> *mut c_char {
-        // SAFETY: a field of the live watcher.
-        unsafe { (&raw mut (*self.0).addr).cast() }
-    }
-
-    /// The address buffer as a string: it is always NUL-terminated
-    /// (`xstrlcpy` writes it).
+    /// The address it reports.
     ///
     /// # Safety
-    /// The watcher stays alive, and its address buffer unwritten, for `'a`.
-    unsafe fn addr<'a>(self) -> &'a CStr {
-        // SAFETY: a field of the live watcher (the caller's promise),
-        // NUL-terminated.
-        unsafe { CStr::from_ptr(self.addr_ptr()) }
+    /// The watcher stays alive, and its address unwritten, for `'a`.
+    unsafe fn address<'a>(self) -> &'a CStr {
+        // SAFETY: a field of the live watcher (the caller's promise), which
+        // libuv never writes.
+        unsafe { (*self.0).address.as_c_str() }
+    }
+
+    /// Is this a TCP endpoint rather than a local socket?
+    fn is_tcp(self) -> bool {
+        // SAFETY: a field of the live watcher, which libuv never writes.
+        unsafe { (*self.0).tcp }
+    }
+
+    /// The connection callback, once started.
+    fn cb(self) -> Option<ConnectionCb> {
+        // SAFETY: as above.
+        unsafe { (*self.0).cb }
+    }
+
+    /// The TCP arm of the handle union.
+    fn tcp(self) -> *mut uv_tcp_t {
+        // SAFETY: a field of the live watcher; the caller picks the arm.
+        unsafe { (&raw mut (*self.0).uv).cast() }
+    }
+
+    /// The pipe arm of the handle union.
+    fn pipe(self) -> *mut uv_pipe_t {
+        // SAFETY: as above.
+        unsafe { (&raw mut (*self.0).uv).cast() }
+    }
+
+    /// The handle, as the stream libuv listens on.
+    fn stream(self) -> *mut uv_stream_t {
+        if self.is_tcp() {
+            self.tcp().cast()
+        } else {
+            self.pipe().cast()
+        }
+    }
+
+    /// The resolved addresses, taken: they are bound or given up on once.
+    fn take_lookup(self) -> Option<Lookup> {
+        // SAFETY: a field of the live watcher, which libuv never writes.
+        unsafe { (*self.0).lookup.take() }
     }
 
     /// Bind the local-socket arm to the address. A path too long for a
@@ -131,67 +230,22 @@ impl Watcher {
     ///
     /// The error is libuv's negative code.
     fn bind_pipe(self) -> Result<(), c_int> {
-        let addr = self.addr_ptr();
-        // SAFETY: the watcher's own handle, and its NUL-terminated address
-        // buffer, which libuv only reads.
+        // SAFETY: nothing writes the address while this borrow lives.
+        let address = unsafe { self.address() };
+        // SAFETY: the watcher's own handle, and its address, which libuv
+        // only reads.
         let result = unsafe {
-            let len = CStr::from_ptr(addr).count_bytes();
-            uv_pipe_bind2(self.pipe(), addr, len, UV_PIPE_NO_TRUNCATE)
+            let len = address.count_bytes();
+            uv_pipe_bind2(self.pipe(), address.as_ptr(), len, UV_PIPE_NO_TRUNCATE)
         };
         if result == 0 { Ok(()) } else { Err(result) }
-    }
-
-    /// The TCP arm of the handle union.
-    fn tcp(self) -> *mut uv_tcp_t {
-        // SAFETY: a field of the live watcher; the caller picks the arm.
-        unsafe { &raw mut (*self.0).uv.tcp.handle }
-    }
-
-    /// The pipe arm of the handle union.
-    fn pipe(self) -> *mut uv_pipe_t {
-        // SAFETY: a field of the live watcher; the caller picks the arm.
-        unsafe { &raw mut (*self.0).uv.pipe.handle }
-    }
-
-    /// What the host lookup produced, for a TCP watcher.
-    fn addrinfo(self) -> *mut addrinfo {
-        // SAFETY: a field of the live watcher, set by `socket_watcher_init`.
-        unsafe { (*self.0).uv.tcp.addrinfo }
-    }
-
-    /// Is this a TCP endpoint rather than a local socket? The handle libuv
-    /// built is what says so.
-    fn is_tcp(self) -> bool {
-        let stream = self.stream;
-        // SAFETY: the handle `socket_watcher_init` initialised.
-        unsafe { (*stream).type_0 == UV_TCP }
-    }
-}
-
-impl Deref for Watcher {
-    type Target = SocketWatcher;
-
-    fn deref(&self) -> &SocketWatcher {
-        // SAFETY: the promise made at construction.
-        unsafe { &*self.0 }
     }
 }
 
 crate::event::stream::field_writers!(Watcher {
-    fn set_stream => stream: *mut uv_stream_t;
-    fn set_data => data: *mut c_void;
-    fn set_cb => cb: socket_cb;
-    fn set_close_cb => close_cb: socket_close_cb;
+    fn set_address => address: CString;
+    fn set_cb => cb: Option<ConnectionCb>;
 });
-
-/// The libuv loop inside one of the editor's.
-///
-/// # Safety
-/// `uv_loop` is a live `Loop`.
-unsafe fn uv_of(uv_loop: *mut Loop) -> *mut uv_loop_t {
-    // SAFETY: the caller's promise.
-    unsafe { &raw mut (*uv_loop).uv }
-}
 
 /// Does `address` name a TCP endpoint rather than a local socket?
 pub fn socket_address_is_tcp(address: &CStr) -> bool {
@@ -202,167 +256,151 @@ pub fn socket_address_is_tcp(address: &CStr) -> bool {
 // Listening
 // ---------------------------------------------------------------------------
 
-/// Prepare `watcher` to listen on `endpoint`, resolving it if it is TCP.
-///
-/// Returns a libuv error code; the host lookup is the only thing that can
-/// fail here, binding and listening happen in [`socket_watcher_start`].
-///
-/// # Safety
-/// `watcher` is a live, uninitialised `SocketWatcher`, `uv_loop` is a live
-/// loop, and `endpoint` is a NUL-terminated string.
-pub unsafe fn socket_watcher_init(
-    uv_loop: *mut Loop,
-    watcher: *mut SocketWatcher,
-    endpoint: *const c_char,
-) -> c_int {
-    // SAFETY: the caller's promise.
-    let watcher = unsafe { Watcher::new(watcher) };
-    let addr = watcher.addr_ptr();
-    // SAFETY: the watcher's own buffer, and the caller's endpoint.
-    unsafe { xstrlcpy(addr, endpoint, SOCKET_ADDR_LEN) };
+/// A socket this process listens on: the watcher, boxed at the address
+/// libuv's handle points back to, from [`Listener::new`] until
+/// [`Listener::close`] hands it to libuv's close callback, which frees it.
+#[derive(Debug)]
+pub(crate) struct Listener(Watcher);
 
-    // SAFETY: `xstrlcpy` always terminates.
-    let host_end = tcp_host_end(unsafe { CStr::from_ptr(addr) }.to_bytes());
-    match host_end {
-        Some(host_end) => {
-            // Split the address in place; the port half is re-appended by
-            // socket_watcher_start once the kernel has assigned one.
-            // SAFETY: `host_end` indexes the string just measured.
-            unsafe { *addr.add(host_end) = 0 };
-            // SAFETY: the port half starts one past the separator.
-            let mut port = unsafe { addr.add(host_end + 1) };
-
-            // SAFETY: the port half is NUL-terminated by the buffer's own
-            // terminator.
-            let port_text = unsafe { CStr::from_ptr(port) };
-            let valid = try_getdigits_at(port_text.to_bytes(), 0)
-                .is_some_and(|(iport, _)| (0..=intmax_t::from(u16::MAX)).contains(&iport));
-            if !valid {
+impl Listener {
+    /// A watcher for `endpoint`, resolved if it is TCP but not yet bound;
+    /// the libuv error otherwise.
+    pub(crate) fn new(endpoint: &CStr) -> Result<Self, c_int> {
+        let (address, lookup) = match Endpoint::parse(endpoint) {
+            Ok(Endpoint::Pipe(path)) => (path, None),
+            Ok(Endpoint::Tcp { host, port }) => match Lookup::resolve(&host, port.as_deref(), 0) {
+                Ok(lookup) => (host, Some(lookup)),
+                Err(result) => {
+                    logmsg!(
+                        LOGLVL_ERR,
+                        c"socket_watcher_init",
+                        78,
+                        "Host lookup failed: {}",
+                        msg_cstr(endpoint)
+                    );
+                    return Err(result);
+                }
+            },
+            Err(InvalidPort(port)) => {
                 logmsg!(
                     LOGLVL_ERR,
                     c"socket_watcher_init",
                     62,
                     "Invalid port: {}",
-                    msg_cstr(port_text)
+                    msg_bytes(&port)
                 );
-                return UV_EINVAL;
+                return Err(UV_EINVAL);
             }
-            // SAFETY: `port` points into the buffer.
-            if unsafe { *port } == 0 {
-                // getaddrinfo wants a null service rather than an empty one,
-                // or it tries to look the name up and fails.
-                port = ptr::null_mut();
-            }
+        };
 
-            // SAFETY: `addrinfo` is inhabited by the all-zero bit pattern.
-            let zeroed: addrinfo = unsafe { mem::zeroed() };
-            let hints = addrinfo {
-                ai_family: AF_UNSPEC,
-                ai_socktype: SOCK_STREAM,
-                ..zeroed
-            };
-            // SAFETY: as above, for the request block.
-            let mut request: uv_getaddrinfo_t = unsafe { mem::zeroed() };
-            // SAFETY: the caller's loop, a request on this frame, and the two
-            // halves of the watcher's own address buffer.
-            let retval = unsafe {
-                let uv = uv_of(uv_loop);
-                uv_getaddrinfo(uv, &raw mut request, None, addr, port, &raw const hints)
-            };
-            if retval != 0 {
-                logmsg!(
-                    LOGLVL_ERR,
-                    c"socket_watcher_init",
-                    78,
-                    "Host lookup failed: {}",
-                    msg_cstr(unsafe { CStr::from_ptr(endpoint) })
-                );
-                return retval;
-            }
-            // SAFETY: the watcher's own union, whose TCP arm this picks.
-            unsafe { (*watcher.as_ptr()).uv.tcp.addrinfo = request.addrinfo };
-            let handle = watcher.tcp();
-            // SAFETY: the caller's loop and the handle just chosen.
+        let tcp = lookup.is_some();
+        let watcher = Box::new(SocketWatcher {
+            address,
+            // SAFETY: both handles are inhabited by the all-zero bit pattern,
+            // and `uv_*_init` below fills the one chosen in place.
+            uv: unsafe { mem::zeroed() },
+            tcp,
+            lookup,
+            cb: None,
+        });
+        // SAFETY: the box, leaked here and freed by `close_cb` once libuv is
+        // done with its handle.
+        let watcher = unsafe { Watcher::new(Box::into_raw(watcher)) };
+        let uv_loop = main_uv_loop();
+        if tcp {
+            // SAFETY: the editor's loop and the watcher's own handle, which
+            // never moves.
             unsafe {
-                uv_tcp_init(uv_of(uv_loop), handle);
-                uv_tcp_nodelay(handle, 1);
+                uv_tcp_init(uv_loop, watcher.tcp());
+                uv_tcp_nodelay(watcher.tcp(), 1);
             }
-            watcher.set_stream(handle.cast());
+        } else {
+            // SAFETY: as above.
+            unsafe { uv_pipe_init(uv_loop, watcher.pipe(), 0) };
         }
-        None => {
-            let handle = watcher.pipe();
-            // SAFETY: the caller's loop and the handle just chosen.
-            unsafe { uv_pipe_init(uv_of(uv_loop), handle, 0) };
-            watcher.set_stream(handle.cast());
-        }
+        // SAFETY: the handle initialised just above.
+        unsafe { (*watcher.stream()).data = watcher.as_ptr().cast() };
+        Ok(Self(watcher))
     }
 
-    let stream = watcher.stream;
-    // SAFETY: the handle initialised just above.
-    unsafe { (*stream).data = watcher.as_ptr().cast() };
-    watcher.set_cb(None);
-    watcher.set_close_cb(None);
-    watcher.set_data(ptr::null_mut());
-    0
+    /// The address it listens on: the endpoint as resolved, with the port
+    /// the kernel picked once it is bound.
+    pub(crate) fn address(&self) -> &CStr {
+        // SAFETY: the watcher this value owns, live until `close` consumes
+        // it; the address is written only by `start`, which takes `&mut
+        // self`, so not while the answer borrows `self`.
+        unsafe { self.0.address() }
+    }
+
+    /// Bind and listen, reporting each connection to `cb`; the libuv error
+    /// otherwise.
+    ///
+    /// A TCP watcher tries every address the lookup produced; a pipe watcher
+    /// gets one retry, after clearing a socket file left behind by an nvim
+    /// that is no longer running.
+    pub(crate) fn start(&mut self, backlog: c_int, cb: ConnectionCb) -> c_int {
+        let watcher = self.0;
+        watcher.set_cb(Some(cb));
+        let result = if watcher.is_tcp() {
+            listen_tcp(watcher, backlog)
+        } else {
+            listen_pipe(watcher, backlog)
+        };
+        debug_assert!(result <= 0, "libuv returns a negative error code or zero");
+        result
+    }
+
+    /// Stop listening; the watcher, and a lookup it never bound, are freed
+    /// once libuv is done with it.
+    pub(crate) fn close(self) {
+        // SAFETY: the watcher's own handle; the watcher stays allocated
+        // until `close_cb` frees it.
+        unsafe { uv_close(self.0.stream().cast(), Some(close_cb)) };
+    }
 }
 
-/// Bind and listen, reporting each connection to `cb`.
-///
-/// Returns a libuv error code. A TCP watcher tries every address the lookup
-/// produced; a pipe watcher gets one retry, after clearing a socket file left
-/// behind by an nvim that is no longer running.
-///
-/// # Safety
-/// `watcher` has been through [`socket_watcher_init`] and has not been closed.
-pub unsafe fn socket_watcher_start(
-    watcher: *mut SocketWatcher,
-    backlog: c_int,
-    cb: socket_cb,
-) -> c_int {
-    // SAFETY: the caller's promise.
-    let watcher = unsafe { Watcher::new(watcher) };
-    watcher.set_cb(cb);
-    let addr = watcher.addr_ptr();
-    let stream = watcher.stream;
+/// Bind a TCP watcher to the first of its resolved addresses that takes,
+/// and listen there.
+fn listen_tcp(watcher: Watcher, backlog: c_int) -> c_int {
+    // Spent whatever happens: freed when this returns.
+    let lookup = watcher
+        .take_lookup()
+        .expect("a TCP listener is started once, holding its lookup");
     let mut result = UV_EINVAL;
-
-    if watcher.is_tcp() {
-        let mut ai = watcher.addrinfo();
-        while !ai.is_null() {
-            // SAFETY: the watcher's own handle, and one lookup result.
-            result = unsafe { uv_tcp_bind(watcher.tcp(), (*ai).ai_addr, 0) };
-            if result == 0 {
-                // SAFETY: the watcher's own listening handle.
-                result = unsafe { uv_listen(stream, backlog, Some(connection_cb)) };
-                if result == 0 {
-                    record_bound_port(watcher);
-                    break;
-                }
-            }
-            // SAFETY: walking the lookup's own list.
-            ai = unsafe { (*ai).ai_next };
+    for address in lookup.addresses() {
+        // SAFETY: the watcher's own handle, and an address the lookup holds.
+        result = unsafe { uv_tcp_bind(watcher.tcp(), address, 0) };
+        if result != 0 {
+            continue;
         }
-        // SAFETY: the list the lookup allocated for this watcher.
-        unsafe { uv_freeaddrinfo(watcher.addrinfo()) };
-    } else {
-        result = watcher.bind_pipe().err().unwrap_or(0);
-        if result == UV_EACCES || result == UV_EADDRINUSE {
-            result = rebind_stale_socket(watcher, result);
-        }
+        // SAFETY: the watcher's own handle, bound just now.
+        result = unsafe { uv_listen(watcher.stream(), backlog, Some(connection_cb)) };
         if result == 0 {
-            // SAFETY: the watcher's own listening handle.
-            result = unsafe { uv_listen(watcher.stream, backlog, Some(connection_cb)) };
+            record_bound_port(watcher);
+            break;
         }
     }
+    result
+}
 
-    debug_assert!(result <= 0, "libuv returns a negative error code or zero");
+/// Bind a pipe watcher to its path and listen there.
+fn listen_pipe(watcher: Watcher, backlog: c_int) -> c_int {
+    let mut result = watcher.bind_pipe().err().unwrap_or(0);
+    if result == UV_EACCES || result == UV_EADDRINUSE {
+        result = rebind_stale_socket(watcher, result);
+    }
+    if result == 0 {
+        // SAFETY: the watcher's own handle, bound just now.
+        result = unsafe { uv_listen(watcher.stream(), backlog, Some(connection_cb)) };
+    }
     if result == UV_EACCES {
         // libuv reports a missing parent directory as EACCES, for Windows
         // compatibility. ENOENT is the more useful answer.
-        // SAFETY: the watcher's own NUL-terminated address buffer.
-        unsafe { *addr.add(tail_index(CStr::from_ptr(addr).to_bytes())) = 0 };
-        // SAFETY: as above.
-        if !path_exists(unsafe { CStr::from_ptr(addr) }) {
+        // SAFETY: nothing writes the address while this borrow lives.
+        let address = unsafe { watcher.address() }.to_bytes();
+        let parent = &address[..tail_index(address)];
+        let parent = CString::new(parent).expect("a C string's prefix holds no NUL");
+        if !path_exists(&parent) {
             result = UV_ENOENT;
         }
     }
@@ -375,27 +413,19 @@ pub unsafe fn socket_watcher_start(
 /// is the address string, so it has to be told.
 fn record_bound_port(watcher: Watcher) {
     // SAFETY: `sockaddr_storage` is inhabited by the all-zero bit pattern.
-    let mut sas: sockaddr_storage = unsafe { mem::zeroed() };
-    let size = size_of::<sockaddr_storage>();
+    let mut sas: ::libc::sockaddr_storage = unsafe { mem::zeroed() };
+    let size = size_of::<::libc::sockaddr_storage>();
     let mut len = c_int::try_from(size).expect("a socket address fits in an int");
     // SAFETY: the watcher's own handle, and a buffer on this frame.
     unsafe { uv_tcp_getsockname(watcher.tcp(), (&raw mut sas).cast(), &raw mut len) };
     // SAFETY: both address families put the port right after the family, and
     // both structs are `repr(C)`.
-    let port = ntohs(unsafe { (*(&raw const sas).cast::<sockaddr_head>()).port });
+    let port = ntohs(unsafe { (*(&raw const sas).cast::<SockaddrHead>()).port });
 
-    let addr = watcher.addr_ptr();
-    // SAFETY: the watcher's own NUL-terminated address buffer.
-    let used = unsafe { CStr::from_ptr(addr) }.to_bytes().len();
-    let suffix = port_suffix(port);
-    // SAFETY: appending within the buffer's own bound.
-    unsafe {
-        xstrlcpy(
-            addr.add(used),
-            suffix.as_ptr().cast(),
-            SOCKET_ADDR_LEN - used,
-        )
-    };
+    // SAFETY: the copy is taken before the write below.
+    let mut bound = unsafe { watcher.address() }.to_bytes().to_vec();
+    bound.extend_from_slice(format!(":{port}").as_bytes());
+    watcher.set_address(CString::new(bound).expect("an address and a port hold no NUL"));
 }
 
 /// A pipe bind failed because the socket file is already there. If nothing is
@@ -405,22 +435,15 @@ fn record_bound_port(watcher: Watcher) {
 /// Returns the new bind result, or `failure` unchanged if the socket is live
 /// or could not be removed.
 fn rebind_stale_socket(watcher: Watcher, failure: c_int) -> c_int {
-    let addr = watcher.addr_ptr();
-    let stream = watcher.stream;
-    // SAFETY: the watcher's handle, which libuv gave the editor's loop.
-    let uv_loop: *mut Loop = unsafe { (*(*stream).loop_0).data }.cast();
-
-    // SAFETY: the watcher's own NUL-terminated address buffer, which
-    // nothing below writes.
-    let address = unsafe { CStr::from_ptr(addr) };
-    // SAFETY: the loop the watcher's handle belongs to, and its address.
-    if unsafe { socket_alive(uv_loop, address) } {
+    // SAFETY: a copy, taken before the loop runs below.
+    let address = unsafe { watcher.address() }.to_owned();
+    if socket_alive(&address) {
         logmsg!(
             LOGLVL_ERR,
             c"socket_watcher_start",
             203,
             "Socket already in use by another Nvim instance: {}",
-            msg_cstr(address)
+            msg_cstr(&address)
         );
         return failure;
     }
@@ -430,55 +453,50 @@ fn rebind_stale_socket(watcher: Watcher, failure: c_int) -> c_int {
         c"socket_watcher_start",
         180,
         "Removing stale socket: {}",
-        msg_cstr(address)
+        msg_cstr(&address)
     );
-    let rm_result = os_remove(address);
+    let rm_result = os_remove(&address);
     if rm_result != 0 {
         logmsg!(
             LOGLVL_WRN,
             c"socket_watcher_start",
             185,
             "Failed to remove stale socket {}: {}",
-            msg_cstr(address),
+            msg_cstr(&address),
             msg_cstr(os_strerror(rm_result))
         );
         return failure;
     }
 
     let handle = watcher.pipe();
-    // SAFETY: the watcher's own handle.
-    let handle_loop = unsafe { (*handle).loop_0 };
     // A `Cell`: the close callback writes it through `data` while the
     // wait's closure reads it, and a plain `bool` borrowed by that closure
     // is one the optimiser may read once (the release build did, and
     // waited for ever).
     let closed = Cell::new(false);
-    // SAFETY: as above; `closed` outlives the wait below.
-    unsafe { (*handle).data = closed.as_ptr().cast() };
-    // SAFETY: as above.
-    unsafe { uv_close(handle.cast(), Some(early_server_close_cb)) };
-    // SAFETY: the main loop is live for as long as the editor is.
-    unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed.get()) };
+    // SAFETY: the watcher's own handle; `closed` outlives the wait below.
+    unsafe {
+        (*handle).data = closed.as_ptr().cast();
+        uv_close(handle.cast(), Some(early_server_close_cb));
+    }
+    wait_on_main_loop(Drain::Nothing, -1, || closed.get());
 
-    // SAFETY: a fresh handle, on the loop the closed one used.
-    unsafe { uv_pipe_init(handle_loop, handle, 0) };
-    watcher.set_stream(handle.cast());
-    // SAFETY: the handle just re-initialised.
-    unsafe { (*handle).data = watcher.as_ptr().cast() };
+    // SAFETY: a fresh handle in the closed one's place, on the editor's loop.
+    unsafe {
+        uv_pipe_init(main_uv_loop(), handle, 0);
+        (*handle).data = watcher.as_ptr().cast();
+    }
     watcher.bind_pipe().err().unwrap_or(0)
 }
 
 /// Is anything listening on `address`? Probed by connecting to it, with a
 /// 500ms timeout so a dead socket is diagnosed quickly.
-///
-/// # Safety
-/// `uv_loop` is a live loop.
-unsafe fn socket_alive(uv_loop: *mut Loop, address: &CStr) -> bool {
+fn socket_alive(address: &CStr) -> bool {
     // SAFETY: `RStream` is inhabited by the all-zero bit pattern.
     let mut stream: RStream = unsafe { mem::zeroed() };
     let probe = &raw mut stream;
-    // SAFETY: the caller's loop, and a stream on this frame.
-    if unsafe { socket_connect(uv_loop, probe, false, address, 500) }.is_err() {
+    // SAFETY: a stream on this frame, which outlives the call.
+    if unsafe { socket_connect(probe, false, address, 500) }.is_err() {
         return false;
     }
 
@@ -490,122 +508,8 @@ unsafe fn socket_alive(uv_loop: *mut Loop, address: &CStr) -> bool {
     stream.s.internal_data = closed.as_ptr().cast();
     // SAFETY: the probe stream, still on this frame.
     unsafe { stream_may_close(&raw mut stream.s) };
-    // SAFETY: the main loop is live for as long as the editor is.
-    unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed.get()) };
+    wait_on_main_loop(Drain::Nothing, -1, || closed.get());
     true
-}
-
-/// Hand an accepted connection to `stream`, which the caller owns.
-///
-/// # Safety
-/// `watcher` is listening, and `stream` is a live `RStream` the caller keeps
-/// alive for as long as the connection lasts.
-pub unsafe fn socket_watcher_accept(watcher: *mut SocketWatcher, stream: *mut RStream) -> c_int {
-    // SAFETY: the caller's promise.
-    let watcher = unsafe { Watcher::new(watcher) };
-    // SAFETY: as above.
-    let conn = unsafe { Reader::new(stream) }.conn();
-    let client: *mut uv_stream_t = if watcher.is_tcp() {
-        // SAFETY: the caller's stream, on the watcher handle's own loop.
-        unsafe {
-            let client = conn.tcp();
-            uv_tcp_init((*watcher.tcp()).loop_0, client);
-            uv_tcp_nodelay(client, 1);
-            client.cast()
-        }
-    } else {
-        // SAFETY: as above.
-        unsafe {
-            let client = conn.pipe();
-            uv_pipe_init((*watcher.pipe()).loop_0, client, 0);
-            client.cast()
-        }
-    };
-
-    // SAFETY: the watcher's listening handle and the client just built.
-    let result = unsafe { uv_accept(watcher.stream, client) };
-    if result != 0 {
-        // SAFETY: the client handle, which nothing else holds yet.
-        unsafe { uv_close(client.cast(), None) };
-        return result;
-    }
-    // SAFETY: the caller's stream, now holding the accepted connection.
-    unsafe { stream_init(ptr::null_mut(), conn.as_ptr(), -1, client) };
-    0
-}
-
-/// Stop listening; `cb` is told once libuv is done with the handle.
-///
-/// # Safety
-/// `watcher` has been through [`socket_watcher_init`] and stays live until
-/// `cb` runs.
-pub unsafe fn socket_watcher_close(watcher: *mut SocketWatcher, cb: socket_close_cb) {
-    // SAFETY: the caller's promise.
-    let watcher = unsafe { Watcher::new(watcher) };
-    watcher.set_close_cb(cb);
-    let stream = watcher.stream;
-    // SAFETY: the watcher's own listening handle.
-    unsafe { uv_close(stream.cast(), Some(close_cb)) };
-}
-
-/// A socket this process listens on: the watcher, boxed at the address
-/// libuv's handle points back to, from [`Listener::new`] until
-/// [`Listener::close`] hands it to libuv's close callback, which frees it.
-#[derive(Debug)]
-pub(crate) struct Listener(ptr::NonNull<SocketWatcher>);
-
-impl Listener {
-    /// A watcher for `endpoint`, resolved if it is TCP but not yet bound;
-    /// the libuv error otherwise.
-    pub(crate) fn new(endpoint: &CStr) -> Result<Self, c_int> {
-        let mut storage = Box::<SocketWatcher>::new_uninit();
-        // SAFETY: the main loop, live from startup to exit, writable storage
-        // the size of a watcher for `socket_watcher_init` to fill, and the
-        // caller's NUL-terminated endpoint.
-        let uv_loop = crate::event::r#loop::main_loop_raw();
-        let result =
-            unsafe { socket_watcher_init(uv_loop, storage.as_mut_ptr(), endpoint.as_ptr()) };
-        if result < 0 {
-            return Err(result);
-        }
-        // SAFETY: `socket_watcher_init` succeeded, so every field is set.
-        let watcher = unsafe { storage.assume_init() };
-        Ok(Self(ptr::NonNull::from(Box::leak(watcher))))
-    }
-
-    /// The address it listens on: the endpoint as resolved, with the port
-    /// the kernel picked once it is bound.
-    pub(crate) fn address(&self) -> &CStr {
-        // SAFETY: the watcher this value owns, live until `close` consumes
-        // it; the address is written only by `start`, which takes `&mut
-        // self`, so not while the answer borrows `self`.
-        unsafe { Watcher(self.0.as_ptr()).addr() }
-    }
-
-    /// Bind and listen, reporting each connection to `cb`; the libuv error
-    /// otherwise.
-    pub(crate) fn start(&mut self, backlog: c_int, cb: fn(&Incoming<'_>, c_int)) -> c_int {
-        // SAFETY: a watcher `socket_watcher_init` set up and nothing closed.
-        unsafe { socket_watcher_start(self.0.as_ptr(), backlog, Some(cb)) }
-    }
-
-    /// Stop listening; the watcher is freed once libuv is done with it.
-    pub(crate) fn close(self) {
-        // SAFETY: the watcher stays allocated until `free_listener` runs.
-        unsafe { socket_watcher_close(self.0.as_ptr(), Some(free_listener)) };
-    }
-
-    /// Close a watcher that was never started, releasing the host lookup a
-    /// TCP one still holds.
-    pub(crate) fn discard(self) {
-        let watcher = Watcher(self.0.as_ptr());
-        if watcher.is_tcp() {
-            // SAFETY: the lookup `socket_watcher_init` made for this watcher,
-            // which only `socket_watcher_start` would otherwise free.
-            unsafe { uv_freeaddrinfo(watcher.addrinfo()) };
-        }
-        self.close();
-    }
 }
 
 /// A client waiting on a listening socket, as its connection callback sees
@@ -614,47 +518,72 @@ impl Listener {
 /// client and read the address, nothing else.
 pub struct Incoming<'call> {
     watcher: Watcher,
-    _call: core::marker::PhantomData<&'call mut SocketWatcher>,
+    _call: core::marker::PhantomData<&'call SocketWatcher>,
 }
 
 impl Incoming<'_> {
-    /// The listener, for [`socket_watcher_accept`].
-    pub(in crate::event) fn as_ptr(&self) -> *mut SocketWatcher {
-        self.watcher.0
+    /// Hand the waiting client to `stream`, which the caller owns; libuv's
+    /// error otherwise.
+    ///
+    /// # Safety
+    /// `stream` is a live `RStream` the caller keeps alive, unmoved, for as
+    /// long as the connection lasts.
+    pub(in crate::event) unsafe fn accept(&self, stream: *mut RStream) -> c_int {
+        let watcher = self.watcher;
+        // SAFETY: the caller's promise.
+        let conn = unsafe { Reader::new(stream) }.conn();
+        let uv_loop = main_uv_loop();
+        let client: *mut uv_stream_t = if watcher.is_tcp() {
+            // SAFETY: the caller's stream, on the editor's loop.
+            unsafe {
+                let client = conn.tcp();
+                uv_tcp_init(uv_loop, client);
+                uv_tcp_nodelay(client, 1);
+                client.cast()
+            }
+        } else {
+            // SAFETY: as above.
+            unsafe {
+                let client = conn.pipe();
+                uv_pipe_init(uv_loop, client, 0);
+                client.cast()
+            }
+        };
+
+        // SAFETY: the watcher's listening handle and the client just built.
+        let result = unsafe { uv_accept(watcher.stream(), client) };
+        if result != 0 {
+            // SAFETY: the client handle, which nothing else holds yet.
+            unsafe { uv_close(client.cast(), None) };
+            return result;
+        }
+        // SAFETY: the caller's stream, now holding the accepted connection.
+        unsafe { stream_init(ptr::null_mut(), conn.as_ptr(), -1, client) };
+        0
     }
 
     /// The address the listener is bound to.
     pub(crate) fn address(&self) -> CString {
         // SAFETY: the listener, live for the callback this is lent to; the
         // copy is taken before the borrow ends.
-        unsafe { self.watcher.addr() }.to_owned()
+        unsafe { self.watcher.address() }.to_owned()
     }
-}
-
-/// libuv is done with a [`Listener`]'s watcher: free it.
-///
-/// # Safety
-/// `watcher` is the box [`Listener::new`] leaked, and nothing uses it again.
-unsafe fn free_listener(watcher: *mut SocketWatcher, _data: *mut c_void) {
-    // SAFETY: the caller's promise.
-    drop(unsafe { Box::from_raw(watcher) });
 }
 
 // ---------------------------------------------------------------------------
 // Connecting
 // ---------------------------------------------------------------------------
 
-/// Connect `stream` to `address`, driving the loop until it settles.
+/// Connect `stream` to `address`, driving the editor's loop until it
+/// settles.
 ///
 /// `timeout` is in milliseconds. A failure answers a message the caller may
 /// show; a TCP address that resolved to several candidates is tried in turn
 /// before that happens.
 ///
 /// # Safety
-/// `uv_loop` is live, and `stream` is a live `RStream` the caller keeps alive
-/// until this returns.
+/// `stream` is a live `RStream` the caller keeps alive until this returns.
 pub unsafe fn socket_connect(
-    uv_loop: *mut Loop,
     stream: *mut RStream,
     is_tcp: bool,
     address: &CStr,
@@ -662,37 +591,27 @@ pub unsafe fn socket_connect(
 ) -> Result<(), &'static CStr> {
     // SAFETY: the caller's stream, live until this returns.
     let conn = unsafe { Reader::new(stream) }.conn();
-    // SAFETY: `uv_getaddrinfo_t` is inhabited by the all-zero bit pattern.
-    let mut addr_req: uv_getaddrinfo_t = unsafe { mem::zeroed() };
+    let uv_loop = main_uv_loop();
 
-    let mut candidate: *const addrinfo = ptr::null();
-    if is_tcp {
-        let bytes = address.to_bytes_with_nul();
+    let lookup = if is_tcp {
+        let bytes = address.to_bytes();
         let Some(host_end) = bytes.iter().rposition(|&b| b == b':') else {
             return Err(gettext(c"tcp address must be host:port"));
         };
         let host = CString::new(&bytes[..host_end]).expect("a C string holds no NUL");
-        let port = CStr::from_bytes_with_nul(&bytes[host_end + 1..]).expect("the address's tail");
-
-        // SAFETY: `addrinfo` is inhabited by the all-zero bit pattern.
-        let zeroed: addrinfo = unsafe { mem::zeroed() };
-        let hints = addrinfo {
-            ai_flags: AI_NUMERICSERV,
-            ai_family: AF_UNSPEC,
-            ai_socktype: SOCK_STREAM,
-            ..zeroed
-        };
-        // SAFETY: the caller's loop, a request on this frame, and the host
-        // and port halves of the address.
-        let looked_up = unsafe {
-            let (uv, node, service) = (uv_of(uv_loop), host.as_ptr(), port.as_ptr());
-            uv_getaddrinfo(uv, &raw mut addr_req, None, node, service, &raw const hints)
-        };
-        if looked_up != 0 {
+        let port = CString::new(&bytes[host_end + 1..]).expect("a C string holds no NUL");
+        let Ok(lookup) = Lookup::resolve(&host, Some(&port), AI_NUMERICSERV) else {
             return Err(gettext(c"failed to lookup host or port"));
-        }
-        candidate = addr_req.addrinfo;
-    }
+        };
+        Some(lookup)
+    } else {
+        None
+    };
+    // One attempt per resolved address; a pipe has the one, its path.
+    let candidates: Vec<Option<*const sockaddr>> = match &lookup {
+        Some(lookup) => lookup.addresses().map(Some).collect(),
+        None => vec![None],
+    };
 
     // `Cell`s, as in `rebind_stale_socket`: the callbacks write them while
     // the waits' closures read them.
@@ -702,25 +621,25 @@ pub unsafe fn socket_connect(
     let mut req: uv_connect_t = unsafe { mem::zeroed() };
     req.data = status.as_ptr().cast();
 
-    let settled = loop {
-        let uv_stream: *mut uv_stream_t = if is_tcp {
-            // SAFETY: the caller's stream and loop, and one candidate from
-            // the lookup above.
-            unsafe {
+    let mut settled = Err(gettext(c"connection refused"));
+    for candidate in candidates {
+        let uv_stream: *mut uv_stream_t = match candidate {
+            // SAFETY: the caller's stream, the editor's loop, and an address
+            // the lookup holds.
+            Some(target) => unsafe {
                 let tcp = conn.tcp();
-                uv_tcp_init(uv_of(uv_loop), tcp);
+                uv_tcp_init(uv_loop, tcp);
                 uv_tcp_nodelay(tcp, 1);
-                uv_tcp_connect(&raw mut req, tcp, (*candidate).ai_addr, Some(connect_cb));
+                uv_tcp_connect(&raw mut req, tcp, target, Some(connect_cb));
                 tcp.cast()
-            }
-        } else {
-            // SAFETY: the caller's stream, loop and address.
-            unsafe {
+            },
+            // SAFETY: the caller's stream and address, and the editor's loop.
+            None => unsafe {
                 let pipe = conn.pipe();
-                uv_pipe_init(uv_of(uv_loop), pipe, 0);
+                uv_pipe_init(uv_loop, pipe, 0);
                 uv_pipe_connect(&raw mut req, pipe, address.as_ptr(), Some(connect_cb));
                 pipe.cast()
-            }
+            },
         };
         // SAFETY: the caller's stream, now holding the connect attempt.
         unsafe { stream_init(ptr::null_mut(), conn.as_ptr(), -1, uv_stream) };
@@ -729,37 +648,20 @@ pub unsafe fn socket_connect(
         closed.set(false);
         status.set(1);
 
-        let ms = i64::from(timeout);
-        // SAFETY: the main loop is live for as long as the editor is.
-        unsafe { process_events_until(MAIN_LOOP.ptr(), None, ms, || status.get() != 1) };
+        wait_on_main_loop(Drain::Nothing, i64::from(timeout), || status.get() != 1);
         if status.get() == 0 {
-            break Ok(());
+            settled = Ok(());
+            break;
         }
 
         may_close(conn);
         // Wait for the close callback before retrying or returning: `stream`
         // may be on the caller's stack.
-        // SAFETY: the main loop is live for as long as the editor is.
-        unsafe { process_events_until(MAIN_LOOP.ptr(), None, -1, || closed.get()) };
-
-        // The short circuit is load-bearing: a pipe connect never looked an
-        // address up, so `candidate` is still null here.
-        // SAFETY: for TCP, the candidate is one of the lookup's entries.
-        let next = if is_tcp {
-            unsafe { (*candidate).ai_next }
-        } else {
-            ptr::null_mut()
-        };
-        if next.is_null() {
-            break Err(gettext(c"connection refused"));
-        }
-        candidate = next;
-    };
+        wait_on_main_loop(Drain::Nothing, -1, || closed.get());
+    }
 
     conn.set_internal_close_cb(None);
     conn.set_internal_data(ptr::null_mut());
-    // SAFETY: the lookup made above, if any; libuv takes a null one.
-    unsafe { uv_freeaddrinfo(addr_req.addrinfo) };
     settled
 }
 
@@ -775,7 +677,7 @@ pub unsafe fn socket_connect(
 unsafe extern "C" fn connection_cb(handle: *mut uv_stream_t, status: c_int) {
     // SAFETY: the caller's promise.
     let watcher = unsafe { Watcher::new((*handle).data.cast()) };
-    let notify = watcher.cb.expect("a started watcher has a callback");
+    let notify = watcher.cb().expect("a started watcher has a callback");
     let incoming = Incoming {
         watcher,
         _call: core::marker::PhantomData,
@@ -783,17 +685,15 @@ unsafe extern "C" fn connection_cb(handle: *mut uv_stream_t, status: c_int) {
     notify(&incoming, status);
 }
 
-/// libuv: the listening handle is closed.
+/// libuv: a [`Listener`]'s handle is closed, and libuv is done with it:
+/// free the watcher.
 ///
 /// # Safety
-/// libuv's: `handle` is a listening handle whose `data` is its watcher.
+/// libuv's: `handle` is a listening handle whose `data` is the box
+/// [`Listener::new`] leaked, and nothing uses it again.
 unsafe extern "C" fn close_cb(handle: *mut uv_handle_t) {
     // SAFETY: the caller's promise.
-    let watcher = unsafe { Watcher::new((*handle).data.cast()) };
-    if let Some(notify) = watcher.close_cb {
-        // SAFETY: the watcher's own callback, given the watcher.
-        unsafe { notify(watcher.as_ptr(), watcher.data) };
-    }
+    drop(unsafe { Box::from_raw((*handle).data.cast::<SocketWatcher>()) });
 }
 
 /// libuv: the connect request settled. A failure also takes the stream down,

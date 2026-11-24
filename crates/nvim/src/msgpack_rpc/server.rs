@@ -32,8 +32,6 @@ use crate::path::fix_fname;
 use crate::types::Vv;
 use std::ffi::CString;
 
-use crate::event::socket::address::SOCKET_ADDR_LEN;
-
 /// Values these belong to other modules; nested so they stay out of the flat
 /// namespace the unit-test header generator collects constants into.
 mod known {
@@ -143,6 +141,10 @@ pub fn server_address_generated() -> XString {
     server_address_new(None)
 }
 
+/// The longest address [`server_address_new`] generates, with its NUL:
+/// upstream's socket address buffer.
+const SOCKET_ADDR_LEN: usize = 256;
+
 /// Generates an address in the runtime directory, unique to this process.
 ///
 /// `name` names the socket; without one the editor's own name is used. The
@@ -225,7 +227,7 @@ pub fn server_start(addr: Option<&CStr>) -> c_int {
             "Already listening on {}",
             msg_cstr(watcher.address())
         );
-        watcher.discard();
+        watcher.close();
         return 2;
     }
 
@@ -255,10 +257,7 @@ pub fn server_start(addr: Option<&CStr>) -> c_int {
 /// `keep_vservername` is for the restart `:detach` performs, where the name
 /// is about to be reused.
 pub fn server_stop(endpoint: &CStr, keep_vservername: bool) -> bool {
-    // Truncated the same way a watcher's own address is, so an over-long
-    // endpoint still matches the socket it opened.
     let addr = endpoint.to_bytes();
-    let addr = &addr[..addr.len().min(SOCKET_ADDR_LEN - 1)];
 
     let found = WATCHERS.with_mut(|watchers| {
         let index = watchers

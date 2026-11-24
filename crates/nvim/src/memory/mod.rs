@@ -443,25 +443,6 @@ pub unsafe fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void {
     }
 }
 
-/// BSD `strlcpy`: bounded copy that always terminates (when `dsize > 0`)
-/// and returns the untruncated source length.
-///
-/// # Safety
-///
-/// `src` is NUL-terminated, `dst` is writable for `dsize` bytes, and the two
-/// do not overlap.
-pub unsafe fn xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
-    // SAFETY: the caller's promise. At most `dsize - 1` payload bytes are
-    // written, plus the terminator at `dsize - 1` or earlier.
-    let slen = unsafe { cbytes(src) }.len();
-    if dsize != 0 {
-        let len = slen.min(dsize - 1);
-        unsafe { copy_bytes(dst.cast::<c_void>(), src.cast::<c_void>(), len) };
-        unsafe { *dst.add(len) = 0 };
-    }
-    slen
-}
-
 /// How many source bytes `xstrlcat` copies when appending `slen` bytes at
 /// offset `dlen` of a `dsize` buffer, and where the terminator must be
 /// written when truncating (the untruncated copy brings its own).

@@ -190,7 +190,6 @@ pub type uv_handle_type = ::core::ffi::c_uint;
 pub(crate) const UV_TTY: uv_handle_type = 14;
 pub(crate) const UV_NAMED_PIPE: uv_handle_type = 7;
 pub(crate) const UV_FILE: uv_handle_type = 17;
-pub(crate) const UV_TCP: uv_handle_type = 12;
 pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 pub type uv_idle_cb = Option<unsafe extern "C" fn(*mut uv_idle_t) -> ()>;
 #[derive(Copy, Clone, Debug)]

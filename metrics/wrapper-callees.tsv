@@ -1,46 +1,44 @@
 count	callee	no_raw	defs	def
 41	f	0	0	
-30	CStr::from_ptr	0	0	
-19	.as_ref	0	0	
+23	CStr::from_ptr	0	0	
+20	.as_ref	0	0	
 17	from_raw_parts	0	0	
 16	Reader::new	0	1	crates/nvim/src/event/rstream.rs
-14	zeroed	0	0	
+13	zeroed	0	0	
 11	Box::from_raw	0	6	
 11	Child::new	0	1	crates/nvim/src/event/proc.rs
-10	notify	0	0	
+9	notify	0	0	
 8	Conn::new	0	1	crates/nvim/src/event/stream.rs
-8	process_events_until	0	1	crates/nvim/src/event/loop.rs
 8	xfree	0	1	crates/nvim/src/memory/mod.rs
 7	c_bytes	0	1	crates/nvim/src/lua/treesitter/mod.rs
 7	check_write	0	1	crates/nvim/src/slot/guards.rs
 7	slot_of	0	1	crates/nvim/src/slot.rs
-7	uv_close	0	0	
+6	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
 6	Stack::from_raw	0	1	crates/nvim/src/lua/stack/mod.rs
-6	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
 6	loop_poll_events	0	1	crates/nvim/src/event/loop.rs
 6	lua_tolstring	0	0	
+6	uv_close	0	0	
+5	.address	1	1	crates/nvim/src/event/socket/mod.rs
 5	.as_mut	0	0	
 5	.next_arg::<::core::ffi::c_ulong>	0	0	
-5	EventLoop::new	0	1	crates/nvim/src/event/loop.rs
 5	Handle::new	0	1	crates/nvim/src/event/time.rs
 5	NonNull::new_unchecked	0	0	
 5	Signal::new	0	1	crates/nvim/src/event/signal.rs
 5	read_at	0	1	crates/nvim/src/slot/guards.rs
 5	stream_may_close	0	1	crates/nvim/src/event/stream.rs
-4	.add	0	0	
 4	.ml_unlent	1	1	crates/nvim/src/winlayer/deref.rs
 4	.pty	1	1	crates/nvim/src/event/proc.rs
 4	Uv::new	0	1	crates/nvim/src/event/libuv_proc.rs
-4	cbytes	0	1	crates/nvim/src/memory/mod.rs
 4	fcntl	0	0	
 4	generation_at	0	1	crates/nvim/src/slot.rs
 4	proc_stop	0	1	crates/nvim/src/event/proc.rs
+4	process_events_until	0	1	crates/nvim/src/event/loop.rs
 4	try_to_free_memory	1	1	crates/nvim/src/memory/mod.rs
 4	ts_node_child	0	0	
 4	ts_node_child_count	0	0	
 4	uv_dlclose	0	0	
-4	uv_pipe_init	0	0	
 4	uv_timer_start	0	0	
+3	.add	0	0	
 3	.get_unchecked_mut	0	0	
 3	.next_arg::<::core::ffi::c_int>	0	0	
 3	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
@@ -50,6 +48,7 @@ count	callee	no_raw	defs	def
 3	Stack::above_top	0	1	crates/nvim/src/lua/stack/mod.rs
 3	ThinCString::from_raw	0	1	crates/nvim/src/memory/thin_cstring.rs
 3	XString::from_raw	0	1	crates/nvim/src/memory/xstring.rs
+3	cbytes	0	1	crates/nvim/src/memory/mod.rs
 3	copy_entry	0	1	crates/nvim/src/os/users.rs
 3	create_event	0	1	crates/nvim/src/event/proc.rs
 3	edit_at	0	1	crates/nvim/src/slot/guards.rs
@@ -61,9 +60,9 @@ count	callee	no_raw	defs	def
 3	rstream_may_close	0	1	crates/nvim/src/event/rstream.rs
 3	state_terminal	0	1	crates/nvim/src/vterm/abi/mod.rs
 3	ts_tree_root_node	0	0	
-3	uv_freeaddrinfo	0	0	
 3	uv_fs_access	0	0	
 3	uv_fs_req_cleanup	0	0	
+3	uv_pipe_init	0	0	
 3	uv_pipe_open	0	0	
 3	uv_timer_stop	0	0	
 2	.is_collected	1	1	crates/nvim/src/lua/stack/userdata.rs
@@ -77,6 +76,7 @@ count	callee	no_raw	defs	def
 2	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 2	Stack::entry	0	1	crates/nvim/src/lua/stack/dispatch.rs
 2	Vec::from_raw_parts	0	0	
+2	Watcher::new	0	1	crates/nvim/src/event/socket/mod.rs
 2	_exit	0	0	
 2	bytes	0	1	crates/nvim/src/tui/input.rs
 2	character_bytes	0	1	crates/nvim/src/harness.rs
@@ -132,9 +132,7 @@ count	callee	no_raw	defs	def
 2	wstream_write	0	1	crates/nvim/src/event/wstream.rs
 2	xcalloc	0	1	crates/nvim/src/memory/mod.rs
 2	xmemdupz	0	1	crates/nvim/src/memory/mod.rs
-2	xstrlcpy	0	1	crates/nvim/src/memory/mod.rs
-1	.addr	1	1	crates/nvim/src/event/socket/mod.rs
-1	.assume_init	0	0	
+1	.accept	0	1	crates/nvim/src/event/socket/mod.rs
 1	.assume_init_mut	0	0	
 1	.bit_copy	1	1	crates/nvim/src/eval/typval/handle.rs
 1	.next_arg::<*const ::core::ffi::c_char>	0	0	
@@ -157,7 +155,6 @@ count	callee	no_raw	defs	def
 1	calloc	0	0	
 1	consume	0	0	
 1	copy	0	0	
-1	copy_bytes	0	1	crates/nvim/src/memory/mod.rs
 1	decode_bridge	0	1	crates/nvim/src/vterm/abi/charset.rs
 1	endpwent	0	0	
 1	execvp	0	0	
@@ -239,11 +236,6 @@ count	callee	no_raw	defs	def
 1	setxattr	0	0	
 1	signal	0	0	
 1	signal_event	0	1	crates/nvim/src/event/signal.rs
-1	socket_alive	0	1	crates/nvim/src/event/socket/mod.rs
-1	socket_watcher_accept	0	1	crates/nvim/src/event/socket/mod.rs
-1	socket_watcher_close	0	1	crates/nvim/src/event/socket/mod.rs
-1	socket_watcher_init	0	1	crates/nvim/src/event/socket/mod.rs
-1	socket_watcher_start	0	1	crates/nvim/src/event/socket/mod.rs
 1	step	0	0	
 1	strchr	0	1	crates/nvim/src/os/cshim.rs
 1	strftime	0	0	
@@ -295,6 +287,7 @@ count	callee	no_raw	defs	def
 1	uv_disable_stdio_inheritance	0	0	
 1	uv_dlopen	0	0	
 1	uv_dlsym	0	0	
+1	uv_freeaddrinfo	0	0	
 1	uv_fs_chmod	0	0	
 1	uv_fs_chown	0	0	
 1	uv_fs_close	0	0	

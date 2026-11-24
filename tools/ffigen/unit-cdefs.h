@@ -13,7 +13,6 @@ typedef struct Window Window;
 typedef struct key_value_pair key_value_pair;
 typedef struct loop loop;
 typedef struct queue queue;
-typedef struct socket_watcher socket_watcher;
 typedef struct terminal terminal;
 typedef struct __pthread_mutex_s __pthread_mutex_s;
 typedef struct __pthread_rwlock_arch_t __pthread_rwlock_arch_t;
@@ -92,9 +91,6 @@ typedef struct addrinfo addrinfo;
 typedef union pthread_mutex_t pthread_mutex_t;
 typedef union pthread_rwlock_t pthread_rwlock_t;
 typedef struct sockaddr sockaddr;
-typedef struct socket_watcher_uv_pipe socket_watcher_uv_pipe;
-typedef struct socket_watcher_uv_tcp socket_watcher_uv_tcp;
-typedef union socket_watcher_uv socket_watcher_uv;
 typedef struct uv__work uv__work;
 typedef union uv_async_s_u uv_async_s_u;
 typedef struct uv_async_s uv_async_s;
@@ -263,7 +259,6 @@ typedef int32_t ScreenAttr;
 typedef uint32_t ScreenChar;
 typedef int ScriptId;
 typedef struct signal_watcher SignalWatcher;
-typedef socket_watcher SocketWatcher;
 typedef unsigned int SpecialVarValue;
 typedef unsigned int SpellAddType;
 typedef int SpellIdx;
@@ -329,8 +324,6 @@ typedef unsigned long pthread_t;
 typedef unsigned short sa_family_t;
 typedef void (*signal_cb)(SignalWatcher *, int, void *);
 typedef void (*signal_close_cb)(SignalWatcher *, void *);
-typedef struct socket_cb socket_cb;
-typedef void (*socket_close_cb)(SocketWatcher *, void *);
 typedef unsigned int socklen_t;
 typedef void (*stream_close_cb)(Stream *, void *);
 typedef size_t (*stream_read_cb)(RStream *, const char *, size_t, void *, bool);
@@ -968,17 +961,6 @@ union pthread_rwlock_t {
 struct sockaddr {
   sa_family_t sa_family;
   char sa_data[14];
-};
-struct socket_watcher_uv_pipe {
-  uv_pipe_t handle;
-};
-struct socket_watcher_uv_tcp {
-  uv_tcp_t handle;
-  addrinfo *addrinfo;
-};
-union socket_watcher_uv {
-  socket_watcher_uv_tcp tcp;
-  socket_watcher_uv_pipe pipe;
 };
 struct uv__work {
   void (*work)(uv__work *);
@@ -4607,7 +4589,6 @@ static const int UV_PROCESS_WINDOWS_HIDE = 16;
 static const int UV_RUN_DEFAULT = 0;
 static const int UV_RUN_NOWAIT = 2;
 static const int UV_RUN_ONCE = 1;
-static const int UV_TCP = 12;
 static const int UV_TTY = 14;
 static const int UV_TTY_MODE_IO = 2;
 static const int UV_TTY_MODE_NORMAL = 0;

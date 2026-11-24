@@ -41,14 +41,14 @@ use crate::channel::defs::{
 use crate::channel::with_channel;
 use crate::eval::typval::DictRef;
 use crate::event::libuv_proc::argv_into_raw;
-use crate::event::r#loop::main_loop_raw;
+use crate::event::r#loop::{Drain, main_loop_raw, wait_on_main_loop};
 use crate::event::objects::{Proc, RStream, Stream};
 use crate::event::proc::{proc_free, proc_spawn, proc_stop, proc_wait};
 use crate::event::rstream::{
     rstream_init, rstream_init_fd, rstream_may_close, rstream_start, rstream_start_inner,
     rstream_stop_inner,
 };
-use crate::event::socket::{socket_connect, socket_watcher_accept};
+use crate::event::socket::socket_connect;
 use crate::event::stream::stream_may_close;
 use crate::event::wstream::{SharedBuffer, wstream_init, wstream_init_fd, wstream_write};
 use crate::event_queue::{self, ParkingQueue, QueueId};
@@ -454,7 +454,7 @@ pub(crate) fn connect_socket(
     // SAFETY: the socket channel's stream, at its fixed address; the loop
     // runs only libuv's callbacks here, and the channel holds its own
     // reference until this returns.
-    unsafe { socket_connect(main_loop_raw(), socket, tcp, address, timeout) }
+    unsafe { socket_connect(socket, tcp, address, timeout) }
 }
 
 /// Take over a pending connection as socket channel `id`'s stream, or
@@ -466,7 +466,7 @@ pub(crate) fn accept_socket(
     let socket = socket_stream(id);
     // SAFETY: the socket channel's stream, at its fixed address, and the
     // caller's listening watcher.
-    let result = unsafe { socket_watcher_accept(incoming.as_ptr(), socket) };
+    let result = unsafe { incoming.accept(socket) };
     if result == 0 { Ok(()) } else { Err(result) }
 }
 
@@ -594,10 +594,9 @@ pub(crate) fn wait_job(id: u64, ms: c_int, drain: Option<&ParkingQueue>) -> c_in
 /// channel, which keeps the queue alive for the wait.
 pub(crate) fn wait_on_channel_events(id: u64, done: impl FnMut() -> bool) {
     let events = with(id, |channel| channel.events.id());
-    // SAFETY: the editor's loop, live from startup to exit; the channel's
-    // own queue lives as long as the caller's reference, and nothing of the
-    // channel is borrowed while the events run.
-    unsafe { crate::event::r#loop::process_events_until(main_loop_raw(), Some(events), -1, done) };
+    // The channel's own queue lives as long as the caller's reference, and
+    // nothing of the channel is borrowed while the events run.
+    wait_on_main_loop(Drain::Queue(events), -1, done);
 }
 
 pub(crate) fn process_channel_events(id: u64) {

@@ -2222,8 +2222,6 @@ COPY_KEEPERS = {
     "crates/nvim/src/eval/list/mod.rs::Item": "value",
     "crates/nvim/src/eval/lval.rs::Span": "value",
     "crates/nvim/src/eval/vars/assign.rs::VarList": "value",
-    "crates/nvim/src/event/objects.rs::socket_watcher_uv_pipe": "value",
-    "crates/nvim/src/event/objects.rs::socket_watcher_uv_tcp": "ffi: a libuv TCP handle and its addrinfo",
     "crates/nvim/src/event/objects.rs::stream_uv": "value",
     "crates/nvim/src/event/uv.rs": "ffi: libuv's structs, copied as C copies them",
     "crates/nvim/src/ex_cmds/mod.rs::SubResult": "value",

@@ -1,5 +1,4 @@
-//! Deciding what an `--listen`/`--server` address means, and rendering the
-//! port back into it.
+//! Deciding what an `--listen`/`--server` address means.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -10,8 +9,57 @@
     clippy::ptr_as_ptr
 )]
 
-/// The size of a `SocketWatcher`'s address buffer.
-pub const SOCKET_ADDR_LEN: usize = 256;
+use crate::charset::try_getdigits_at;
+use std::ffi::{CStr, CString};
+
+/// What an address to listen on names, parsed whole.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Endpoint {
+    /// A local socket (a Unix domain socket, a Windows named pipe) at this
+    /// path.
+    Pipe(CString),
+    /// A TCP endpoint: the host to resolve, and the port (the service
+    /// handed to the resolver), or `None` for whichever one the kernel has
+    /// free (the address ended in a colon).
+    Tcp {
+        host: CString,
+        port: Option<CString>,
+    },
+}
+
+/// The text after a TCP endpoint's colon, which is not a port number.
+#[derive(Debug, PartialEq, Eq)]
+pub struct InvalidPort(pub Vec<u8>);
+
+impl Endpoint {
+    /// Split `address` into what it names. Nothing is cut: an address too
+    /// long for a socket path fails when it is bound, and a host too long to
+    /// be one fails its lookup.
+    pub fn parse(address: &CStr) -> Result<Self, InvalidPort> {
+        let bytes = address.to_bytes();
+        let Some(host_end) = tcp_host_end(bytes) else {
+            return Ok(Endpoint::Pipe(address.to_owned()));
+        };
+        let (host, port) = (&bytes[..host_end], &bytes[host_end + 1..]);
+        if !port_in_range(port) {
+            return Err(InvalidPort(port.to_vec()));
+        }
+        let no_nul = "a C string's slice holds no NUL";
+        let host = CString::new(host).expect(no_nul);
+        let port = (!port.is_empty()).then(|| CString::new(port).expect(no_nul));
+        Ok(Endpoint::Tcp { host, port })
+    }
+}
+
+/// Upstream's check on a port: the number it starts with (read as
+/// `strtoimax` reads one, so none at all reads as 0) is a port number.
+///
+/// Anything after that number is left to the resolver, which refuses it as a
+/// service — `https://example.com` is host `https`, service
+/// `//example.com`, and fails its lookup, which server_spec pins.
+fn port_in_range(text: &[u8]) -> bool {
+    try_getdigits_at(text, 0).is_some_and(|(port, _)| (0..=i64::from(u16::MAX)).contains(&port))
+}
 
 /// The offset of the colon that separates host from port, or `None` when
 /// `address` names a local socket rather than a TCP endpoint.
@@ -44,33 +92,10 @@ pub fn is_bare_server_name(address: &[u8]) -> bool {
         .any(|&byte| matches!(byte, b':' | b'/' | b'\\'))
 }
 
-/// `":<port>"`, NUL-terminated, for appending to a bound address.
-///
-/// The address a server reports through `v:servername` has to name the port
-/// the kernel actually assigned, which is not known until the socket is bound.
-pub fn port_suffix(port: u16) -> [u8; 8] {
-    let mut digits = [0u8; 5];
-    let mut count = 0;
-    let mut rest = port;
-    loop {
-        digits[count] = b'0' + (rest % 10) as u8;
-        count += 1;
-        rest /= 10;
-        if rest == 0 {
-            break;
-        }
-    }
-    let mut out = [0u8; 8];
-    out[0] = b':';
-    for (i, digit) in digits[..count].iter().rev().enumerate() {
-        out[1 + i] = *digit;
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{is_bare_server_name, port_suffix, tcp_host_end};
+    use super::{Endpoint, InvalidPort, is_bare_server_name, tcp_host_end};
+    use std::ffi::CString;
 
     fn host_end(address: &str) -> Option<usize> {
         tcp_host_end(address.as_bytes())
@@ -126,10 +151,68 @@ mod tests {
         assert!(!is_bare_server_name(br"C:\pipe\nvim"));
     }
 
+    fn parse(address: &str) -> Result<Endpoint, InvalidPort> {
+        Endpoint::parse(&CString::new(address).unwrap())
+    }
+
+    fn tcp(host: &str, port: Option<&str>) -> Result<Endpoint, InvalidPort> {
+        let host = CString::new(host).unwrap();
+        let port = port.map(|port| CString::new(port).unwrap());
+        Ok(Endpoint::Tcp { host, port })
+    }
+
     #[test]
-    fn a_port_renders_with_a_leading_colon_and_a_nul() {
-        assert_eq!(&port_suffix(0)[..3], b":0\0");
-        assert_eq!(&port_suffix(6666)[..6], b":6666\0");
-        assert_eq!(&port_suffix(65535)[..7], b":65535\0");
+    fn an_endpoint_with_a_port_is_tcp() {
+        assert_eq!(parse("127.0.0.1:6666"), tcp("127.0.0.1", Some("6666")));
+        assert_eq!(parse("::1:0"), tcp("::1", Some("0")));
+        assert_eq!(parse("localhost:65535"), tcp("localhost", Some("65535")));
+    }
+
+    #[test]
+    fn a_trailing_colon_asks_for_any_free_port() {
+        assert_eq!(parse("localhost:"), tcp("localhost", None));
+    }
+
+    #[test]
+    fn a_port_out_of_range_is_refused() {
+        let invalid = |port: &str| Err(InvalidPort(port.as_bytes().to_vec()));
+        assert_eq!(parse("127.0.0.1:65536"), invalid("65536"));
+        assert_eq!(parse("127.0.0.1:-1"), invalid("-1"));
+        let huge = "99999999999999999999999";
+        assert_eq!(parse(&format!("127.0.0.1:{huge}")), invalid(huge));
+    }
+
+    #[test]
+    fn text_after_the_number_is_left_to_the_resolver() {
+        // As upstream: only the leading number is checked, so a service the
+        // resolver will refuse still parses.
+        assert_eq!(
+            parse("https://example.com"),
+            tcp("https", Some("//example.com"))
+        );
+        assert_eq!(parse("localhost:12ab"), tcp("localhost", Some("12ab")));
+        assert_eq!(parse("localhost:http"), tcp("localhost", Some("http")));
+    }
+
+    #[test]
+    fn anything_else_is_a_local_socket_path() {
+        let pipe = |path: &str| Ok(Endpoint::Pipe(CString::new(path).unwrap()));
+        assert_eq!(parse("/tmp/nvim.sock"), pipe("/tmp/nvim.sock"));
+        assert_eq!(parse(":6666"), pipe(":6666"));
+        assert_eq!(
+            parse(r"C:\Users\me\nvim.sock"),
+            pipe(r"C:\Users\me\nvim.sock")
+        );
+    }
+
+    #[test]
+    fn a_long_address_is_kept_whole() {
+        let host = "h".repeat(300);
+        assert_eq!(parse(&format!("{host}:6666")), tcp(&host, Some("6666")));
+        let path = format!("/tmp/{}", "x".repeat(300));
+        assert_eq!(
+            parse(&path),
+            Ok(Endpoint::Pipe(CString::new(path.clone()).unwrap()))
+        );
     }
 }

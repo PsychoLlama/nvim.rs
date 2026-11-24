@@ -16,8 +16,8 @@
 
 use crate::eval::typval::DictBox;
 use crate::event::uv::{
-    addrinfo, uv_async_t, uv_buf_t, uv_file, uv_idle_t, uv_loop_t, uv_pipe_t, uv_signal_t,
-    uv_stream_t, uv_tcp_t, uv_timer_t,
+    uv_async_t, uv_buf_t, uv_file, uv_idle_t, uv_loop_t, uv_pipe_t, uv_signal_t, uv_stream_t,
+    uv_tcp_t, uv_timer_t,
 };
 use crate::os::libc::{int64_t, size_t, uint8_t, uint64_t};
 use crate::types::Refcount;
@@ -61,7 +61,6 @@ pub type Proc = proc;
 pub type ProcType = ::core::ffi::c_uint;
 pub type RStream = rstream;
 pub type SignalWatcher = signal_watcher;
-pub type SocketWatcher = socket_watcher;
 pub type Stream = stream;
 pub type internal_proc_cb = Option<unsafe fn(*mut Proc) -> ()>;
 #[derive(Debug)]
@@ -142,35 +141,6 @@ pub struct signal_watcher {
     pub close_cb: signal_close_cb,
     pub events: Option<crate::event_queue::QueueId>,
 }
-/// A listening socket's connection callback: the watcher, and libuv's
-/// status for the connection.
-pub type socket_cb = Option<fn(&crate::event::socket::Incoming<'_>, ::core::ffi::c_int)>;
-pub type socket_close_cb = Option<unsafe fn(*mut SocketWatcher, *mut ::core::ffi::c_void) -> ()>;
-#[derive(Debug)]
-pub struct socket_watcher {
-    pub addr: [::core::ffi::c_char; 256],
-    pub uv: socket_watcher_uv,
-    pub stream: *mut uv_stream_t,
-    pub data: *mut ::core::ffi::c_void,
-    pub cb: socket_cb,
-    pub close_cb: socket_close_cb,
-}
-#[repr(C)]
-pub union socket_watcher_uv {
-    pub tcp: socket_watcher_uv_tcp,
-    pub pipe: socket_watcher_uv_pipe,
-}
-#[derive(Copy, Clone, Debug)]
-#[repr(C)]
-pub struct socket_watcher_uv_pipe {
-    pub handle: uv_pipe_t,
-}
-#[derive(Copy, Clone, Debug)]
-#[repr(C)]
-pub struct socket_watcher_uv_tcp {
-    pub handle: uv_tcp_t,
-    pub addrinfo: *mut addrinfo,
-}
 /// A stream: a libuv pipe, TTY, TCP or idle handle, and what reads and
 /// writes it.
 ///
@@ -217,4 +187,4 @@ pub union stream_uv {
 }
 pub type stream_write_cb =
     Option<unsafe fn(*mut Stream, *mut ::core::ffi::c_void, ::core::ffi::c_int) -> ()>;
-crate::untagged_union_debug!(socket_watcher_uv, stream_uv);
+crate::untagged_union_debug!(stream_uv);
