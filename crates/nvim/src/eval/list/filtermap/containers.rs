@@ -185,8 +185,10 @@ pub(crate) fn filter_map_blob(
                     b_ret.set_byte(i, byte.cast_unsigned().to_le_bytes()[0]);
                 }
             } else if rem {
+                // The next byte moves down into `i`: walk on from here.
                 b.remove_byte(i);
-                i -= 1;
+                idx += 1;
+                continue;
             }
         }
         idx += 1;
