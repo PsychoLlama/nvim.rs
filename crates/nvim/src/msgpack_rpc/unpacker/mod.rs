@@ -113,8 +113,15 @@ impl Unpacker {
     ///
     /// Returns whether a whole message — or, for a redraw batch, a whole
     /// event — is now available in the unpacker.
+    ///
+    /// Once the stream has been refused (`state` is `INVALID`) nothing more
+    /// is decoded: the channel is closing, but bytes already queued for it
+    /// (an internal channel's writes, a read in flight) still arrive here.
+    /// Upstream asserts instead.
     pub fn advance(&mut self, input: &mut &[u8]) -> bool {
-        debug_assert!(self.state >= 0);
+        if self.state < 0 {
+            return false;
+        }
         self.has_grid_line_event = false;
 
         if self.state == protocol::HEADER {
@@ -548,5 +555,28 @@ pub(super) fn unpack_integer_token(tok: Tok) -> Option<Integer> {
         Some(Kind::Uint) => Some(token::unpack_uint(&tok).cast_signed()),
         Some(Kind::Sint) => Some(token::unpack_sint(&tok)),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A refused stream stays refused: the next bytes, valid or not, decode
+    /// nothing and leave the state alone (it was a `debug_assert!` that a
+    /// closing self-connected channel tripped).
+    #[test]
+    fn a_refused_stream_decodes_nothing_more() {
+        let mut unpacker = Unpacker::new();
+        let mut input: &[u8] = &[0xc1];
+        assert!(!unpacker.advance(&mut input));
+        assert_eq!(unpacker.state, protocol::INVALID);
+        assert!(unpacker.unpack_error.is_set());
+
+        // A whole notification, `[2, "nvim_get_mode", []]`.
+        let mut input: &[u8] = b"\x93\x02\xadnvim_get_mode\x90";
+        assert!(!unpacker.advance(&mut input));
+        assert_eq!(unpacker.state, protocol::INVALID);
+        assert_eq!(input.len(), 17);
     }
 }

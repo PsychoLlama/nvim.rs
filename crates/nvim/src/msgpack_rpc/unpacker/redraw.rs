@@ -26,7 +26,7 @@ use crate::mpack::token::{self, Kind, Tok};
 
 use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::os::libc::size_t;
-use crate::types::{Array, ScreenAttr, ScreenChar};
+use crate::types::{Array, Error, ScreenAttr, ScreenChar};
 use crate::ui_client::{ui_client_event_grid_line, ui_client_get_redraw_handler};
 
 use super::protocol;
@@ -118,6 +118,8 @@ pub(super) fn unpacker_parse_redraw(u: &mut Unpacker, input: &mut &[u8]) -> bool
         Ok(done) => done,
         Err(Halt::Incomplete) => false,
         Err(Halt::Invalid) => {
+            // Said, so the channel closes with a reason (upstream's is empty).
+            u.unpack_error = Error::validation(c"failed to decode redraw event");
             u.state = protocol::INVALID;
             false
         }
