@@ -289,7 +289,9 @@ fn a_fresh_swap_file_identifies_itself() {
             .try_into()
             .expect("an int16_t"),
     );
-    assert_eq!(short, i16::try_from(B0_MAGIC_SHORT).unwrap());
+    // Block zero holds the low sixteen bits.
+    let [low, high, ..] = B0_MAGIC_SHORT.to_le_bytes();
+    assert_eq!(short, i16::from_le_bytes([low, high]));
     assert_eq!(
         b0.field(offset_of!(ZeroBlockLayout, b0_magic_char), 1)[0],
         B0_MAGIC_CHAR
