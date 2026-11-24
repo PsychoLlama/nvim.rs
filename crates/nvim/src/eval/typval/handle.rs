@@ -1000,8 +1000,7 @@ mod tests {
     }
 
     /// The discriminant is the `VarType` code at offset zero: what
-    /// `#[repr(C, u32)]` promises and what the generated `ffi.cdef` chunk
-    /// describes to the unit fixtures.
+    /// `#[repr(u32)]` promises.
     #[test]
     fn a_value_is_tagged_by_its_var_type_at_offset_zero() {
         for tv in [
@@ -1017,8 +1016,8 @@ mod tests {
             TypVal::partial(None),
             TypVal::blob(None),
         ] {
-            // SAFETY: `repr(C, u32)` puts the discriminant first, and it is
-            // a `u32`.
+            // SAFETY: `repr(u32)` puts the discriminant first, and it is a
+            // `u32`.
             let tag = unsafe { *(&raw const tv).cast::<crate::types::VarType>() };
             assert_eq!(tag, tv.v_type());
         }

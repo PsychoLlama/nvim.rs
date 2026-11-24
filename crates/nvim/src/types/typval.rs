@@ -30,13 +30,13 @@ pub const BOOL_VAR_TRUE: BoolVarValue = 1;
 /// explicit `clear` it has always been, which also gives back the funcref's
 /// count on its function.
 ///
-/// `#[repr(C, u32)]` with `None` at zero, because several aggregates that
+/// `#[repr(u32)]` with `None` at zero, because several aggregates that
 /// hold one are born from all-zero bytes and never write the field:
 /// `Buffer` from `Box::new_zeroed`, `QfList` and a channel's readers from
-/// `mem::zeroed`, `'complete'`'s per-source array from `xcalloc`. The
-/// discriminant may not move into a niche, or "no callback" stops being
-/// what those zeroes mean.
-#[repr(C, u32)]
+/// `mem::zeroed`, `'complete'`'s per-source array from `xcalloc`. A
+/// primitive representation keeps the discriminant a `u32` of its own at
+/// offset zero, out of any niche, so all-zero bytes are `None`.
+#[repr(u32)]
 #[derive(Debug)]
 pub enum Callback {
     None = 0,
@@ -538,7 +538,6 @@ pub struct Partial {
 }
 pub type ScriptId = ::core::ffi::c_int;
 #[derive(Copy, Clone, PartialEq, Debug)]
-#[repr(C)]
 pub struct ScriptCtx {
     pub sc_sid: ScriptId,
     pub sc_seq: ::core::ffi::c_int,
@@ -585,8 +584,7 @@ impl Default for ScriptCtx {
 /// A Vimscript value.
 ///
 /// Eleven kinds, one payload each, sixteen bytes: the tag and, beside it, the
-/// eight the payload needs.  `#[repr(C, u32)]` because that layout is the one
-/// the C had -- a `v_type` word followed by a union -- and because it lets the
+/// eight the payload needs.  `#[repr(u32)]` because it lets the
 /// discriminants *be* the [`VarType`] codes, so `type()`, the error tables and
 /// the `tv_check_for_*_arg` family keep reading a number rather than matching
 /// eleven arms.  [`v_type`](Self::v_type) is that number.
@@ -616,7 +614,7 @@ impl Default for ScriptCtx {
 /// from doing it a second time.
 ///
 /// [`ManuallyDrop`]: ::core::mem::ManuallyDrop
-#[repr(C, u32)]
+#[repr(u32)]
 #[derive(Debug)]
 pub enum TypVal {
     /// No value: what a fresh slot holds, and what one is left as after being
