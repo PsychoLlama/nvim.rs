@@ -369,10 +369,9 @@ end
 cimport_immediate('./test/unit/fixtures/posix.h')
 
 -- System preamble: every system header any spec imports, loaded up front in
--- a fixed order. The generated chunk references (but must not define, see
--- tools/ffigen/deny.txt) type tags these headers own, so they are cdef'd
--- first, then the chunk itself -- all in the parent process, pre-fork, so
--- every itp child inherits the full namespace.
+-- a fixed order, then the generated chunk (which must not define a tag these
+-- headers own) -- all in the parent process, pre-fork, so every itp child
+-- inherits the full namespace.
 cimport_immediate(
   paths.test_source_path .. '/test/includes/pre/fcntl.h',
   paths.test_source_path .. '/test/includes/pre/sys/stat.h',

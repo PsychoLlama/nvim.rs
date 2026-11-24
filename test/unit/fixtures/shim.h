@@ -8,11 +8,9 @@
 // The chunk assumes only LuaJIT's built-in types, and glibc headers must
 // stay out of the translation unit (the chunk carries its own struct
 // _IO_FILE, and macros like BUFSIZ would mangle same-named constants). So
-// this header supplies: the built-in types, bodies for the
-// tools/ffigen/deny.txt tags (defined by the harness's system imports at
-// spec time; this TU is freestanding, so the stable glibc x86-64 layouts
-// are inlined), the libc prototypes the fixtures call, and the upstream
-// macros/static-inline helpers that never had an exported symbol.
+// this header supplies: the built-in types, the libc prototypes the
+// fixtures call, and the upstream macros/static-inline helpers that never
+// had an exported symbol.
 #ifndef NVIM_TEST_UNIT_FIXTURES_SHIM_H
 #define NVIM_TEST_UNIT_FIXTURES_SHIM_H
 
@@ -36,56 +34,6 @@ typedef __builtin_va_list va_list;
 #define true 1
 #define false 0
 #define NULL ((void *)0)
-
-// Bodies of the tools/ffigen/deny.txt tags.
-struct iovec {
-  void *iov_base;
-  size_t iov_len;
-};
-struct __pthread_internal_list {
-  struct __pthread_internal_list *__prev;
-  struct __pthread_internal_list *__next;
-};
-struct __pthread_mutex_s {
-  int __lock;
-  unsigned int __count;
-  int __owner;
-  unsigned int __nusers;
-  int __kind;
-  short __spins;
-  short __elision;
-  struct __pthread_internal_list __list;
-};
-struct termios {
-  unsigned int c_iflag;
-  unsigned int c_oflag;
-  unsigned int c_cflag;
-  unsigned int c_lflag;
-  unsigned char c_line;
-  unsigned char c_cc[32];
-  unsigned int c_ispeed;
-  unsigned int c_ospeed;
-};
-struct winsize {
-  unsigned short ws_row;
-  unsigned short ws_col;
-  unsigned short ws_xpixel;
-  unsigned short ws_ypixel;
-};
-struct __pthread_rwlock_arch_t {
-  unsigned int __readers;
-  unsigned int __writers;
-  unsigned int __wrphase_futex;
-  unsigned int __writers_futex;
-  unsigned int __pad3;
-  unsigned int __pad4;
-  int __cur_writer;
-  int __shared;
-  signed char __rwelision;
-  unsigned char __pad1[7];
-  unsigned long __pad2;
-  unsigned int __flags;
-};
 
 // `FILE` is opaque here -- the fixtures only ever pass pointers around. It
 // used to arrive with the chunk, back when a crate type still spelled it out

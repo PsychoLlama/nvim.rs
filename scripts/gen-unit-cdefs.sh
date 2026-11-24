@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Generate the unit tests' LuaJIT ffi.cdef chunk from the Rust crate.
 #
-# tools/ffigen parses crates/nvim/src/**/*.rs and emits a C declaration chunk.
+# tools/ffigen parses crates/nvim/src/**/*.rs and emits a C declaration chunk
+# holding what the unit specs and C fixtures name (closed over the types those
+# declarations reach), so a crate change outside that reach leaves it alone.
 # test/unit/testutil.lua cdefs it and the C fixture helpers compile against it
 # (test/unit/fixtures/shim.h), so the declarations the specs run against always
 # describe the code actually built.
@@ -16,7 +18,7 @@
 #   (no args)   regenerate and write both the golden and the harness copy.
 #               `just ffigen`; part of `just refresh`.
 #   --if-stale  the harness's mode: refresh target/ffi/unit-cdefs.h only when
-#               it is older than the crate, the tool or the deny list. Never
+#               it is older than the crate, the tool or the readers. Never
 #               writes the golden — a suite run must not silently absorb drift,
 #               that is what gives --check its teeth.
 #   --check     regenerate into a scratch file and diff it against the golden,
@@ -39,11 +41,21 @@ if [[ -n ${exit_usage:-} || $# -gt 1 ]]; then
   exit 2
 fi
 
+# The chunk's readers, whose identifiers root it: the specs, the harness
+# (testutil.lua initialises the editor through exported fns) and the C
+# fixtures. test/unit/viml is a functional spec's helper, not a reader.
+readers=("$root"/test/unit/*_spec.lua "$root"/test/unit/testutil.lua
+  "$root"/test/unit/fixtures/*.[ch])
+uses=()
+for f in "${readers[@]}"; do
+  uses+=(--uses "$f")
+done
+
 if [[ $mode == if-stale && -f $out ]]; then
   newer=$(find "$root/crates/nvim" "$root/tools/ffigen/src" \
     -name '*.rs' -newer "$out" -print -quit 2>/dev/null)
-  deny_newer=$(find "$root/tools/ffigen/deny.txt" -newer "$out" -print -quit)
-  if [[ -z $newer && -z $deny_newer ]]; then
+  readers_newer=$(find "${readers[@]}" -newer "$out" -print -quit)
+  if [[ -z $newer && -z $readers_newer ]]; then
     exit 0
   fi
 fi
@@ -67,7 +79,7 @@ echo "generating unit-test cdefs from the crate" >&2
 # they stayed stable across the crates/nvim move and the src/nvim flatten.
 "$root/tools/ffigen/target/release/ffigen" \
   --root "$root/crates/nvim" \
-  --deny "$root/tools/ffigen/deny.txt" \
+  "${uses[@]}" \
   --out "$dest" \
   2> >(grep -Ev '^ffigen: (parsing|[0-9]+ type names|emitted)' >&2 || true)
 

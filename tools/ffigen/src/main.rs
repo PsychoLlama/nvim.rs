@@ -2,23 +2,26 @@
 // the Rust crate itself, replacing the preprocessed v0.12.4 C headers.
 //
 // Reads the transpiled crate (src/**/*.rs), collects
-//   - #[repr(C)] structs/unions and type aliases (canonical copies preferred
-//     from src/types/ and the TYPE_HOMES files that left it),
+//   - #[repr(C)] structs/unions and type aliases,
 //   - #[no_mangle] fns and statics (the linkable ABI surface),
 //   - integer `pub const`s (c2rust's rendering of C enums and #defines),
 // and emits one C-syntax declaration chunk (`unit-cdefs.h`) that ffi.cdef can
-// digest. The chunk is also compiled as C into unit-fixtures.so (see
+// digest. The chunk holds only what the unit suite names (`--uses`: the specs
+// and C fixtures, scanned for identifiers) and the types those declarations
+// reach, so an editor type the suite never touches is free to move or change
+// without regenerating it. The chunk is also compiled as C into unit-fixtures.so (see
 // test/unit/fixtures/shim.h), so a chunk that stops being valid C fails the
 // test build immediately.
 //
-// Names on the deny list (types/constants already defined by the system
-// preamble headers the harness cdefs first: uv.h, string.h, ...) are
-// referenced but never defined here.
+// The chunk is cdef'd after the harness's system preamble (string.h,
+// unistd.h, ...), and LuaJIT refuses a second definition of a struct tag, so
+// a crate mirror of a libc type must stay out of the suite's reach; today
+// nothing it names gets near one.
 //
 // Build with the repo dev shell (Cargo.lock is v3 on purpose: the pinned
 // toolchain's cargo must be able to build this at test time).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -41,7 +44,6 @@ struct Def {
     file: String, // repo-relative
     kind: Kind,
     align: Option<u64>,
-    canonical: bool, // lives under src/types/ or in a TYPE_HOMES file
 }
 
 #[derive(Clone, Debug)]
@@ -83,7 +85,6 @@ struct World {
     consts: HashMap<String, Vec<Konst>>,
     fns: Vec<ExportFn>,
     statics: Vec<ExportStatic>,
-    deny: HashSet<String>,
     // type name -> files whose #[no_mangle] fn/static signatures mention it
     sig_files: HashMap<String, BTreeSet<String>>,
 }
@@ -128,6 +129,66 @@ fn type_names(ty: &syn::Type, out: &mut BTreeSet<String>) {
         syn::Type::Group(g) => type_names(&g.elem, out),
         _ => {}
     }
+}
+
+/// `text` without its line comments (opened by `marker` outside a quoted
+/// string) and C block comments. A Lua `--[[ ]]` comment loses only its
+/// first line, which at worst roots a declaration nobody reads.
+fn strip_comments(text: &str, marker: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    let mut quote: Option<char> = None;
+    while let Some(c) = rest.chars().next() {
+        if let Some(q) = quote {
+            if c == '\\' {
+                let n = rest.chars().take(2).map(char::len_utf8).sum();
+                out.push_str(&rest[..n]);
+                rest = &rest[n..];
+                continue;
+            }
+            if c == q || c == '\n' {
+                quote = None;
+            }
+        } else if rest.starts_with(marker) {
+            rest = &rest[rest.find('\n').unwrap_or(rest.len())..];
+            continue;
+        } else if marker == "//" && rest.starts_with("/*") {
+            rest = rest[2..].find("*/").map_or("", |end| &rest[2 + end + 2..]);
+            out.push(' ');
+            continue;
+        } else if c == '\'' || c == '"' {
+            quote = Some(c);
+        }
+        out.push(c);
+        rest = &rest[c.len_utf8()..];
+    }
+    out
+}
+
+/// The C/Lua identifiers in `text`: maximal `[A-Za-z_][A-Za-z0-9_]*` runs
+/// not preceded by a digit (so `0x1b` yields no `x1b`).
+fn identifiers(text: &str) -> impl Iterator<Item = String> + '_ {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    std::iter::from_fn(move || {
+        while i < bytes.len() {
+            let b = bytes[i];
+            if b.is_ascii_digit() {
+                while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                    i += 1;
+                }
+            } else if b.is_ascii_alphabetic() || b == b'_' {
+                let start = i;
+                while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                    i += 1;
+                }
+                return Some(text[start..i].to_string());
+            } else {
+                i += 1;
+            }
+        }
+        None
+    })
 }
 
 // ------------------------------------------------------------ collection
@@ -612,113 +673,13 @@ fn is_marker(ty: &syn::Type) -> bool {
         .is_some_and(|s| s.ident == "PhantomData" || s.ident == "PhantomPinned")
 }
 
-/// The canonical type files that left `src/types/` for the module owning
-/// them. Each is read exactly as a `src/types/` file: its types are closure
-/// roots, and its copy of a name defined twice wins. A `file::Name` row
-/// claims that one type only, for a type that joined a file holding others
-/// the chunk never rendered. A row naming a file or type that no longer
-/// exists is an error, so the list cannot outlive a move.
-const TYPE_HOMES: &[&str] = &[
-    "src/api/keysets.rs",
-    "src/arglist/mod.rs::ArgListId",
-    "src/autocmd/defs.rs",
-    "src/channel/defs.rs",
-    "src/cmdexpand/defs.rs",
-    "src/cmdhist/mod.rs::HistoryType",
-    "src/cursor_shape.rs::CursorShape",
-    "src/decoration/defs.rs",
-    "src/edit/mod.rs::InscharFlags",
-    "src/eval/funcs/builtin.rs",
-    "src/eval/typval/dictitem.rs::DictKey",
-    "src/eval/userfunc/mod.rs::ArgvFunc",
-    "src/eval/userfunc/mod.rs::FcId",
-    "src/event/libuv_proc.rs",
-    "src/event/objects.rs",
-    "src/event/queue.rs",
-    "src/event/uv.rs",
-    "src/event_queue/list.rs",
-    "src/ex_eval/defs.rs",
-    "src/ex_getln/state.rs::CmdRedraw",
-    "src/extmark/mod.rs::BCount",
-    "src/extmark/mod.rs::ExtmarkOp",
-    "src/extmark/mod.rs::ExtmarkType",
-    "src/extmark/mod.rs::UndoObjectType",
-    "src/fileio/mod.rs::FileOffset",
-    "src/getchar/state.rs::FlushBuffers",
-    "src/hashtab.rs::HashValue",
-    "src/highlight/mod.rs::HlKind",
-    "src/highlight/mod.rs::Hlf",
-    "src/highlight/mod.rs::RgbValue",
-    "src/keycodes/mod.rs::KeyExtra",
-    "src/lua/abi.rs",
-    "src/mark/defs.rs",
-    "src/marktree/mod.rs::MetaIndex",
-    "src/mbyte/mod.rs::CharInfo",
-    "src/mbyte/mod.rs::ConvFlags",
-    "src/mbyte/mod.rs::GraphemeState",
-    "src/mbyte/mod.rs::StrCharInfo",
-    "src/memfile/mod.rs::BlockNr",
-    "src/memline/state.rs",
-    "src/mpack/typedefs.rs",
-    "src/msgpack_rpc/handler.rs",
-    "src/normal/defs.rs",
-    "src/ops/mod.rs::OpType",
-    "src/option/defs.rs",
-    "src/optionstr/mod.rs::CharsOption",
-    "src/os/fs/meta.rs::VimAcl",
-    "src/os/libc.rs",
-    "src/os/pty_proc_unix/mod.rs",
-    "src/path/compare.rs::FileComparison",
-    "src/plines/mod.rs::CharsizeKind",
-    "src/quickfix/model.rs",
-    "src/regexp/mod.rs::Magic",
-    "src/regexp/mod.rs::OptMagic",
-    "src/register/defs.rs",
-    "src/runtime/defs.rs",
-    "src/spell/mod.rs::SalFirst",
-    "src/spell/mod.rs::SpellAddType",
-    "src/spell/mod.rs::SpellIdx",
-    "src/spell/mod.rs::SpellMoveType",
-    "src/statusline/defs.rs",
-    "src/terminal/state.rs",
-    "src/tui/state.rs",
-    "src/tui/terminfo/entry.rs",
-    "src/tui/termkey/keyinfo.rs",
-    "src/tui/termkey/types.rs",
-    "src/ui/state.rs::LineFlags",
-    "src/ui/state.rs::UIExtension",
-    "src/utf8proc/mod.rs::utf8proc_int32_t",
-    "src/viml/parser/expressions/mod.rs::ExprASTNodeType",
-    "src/viml/parser/expressions/mod.rs::ExprAssignmentType",
-    "src/viml/parser/expressions/mod.rs::ExprCaseCompareStrategy",
-    "src/viml/parser/expressions/mod.rs::ExprComparisonType",
-    "src/viml/parser/expressions/mod.rs::ExprOptScope",
-    "src/viml/parser/expressions/mod.rs::ExprParserFlags",
-    "src/viml/parser/expressions/mod.rs::ExprVarScope",
-    "src/vterm/internal.rs",
-    "src/vterm/keycodes.rs",
-    "src/vterm/types.rs",
-];
-
-/// Whether `name`, defined in `rel`, is a canonical copy: under `src/types/`
-/// or claimed by a `TYPE_HOMES` row.
-fn is_canonical(rel: &str, name: &str) -> bool {
-    rel.starts_with("src/types/")
-        || TYPE_HOMES.iter().any(|home| match home.split_once("::") {
-            Some((file, ty)) => file == rel && ty == name,
-            None => *home == rel,
-        })
-}
-
 fn collect_file(world: &mut World, rel: &str, ast: syn::File) {
     let bitfields = bitfield_invocations(&ast);
     let add = |world: &mut World, name: String, kind: Kind, align: Option<u64>| {
-        let canonical = is_canonical(rel, &name);
         let def = Def {
             file: rel.to_string(),
             kind,
             align,
-            canonical,
         };
         world.by_name.entry(name).or_default().push(def);
     };
@@ -1015,7 +976,6 @@ struct Emitter<'w> {
     /// Types left incomplete because a field had no C image: a by-value
     /// field of one cannot render either.
     incomplete: BTreeSet<String>,
-    denied_refs: BTreeSet<String>,
     notes: Vec<String>,
 }
 
@@ -1028,7 +988,6 @@ impl<'w> Emitter<'w> {
             queue: Vec::new(),
             unknown: BTreeSet::new(),
             incomplete: BTreeSet::new(),
-            denied_refs: BTreeSet::new(),
             notes: Vec::new(),
         }
     }
@@ -1039,16 +998,11 @@ impl<'w> Emitter<'w> {
             .iter()
             .filter(|d| !matches!(d.kind, Kind::Opaque))
             .collect();
-        // 1. canonical copy (types/, TYPE_HOMES; 5a may have left only an opaque
-        //    declaration there; a concrete def elsewhere then wins)
-        if let Some(d) = concrete.iter().find(|d| d.canonical) {
-            return Some((*d).clone());
-        }
-        // 2. the referencing file's own definition
+        // 1. the referencing file's own definition
         if let Some(d) = concrete.iter().find(|d| d.file == file) {
             return Some((*d).clone());
         }
-        // 3. the copy owned by the module whose exported fns/statics carry
+        // 2. the copy owned by the module whose exported fns/statics carry
         //    this type in their signatures (same-named private types exist:
         //    lmpack's Unpacker vs msgpack_rpc's)
         if let Some(files) = self.world.sig_files.get(name) {
@@ -1056,6 +1010,20 @@ impl<'w> Emitter<'w> {
                 return Some((*d).clone());
             }
         }
+        // Nothing says which of several layouts a reader means: refuse to
+        // guess, so a same-named type landing elsewhere in the crate cannot
+        // silently swap the one the specs and fixtures were written against.
+        assert!(
+            concrete.len() <= 1,
+            "ffigen: {name} has {} C-visible definitions ({}) and neither the \
+             referencing file nor an export's signature picks one; rename one",
+            concrete.len(),
+            concrete
+                .iter()
+                .map(|d| d.file.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
         match concrete.first() {
             Some(d) => Some((*d).clone()),
             None => defs.first().cloned(),
@@ -1063,11 +1031,6 @@ impl<'w> Emitter<'w> {
     }
 
     fn want(&mut self, file: &str, name: &str) {
-        if self.world.deny.contains(name) {
-            // referenced but system-owned: emit a compat typedef to the tag
-            self.denied_refs.insert(name.to_string());
-            return;
-        }
         if self.emitted.contains_key(name) || self.opaque.contains(name) || prim(name).is_some() {
             return;
         }
@@ -1385,10 +1348,7 @@ impl<'w> Emitter<'w> {
 
     fn run(&mut self) {
         while let Some((file, name)) = self.queue.pop() {
-            if self.emitted.contains_key(&name)
-                || self.opaque.contains(&name)
-                || self.world.deny.contains(&name)
-            {
+            if self.emitted.contains_key(&name) || self.opaque.contains(&name) {
                 continue;
             }
             match self.resolve(&file, &name) {
@@ -1490,60 +1450,47 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let mut root = PathBuf::from(".");
     let mut out_path = None;
-    let mut deny_paths: Vec<PathBuf> = Vec::new();
-    let mut extra_roots_path: Option<PathBuf> = None;
+    let mut use_paths: Vec<PathBuf> = Vec::new();
     while let Some(a) = args.next() {
         match a.as_str() {
             "--root" => root = PathBuf::from(args.next().expect("--root DIR")),
             "--out" => out_path = Some(PathBuf::from(args.next().expect("--out FILE"))),
-            "--deny" => deny_paths.push(PathBuf::from(args.next().expect("--deny FILE"))),
-            "--extra-roots" => {
-                extra_roots_path = Some(PathBuf::from(args.next().expect("--extra-roots FILE")))
-            }
+            "--uses" => use_paths.push(PathBuf::from(args.next().expect("--uses FILE"))),
             other => panic!("unknown arg: {}", other),
         }
     }
     let out_path = out_path.expect("--out is required");
-
-    let mut world = World::default();
-    for p in &deny_paths {
-        let text = std::fs::read_to_string(p).expect("deny file");
-        for line in text.lines() {
-            let line = line.trim();
-            if !line.is_empty() && !line.starts_with('#') {
-                world.deny.insert(line.to_string());
-            }
-        }
+    assert!(
+        !use_paths.is_empty(),
+        "--uses is required: the chunk is rooted at what its readers name"
+    );
+    // Every identifier the unit suite's code spells (strings included, as
+    // `ffi.new('VTermPos')` names its type in one): the roots. Reserved
+    // `__` names belong to the compiler and libc, as with the constants.
+    let mut used: BTreeSet<String> = BTreeSet::new();
+    for p in &use_paths {
+        let text = std::fs::read_to_string(p)
+            .unwrap_or_else(|e| panic!("ffigen: --uses {}: {e}", p.display()));
+        let lua = p.extension().is_some_and(|e| e == "lua");
+        let code = strip_comments(&text, if lua { "--" } else { "//" });
+        used.extend(identifiers(&code).filter(|id| !id.starts_with("__")));
     }
 
+    let mut world = World::default();
+
     eprintln!("ffigen: parsing crate under {} ...", root.display());
-    let mut homes_seen = BTreeSet::new();
     for path in discover(&root) {
         let rel = path
             .strip_prefix(&root)
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/");
-        homes_seen.insert(rel.clone());
         let text = std::fs::read_to_string(&path).expect("read source");
         let ast = match syn::parse_file(&text) {
             Ok(a) => a,
             Err(e) => panic!("ffigen: parse error in {}: {}", rel, e),
         };
         collect_file(&mut world, &rel, ast);
-    }
-    for home in TYPE_HOMES {
-        let found = match home.split_once("::") {
-            Some((file, ty)) => world
-                .by_name
-                .get(ty)
-                .is_some_and(|defs| defs.iter().any(|d| d.file == file)),
-            None => homes_seen.contains(*home),
-        };
-        assert!(
-            found,
-            "ffigen: TYPE_HOMES names {home}, which is not in the crate"
-        );
     }
     for f in &world.fns {
         let mut names = BTreeSet::new();
@@ -1575,24 +1522,12 @@ fn main() {
         world.statics.len()
     );
 
-    // ---- closure roots: every canonical type + everything exports touch
+    // ---- closure roots: the types the unit suite names; the exported fns
+    // and statics it names add theirs below, and each type its fields'.
     let mut emitter = Emitter::new(&world);
-    for (name, defs) in &world.by_name {
-        if let Some(d) = defs.iter().find(|d| d.canonical) {
-            // os/libc.rs mirrors glibc; the system preamble owns that
-            // domain, so its types are emitted only if the closure pulls
-            // them in (and not denied).
-            if !world.deny.contains(name) && d.file != "src/os/libc.rs" {
-                emitter.queue.push((d.file.clone(), name.clone()));
-            }
-        }
-    }
-    if let Some(p) = &extra_roots_path {
-        for line in std::fs::read_to_string(p).expect("extra roots").lines() {
-            let line = line.trim();
-            if !line.is_empty() && !line.starts_with('#') {
-                emitter.queue.push((String::new(), line.to_string()));
-            }
+    for name in &used {
+        if world.by_name.contains_key(name) {
+            emitter.want("", name);
         }
     }
     emitter.run();
@@ -1600,7 +1535,7 @@ fn main() {
     // fn signatures + statics enqueue more types
     let mut protos: Vec<(String, String)> = Vec::new();
     let mut skipped_fns = Vec::new();
-    for f in &world.fns {
+    for f in world.fns.iter().filter(|f| used.contains(&f.name)) {
         let mut args = Vec::new();
         let mut ok = true;
         for input in &f.sig.inputs {
@@ -1644,7 +1579,7 @@ fn main() {
             other => other,
         }
     }
-    for s in &world.statics {
+    for s in world.statics.iter().filter(|s| used.contains(&s.name)) {
         // GlobalCell/RawStatic wrap mutable editor state; a plain Rust
         // static is immutable, i.e. `const` on the C side.
         let cell = match &s.ty {
@@ -1673,7 +1608,7 @@ fn main() {
     for (name, copies) in &world.consts {
         // reserved names are compiler/libc macros (__INT_MAX__, ...): the C
         // preprocessor would mangle them, and no spec can want them
-        if name.starts_with("__") || world.deny.contains(name) {
+        if !used.contains(name) || name.starts_with("__") {
             continue;
         }
         let mut vals = BTreeSet::new();
@@ -1758,12 +1693,6 @@ fn main() {
     for name in &emitter.unknown {
         let c = c_name(name);
         writeln!(chunk, "typedef struct {} {};", c, c).unwrap();
-    }
-    // Denied names are defined by the system preamble the harness cdefs
-    // before this chunk; give the tag a same-named typedef so field/proto
-    // references by bare name resolve.
-    for name in emitter.denied_refs.clone() {
-        writeln!(chunk, "typedef struct {} {};", name, name).unwrap();
     }
     for name in &order {
         let def = &emitted[name];
