@@ -98,7 +98,7 @@ pub fn signal_teardown() {
     WATCHERS.with(|watchers| watchers.iter().for_each(SignalWatcher::close));
 }
 
-/// Start delivering every watched signal to [`on_signal`].
+/// Start delivering every watched signal to [`handle_signal`].
 pub fn signal_start() {
     WATCHERS.with(|watchers| {
         for (watcher, &signum) in watchers.iter().zip(&WATCHED) {
