@@ -15,7 +15,7 @@ unsafe code anywhere off this list (see "How the ratchet enforces it").
 reader who is not a specialist: what each row holds, the contract that keeps
 it sound, and what would retire it.
 
-Today: **1,506** unchecked statements inside the perimeter (66 files),
+Today: **1,500** unchecked statements inside the perimeter (66 files),
 **0** outside it (0 files, of 1,360 measured). It was 138,877 when this
 file was written, at the end of phase 23's slice 15 — in _lines_, which is what
 this metric counted until phase 31 changed the unit to statements.
@@ -173,15 +173,14 @@ that needs `unsafe` — so a few appear there; they are listed too.
 
 **Allocation.**
 
-- The `xmalloc` family (`manual_alloc`, 26, all on the perimeter): the family
-  itself and the owned strings (`memory/` 17); Lists and Dictionaries, which
-  stay `xcalloc`'d because the unit suite's allocation log pins that family
-  (`eval/typval/handle.rs` 4); buffers tree-sitter frees
+- The `xmalloc` family (`manual_alloc`, 14, all on the perimeter): the family
+  itself and the owned strings (`memory/` 12); buffers tree-sitter frees
   (`lua/treesitter/` 2).
 - `Box::from_raw`/`Box::into_raw` (13 each): a box parked behind an address —
   libuv handle data (`event/` 7 and 5), the window block (`winlayer/graph.rs`,
-  `ParkedWindow`), the terminal (`winlayer/terminal.rs`), Blobs and partials
-  (`eval/typval/handle.rs` 3 and 1), Lua userdata (`lua/stack/userdata.rs`),
+  `ParkedWindow`), the terminal (`winlayer/terminal.rs`), the four value objects
+  (`eval/typval/handle.rs`: leaked at the allocation, taken back at the
+  last release, 4), Lua userdata (`lua/stack/userdata.rs`),
   the `VTerm` a C client is handed (`vterm/abi/mod.rs`), the allocator. One
   `into_raw` sits off the perimeter (`types/api_string.rs`): `into_raw` is safe, and it
   hands its box to a perimeter file that takes it back.

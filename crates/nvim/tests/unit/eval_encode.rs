@@ -11,7 +11,7 @@ use neovim::eval::encode::encode_list_write;
 use neovim::eval::typval::{DictRef, list_first, tv_clear, tv_list_alloc};
 use neovim::types::{List, TypVal};
 
-use crate::support::alloc::{self, AllocLog};
+use crate::support::alloc::AllocLog;
 use crate::support::tv::{self, Payload, Tv, ValuePtr};
 
 // -------------------------------------------------------------- encode
@@ -156,48 +156,39 @@ unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
 
 /// `describe('tv_clear()')`, spec `tv_clear_spec.lua`: four shapes where
 /// the same container is reached more than once, and clearing the outer
-/// list has to release it exactly once.
+/// list has to release it exactly once per holder.
+///
+/// The spec watched the shared container's free in the allocation log; a
+/// container is a `Box` now, which the log does not record, so the case
+/// holds a reference of its own across the clear instead: the clear gives
+/// back every holder's and leaves exactly that one.
 #[test]
 fn clearing_releases_a_shared_container_exactly_once() {
     let log = AllocLog::start();
     // SAFETY: each structure is this case's own and is cleared.
     unsafe {
-        // `[&l [1], *l, *l]`
-        let mut tv = sharing(3, &Tv::List(vec![Tv::Float(1.0)]));
-        let outer = tv.list();
-        let inner = list_first(outer.as_mut()).unwrap().li_tv.list();
-        // Two lists and nothing per item: the items are the lists' own
-        // arrays, whose growth this log does not see.
-        log.check(&[alloc::list(outer), alloc::list(inner)]);
-        assert_eq!(tv::lrefs(inner), 3);
-        tv_clear(&mut tv);
-        log.check(&[alloc::freed(inner), alloc::freed(outer)]);
+        // `[&l [1], *l, *l]` and `[&l [], *l, *l]`
+        for inner in [Tv::List(vec![Tv::Float(1.0)]), Tv::List(vec![])] {
+            let mut tv = sharing(3, &inner);
+            let inner = list_first(tv.list().as_mut()).unwrap().li_tv.list();
+            let held = tv::handle(inner);
+            assert_eq!(held.refcount(), 4);
+            tv_clear(&mut tv);
+            assert_eq!(held.refcount(), 1);
+            // Nothing per item: the items are the lists' own arrays, whose
+            // growth this log does not see.
+            log.check(&[]);
+        }
 
-        // `[&l [], *l, *l]`
-        let mut tv = sharing(3, &Tv::List(vec![]));
-        let outer = tv.list();
-        let inner = list_first(outer.as_mut()).unwrap().li_tv.list();
-        log.check(&[alloc::list(outer), alloc::list(inner)]);
-        assert_eq!(tv::lrefs(inner), 3);
-        tv_clear(&mut tv);
-        log.check(&[alloc::freed(inner), alloc::freed(outer)]);
-
-        // `[&d {}, *d]`
-        let mut tv = sharing(2, &Tv::Dict(vec![]));
-        let outer = tv.list();
-        let inner = list_first(outer.as_mut()).unwrap().li_tv.dict();
-        log.check(&[alloc::list(outer), alloc::dict(inner)]);
-        assert_eq!(tv::drefs(inner), 2);
-        tv_clear(&mut tv);
-        log.check(&[alloc::freed(inner), alloc::freed(outer)]);
-
-        // `[&d {a: 1}, *d]`
-        let mut tv = sharing(2, &Tv::dict([("a", Tv::Float(1.0))]));
-        let outer = tv.list();
-        let inner = list_first(outer.as_mut()).unwrap().li_tv.dict();
-        log.check(&[alloc::list(outer), alloc::dict(inner)]);
-        assert_eq!(tv::drefs(inner), 2);
-        tv_clear(&mut tv);
-        log.check(&[alloc::freed(inner), alloc::freed(outer)]);
+        // `[&d {}, *d]` and `[&d {a: 1}, *d]`
+        for inner in [Tv::Dict(vec![]), Tv::dict([("a", Tv::Float(1.0))])] {
+            let mut tv = sharing(2, &inner);
+            let inner = list_first(tv.list().as_mut()).unwrap().li_tv.dict();
+            let held = DictRef::retained(tv::dbox(inner)).expect("a live dict");
+            assert_eq!(held.refcount(), 3);
+            tv_clear(&mut tv);
+            assert_eq!(held.refcount(), 1);
+            log.check(&[]);
+        }
     }
 }

@@ -5,7 +5,7 @@
 //! through [`crate::support::alloc::AllocLog`]. What they no longer say is
 //! *per item*: a `List` owns its items in a `Vec<ListItem>`, whose growth
 //! goes through Rust's global allocator, which the log deliberately does
-//! not see. So the sequence a case asserts is the list's own `xcalloc` plus
+//! not see, nor the list itself (a `Box`). So the sequence a case asserts is
 //! the allocations of the *values* the items hold — and a case whose whole
 //! point was the item allocation ("appending a number costs only the item")
 //! now pins the contents, the reference counts and what gets freed instead.
@@ -141,7 +141,7 @@ fn removing_an_item_answers_the_index_that_followed_it() {
     // SAFETY: the list is this case's own and is freed at the end.
     unsafe {
         let l = tv::new_list(&floats(1..=7));
-        log.check(&[alloc::list(l)]);
+        log.check(&[]);
 
         // From the front, from the back, and from the middle.
         assert_eq!(tv::handle(l).remove_at(0), Some(0));
@@ -160,7 +160,7 @@ fn removing_an_item_answers_the_index_that_followed_it() {
         log.check(&[]);
 
         drop(ListRef::owning(tv::lbox(l)));
-        log.check(&[alloc::freed(l)]);
+        log.check(&[]);
     }
 }
 
@@ -177,7 +177,7 @@ fn removing_an_item_frees_its_value() {
             .map(|&li| (*li).li_tv.string())
             .collect();
 
-        let mut expected = vec![alloc::list(l)];
+        let mut expected = vec![];
         expected.extend(strings.iter().map(|&s| alloc::string(s, 1)));
         log.check(&expected);
 
@@ -190,7 +190,7 @@ fn removing_an_item_frees_its_value() {
         }
 
         drop(ListRef::owning(tv::lbox(l)));
-        log.check(&[alloc::freed(strings.remove(0)), alloc::freed(l)]);
+        log.check(&[alloc::freed(strings.remove(0))]);
     }
 }
 
@@ -212,7 +212,7 @@ fn removing_an_item_moves_the_watchers_standing_on_it() {
         let l = tv::new_list(&floats(1..=7));
         // Three watchers: on the first, the middle and the last item.
         let lws = [watch(l, 0), watch(l, 3), watch(l, 6)];
-        log.check(&[alloc::list(l)]);
+        log.check(&[]);
 
         // The watched middle item goes: its watcher lands on what followed
         // it, the item holding 5, and the last one moves down with 7.
@@ -247,9 +247,9 @@ fn removing_an_item_moves_the_watchers_standing_on_it() {
         assert_eq!(standing(l, &lws), [Some(0), Some(1), None]);
 
         unwatch(l, &lws);
-        // Floats cost nothing, so the list header is all there is to free.
+        // Floats cost nothing, so freeing the list frees nothing the log sees.
         drop(ListRef::owning(tv::lbox(l)));
-        log.check(&[alloc::freed(l)]);
+        log.check(&[]);
     }
 }
 
@@ -311,10 +311,10 @@ fn removing_an_unregistered_watch_is_a_no_op() {
 /// The three lists the free cases are stated over: a list of two scalars,
 /// a list holding a dict, and a list holding a list.
 ///
-/// Each comes with the allocations it is made of, in the order a full free
-/// gives them back: the values the items hold, then the list header. The
-/// items themselves are not on the list — they are slots in the list's own
-/// array, which is Rust's to allocate and give back.
+/// Each comes with the allocations the log sees it made of, in the order a
+/// full free gives them back: the values the items hold. The lists
+/// themselves, a dict or list item and the items' slots are Rust's to
+/// allocate and give back, which the log does not record.
 ///
 /// # Safety
 /// The editor must be up. The caller owns all three.
@@ -324,18 +324,16 @@ unsafe fn three_lists(log: &AllocLog) -> [(*mut List, Vec<*mut std::ffi::c_void>
     unsafe {
         let l1 = tv::new_list(&[f(1.0), Tv::s("abc")]);
         let s1 = list_last(l1.as_mut()).unwrap().li_tv.string();
-        log.check(&[alloc::list(l1), alloc::string(s1, "abc".len())]);
-        out.push((l1, vec![s1.cast(), l1.cast()]));
+        log.check(&[alloc::string(s1, "abc".len())]);
+        out.push((l1, vec![s1.cast()]));
 
         let l2 = tv::new_list(&[Tv::Dict(vec![])]);
-        let d2 = list_first(l2.as_mut()).unwrap().li_tv.dict();
-        log.check(&[alloc::list(l2), alloc::dict(d2)]);
-        out.push((l2, vec![d2.cast(), l2.cast()]));
+        log.check(&[]);
+        out.push((l2, vec![]));
 
         let l3 = tv::new_list(&[Tv::List(vec![])]);
-        let inner = list_first(l3.as_mut()).unwrap().li_tv.list();
-        log.check(&[alloc::list(l3), alloc::list(inner)]);
-        out.push((l3, vec![inner.cast(), l3.cast()]));
+        log.check(&[]);
+        out.push((l3, vec![]));
     }
     out.try_into()
         .unwrap_or_else(|_| unreachable!("three lists"))
@@ -399,7 +397,7 @@ fn freeing_only_the_contents_leaves_the_list() {
         for (l, allocated) in three_lists(&log) {
             list_free_contents(&tv::view(l).unwrap());
             log.check(
-                &allocated[..allocated.len() - 1]
+                &allocated
                     .iter()
                     .map(|&p| alloc::freed(p))
                     .collect::<Vec<_>>(),
@@ -410,7 +408,7 @@ fn freeing_only_the_contents_leaves_the_list() {
                 "the list is still there, and empty"
             );
             list_free_list(tv::lbox(l));
-            log.check(&[alloc::freed(*allocated.last().expect("the list itself"))]);
+            log.check(&[]);
         }
     }
 }
@@ -425,14 +423,15 @@ fn unref_frees_only_at_the_last_reference() {
     unsafe {
         let l = tv::new_list(&[Tv::List(vec![])]);
         let inner = list_first(l.as_mut()).unwrap().li_tv.list();
-        log.check(&[alloc::list(l), alloc::list(inner)]);
+        log.check(&[]);
 
         // A second reference, given back by the first drop below.
         std::mem::forget(tv::handle(l));
         drop(ListRef::owning(tv::lbox(l)));
+        assert_eq!((tv::lrefs(l), tv::lrefs(inner)), (1, 1), "nothing freed");
         log.check(&[]);
         drop(ListRef::owning(tv::lbox(l)));
-        log.check(&[alloc::freed(inner), alloc::freed(l)]);
+        log.check(&[]);
     }
 }
 
@@ -506,7 +505,7 @@ fn moving_a_run_of_items_takes_them_without_freeing_and_moves_the_watchers() {
         log.check(&[]);
 
         drop(ListRef::owning(tv::lbox(tgt)));
-        log.check(&[alloc::freed(tgt)]);
+        log.check(&[]);
         tv_clear(&mut l_tv);
     }
 }
@@ -628,7 +627,7 @@ fn inserting_a_value_puts_it_in_front_of_the_index_named() {
         // array, which Rust grows.
         log.check(&[]);
         tv_clear(&mut l_tv);
-        log.check(&[alloc::freed(l)]);
+        log.check(&[]);
     }
 }
 
@@ -856,7 +855,7 @@ fn appending_an_allocated_string_takes_ownership() {
         tv_clear(&mut l_tv);
         // The two null strings own no block, so releasing them frees
         // nothing at all.
-        log.check(&[alloc::freed(s), alloc::freed(l)]);
+        log.check(&[alloc::freed(s)]);
     }
 }
 
@@ -887,7 +886,7 @@ fn appending_a_number_allocates_nothing() {
         );
 
         tv_clear(&mut l_tv);
-        log.check(&[alloc::freed(l)]);
+        log.check(&[]);
     }
 }
 
@@ -1035,10 +1034,7 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
         assert_eq!(tv::read_list(shallow), copy_corpus());
         // A shallow copy rebuilds one thing: the string, which is not
         // reference counted and so cannot be shared.
-        log.check(&[
-            alloc::list(shallow),
-            alloc::string((*copies[3]).li_tv.string(), "“".len()),
-        ]);
+        log.check(&[alloc::string((*copies[3]).li_tv.string(), "“".len())]);
         drop(ListRef::owning(tv::lbox(shallow)));
         log.clear();
 
@@ -1057,10 +1053,7 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
         let di = tv::first_di(copied_dict);
         let copied_list = (*copies[1]).li_tv.list();
         log.check(&[
-            alloc::list(deep),
-            alloc::dict(copied_dict),
             alloc::string((*di).di_tv.string(), "»".len()),
-            alloc::list(copied_list),
             alloc::string(
                 list_first(copied_list.as_mut()).unwrap().li_tv.string(),
                 "„".len(),
@@ -1119,10 +1112,7 @@ fn a_converting_copy_rewrites_every_string() {
         log.check_net(
             false,
             &[
-                alloc::list(deep),
-                alloc::dict(copied_dict),
                 alloc::string((*di).di_tv.string(), "»".len()),
-                alloc::list(copied_list),
                 alloc::string(
                     list_first(copied_list.as_mut()).unwrap().li_tv.string(),
                     "„".len(),
@@ -1250,7 +1240,7 @@ fn a_list_can_be_extended_with_itself() {
             assert_eq!(tv::read_list(l), Tv::List(expected), "bef {bef:?}");
 
             drop(ListRef::owning(tv::lbox(l)));
-            log.check(&[alloc::freed(d), alloc::freed(l)]);
+            log.check(&[]);
         }
     }
 }
@@ -1388,7 +1378,7 @@ fn concatenating_with_a_null_list_copies_the_other_one() {
             assert_eq!(tv::read(&raw const rettv), Tv::List(vec![f(1.0), DICT]));
             let out = rettv.list();
             assert_eq!(tv::lrefs(out), 1);
-            log.check(&[alloc::list(out)]);
+            log.check(&[]);
             refs += 1;
             assert_eq!(tv::drefs(d), refs);
             results.push(rettv);
@@ -1430,7 +1420,7 @@ fn concatenating_two_lists_copies_both() {
         assert_eq!((tv::lrefs(l1), tv::drefs(d)), (1, 2));
         assert_eq!((tv::lrefs(l2), tv::lrefs(inner)), (1, 2));
         let out = rettv.list();
-        log.check(&[alloc::list(out)]);
+        log.check(&[]);
         assert_eq!(list_len(out.as_ref()), 4);
         assert_eq!(
             tv::read(&raw const rettv),
@@ -1462,7 +1452,7 @@ fn concatenating_a_list_with_itself_copies_it_twice() {
         );
         assert_eq!((tv::lrefs(l), tv::drefs(d)), (1, 3));
         let out = rettv.list();
-        log.check(&[alloc::list(out)]);
+        log.check(&[]);
         assert_eq!(list_len(out.as_ref()), 4);
         assert_eq!(
             tv::read(&raw const rettv),
@@ -1500,7 +1490,7 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
             assert_eq!((tv::lrefs(l), tv::drefs(d)), (1, refs));
             assert_eq!((tv::lrefs(le), tv::lrefs(le2)), (1, 1));
             let out = rettv.list();
-            log.check(&[alloc::list(out)]);
+            log.check(&[]);
             assert_eq!(list_len(out.as_ref()), 2);
             assert_eq!(tv::read(&raw const rettv), Tv::List(vec![f(1.0), DICT]));
             kept.push(rettv);
@@ -1513,7 +1503,7 @@ fn concatenating_empty_lists_allocates_only_the_answer() {
                 Ok(())
             );
             assert_eq!((tv::lrefs(l), tv::drefs(d)), (1, 3));
-            log.check(&[alloc::list(rettv.list())]);
+            log.check(&[]);
             assert_eq!(tv::read(&raw const rettv), Tv::List(vec![]));
             kept.push(rettv);
         }
@@ -1916,14 +1906,11 @@ fn an_items_identity_is_its_index_into_one_list() {
     }
 }
 
-/// The list allocator answers an empty header with one allocation and no
-/// reference — the shape every case above starts from.
-///
 /// `len` is a capacity hint now rather than the ignored argument it was:
 /// a caller that knows how many items are coming reserves them here. The
-/// reservation goes through Rust's global allocator, which this log does
-/// not see, so the assertion is that it does *not* show up — one `xcalloc`
-/// however many items were asked for.
+/// list and the reservation go through Rust's global allocator, which this
+/// log does not see.
+///
 /// A fresh list is empty and owned by **one** reference: the handle
 /// [`tv_list_alloc`] answers.
 ///
@@ -1939,14 +1926,14 @@ fn a_fresh_list_is_empty_and_owned_by_its_handle() {
         for len in [0, 10, -1] {
             let list = tv_list_alloc(len);
             let l = list.value();
-            log.check(&[alloc::list(l)]);
+            log.check(&[]);
             assert_eq!(list_len(l.as_ref()), 0, "len {len}");
             assert!(list_first(l.as_mut()).is_none());
             assert!(list_last(l.as_mut()).is_none());
             assert_eq!(tv::lrefs(l), 1);
             assert_eq!((*l).lv_lock, VarLock::Unlocked);
             drop(list);
-            log.check(&[alloc::freed(l)]);
+            log.check(&[]);
         }
     }
 }

@@ -358,7 +358,7 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
 ### `eval/typval/{handle,store}.rs` — Vimscript value handles
 
 - **What:** `ListRef`, `DictRef`, `BlobRef` and `PartialRef` (`handle.rs`,
-  35, four of them test cases): the `Counted` each points at -- the
+  29, four of them test cases): the `Counted` each points at -- the
   reference count, the borrow word and, for a list or a dictionary, the
   registry slot and the deep copy's memo, beside the value -- reached field
   by field through the handle's pointer, the lending of the value,
@@ -385,10 +385,8 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
   entry type is `store.rs`'s and no slot is reachable outside it: an item
   enters as a box and leaves as one, so a table moved, swapped or replaced
   whole still owns each of its items once.
-- **Retires:** only with a different value model. Two cuts are listed: Lists
-  and Dictionaries in a `Box` (needs the unit suite's allocation log
-  rewritten) and one generic handle type (needs ffigen to emit the C
-  aliases from it).
+- **Retires:** only with a different value model. One cut is listed: one
+  generic handle type over the four.
 
 ### `vterm/abi/` — libvterm's C interface
 
@@ -467,6 +465,6 @@ each is its section in [safe-surface.md](safe-surface.md).
 
 ## Listed for later
 
-Editor-shaped residue on the perimeter, each with what removes it: `handle.rs`'s `Box` allocation and
+Editor-shaped residue on the perimeter, each with what removes it: `handle.rs`'s
 generic handle, and the emulator's
 offset keepers.

@@ -336,18 +336,11 @@ const LIST_RESERVE_MAX: usize = 1 << 16;
 /// nothing.
 pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
     let reserve = usize::try_from(len).map_or(0, |len| len.min(LIST_RESERVE_MAX));
-    // The `xmalloc` family, not a `Box`: the unit cases' allocation log sees
-    // only that family.
-    let raw = unsafe { xcalloc(1, ::core::mem::size_of::<ListBox>()) }.cast::<ListBox>();
-    let at = NonNull::new(raw).expect("xcalloc never answers null");
     let list = List {
         lv_items: Vec::with_capacity(reserve),
         ..List::empty()
     };
-    // Written, not assigned: a zeroed `List` is not a valid one (`Vec` never
-    // holds a null pointer), so there is nothing there to drop.
-    // SAFETY: the allocation just made, of exactly this size.
-    unsafe { raw.write(Counted::new(list, Node::new())) };
+    let at = NonNull::from(Box::leak(Box::new(Counted::new(list, Node::new()))));
     // The collector reaches every live list through its registry.
     node(&at).root.set(root_list(&RootKey(()), at));
     // The reference just seeded is the one this handle owns.
@@ -363,9 +356,9 @@ pub fn tv_list_alloc(len: ptrdiff_t) -> ListRef {
 /// call and named by nothing afterwards.  Anything still in it is
 /// **released**, so no caller may hold a reference to an item.
 pub unsafe fn list_free_list(l: *mut ListBox) {
-    // SAFETY: the caller's promise: a live list, which this moves out of
-    // its allocation; nothing reads the allocation again but the free.
-    let list = unsafe { l.read() };
+    // SAFETY: the caller's promise: a live list -- the `Box`
+    // `tv_list_alloc` leaked -- which nothing names afterwards.
+    let list = unsafe { Box::from_raw(l) };
     // Out of the collector's registry. A list the registry never held
     // carries `RootId::NONE`; the removal is a no-op for it.
     unroot_list(&RootKey(()), list.head.root.get());
@@ -373,11 +366,7 @@ pub unsafe fn list_free_list(l: *mut ListBox) {
     if list.value.lua_table_ref != LUA_NOREF {
         release_luaref(list.value.lua_table_ref);
     }
-    // The item array and the cursor array first, then the header: the
-    // order the allocation log pins.
     drop(list);
-    // SAFETY: the `xcalloc` `tv_list_alloc` made, its contents moved out.
-    unsafe { xfree(l.cast()) };
 }
 
 /// An owning reference to a heap-allocated [`Dict`]: [`ListRef`]'s
@@ -512,9 +501,6 @@ fn free_dict(dict: &DictRef) {
 /// Allocate an empty dictionary, **owned by the handle it answers**; see
 /// [`tv_list_alloc`].
 pub fn tv_dict_alloc() -> DictRef {
-    // The `xmalloc` family, for the allocation log, as a list's.
-    let raw = unsafe { xcalloc(1, ::core::mem::size_of::<DictBox>()) }.cast::<DictBox>();
-    let at = NonNull::new(raw).expect("xcalloc never answers null");
     let dict = Dict {
         dv_lock: VarLock::Unlocked,
         dv_scope: VAR_NO_SCOPE,
@@ -523,9 +509,7 @@ pub fn tv_dict_alloc() -> DictRef {
         watchers: Vec::new(),
         lua_table_ref: LUA_NOREF as LuaRef,
     };
-    // Written, not assigned: zeroed storage is not a valid `Dict`.
-    // SAFETY: the allocation just made, of exactly this size.
-    unsafe { raw.write(Counted::new(dict, Node::new())) };
+    let at = NonNull::from(Box::leak(Box::new(Counted::new(dict, Node::new()))));
     // The collector reaches every live dictionary through its registry.
     node(&at).root.set(root_dict(&RootKey(()), at));
     // The reference just seeded is the one this handle owns.
@@ -540,9 +524,9 @@ pub fn tv_dict_alloc() -> DictRef {
 /// caller must own the collector's registry, which this takes it out of.
 /// `d` is dangling afterwards.
 pub unsafe fn tv_dict_free_dict(d: *mut DictBox) {
-    // SAFETY: the caller's promise: a live dictionary, which this moves out
-    // of its allocation; nothing reads the allocation again but the free.
-    let dict = unsafe { d.read() };
+    // SAFETY: the caller's promise: a live dictionary -- the `Box`
+    // `tv_dict_alloc` leaked -- which nothing names afterwards.
+    let dict = unsafe { Box::from_raw(d) };
     // Out of the collector's registry.
     unroot_dict(&RootKey(()), dict.head.root.get());
     // NLUA_CLEAR_REF
@@ -550,8 +534,6 @@ pub unsafe fn tv_dict_free_dict(d: *mut DictBox) {
         release_luaref(dict.value.lua_table_ref);
     }
     drop(dict);
-    // SAFETY: the `xcalloc` `tv_dict_alloc` made, its contents moved out.
-    unsafe { xfree(d.cast()) };
 }
 
 /// References taken as one and given back as one: what a scope holds on its

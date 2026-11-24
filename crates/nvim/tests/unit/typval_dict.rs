@@ -117,7 +117,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
     unsafe {
         let d = tv::new_dict(&[]);
         assert_eq!(tv::dict_watchers(d), []);
-        log.check(&[alloc::dict(d)]);
+        log.check(&[]);
 
         // `Callback::None` owns nothing.
         let none = tv::build_callback(&Cb::None);
@@ -143,12 +143,10 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
         let Callback::Partial(pt) = &partial else {
             panic!("built a partial callback");
         };
-        let pt_dict = pt.pt_dict.as_ref().map_or(ptr::null_mut(), |d| d.as_ptr());
         let pt_name = pt.pt_name.as_ref().map_or(ptr::null(), |n| n.as_ptr());
         let pt_arg = pt.pt_argv[0].string();
         log.check(&[
             alloc::string(pt_arg, "test".len()),
-            alloc::dict(tv::dval(pt_dict)),
             alloc::string(pt_name, "tr".len()),
         ]);
 
@@ -190,11 +188,7 @@ fn watchers_are_removed_one_at_a_time_with_what_they_hold() {
 
         // The partial: everything it owns, innermost first.
         assert!((*d).watcher_remove(b"te", &registered[2].1));
-        log.check(&[
-            alloc::freed(pt_arg),
-            alloc::freed(pt_dict),
-            alloc::freed(pt_name),
-        ]);
+        log.check(&[alloc::freed(pt_arg), alloc::freed(pt_name)]);
         assert!(!(*d).watcher_remove(b"te", &registered[2].1));
         assert_eq!(tv::dict_watchers(d).len(), 1);
 
@@ -709,7 +703,7 @@ fn adding_an_item_transfers_it_and_refuses_a_duplicate() {
         again.di_tv = Tv::Int(42).build();
 
         let d = tv::new_dict(&[("test", f(10.0))]);
-        log.check(&[alloc::dict(d)]);
+        log.check(&[]);
         assert_eq!(tv::read_dict(d), Tv::dict([("test", f(10.0))]));
         log.clear();
 
@@ -862,7 +856,7 @@ fn clearing_a_dict_frees_its_items() {
     // SAFETY: the dict is this case's own.
     unsafe {
         let d = tv::dval(tv_dict_alloc().into_raw());
-        log.check(&[alloc::dict(d)]);
+        log.check(&[]);
         assert_eq!(tv::read_dict(d), Tv::Dict(vec![]));
 
         // Clearing an empty dict is a no-op.
@@ -900,9 +894,9 @@ fn extending_a_dict_keeps_forces_or_reports() {
         };
 
         let d1 = tv::dval(tv_dict_alloc().into_raw());
-        log.check(&[alloc::dict(d1)]);
+        log.check(&[]);
         let d2 = tv::dval(tv_dict_alloc().into_raw());
-        log.check(&[alloc::dict(d2)]);
+        log.check(&[]);
         for action in ["error", "keep", "force"] {
             extend(d1, d2, action, None);
         }
@@ -914,11 +908,11 @@ fn extending_a_dict_keeps_forces_or_reports() {
         let d1 = tv::new_dict(&[("a", Tv::s("TEST"))]);
         let a1 = tv::di_of(d1, "a");
         let a1_s = (*a1).di_tv.string();
-        log.check_net(false, &[alloc::dict(d1), alloc::string(a1_s, "TEST".len())]);
+        log.check_net(false, &[alloc::string(a1_s, "TEST".len())]);
         let d2 = tv::new_dict(&[("a", Tv::s("TSET"))]);
         let a2 = tv::di_of(d2, "a");
         let a2_s = (*a2).di_tv.string();
-        log.check_net(false, &[alloc::dict(d2), alloc::string(a2_s, "TSET".len())]);
+        log.check_net(false, &[alloc::string(a2_s, "TSET".len())]);
 
         extend(d1, d2, "error", Some("E737: Key already exists: a"));
         assert_eq!(tv::read_dict(d1), Tv::dict([("a", Tv::s("TEST"))]));
@@ -1032,7 +1026,7 @@ fn comparing_dicts_folds_the_values_case_but_never_the_keys() {
     unsafe {
         assert!(dict_equal(None, None, false));
         let d1 = tv::dval(tv_dict_alloc().into_raw());
-        log.check(&[alloc::dict(d1)]);
+        log.check(&[]);
         // The allocator hands out one reference, which `into_raw` gave to
         // this case; the `DictRef` dropped at the bottom gives it back.
         assert_eq!(tv::drefs(d1), 1);
@@ -1044,13 +1038,7 @@ fn comparing_dicts_folds_the_values_case_but_never_the_keys() {
         let build = |key: &str, value: &str| {
             let d = tv::new_dict(&[(key, Tv::s(value))]);
             let di = tv::di_of(d, key);
-            log.check_net(
-                false,
-                &[
-                    alloc::dict(d),
-                    alloc::string((*di).di_tv.string(), value.len()),
-                ],
-            );
+            log.check_net(false, &[alloc::string((*di).di_tv.string(), value.len())]);
             d
         };
         let upper = build("a", "TEST");
@@ -1281,7 +1269,7 @@ fn making_keys_read_only_sets_both_flags_on_every_item() {
     unsafe {
         let d = tv::new_dict(&[("a", Tv::Bool(true))]);
         let di = tv::di_of(d, "a");
-        log.check(&[alloc::dict(d)]);
+        log.check(&[]);
         let ro = DI_FLAGS_RO;
         let fix = DI_FLAGS_FIX;
         assert_eq!((*di).di_flags & ro, 0);

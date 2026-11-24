@@ -444,29 +444,23 @@ fn walk(at: &Path) -> Vec<PathBuf> {
 /// )]);
 /// ```
 ///
-/// The spec's `a.li(...)` and `a.di(...)` have no twin: a `List` owns its
-/// items in a `Vec<ListItem>` and a `Dict` owns each of its items in a
-/// `Box<DictItem>` -- the key included -- and both go through Rust's global
+/// The spec's `a.list(...)`, `a.dict(...)`, `a.li(...)` and `a.di(...)` have
+/// no twin: a list or a dictionary is a `Box`, a `List` owns its items in a
+/// `Vec<ListItem>` and a `Dict` owns each of its items in a `Box<DictItem>`
+/// -- the key included -- and all of them go through Rust's global
 /// allocator, which this log does not record. An expectation over a
-/// container is the container's own `xcalloc` plus the allocations of the
-/// *values* its items hold; that an item and its key are released is Miri's
-/// and ASan's to say.
+/// container is the allocations of the *values* its items hold; that the
+/// container, an item and its key are released is Miri's and ASan's to say.
 ///
 /// The one property to preserve when porting a case: **every size is
-/// derived from the layout**, never written as a literal. The Lua
-/// expectations spell them `ffi.sizeof('list_T')` and
-/// `ffi.sizeof('dict_T')`; here they are `size_of::<List>()` and
-/// `size_of::<Dict>()`. That is what makes an expectation a statement about
-/// the allocation rather than about this machine, and it is why the cases
-/// port at all.
+/// derived from the value**, never written as a literal (`"test".len()`),
+/// which is what makes an expectation a statement about the allocation
+/// rather than about this machine.
 #[cfg(not(miri))]
 pub(crate) mod alloc {
     use std::ffi::{c_char, c_void};
-    use std::mem::size_of;
 
-    use neovim::eval::typval::{DictBox, ListBox};
     use neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
-    use neovim::types::{Dict, List};
 
     /// A recording of this thread's editor allocations, plus the editor lock
     /// — recording only means anything with one case running at a time.
@@ -516,25 +510,6 @@ pub(crate) mod alloc {
         }
     }
 
-    /// `tv_list_alloc`'s allocation: `a.list(l)`, for the value at `l`
-    /// (the allocation is the object around it).
-    pub(crate) fn list(l: *const List) -> AllocEvent {
-        AllocEvent::Calloc {
-            count: 1,
-            size: size_of::<ListBox>(),
-            ret: super::tv::lbox(l.cast_mut()).cast(),
-        }
-    }
-
-    /// `tv_dict_alloc`'s allocation: `a.dict(d)`, as [`list`].
-    pub(crate) fn dict(d: *const Dict) -> AllocEvent {
-        AllocEvent::Calloc {
-            count: 1,
-            size: size_of::<DictBox>(),
-            ret: super::tv::dbox(d.cast_mut()).cast(),
-        }
-    }
-
     /// A NUL-terminated copy of `len` bytes: `a.str(s, len)`.
     pub(crate) fn string(s: *const c_char, len: usize) -> AllocEvent {
         AllocEvent::Malloc {
@@ -543,34 +518,9 @@ pub(crate) mod alloc {
         }
     }
 
-    /// What a release names: the address itself, or for a list or a
-    /// dictionary value the object around it, which is what is freed.
+    /// What a release names: the address freed.
     pub(crate) trait Freed {
         fn freed_at(self) -> *mut c_void;
-    }
-
-    impl Freed for *mut List {
-        fn freed_at(self) -> *mut c_void {
-            super::tv::lbox(self).cast()
-        }
-    }
-
-    impl Freed for *mut Dict {
-        fn freed_at(self) -> *mut c_void {
-            super::tv::dbox(self).cast()
-        }
-    }
-
-    impl Freed for *mut ListBox {
-        fn freed_at(self) -> *mut c_void {
-            self.cast()
-        }
-    }
-
-    impl Freed for *mut DictBox {
-        fn freed_at(self) -> *mut c_void {
-            self.cast()
-        }
     }
 
     impl Freed for *mut c_char {

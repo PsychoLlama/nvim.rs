@@ -117,38 +117,25 @@ fn clearing_a_value_releases_exactly_what_it_owns() {
             log.check(&vec![alloc::freed(ptr::null::<u8>()); frees]);
         }
 
-        // A string, a dict and a list are one allocation each, released in
-        // the reverse of the order they were made.
+        // A string is one allocation, released by the clear.
         let mut tv = Tv::s("true").build();
         log.check(&[alloc::string(tv.string(), "true".len())]);
         let s = tv.string();
         tv_clear(&mut tv);
         log.check(&[alloc::freed(s)]);
 
-        let mut tv = Tv::Dict(vec![]).build();
-        let d = tv.dict();
-        log.check(&[alloc::dict(d)]);
-        tv_clear(&mut tv);
-        log.check(&[alloc::freed(d)]);
-
-        let mut tv = Tv::List(vec![]).build();
-        let l = tv.list();
-        log.check(&[alloc::list(l)]);
-        tv_clear(&mut tv);
-        log.check(&[alloc::freed(l)]);
-
         // A self-referencing container holds itself, so clearing the only
         // *outside* reference frees nothing and leaves the count at one.
         let mut tv = Tv::List(vec![Tv::Cycle(0)]).build();
         let l = tv.list();
-        log.check(&[alloc::list(l)]);
+        log.check(&[]);
         tv_clear(&mut tv);
         log.check(&[]);
         assert_eq!(tv::lrefs(l), 1);
 
         let mut tv = Tv::Dict(vec![(b"dd".to_vec(), Tv::Cycle(0))]).build();
         let d = tv.dict();
-        log.check(&[alloc::dict(d)]);
+        log.check(&[]);
         tv_clear(&mut tv);
         log.check(&[]);
         assert_eq!(tv::drefs(d), 1);
@@ -227,7 +214,7 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
         }
 
         let mut from = Tv::Dict(vec![]).build();
-        log.check(&[alloc::dict(from.dict())]);
+        log.check(&[]);
         let mut to = TypVal::Unknown;
         tv_copy(&from, &mut to);
         assert_eq!(tv::read(&raw const to), Tv::Dict(vec![]));
@@ -239,7 +226,7 @@ fn copying_a_value_shares_containers_and_duplicates_strings() {
         log.clear();
 
         let mut from = Tv::List(vec![]).build();
-        log.check(&[alloc::list(from.list())]);
+        log.check(&[]);
         let mut to = TypVal::Unknown;
         tv_copy(&from, &mut to);
         assert_eq!(tv::read(&raw const to), Tv::List(vec![]));
@@ -974,7 +961,7 @@ fn comparing_dict_values_folds_values_but_never_keys() {
         log.check(&[]);
 
         let mut d1 = Tv::Dict(vec![]).build();
-        log.check(&[alloc::dict(d1.dict())]);
+        log.check(&[]);
         assert_eq!(tv::drefs(d1.dict()), 1);
         assert!(tv_equal(&nd, &d1, false));
         assert!(tv_equal(&d1, &nd, false));
@@ -986,13 +973,7 @@ fn comparing_dict_values_folds_values_but_never_keys() {
             let tv = Tv::dict([(key, Tv::s(value))]).build();
             let d = tv.dict();
             let di = tv::first_di(d);
-            log.check_net(
-                false,
-                &[
-                    alloc::dict(d),
-                    alloc::string((*di).di_tv.string(), value.len()),
-                ],
-            );
+            log.check_net(false, &[alloc::string((*di).di_tv.string(), value.len())]);
             tv
         };
         let mut upper = build("a", "TEST");

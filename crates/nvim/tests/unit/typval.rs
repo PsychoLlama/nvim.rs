@@ -51,7 +51,7 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
     // outlive every call that reads them.
     unsafe {
         let l = tv::lval(tv_list_alloc(LIST_LEN_UNKNOWN as isize).into_raw());
-        log.check(&[alloc::list(l)]);
+        log.check(&[]);
 
         let test = cstr("test");
         (*l).push_bytes(Some(&test.to_bytes()[..3]));
@@ -71,18 +71,17 @@ fn tv_list_append_string_copies_the_string_and_allocates_no_item() {
 
         // The spec left this to a LuaJIT finalizer, so it never said what
         // freeing costs. It is worth saying: the items release their strings
-        // front to back, and the list goes last. An item holding a NULL
+        // front to back. An item holding a NULL
         // string reaches the allocator not at all: `tv_clear` recognises an
         // already-empty value and returns, where the C called `xfree(NULL)`.
         let held: Vec<*mut c_char> = (0..list_len(l.as_ref()))
             .map(|at| list_find(l.as_mut(), at).unwrap().li_tv.string())
             .collect();
-        let mut expected: Vec<_> = held
+        let expected: Vec<_> = held
             .iter()
             .filter(|s| !s.is_null())
             .map(|&s| alloc::freed(s))
             .collect();
-        expected.push(alloc::freed(l));
         drop(ListRef::owning(tv::lbox(l)));
         log.check(&expected);
     }
@@ -183,7 +182,7 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
     // to the dict, which then owns it, and the dict is freed at the end.
     unsafe {
         let d = tv::dval(tv_dict_alloc().into_raw());
-        log.check(&[alloc::dict(d)]);
+        log.check(&[]);
 
         let mut di = DictItem::boxed(b"");
         let value = xstrdup(cstr("test").as_ptr());
@@ -209,13 +208,13 @@ fn a_dict_item_is_added_by_move_and_removed_with_its_value() {
         tv_dict_item_remove(&held, b"");
         log.check(&[alloc::freed(value)]);
 
-        // Freeing the now-empty dict releases the dict and nothing else —
-        // an empty hashtab still lives in its own static array. Said through
-        // `check_net`, the twin of the spec's `clear_tmp_allocs`: with every
-        // matched allocate/release pair dropped, what remains is the release
-        // of something allocated before this stretch of the log.
+        // Freeing the now-empty dict releases nothing the log sees: the
+        // dict is a `Box`, and an empty hashtab still lives in its own
+        // static array. Said through `check_net`, the twin of the spec's
+        // `clear_tmp_allocs`, with every matched allocate/release pair
+        // dropped.
         drop(DictRef::owning(tv::dbox(d)));
-        log.check_net(true, &[alloc::freed(d)]);
+        log.check_net(true, &[]);
     }
 }
 

@@ -20,7 +20,6 @@ use crate::global_cell::GlobalCell;
 use crate::lua::executor::release_luaref;
 use crate::lua::ffi::LUA_NOREF;
 use crate::mbyte::VimConv;
-use crate::memory::{xcalloc, xfree};
 use crate::message::emsg;
 use crate::message::state::DID_EMSG;
 use crate::message::{
