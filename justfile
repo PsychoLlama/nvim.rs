@@ -274,7 +274,7 @@ miri-lib *args:
 miri-perimeter *args:
   {{ nightly }} MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib -- \
     allocator::tests:: global_cell::tests:: slot::tests:: slot::guards::tests:: \
-    memory::tests:: memory::alloc_log::tests:: memory::blocks::tests:: \
+    memory::tests:: memory::alloc_log::tests:: memory::blocks::tests:: memory::cstr_vec::tests:: \
     memory::thin_cstring::tests:: memory::xstring::tests:: \
     winlayer::tests:: winlayer::deref::tests:: winlayer::deref::buf_fields::tests:: winlayer::deref::win_fields::tests:: winlayer::graph::tests:: winlayer::grid::tests:: \
     winlayer::handles::tests:: winlayer::terminal::tests:: \
