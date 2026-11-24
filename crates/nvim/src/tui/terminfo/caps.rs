@@ -15,9 +15,8 @@
 
 use core::ffi::{CStr, c_uint};
 
-/// unibilium's capability numbers. Nested so they stay out of the flat
-/// namespace the unit-test cdefs are generated into -- they are an
-/// implementation detail of the tables below.
+/// unibilium's capability numbers, an implementation detail of the tables
+/// below.
 pub(crate) mod unibi_cap {
     pub const BACK_COLOR_ERASE: super::UnibiCap = 29;
     pub const MAX_COLORS: super::UnibiCap = 59;

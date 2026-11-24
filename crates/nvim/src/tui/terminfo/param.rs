@@ -27,8 +27,6 @@ use core::ffi::c_int;
 
 use crate::narrow::number_as_int;
 
-/// Nested so these short names stay out of the flat namespace the unit-test
-/// cdefs are generated into.
 mod limits {
     /// How deep the operand stack goes. Overflowing it fails the whole
     /// expansion, which is the only way a well-formed capability can fail

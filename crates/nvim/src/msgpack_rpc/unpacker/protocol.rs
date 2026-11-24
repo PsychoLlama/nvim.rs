@@ -12,10 +12,6 @@ use crate::mpack::token::Kind;
 
 /// Parse stages. The unpacker resumes mid-message whenever the stream runs
 /// out, so its position is one of these plus the byte offset it stopped at.
-///
-/// Nested in a module because the unit-test header generator collects every
-/// top-level constant into one flat namespace; the `pub use` below is
-/// invisible to it.
 mod stage {
     use core::ffi::c_int;
 

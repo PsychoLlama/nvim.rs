@@ -346,8 +346,7 @@ fn open_buffer_inner(
     if !buf.read().name.full().is_none() {
         let save_bin = buf.b_p_bin();
         let perm = buf.read().name.full().map_or(-1, getperm);
-        // `S_ISFIFO(perm) || S_ISSOCK(perm)`; the literals stay literals so
-        // that ffigen does not export them as new C declarations.
+        // `S_ISFIFO(perm) || S_ISSOCK(perm)`.
         if perm >= 0
             && (u64::from(perm.cast_unsigned()) & S_IFMT == 0o10000
                 || u64::from(perm.cast_unsigned()) & S_IFMT == 0o140000)

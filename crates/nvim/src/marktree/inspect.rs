@@ -20,8 +20,6 @@ use crate::marktree::{MTPos, MarkTree};
 use crate::os::libc::uint64_t;
 use crate::types::ApiString;
 
-/// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
-/// the same reason node.rs nests its own sizes.
 mod sizes {
     /// The most bytes a node's Graphviz identifier can occupy. The C formatted
     /// it with `snprintf` into a 64-byte buffer, and since each level appends

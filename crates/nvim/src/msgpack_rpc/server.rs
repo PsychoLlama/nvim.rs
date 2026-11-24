@@ -25,8 +25,7 @@ use crate::path::fix_fname;
 use crate::types::Vv;
 use std::ffi::CString;
 
-/// Values these belong to other modules; nested so they stay out of the flat
-/// namespace the unit-test header generator collects constants into.
+/// Values these belong to other modules.
 mod known {
     use core::ffi::c_int;
 

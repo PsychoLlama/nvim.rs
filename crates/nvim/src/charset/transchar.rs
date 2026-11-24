@@ -9,8 +9,6 @@
 use crate::mbyte::Codepoint;
 use core::ffi::c_int;
 
-// Nested so that ffigen, which collects a file's top-level constants into
-// one flat C namespace, does not publish a name this generic.
 mod limit {
     /// The longest rendering: `~@` plus `<xxxxxx>`.
     pub const MAX_LEN: usize = 11;

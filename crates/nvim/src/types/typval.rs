@@ -278,11 +278,10 @@ impl RefcountSize {
 mod refcount_tests {
     use super::*;
 
-    /// The FFI edge reads these fields through `unit-cdefs.h`, where
-    /// `Refcount` is a `typedef` for `int` and `VarLock` one for `unsigned
-    /// int`. A newtype that stopped being the integer it wraps would put
-    /// every `#[repr(C)]` struct that has one out of step with the header
-    /// silently, so say it here.
+    /// The wrappers stand where the C had a plain `int` (`Refcount`), a
+    /// `size_t` (`RefcountSize`) and an `unsigned int` (`VarLock`). One that
+    /// stopped being the integer it wraps would grow every struct that has
+    /// one silently, so say it here.
     #[test]
     fn the_wrappers_are_still_the_integers_they_wrap() {
         assert_eq!(

@@ -34,8 +34,7 @@ use super::intersect::IdSet;
 use super::key::{MT_BRANCH_FACTOR, MT_LOG2_BRANCH, MtFlags, key_cmp, mt_lookup_key};
 use super::meta::{META_COUNT, MetaCount, meta_add, meta_add_key};
 
-/// Sizes that are part of the node layout. Nested to keep the names out of the
-/// flat cdef namespace `ffigen` builds.
+/// Sizes that are part of the node layout.
 mod sizes {
     use super::MT_BRANCH_FACTOR;
 

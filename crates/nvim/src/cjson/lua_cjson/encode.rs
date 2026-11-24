@@ -198,8 +198,6 @@ impl Encoder {
         length: i64,
         raw: bool,
     ) -> Result<(), Raise> {
-        // Function-local: a module-level const lands in ffigen's flat C
-        // namespace (`unit-cdefs.h`).
         const BOUNDED_BY_LENGTH: &str = "an array index is bounded by the table's length";
         self.out.push(b'[');
         for index in 1..=length {

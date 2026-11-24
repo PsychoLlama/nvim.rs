@@ -12,8 +12,7 @@
 //! format other implementations have been reading for years, so they are
 //! reproduced as they are rather than tightened.
 
-/// msgpack format bytes and sizes, kept out of the flat namespace the
-/// unit-test cdef generator collects top-level constants into.
+/// msgpack format bytes and sizes.
 mod tag {
     /// The longest sequence any encoder here produces: a one-byte tag plus an
     /// eight-byte payload. The packer guarantees this much room per item.

@@ -46,8 +46,6 @@ use crate::marktree::pair::{intersect_node, pseudo_index_for_id, unintersect_nod
 use crate::marktree::{MTKey, MTPos, MarkTree};
 use crate::os::libc::uint64_t;
 
-/// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
-/// the same reason node.rs nests its own sizes.
 mod sizes {
     use super::MT_BRANCH_FACTOR;
 

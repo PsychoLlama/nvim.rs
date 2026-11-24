@@ -17,9 +17,6 @@ use crate::os::libc::uint32_t;
 
 use super::key::{MtFlags, mt_end, mt_invalid};
 
-// Nested so `ffigen` does not publish a name this generic into the flat cdef
-// namespace; it collects top-level consts only, and `pub use` is invisible to
-// it.
 mod count {
     pub const META_COUNT: usize = super::MT_META_COUNT as usize;
 }

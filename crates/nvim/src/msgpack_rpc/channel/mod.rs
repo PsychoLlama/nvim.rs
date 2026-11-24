@@ -55,8 +55,7 @@ use client::classify_client;
 use envelope::serialize_request;
 use receive::parse_msgpack;
 
-/// Values these belong to other modules; nested so they stay out of the flat
-/// namespace the unit-test header generator collects constants into.
+/// Values these belong to other modules.
 mod known {
     use super::ClientType;
 

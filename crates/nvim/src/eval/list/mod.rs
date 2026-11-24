@@ -281,8 +281,7 @@ impl<'a> ListArg<'a> {
 /// Allocate a fresh list into `result`, for `mapnew()`.
 #[inline(always)]
 pub(crate) fn list_alloc_ret(result: &mut TypVal) -> ListArg<'_> {
-    // `LIST_LEN_UNKNOWN`: no idea how long.  Declared here rather than at
-    // module level, where `ffigen` would emit it into the unit cdefs.
+    // `LIST_LEN_UNKNOWN`: no idea how long.
     const LEN_UNKNOWN: ptrdiff_t = -1;
     tv_list_alloc_ret(result, LEN_UNKNOWN);
     ListArg(result.list_shared())

@@ -32,9 +32,6 @@ type Params<'a> = [Option<&'a [u8]>; CSI_MAX_PARAMS];
 
 /// Sequence introducers and terminators, in both their seven-bit (an escape
 /// then a character) and eight-bit (a single C1 byte) spellings.
-///
-/// Nested so these short, generic names stay out of the flat namespace the unit
-/// tests' generated C declarations share.
 mod byte {
     pub(super) const BEL: u8 = 0x07;
     pub(super) const SS3_7BIT: u8 = b'O';

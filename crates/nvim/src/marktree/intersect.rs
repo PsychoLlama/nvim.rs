@@ -18,7 +18,6 @@
 
 use crate::os::libc::uint64_t;
 
-/// Nested to keep the name out of the flat cdef namespace `ffigen` builds.
 mod sizes {
     /// How many ids a set holds before it goes to the heap.
     pub(super) const INTERSECT_INLINE: usize = 4;

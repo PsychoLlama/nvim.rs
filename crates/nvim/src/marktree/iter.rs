@@ -33,8 +33,6 @@ use crate::os::libc::int32_t;
 
 use super::marktree_lookup;
 
-/// Nested to keep the name out of the flat cdef namespace `ffigen` builds,
-/// the same reason node.rs nests its own sizes.
 mod sizes {
     /// The deepest the tree can get: the C's `MT_MAX_DEPTH`, which is also the
     /// length of `MarkTreeIter::path` and so the range `MarkTreeIter::depth`
