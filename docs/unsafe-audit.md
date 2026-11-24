@@ -80,10 +80,10 @@ unsafe_placement` lists any misplaced attribute (none);
 | `lua/ffi.rs`, `lua/executor/{luv,state}.rs` | foreign  |     3 |        104 |            8 | LuaJIT's declarations, luv's hooks, state making |
 | `lua/stack/`                                | foreign  |     5 |        111 |            7 | the typed Lua stack                              |
 | `lua/treesitter/`                           | foreign  |    10 |        204 |            9 | the tree-sitter library                          |
-| `event/`                                    | foreign  |    11 |        497 |           77 | libuv: loop, streams, timers, signals, children  |
-| `tui/{tui,input,output,events}.rs`          | foreign  |     4 |         68 |            4 | the terminal's libuv handles                     |
+| `event/`                                    | foreign  |    11 |        490 |           77 | libuv: loop, streams, timers, signals, children  |
+| `tui/{tui,input,output,events}.rs`          | foreign  |     4 |         60 |            4 | the terminal's libuv handles                     |
 | `xdiff/`                                    | foreign  |     1 |          1 |            0 | `isspace(3)`'s table                             |
-| `os/`                                       | OS       |    14 |        235 |           14 | system calls                                     |
+| `os/`                                       | OS       |    14 |        232 |           14 | system calls                                     |
 | `allocator.rs`                              | memory   |     1 |         16 |            4 | the global allocator                             |
 | `memory/`                                   | memory   |     3 |         66 |           19 | `xmalloc`, owned C strings                       |
 | `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
@@ -154,8 +154,8 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 ### `event/` — libuv
 
 - **What:** libuv's loop, streams, timers, signal watchers and child
-  processes are C objects libuv holds _by address_ (`libuv.rs` 93 — mostly the declarations — `proc.rs` 70, `socket/mod.rs` 69,
-  `loop.rs` 58, `channel.rs` 46, `libuv_proc.rs` 48, `rstream.rs` 32, `stream.rs` 34,
+  processes are C objects libuv holds _by address_ (`libuv.rs` 93 — mostly the declarations — `proc.rs` 70, `socket/mod.rs` 65,
+  `loop.rs` 58, `channel.rs` 43, `libuv_proc.rs` 48, `rstream.rs` 34, `stream.rs` 34,
   `signal.rs` 17, `time.rs` 16, `wstream.rs` 14). Each region is a libuv
   call, a handle rebuilt from the address libuv hands back to a callback, or
   a pin projection.
@@ -179,7 +179,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 
 - **What:** the output tty/pipe handle on a private write loop, the startup
   timer, the window-size signal and the suspend `kill` (`tui.rs` 29); stdin's
-  read stream, the escape and query timers and `tcgetattr` (`input.rs` 25);
+  read stream's opening, the escape and query timers and `tcgetattr` (`input.rs` 14);
   the UI events that reach libuv (`events.rs` 11); the flush's one
   `uv_write` (`output.rs` 4).
 - **Contract:** the TUI's state is one cell for the life of the process;
@@ -203,7 +203,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   (`fs/` 43), the environment, `uv_random`, `uname` and the `environ` walk
   (`env/mod.rs` 13), `setlocale`/`nl_langinfo`/gettext's binds (`lang.rs` 5),
   the `getpw*` family (`users.rs` 8), the clocks and `strftime`/`strptime`
-  (`time.rs` 10), stdin's read stream and the loop polls (`input.rs` 8), the
+  (`time.rs` 10), opening stdin's read stream and the loop polls (`input.rs` 5), the
   PTY — `forkpty`, `ioctl`, `ptsname`, and in the forked child
   `setsid`/`execvp` (`pty_proc_unix/mod.rs` 38) — signals (`signal.rs` 11),
   `dlopen` for `libcall()` (`dl.rs` 13), `iconv` (`iconv.rs` 7), process

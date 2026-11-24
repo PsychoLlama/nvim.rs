@@ -2,7 +2,7 @@
 //!
 //! # Boundary
 //!
-//! stdin is read by libuv through [`RStream`], which calls
+//! stdin is read by libuv through [`ReadStream`], which calls
 //! [`input_read_cb`] with whatever arrived; everything else here is bytes
 //! moving between that callback, a fixed buffer, and `getchar.c`'s typeahead.
 //!
@@ -26,10 +26,8 @@ use crate::autocmd::state::DID_CURSORHOLD;
 use crate::autocmd::{fire_autocmds, trigger_cursorhold};
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{Drain, loop_poll_events, wait_on_main_loop};
-use crate::event::objects::{Event, RStream};
-use crate::event::rstream::{
-    Arrived, closed_rstream, rstream_init_fd, rstream_may_close, rstream_start, rstream_stop,
-};
+use crate::event::objects::Event;
+use crate::event::rstream::{Arrived, ReadStream};
 use crate::event::uv::UV_TTY;
 use crate::event_queue::{self, ChildQueue, QueueId, queue_in};
 use crate::getchar::state::{CTRL_C_INTERRUPTS, GOT_INT, MAPPED_CTRL_C, TYPEBUF_WAS_FILLED};
@@ -69,7 +67,7 @@ const READ_BUFFER_SIZE: usize = 0xfff;
 const INPUT_BUFFER_SIZE: usize = READ_BUFFER_SIZE * 4 + MAX_KEY_CODE_LEN;
 
 /// stdin. Starts closed, because nothing is read until a UI attaches.
-static READ_STREAM: GlobalCell<RStream> = GlobalCell::new(closed_rstream());
+static READ_STREAM: GlobalCell<ReadStream> = GlobalCell::new(ReadStream::closed());
 
 /// Bytes read from the OS and not yet handed to the typeahead.
 ///
@@ -112,13 +110,12 @@ pub fn input_start() {
         return;
     }
     USED_STDIN.set(true);
-    // SAFETY: `READ_STREAM` is this module's own static, at a fixed address,
-    // and libuv only ever touches it from the main thread; `input_read_cb`
-    // has the signature `rstream_start` demands and takes no data pointer.
-    unsafe {
-        rstream_init_fd(MAIN_LOOP.ptr(), READ_STREAM.ptr(), STDIN_FILENO);
-        rstream_start(READ_STREAM.ptr(), Some(input_read_cb), ptr::null_mut());
-    }
+    READ_STREAM.with(|stream| {
+        // SAFETY: stdin is open, and `READ_STREAM` is a static nothing
+        // replaces: the stream stays at its address for the process.
+        unsafe { stream.open_fd(STDIN_FILENO) };
+        stream.start(input_read_cb, ptr::null_mut());
+    });
 }
 
 /// Stop reading stdin.
@@ -126,16 +123,15 @@ pub fn input_stop() {
     if stdin_closed() {
         return;
     }
-    // SAFETY: as `input_start`.
-    unsafe {
-        rstream_stop(READ_STREAM.ptr());
-        rstream_may_close(READ_STREAM.ptr());
-    }
+    READ_STREAM.with(|stream| {
+        stream.stop();
+        stream.close();
+    });
 }
 
 /// Whether stdin is not being read.
 fn stdin_closed() -> bool {
-    READ_STREAM.with(|stream| stream.s.closed)
+    READ_STREAM.with(ReadStream::is_closed)
 }
 
 /// The queued CursorHold, fired once the event loop gets to it.

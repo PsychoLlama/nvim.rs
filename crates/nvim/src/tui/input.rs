@@ -36,10 +36,7 @@ use crate::event::libuv::{
     uv_close, uv_timer_get_due_in, uv_timer_init, uv_timer_start, uv_timer_stop,
 };
 use crate::event::r#loop::{main_loop_raw, schedule_fast_job};
-use crate::event::rstream::{
-    Arrived, rstream_consume_unread, rstream_init_fd, rstream_may_close, rstream_start,
-    rstream_stop,
-};
+use crate::event::rstream::Arrived;
 use crate::event::uv::{uv_handle_t, uv_timer_t};
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::message_fmt::msg_bytes;
@@ -131,9 +128,10 @@ pub fn tinput_init(input: &mut TermInput, handles: &Handles, ti: &TerminfoEntry)
     input.in_fd = STDIN_FILENO;
     input.ttimeout = p_ttimeout();
     input.ttimeoutlen = p_ttm();
-    // SAFETY: the editor's loop, and the TUI's own read stream, which
-    // stays put; stdin is open.
-    unsafe { rstream_init_fd(main_loop_raw(), handles.read_stream(), input.in_fd) };
+    // SAFETY: stdin is open, and the TUI's read stream stays put in its
+    // pinned `Handles` until the TUI is dropped, after its loop has closed
+    // every handle.
+    unsafe { handles.read_stream().open_fd(input.in_fd) };
 
     // UTF-8 because that is all nvim reads; C0 kept because the editor wants
     // the control characters themselves rather than termkey's names for
@@ -169,8 +167,8 @@ pub fn tinput_destroy(input: &mut TermInput, handles: &Handles) {
     unsafe {
         uv_close(handles.input_timer().cast::<uv_handle_t>(), None);
         uv_close(handles.bg_query_timer().cast::<uv_handle_t>(), None);
-        rstream_may_close(handles.read_stream());
     }
+    handles.read_stream().close();
     input.tk = None;
 }
 
@@ -198,22 +196,17 @@ fn stty_erase(fd: c_int) -> u8 {
 
 /// Start reading.
 pub fn tinput_start(handles: &Handles) {
-    // SAFETY: the input layer's own read stream; the callback looks the
-    // TUI up again.
-    unsafe {
-        rstream_start(
-            handles.read_stream(),
-            Some(tinput_read_cb),
-            core::ptr::null_mut(),
-        );
-    }
+    // The callback looks the TUI up again.
+    handles
+        .read_stream()
+        .start(tinput_read_cb, core::ptr::null_mut());
 }
 
 /// Stop reading, and stop waiting for anything half-read.
 pub fn tinput_stop(handles: &Handles) {
-    // SAFETY: the input layer's own read stream and timers.
+    handles.read_stream().stop();
+    // SAFETY: the input layer's own timers.
     unsafe {
-        rstream_stop(handles.read_stream());
         uv_timer_stop(handles.input_timer());
         uv_timer_stop(handles.bg_query_timer());
     }
@@ -325,17 +318,10 @@ fn restart_timer(handles: &Handles, ms: u64) {
 /// libuv's timer callback, on the input layer's timer.
 unsafe extern "C" fn tinput_timer_cb(_handle: *mut uv_timer_t) {
     with_started_tui(|tui| {
-        let stream = tui.handles.read_stream();
-        // SAFETY: the input layer's own read stream. Its unread bytes are in
-        // its own block, which is not part of the TUI's state.
-        unsafe {
-            rstream_consume_unread(stream, |unread| {
-                if unread.is_empty() {
-                    0
-                } else {
-                    handle_raw_buffer(tui, true, unread)
-                }
-            });
+        let unread = tui.handles.read_stream().unread();
+        if !unread.is_empty() {
+            let consumed = handle_raw_buffer(tui, true, &unread);
+            tui.handles.read_stream().consume(consumed);
         }
         tk_getkeys(tui, true);
         tinput_flush(&mut tui.input);

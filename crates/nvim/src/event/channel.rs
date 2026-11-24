@@ -45,7 +45,7 @@ use crate::event::r#loop::{Drain, main_loop_raw, wait_on_main_loop};
 use crate::event::objects::{Proc, RStream, Stream};
 use crate::event::proc::{proc_free, proc_spawn, proc_stop, proc_wait};
 use crate::event::rstream::{
-    Arrived, rstream_init, rstream_init_fd, rstream_may_close, rstream_start, rstream_start_inner,
+    Arrived, ReadStream, rstream_init, rstream_may_close, rstream_start, rstream_start_inner,
     rstream_stop_inner,
 };
 use crate::event::socket::socket_connect;
@@ -98,9 +98,9 @@ fn job_proc(id: u64) -> *mut Proc {
 #[derive(Debug)]
 pub(crate) enum TransportMut<'a> {
     Job(Pin<&'a mut JobProc>),
-    Socket(Pin<&'a mut RStream>),
+    Socket(Pin<&'a mut ReadStream>),
     /// This process's stdin, then its stdout.
-    Stdio(Pin<&'a mut RStream>, Pin<&'a mut Stream>),
+    Stdio(Pin<&'a mut ReadStream>, Pin<&'a mut Stream>),
     Stderr(&'a mut StderrState),
     Internal(&'a mut InternalState),
 }
@@ -148,7 +148,7 @@ impl ChannelStream {
     pub(crate) fn write_stream(self: Pin<&mut Self>) -> Option<Pin<&mut Stream>> {
         match self.project() {
             TransportMut::Job(job) => Some(job.stdin()),
-            TransportMut::Socket(socket) => Some(socket.writer()),
+            TransportMut::Socket(socket) => Some(socket.common()),
             TransportMut::Stdio(_, out) => Some(out),
             TransportMut::Stderr(_) | TransportMut::Internal(_) => None,
         }
@@ -295,20 +295,6 @@ impl JobProc {
     }
 }
 
-impl RStream {
-    /// Mark the stream closed; its handle closes once nothing is in flight.
-    pub(crate) fn close(self: Pin<&mut Self>) {
-        // SAFETY: a stream this module initialised, at its fixed address.
-        unsafe { rstream_may_close(self.get_unchecked_mut()) };
-    }
-
-    /// The common half, which a socket also writes through.
-    fn writer(self: Pin<&mut Self>) -> Pin<&mut Stream> {
-        // SAFETY: structural pinning: a field of the pinned stream.
-        unsafe { self.map_unchecked_mut(|stream| &mut stream.s) }
-    }
-}
-
 impl Stream {
     /// Mark the stream closed; its handle closes once nothing is in flight.
     pub(crate) fn close(self: Pin<&mut Self>) {
@@ -416,28 +402,40 @@ pub(crate) fn init_job_streams(id: u64, has_in: bool, has_out: bool) {
 
 /// Start delivering channel `id`'s reads to `reads`.
 pub(crate) fn start_reads(id: u64, reads: Reads) {
-    let (stream, init) = with(id, |channel| {
-        match (channel.stream_mut().project(), reads) {
-            (TransportMut::Job(job), Reads::Stderr) => (job_output(job, true), true),
-            (TransportMut::Job(job), _) => (job_output(job, false), false),
-            (TransportMut::Socket(socket), _) => (address(socket), false),
-            (TransportMut::Stdio(stdin, _), _) => (address(stdin), false),
-            _ => unreachable!("channel {id} has nothing to read"),
-        }
-    });
     let shim: fn(&Arrived<'_>) -> usize = match reads {
         Reads::Output => output_shim,
         Reads::Stderr => stderr_shim,
         Reads::Rpc => rpc_shim,
+    };
+    let data = owner_data(id);
+    // Starting registers no callback that runs before the next loop turn,
+    // so it happens with the channel borrowed.
+    let job_output = with(id, |channel| {
+        match (channel.stream_mut().project(), reads) {
+            (TransportMut::Job(job), Reads::Stderr) => Some((job_output(job, true), true)),
+            (TransportMut::Job(job), _) => Some((job_output(job, false), false)),
+            (TransportMut::Socket(socket), _) => {
+                socket.start(shim, data);
+                None
+            }
+            (TransportMut::Stdio(stdin, _), _) => {
+                stdin.start(shim, data);
+                None
+            }
+            _ => unreachable!("channel {id} has nothing to read"),
+        }
+    });
+    let Some((stream, init)) = job_output else {
+        return;
     };
     if init {
         // SAFETY: the job's stderr, at its fixed address, connected by the
         // spawn and given its buffer here.
         unsafe { rstream_init(stream) };
     }
-    // SAFETY: the channel's read stream, at its fixed address and
-    // initialised; the callback is told the id.
-    unsafe { rstream_start(stream, Some(shim), owner_data(id)) };
+    // SAFETY: the job's read stream, at its fixed address and initialised;
+    // the callback is told the id.
+    unsafe { rstream_start(stream, Some(shim), data) };
 }
 
 /// Connect socket channel `id` to `address`, driving the loop until it
@@ -449,10 +447,10 @@ pub(crate) fn connect_socket(
     timeout: c_int,
 ) -> Result<(), &'static CStr> {
     let socket = socket_stream(id);
-    // SAFETY: the socket channel's stream, at its fixed address; the loop
-    // runs only libuv's callbacks here, and the channel holds its own
-    // reference until this returns.
-    unsafe { socket_connect(socket, tcp, address, timeout) }
+    // SAFETY: the socket channel's stream, at its fixed address in the
+    // channel's pinned box; the loop runs only libuv's callbacks here, and
+    // the channel holds its own reference until this returns.
+    unsafe { socket_connect(&*socket, tcp, address, timeout) }
 }
 
 /// Take over a pending connection as socket channel `id`'s stream, or
@@ -461,10 +459,13 @@ pub(crate) fn accept_socket(
     id: u64,
     incoming: &crate::event::socket::Incoming<'_>,
 ) -> Result<(), c_int> {
-    let socket = socket_stream(id);
-    // SAFETY: the socket channel's stream, at its fixed address, and the
-    // caller's listening watcher.
-    let result = unsafe { incoming.accept(socket) };
+    let result = with(id, |channel| match channel.stream_mut().project() {
+        // SAFETY: the socket channel's stream, unopened, at its fixed
+        // address in the channel's pinned box, which the table frees only
+        // once the stream's handle has closed. Accepting runs no callback.
+        TransportMut::Socket(socket) => unsafe { incoming.accept(&socket) },
+        _ => unreachable!("channel {id} is not a socket"),
+    });
     if result == 0 { Ok(()) } else { Err(result) }
 }
 
@@ -477,10 +478,10 @@ pub(crate) fn stream_addresses(id: u64) -> (*mut c_void, *mut c_void) {
             (address(job.stdin()).cast(), output.cast())
         }
         TransportMut::Socket(socket) => {
-            let socket = address(socket);
+            let socket = socket.as_ptr();
             (socket.cast(), socket.cast())
         }
-        TransportMut::Stdio(stdin, stdout) => (address(stdout).cast(), address(stdin).cast()),
+        TransportMut::Stdio(stdin, stdout) => (address(stdout).cast(), stdin.as_ptr().cast()),
         _ => (ptr::null_mut(), ptr::null_mut()),
     })
 }
@@ -505,9 +506,9 @@ fn job_output(job: Pin<&mut JobProc>, stderr: bool) -> *mut RStream {
 }
 
 /// Socket channel `id`'s stream, at its fixed address.
-fn socket_stream(id: u64) -> *mut RStream {
+fn socket_stream(id: u64) -> *const ReadStream {
     with(id, |channel| match channel.stream_mut().project() {
-        TransportMut::Socket(socket) => address(socket),
+        TransportMut::Socket(socket) => &raw const *socket,
         _ => unreachable!("channel {id} is not a socket"),
     })
 }
@@ -515,29 +516,33 @@ fn socket_stream(id: u64) -> *mut RStream {
 /// Make socket channel `id` the owner of its connected stream: closing the
 /// stream drops the channel's reference, and both halves get their buffers.
 pub(crate) fn attach_socket(id: u64) {
-    let socket = socket_stream(id);
-    // SAFETY: the socket channel's connected stream, at its fixed address,
-    // lent for its two hook fields.
-    let hooks = unsafe { &mut (*socket).s };
-    hooks.internal_close_cb = Some(stream_close_shim);
-    hooks.internal_data = owner_data(id);
-    // SAFETY: as above.
-    unsafe { wstream_init(&raw mut (*socket).s, 0) };
-    // SAFETY: as above.
-    unsafe { rstream_init(socket) };
+    with(id, |channel| match channel.stream_mut().project() {
+        TransportMut::Socket(mut socket) => {
+            socket.set_internal_close_cb(Some(stream_close_shim), owner_data(id));
+            // SAFETY: the socket channel's connected stream, at its fixed
+            // address in the channel's pinned box, which the table frees
+            // only once the stream's handle has closed.
+            unsafe {
+                wstream_init(address(socket.as_mut().common()), 0);
+                socket.open();
+            }
+        }
+        _ => unreachable!("channel {id} is not a socket"),
+    });
 }
 
 /// Open stdio channel `id`'s two streams over `STDIN_FD` and `stdout_fd`.
 pub(crate) fn open_stdio(id: u64, stdin_fd: c_int, stdout_fd: c_int) {
-    let (stdin, stdout) = with(id, |channel| match channel.stream_mut().project() {
-        TransportMut::Stdio(stdin, stdout) => (address(stdin), address(stdout)),
+    with(id, |channel| match channel.stream_mut().project() {
+        // SAFETY: the stdio channel's streams, at their fixed addresses in
+        // the channel's pinned box (freed only once both handles have
+        // closed), over two descriptors this process owns.
+        TransportMut::Stdio(stdin, stdout) => unsafe {
+            stdin.open_fd(stdin_fd);
+            wstream_init_fd(main_loop_raw(), address(stdout), stdout_fd, 0);
+        },
         _ => unreachable!("channel {id} is not stdio"),
     });
-    // SAFETY: the stdio channel's streams, at their fixed address, over two
-    // descriptors this process owns.
-    unsafe { rstream_init_fd(main_loop_raw(), stdin, stdin_fd) };
-    // SAFETY: as above.
-    unsafe { wstream_init_fd(main_loop_raw(), stdout, stdout_fd, 0) };
 }
 
 /// [`unopened_rstream`], for a stdio pair.

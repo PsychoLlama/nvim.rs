@@ -15,9 +15,12 @@
 //! (`pending_read`), and it counts as a pending request so the handle is not
 //! closed out from under it.
 //!
-//! [`Reader`] is the `*mut RStream` libuv threads through its handles'
-//! `data`, wrapped once. `conn()` answers the [`Conn`] for the common half,
-//! which is what keeps `(*stream).s.<field>` from appearing at every site.
+//! [`ReadStream`] is a stream as its owner holds it (stdin, the TUI, a
+//! socket or stdio channel): in place, driven through `&self`, opened by the
+//! one unsafe call. [`Reader`] is the `*mut RStream` libuv threads through
+//! its handles' `data`, wrapped once. `conn()` answers the [`Conn`] for the
+//! common half, which is what keeps `(*stream).s.<field>` from appearing at
+//! every site.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `event/` row in docs/perimeter.md.
@@ -33,6 +36,7 @@
 use crate::event::libuv::{
     uv_fs_read, uv_fs_req_cleanup, uv_idle_start, uv_idle_stop, uv_read_start, uv_read_stop,
 };
+use crate::event::r#loop::main_loop_raw;
 use crate::event::objects::Loop;
 use crate::event::objects::{RStream, Stream, stream_read_cb};
 use crate::event::stream::{Conn, close_handle, may_close, stream_init};
@@ -44,8 +48,10 @@ use crate::message_fmt::{msg_addr, msg_cstr};
 use crate::os::fs::{os_err_name, os_strerror};
 use crate::os::libc::{size_t, ssize_t};
 use crate::os::uv_error::{UV_ENOBUFS, UV_EOF};
+use core::cell::UnsafeCell;
 use core::ffi::{c_int, c_void};
 use core::ops::Deref;
+use core::pin::Pin;
 use core::ptr;
 
 /// The size of the pool block an `RStream` reads into.
@@ -223,22 +229,174 @@ impl Deref for Reader {
     }
 }
 
-/// A stream before it is opened: every handle unregistered, every pointer
-/// null, no block -- what the setup functions expect to fill.
-pub(crate) const fn unopened_rstream() -> RStream {
-    // SAFETY: a stream is plain C data -- pointers, integers, flags, `Option`s
-    // of function pointers and libuv handles -- for all of which all-zero is
-    // the unset value, and its block is an `Option<Box>`, for which all-zero
-    // is `None`.
+/// All-zero: every handle unregistered, every pointer null, no block.
+pub(super) const fn zeroed_rstream() -> RStream {
+    // SAFETY: a stream is plain C data -- pointers, integers, flags,
+    // `Option`s of function pointers and libuv handles -- for all of which
+    // all-zero is the unset value, and its block is an `Option<Box>`, for
+    // which all-zero is `None`.
     unsafe { core::mem::MaybeUninit::zeroed().assume_init() }
 }
 
-/// [`unopened_rstream`], marked closed: a stream nothing reads until it is
-/// opened.
-pub(crate) const fn closed_rstream() -> RStream {
-    let mut stream = unopened_rstream();
-    stream.s.closed = true;
-    stream
+/// A read stream as its owner holds it: in place, at the address libuv is
+/// given when it is opened.
+///
+/// Every operation takes `&self`. libuv writes the handle inside behind any
+/// reference to it, and the `UnsafeCell` is what lets a shared one coexist
+/// with that; no `&mut` to a registered stream is ever formed here. Opening
+/// is the one unsafe step, because from then on the owner promises the
+/// stream stays put until its close callback has run. The other operations
+/// do nothing on a stream that was never opened or has finished closing:
+/// its block is what says it is open.
+///
+/// The owners: stdin's (`os/input.rs`), the TUI's (`tui::tui::Handles`), a
+/// socket channel's and a stdio channel's (`ChannelStream`). A child's two
+/// output streams are still plain [`RStream`] fields of its `Proc`.
+#[repr(transparent)]
+pub struct ReadStream(UnsafeCell<RStream>);
+
+impl core::fmt::Debug for ReadStream {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("ReadStream").field(&self.as_ptr()).finish()
+    }
+}
+
+impl ReadStream {
+    /// A stream before it is opened: every handle unregistered, every
+    /// pointer null, no block.
+    pub(crate) const fn unopened() -> Self {
+        Self(UnsafeCell::new(zeroed_rstream()))
+    }
+
+    /// [`ReadStream::unopened`], marked closed: what `os/input.rs` asks
+    /// before it opens stdin.
+    pub(crate) const fn closed() -> Self {
+        let mut stream = zeroed_rstream();
+        stream.s.closed = true;
+        Self(UnsafeCell::new(stream))
+    }
+
+    /// The stream's address: libuv's view of it, and a log line's.
+    pub(crate) fn as_ptr(&self) -> *mut RStream {
+        self.0.get()
+    }
+
+    /// The handle `rstream`'s functions work through, valid for this
+    /// borrow.
+    fn reader(&self) -> Reader {
+        // SAFETY: live for the borrow, and once opened it does not move
+        // until its close callback (the promise `open` takes); before that
+        // nothing registered holds the address.
+        unsafe { Reader::new(self.as_ptr()) }
+    }
+
+    /// The handle, when the stream is open: it has its block from
+    /// `rstream_init` until the close callback gives it back.
+    fn opened(&self) -> Option<Reader> {
+        let reader = self.reader();
+        reader.buf.block.is_some().then_some(reader)
+    }
+
+    /// Open the stream over `fd` on the editor's loop, and give it its
+    /// block.
+    ///
+    /// # Safety
+    /// `fd` is open. The stream stays at this address, alive, until its
+    /// close callback has run (after [`ReadStream::close`] and the loop
+    /// turn that finishes it).
+    pub(crate) unsafe fn open_fd(&self, fd: c_int) {
+        // SAFETY: the editor's loop, live for the process, and the caller's
+        // promise about the stream and the descriptor.
+        unsafe { rstream_init_fd(main_loop_raw(), self.as_ptr(), fd) };
+    }
+
+    /// Give the stream its block, once its common half is connected (a
+    /// socket the stream layer opened by connecting or accepting).
+    ///
+    /// # Safety
+    /// The common half has been through `stream_init`; and as
+    /// [`ReadStream::open_fd`].
+    pub(crate) unsafe fn open(&self) {
+        // SAFETY: the caller's promise.
+        unsafe { rstream_init(self.as_ptr()) };
+    }
+
+    /// Deliver reads to `consume`, told `data` each time.
+    pub(crate) fn start(&self, consume: fn(&Arrived<'_>) -> usize, data: *mut c_void) {
+        let stream = self
+            .opened()
+            .expect("a read stream is opened before it is started");
+        start_with(stream, Some(consume), data);
+    }
+
+    /// Stop delivering reads.
+    pub(crate) fn stop(&self) {
+        if let Some(stream) = self.opened() {
+            stop_reading(stream);
+            stream.set_want_read(false);
+        }
+    }
+
+    /// Mark the stream closed; its handle closes once nothing is in flight,
+    /// and the close callback gives its block back.
+    pub(crate) fn close(&self) {
+        if let Some(stream) = self.opened() {
+            may_close(stream.conn());
+        }
+    }
+
+    /// Has the stream been marked closed (or never opened, for one built
+    /// [`ReadStream::closed`])?
+    pub(crate) fn is_closed(&self) -> bool {
+        self.reader().s.closed
+    }
+
+    /// Has the stream seen the end of its input?
+    pub(crate) fn at_eof(&self) -> bool {
+        self.reader().did_eof
+    }
+
+    /// A copy of the bytes read but not consumed, for a consumer outside a
+    /// delivery (a timer giving up on the rest of a sequence) whose owner
+    /// also holds the stream.
+    pub(crate) fn unread(&self) -> Vec<u8> {
+        self.reader().buf.unread().to_vec()
+    }
+
+    /// Drop the first `consumed` unread bytes, and resume reads if that made
+    /// room.
+    pub(crate) fn consume(&self, consumed: usize) {
+        if let Some(stream) = self.opened() {
+            consume_bytes(stream, consumed);
+        }
+    }
+
+    /// The common half, pinned with the stream: what a socket writes
+    /// through.
+    pub(super) fn common(self: Pin<&mut Self>) -> Pin<&mut Stream> {
+        // SAFETY: structural pinning: a field of the pinned stream, lent
+        // pinned, and the exclusive borrow of the whole is what makes the
+        // `&mut` to the part unique.
+        unsafe { self.map_unchecked_mut(|stream| &mut stream.0.get_mut().s) }
+    }
+
+    /// The common half's handle, for the socket layer, which connects and
+    /// accepts through it before the stream is opened.
+    pub(super) fn conn(&self) -> Conn {
+        self.reader().conn()
+    }
+
+    /// Who hears that the common half finished closing: a socket channel's
+    /// reference.
+    pub(crate) fn set_internal_close_cb(
+        &self,
+        cb: crate::event::objects::stream_close_cb,
+        data: *mut c_void,
+    ) {
+        let conn = self.reader().conn();
+        conn.set_internal_close_cb(cb);
+        conn.set_internal_data(data);
+    }
 }
 
 crate::event::stream::field_writers!(Reader {
@@ -253,7 +411,7 @@ crate::event::stream::field_writers!(Reader {
 /// # Safety
 /// `uv_loop` is live, `stream` points at storage that does not move
 /// afterwards, and `fd` is open.
-pub unsafe fn rstream_init_fd(uv_loop: *mut Loop, stream: *mut RStream, fd: c_int) {
+unsafe fn rstream_init_fd(uv_loop: *mut Loop, stream: *mut RStream, fd: c_int) {
     // SAFETY: the caller's promise, handed straight on.
     unsafe {
         stream_init(uv_loop, &raw mut (*stream).s, fd, ptr::null_mut());
@@ -266,7 +424,7 @@ pub unsafe fn rstream_init_fd(uv_loop: *mut Loop, stream: *mut RStream, fd: c_in
 ///
 /// # Safety
 /// `stream` has been through [`stream_init`] and has no block yet.
-pub unsafe fn rstream_init(stream: *mut RStream) {
+pub(super) unsafe fn rstream_init(stream: *mut RStream) {
     // SAFETY: the caller's stream.
     let stream = unsafe { Reader::new(stream) };
     stream.set_read_cb(None);
@@ -281,7 +439,7 @@ pub unsafe fn rstream_init(stream: *mut RStream) {
 ///
 /// # Safety
 /// `stream` has been through [`rstream_init`].
-pub unsafe fn rstream_start_inner(stream: *mut RStream) {
+pub(super) unsafe fn rstream_start_inner(stream: *mut RStream) {
     // SAFETY: the caller's stream.
     start_reading(unsafe { Reader::new(stream) });
 }
@@ -304,7 +462,7 @@ fn start_reading(stream: Reader) {
 /// # Safety
 /// `stream` has been through [`rstream_init`], and `cb` is safe to call with
 /// `data`.
-pub(crate) unsafe fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut c_void) {
+pub(super) unsafe fn rstream_start(stream: *mut RStream, cb: stream_read_cb, data: *mut c_void) {
     // SAFETY: the caller's stream.
     start_with(unsafe { Reader::new(stream) }, cb, data);
 }
@@ -321,7 +479,7 @@ fn start_with(stream: Reader, cb: stream_read_cb, data: *mut c_void) {
 
 /// # Safety
 /// `stream` has been through [`rstream_init`].
-pub unsafe fn rstream_stop_inner(stream: *mut RStream) {
+pub(super) unsafe fn rstream_stop_inner(stream: *mut RStream) {
     // SAFETY: the caller's stream.
     stop_reading(unsafe { Reader::new(stream) });
 }
@@ -335,15 +493,6 @@ fn stop_reading(stream: Reader) {
             Some(uvstream) => uv_read_stop(uvstream),
         };
     }
-}
-
-/// # Safety
-/// `stream` has been through [`rstream_init`].
-pub unsafe fn rstream_stop(stream: *mut RStream) {
-    // SAFETY: the caller's stream.
-    let stream = unsafe { Reader::new(stream) };
-    stop_reading(stream);
-    stream.set_want_read(false);
 }
 
 /// libuv's allocation callback: offer it the free tail of the block.
@@ -502,18 +651,6 @@ fn deliver_reads(stream: Reader) {
     }
 }
 
-/// Hand the unread bytes to `consume`, outside a delivery (a timer giving
-/// up on the rest of a sequence), and drop as many as it answers it took.
-///
-/// # Safety
-/// `stream` has been through [`rstream_init`].
-pub unsafe fn rstream_consume_unread(stream: *mut RStream, consume: impl FnOnce(&[u8]) -> usize) {
-    // SAFETY: the caller's stream.
-    let stream = unsafe { Reader::new(stream) };
-    let consumed = consume(stream.buf.unread());
-    consume_bytes(stream, consumed);
-}
-
 /// Drop the first `consumed` unread bytes, compacting what is left to the
 /// front of the block and resuming reads if that made room.
 fn consume_bytes(stream: Reader, consumed: size_t) {
@@ -539,7 +676,7 @@ unsafe fn rstream_close_cb(s: *mut Stream, data: *mut c_void) {
 
 /// # Safety
 /// `stream` has been through [`rstream_init`].
-pub unsafe fn rstream_may_close(stream: *mut RStream) {
+pub(super) unsafe fn rstream_may_close(stream: *mut RStream) {
     // SAFETY: the caller's stream.
     may_close(unsafe { Reader::new(stream) }.conn());
 }

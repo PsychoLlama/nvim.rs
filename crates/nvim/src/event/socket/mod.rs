@@ -40,8 +40,8 @@ use crate::event::libuv::{
     uv_tcp_nodelay,
 };
 use crate::event::r#loop::{Drain, main_uv_loop, wait_on_main_loop};
-use crate::event::objects::{RStream, Stream};
-use crate::event::rstream::Reader;
+use crate::event::objects::Stream;
+use crate::event::rstream::ReadStream;
 use crate::event::socket::address::{Endpoint, InvalidPort, tcp_host_end};
 use crate::event::stream::{may_close, stream_init, stream_may_close};
 use crate::event::uv::{
@@ -492,11 +492,10 @@ fn rebind_stale_socket(watcher: Watcher, failure: c_int) -> c_int {
 /// Is anything listening on `address`? Probed by connecting to it, with a
 /// 500ms timeout so a dead socket is diagnosed quickly.
 fn socket_alive(address: &CStr) -> bool {
-    // SAFETY: `RStream` is inhabited by the all-zero bit pattern.
-    let mut stream: RStream = unsafe { mem::zeroed() };
-    let probe = &raw mut stream;
-    // SAFETY: a stream on this frame, which outlives the call.
-    if unsafe { socket_connect(probe, false, address, 500) }.is_err() {
+    let stream = ReadStream::unopened();
+    // SAFETY: a stream on this frame, which is not moved and outlives the
+    // probe: the frame waits for the close below before it returns.
+    if unsafe { socket_connect(&stream, false, address, 500) }.is_err() {
         return false;
     }
 
@@ -504,10 +503,8 @@ fn socket_alive(address: &CStr) -> bool {
     // this stack frame.
     // A `Cell`, as in `rebind_stale_socket`.
     let closed = Cell::new(false);
-    stream.s.internal_close_cb = Some(connect_close_cb);
-    stream.s.internal_data = closed.as_ptr().cast();
-    // SAFETY: the probe stream, still on this frame.
-    unsafe { stream_may_close(&raw mut stream.s) };
+    stream.set_internal_close_cb(Some(connect_close_cb), closed.as_ptr().cast());
+    may_close(stream.conn());
     wait_on_main_loop(Drain::Nothing, -1, || closed.get());
     true
 }
@@ -526,12 +523,11 @@ impl Incoming<'_> {
     /// error otherwise.
     ///
     /// # Safety
-    /// `stream` is a live `RStream` the caller keeps alive, unmoved, for as
-    /// long as the connection lasts.
-    pub(in crate::event) unsafe fn accept(&self, stream: *mut RStream) -> c_int {
+    /// `stream` is unopened, and the caller keeps it alive, unmoved, until
+    /// its handle's close callback has run.
+    pub(in crate::event) unsafe fn accept(&self, stream: &ReadStream) -> c_int {
         let watcher = self.watcher;
-        // SAFETY: the caller's promise.
-        let conn = unsafe { Reader::new(stream) }.conn();
+        let conn = stream.conn();
         let uv_loop = main_uv_loop();
         let client: *mut uv_stream_t = if watcher.is_tcp() {
             // SAFETY: the caller's stream, on the editor's loop.
@@ -582,15 +578,16 @@ impl Incoming<'_> {
 /// before that happens.
 ///
 /// # Safety
-/// `stream` is a live `RStream` the caller keeps alive until this returns.
-pub unsafe fn socket_connect(
-    stream: *mut RStream,
+/// `stream` is unopened; on success the caller keeps it alive, unmoved,
+/// until its handle's close callback has run (a failure has closed it
+/// before this returns).
+pub(crate) unsafe fn socket_connect(
+    stream: &ReadStream,
     is_tcp: bool,
     address: &CStr,
     timeout: c_int,
 ) -> Result<(), &'static CStr> {
-    // SAFETY: the caller's stream, live until this returns.
-    let conn = unsafe { Reader::new(stream) }.conn();
+    let conn = stream.conn();
     let uv_loop = main_uv_loop();
 
     let lookup = if is_tcp {

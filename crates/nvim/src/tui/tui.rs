@@ -36,7 +36,8 @@ use crate::event::libuv::{
     uv_timer_start, uv_tty_get_winsize, uv_tty_init, uv_tty_reset_mode, uv_tty_set_mode,
 };
 use crate::event::r#loop::{Drain, main_loop_raw, poll_main_loop, wait_on_main_loop};
-use crate::event::objects::{RStream, SignalWatcher};
+use crate::event::objects::SignalWatcher;
+use crate::event::rstream::ReadStream;
 use crate::event::signal::{
     signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
 };
@@ -152,6 +153,8 @@ pub(crate) fn with_started_tui<R>(f: impl FnOnce(&mut TUIData) -> R) -> R {
 /// another, nor reach inside it. What it lends are raw pointers, for the
 /// `unsafe` libuv calls in the TUI's four libuv files; each handle sits in
 /// an [`UnsafeCell`] because libuv writes it while the state is borrowed.
+/// The read stream is lent as the [`ReadStream`] it is, whose operations
+/// take `&self` for the same reason.
 pub struct Handles {
     /// The loop writes run on, private to the TUI so a flush can be
     /// synchronous without pumping the editor's loop.
@@ -174,7 +177,7 @@ pub struct Handles {
     /// theme change would otherwise provoke one of per announcement.
     bg_query_timer: UnsafeCell<uv_timer_t>,
     /// stdin.
-    read_stream: UnsafeCell<RStream>,
+    read_stream: ReadStream,
     _pinned: PhantomPinned,
 }
 
@@ -211,7 +214,7 @@ impl Handles {
                 startup_delay_timer: core::mem::zeroed(),
                 input_timer: core::mem::zeroed(),
                 bg_query_timer: core::mem::zeroed(),
-                read_stream: core::mem::zeroed(),
+                read_stream: ReadStream::unopened(),
                 _pinned: PhantomPinned,
             }
         };
@@ -259,15 +262,13 @@ impl Handles {
     }
 
     /// stdin's read stream.
-    pub(crate) fn read_stream(&self) -> *mut RStream {
-        self.read_stream.get()
+    pub(crate) fn read_stream(&self) -> &ReadStream {
+        &self.read_stream
     }
 
     /// Has stdin's read stream seen the end of its input?
     fn input_at_eof(&self) -> bool {
-        // SAFETY: a plain read of the stream's own flag; libuv writes it only
-        // in a callback the loop runs, and none runs while this does.
-        unsafe { (*self.read_stream.get()).did_eof }
+        self.read_stream.at_eof()
     }
 }
 

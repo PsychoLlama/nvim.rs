@@ -9,7 +9,8 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::event::libuv_proc::LibuvProc;
-use crate::event::objects::{Proc, RStream, Stream};
+use crate::event::objects::{Proc, Stream};
+use crate::event::rstream::ReadStream;
 use crate::os::libc::{uint32_t, uint64_t};
 use crate::os::pty_proc_unix::PtyProc;
 use crate::types::{ApiDict, Callback, LuaRef, Object, RefcountSize};
@@ -158,7 +159,7 @@ pub enum ChannelStream {
     /// A child process, with up to three pipes or a pty master.
     Job(JobProc),
     /// A socket this process dialled or accepted.
-    Socket(RStream),
+    Socket(ReadStream),
     /// This process's own stdin and stdout.
     Stdio(StdioPair),
     /// This process's own stderr, written synchronously.
@@ -259,6 +260,6 @@ pub struct StderrState {
 }
 #[derive(Debug)]
 pub struct StdioPair {
-    pub in_0: RStream,
+    pub in_0: ReadStream,
     pub out: Stream,
 }
