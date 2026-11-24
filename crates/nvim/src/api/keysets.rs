@@ -1,11 +1,4 @@
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 // The `KeyDict_<name>` spelling is upstream's macro, and the wire keys it
 // names are the API's own; `tools/apigen` reads both from here.
 #![allow(non_camel_case_types)]

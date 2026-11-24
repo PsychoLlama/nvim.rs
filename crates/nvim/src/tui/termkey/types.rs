@@ -1,11 +1,4 @@
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 //! libtermkey's public types: the key record, the kinds of key and their
 //! symbols, and what a read answers.

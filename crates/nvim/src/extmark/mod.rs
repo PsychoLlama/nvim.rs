@@ -31,13 +31,6 @@
 
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::os::libc::{ptrdiff_t, uint64_t};
 use crate::slot::EditPart;

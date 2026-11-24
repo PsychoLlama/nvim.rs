@@ -3,13 +3,6 @@
 //! so the output must stay bit-identical.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 /// Size of a SHA-256 digest in bytes.
 pub const SHA256_SUM_SIZE: usize = 32;

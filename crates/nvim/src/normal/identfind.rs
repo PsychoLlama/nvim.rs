@@ -1,13 +1,6 @@
 //! Finding the identifier a command is about to act on: the word under
 //! the cursor, the one at a given position, and the local declaration
 //! `gd`/`gD` jumps to.
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 /// The `mb_get_class` classes this file cares about: 0 is white space, 1 is

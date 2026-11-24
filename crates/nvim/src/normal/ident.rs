@@ -1,13 +1,6 @@
 //! The identifier under the cursor, and the commands that look it up:
 //! tags, `:help`, 'keywordprg', a declaration, a file name.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use super::identfind::find_ident_under_cursor;

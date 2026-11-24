@@ -16,13 +16,6 @@
 //! replaced List is the one written; see the `vars` battery row).
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 // The write half, which reads the record this one fills in.
 mod assign;

@@ -4,13 +4,6 @@
 //! table: `do_one_cmd` calls `verify_command` on every name it failed to
 //! resolve, so that the joke works without occupying a row.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use core::ffi::CStr;
 

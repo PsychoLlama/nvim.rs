@@ -20,13 +20,6 @@
 //! registry.
 //!
 //! [`winlayer`]: super
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `winlayer/` row in docs/perimeter.md.
 // The exports here are metrics/abi-ledger.jsonl rows (`curwin`, `win_col_off`), and

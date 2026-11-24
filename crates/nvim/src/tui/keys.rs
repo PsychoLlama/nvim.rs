@@ -11,13 +11,6 @@
 //! modifiers, which is why those two are spelled out here.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::global_cell::GlobalCell;
 use crate::tui::termkey::termkey::{

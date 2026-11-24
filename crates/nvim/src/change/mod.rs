@@ -17,13 +17,6 @@
 //! break the line.  Its `did_do_comment` out-parameter is how the second
 //! half of a broken line is stopped from starting a *new* comment leader.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::ascii::{TAB, ascii_iswhite};
 use crate::autocmd::defs::AutoEvent;

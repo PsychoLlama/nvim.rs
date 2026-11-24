@@ -17,13 +17,6 @@
 // luv's C API: `luv_CFpcall` and its neighbours are that library's exported
 // names.
 #![allow(non_camel_case_types)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use core::ffi::{c_int, c_void};
 use core::ptr;

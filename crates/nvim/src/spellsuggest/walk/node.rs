@@ -26,13 +26,6 @@
 //! case-folded tree to look for the word the prefix goes in front of.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::ascii::ascii_iswhite;
 use crate::cstr::until_nul;

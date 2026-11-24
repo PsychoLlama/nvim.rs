@@ -5,13 +5,6 @@
 //! either in place or in a split preview window, and restores.  The
 //! `cmdpreview_save_*` / `cmdpreview_restore_*` pairs are that save-restore.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use super::*;

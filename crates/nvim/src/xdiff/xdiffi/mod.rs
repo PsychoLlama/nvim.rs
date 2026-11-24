@@ -16,6 +16,15 @@
 //! [`compact`].
 
 #![forbid(unsafe_code)]
+// Casts: perimeter: vendored libxdiff (a `CAST_ALLOW_FLOOR` row, scripts/ratchet.py).
+// It reaches `compact.rs` too, which denies them again.
+#![allow(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use core::ops::{Index, IndexMut};
 

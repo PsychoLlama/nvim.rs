@@ -10,13 +10,6 @@
 //! written to, so a name is measured where it stands rather than cut there.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::cstr::{self, byte_at};
 use crate::env::getenv_resolved;

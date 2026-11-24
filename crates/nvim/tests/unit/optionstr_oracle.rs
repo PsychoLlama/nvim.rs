@@ -541,7 +541,7 @@ fn glyph(sc: ScreenChar) -> String {
     let len = unsafe { schar_get(buf.as_mut_ptr(), sc) };
     buf[..len]
         .iter()
-        .map(|&b| format!("{:02x}", b as u8))
+        .map(|&b| format!("{:02x}", b.cast_unsigned()))
         .collect()
 }
 

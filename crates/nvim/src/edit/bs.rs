@@ -20,13 +20,6 @@
 //! [`ins_del`] is `<Del>`, the forward case, and is much shorter because
 //! none of those rules apply to it.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::cstr::byte_at;

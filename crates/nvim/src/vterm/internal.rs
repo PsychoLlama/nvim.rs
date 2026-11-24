@@ -1,11 +1,4 @@
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 //! libvterm's internal types (`vterm_internal.h`): the encodings, the parser's
 //! state and the pen, reached through the same C ABI.

@@ -13,13 +13,6 @@
 //! that keep upstream's names. Nothing holds a borrow of it across a call:
 //! a thrown exception's report runs messages, and messages reach Lua.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::ex_eval::defs::{ErrorMsgs, ExcId, Exception};
 use crate::global_cell::state_record;

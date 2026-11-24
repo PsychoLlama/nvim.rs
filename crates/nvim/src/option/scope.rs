@@ -18,13 +18,6 @@
 //! [`super::value`] is where it gets read or written.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::option::defs::{OPT_VAL_TYPE_BOOLEAN, OPT_VAL_TYPE_NUMBER, OPT_VAL_TYPE_STRING};
 use crate::undo::NO_LOCAL_UNDOLEVEL;

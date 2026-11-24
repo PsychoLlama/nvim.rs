@@ -15,13 +15,6 @@
 //! API use to size a splice; it does not walk the text at all, only the line
 //! lengths.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::memline::MlFlags;

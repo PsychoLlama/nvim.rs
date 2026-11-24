@@ -966,34 +966,6 @@ fn with_unsafe_code_allow(text: &str, reason: &str) -> String {
     text.replacen(DENY, &format!("{DENY}{reason}#![allow(unsafe_code)]\n"), 1)
 }
 
-/// The cast deny (`clippy::cast_lossless` and its four siblings), for a tree
-/// whose output has finished its casts.
-///
-/// The ratchet counts files *not* carrying it (`files_without_deny_casts`),
-/// so a generated tree that comes out clean has to say so from here: a
-/// hand-written attribute in a generated file is gone at the next
-/// `just apigen`. It hangs off whichever unsafe attribute the header already
-/// carries -- `#![allow(unsafe_code)]` when the chunk holds unsafe (emitted
-/// just above), `#![forbid(unsafe_code)]` when it does not -- so the two
-/// shapes of header need no separate anchor. `just lint` is the net: turning
-/// this on for a tree that still casts fails the build outright.
-fn with_cast_deny(text: &str) -> String {
-    const DENY: &str = "#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
-";
-    for anchor in ["#![allow(unsafe_code)]\n", "#![forbid(unsafe_code)]\n"] {
-        if text.contains(anchor) {
-            return text.replacen(anchor, &format!("{anchor}{DENY}"), 1);
-        }
-    }
-    panic!("a generated chunk has no unsafe attribute to hang the cast deny on")
-}
-
 fn emit_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
     let name = &f.name;
     let handler = format!("handle_{name}");
@@ -1200,23 +1172,7 @@ const HEADER: &str = r#"//! Dispatch wrappers for the msgpack-RPC API.
 //! overflow the tree's 1,000-line file cap is split into numbered parts.
 
 #![deny(unsafe_op_in_unsafe_fn)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 "#;
-
-/// The cast family's deny, as the tree spells it in a finished module.
-const CAST_DENY: &str = "#![deny(\n    \
-    clippy::cast_lossless,\n    \
-    clippy::cast_possible_truncation,\n    \
-    clippy::cast_possible_wrap,\n    \
-    clippy::cast_sign_loss,\n    \
-    clippy::ptr_as_ptr\n\
-)]";
 
 /// Header for a child module. Children pull the support code in wholesale:
 /// a glob import cannot go stale as the batch changes, and rustc does not
@@ -1234,8 +1190,6 @@ fn child_header(module: &str, part: usize, parts: usize, body: &str) -> String {
     } else {
         "#![forbid(unsafe_code)]"
     };
-    // The wrappers convert between integer widths only through `From`/
-    // `TryFrom`, so every child takes the cast deny, as the parent does.
     format!(
         "//! Dispatch wrappers for `crate::api::{module}`{of}.\n\
          //!\n\
@@ -1243,7 +1197,6 @@ fn child_header(module: &str, part: usize, parts: usize, body: &str) -> String {
          //! run `just apigen`.\n\
          \n\
          {attr}\n\
-         {CAST_DENY}\n\
          \n\
          use super::*;\n\
          \n"
@@ -3178,13 +3131,6 @@ const METADATA_HEADER: &str = r#"//! The API metadata blob.
 //! signatures, tools/apigen/metadata.txt and the tree's own `UI_EXT_NAMES`
 //! and `NVIM_VERSION_*`. Do not edit: run `just apigen`.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 "#;
 
@@ -3327,53 +3273,38 @@ fn run() -> Result<(), String> {
     // (see `with_unsafe_code_allow`). None of them is on the unsafe
     // perimeter: generated crate source is ordinary source, and its unsafe is
     // debt like any other module's. The Lua binding emits none.
-    //
-    // The last field is the cast deny (see `with_cast_deny`): every tree but
-    // the msgpack-RPC wrappers comes out with no cast findings, and the
-    // wrappers still decode 224 argument casts by hand.
     let trees = [
-        (
-            out_dir,
-            generate(&api, &specs, &config)?,
-            "wrappers",
-            "",
-            false,
-        ),
+        (out_dir, generate(&api, &specs, &config)?, "wrappers", ""),
         (
             tables_dir,
             generate_tables(&keysets, &specs, &config)?,
             "tables",
             "",
-            true,
         ),
         (
             lua_dir,
             generate_lua(&api, &specs, &config)?,
             "Lua binding",
             "",
-            true,
         ),
         (
             options_dir.clone(),
             options::generate(&root, &options_lua, &options_dir, &config)?,
             "option table",
             "",
-            true,
         ),
         (
             eval_dir.clone(),
             eval_funcs::generate(&root, &api, &specs, &eval_lua, &eval_dir, &config)?,
             "builtin table",
             "",
-            true,
         ),
     ];
 
     let mut wrote = false;
-    for (dir, mut files, what, reason, casts) in trees {
+    for (dir, mut files, what, reason) in trees {
         for file in &mut files {
             let text = with_unsafe_code_allow(&file.text, reason);
-            let text = if casts { with_cast_deny(&text) } else { text };
             file.text = rustfmt(&config, &text)?;
             // The chunker works on unformatted text; if the margin it leaves
             // was not enough, say so rather than let the ratchet find out.

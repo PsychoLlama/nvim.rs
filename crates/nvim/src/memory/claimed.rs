@@ -19,13 +19,6 @@
 //!   when each element costs at least a byte of input.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 /// How much [`read_claimed`] reads before its buffer grows again, and
 /// [`claimed_capacity`]'s ceiling: large enough that an honest payload

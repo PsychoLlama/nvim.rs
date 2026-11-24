@@ -16,13 +16,6 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::{SUB_FLAGS, check_regexp_delim, skip_substitute, sub_parse_flags, sub_set_replacement};
 use crate::ascii::ascii_iswhite;

@@ -3,13 +3,6 @@
 //! from `\%(` through the `\%23l` position assertions.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::narrow::const_len_as_int;
 use crate::regexp::{NfaOp, RegCompiler, low_byte};

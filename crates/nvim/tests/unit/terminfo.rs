@@ -61,7 +61,7 @@ fn builtin_descriptions_match_the_generated_table() {
             description.lines,
             description.columns,
         ] {
-            fnv.update(&(number as u32).to_le_bytes());
+            fnv.update(&number.to_le_bytes());
         }
 
         let defs = dense(
@@ -72,7 +72,7 @@ fn builtin_descriptions_match_the_generated_table() {
                 .map(|&(slot, seq)| (slot as usize, seq)),
         );
         for (slot, seq) in defs.iter().enumerate() {
-            fnv.update(&[slot as u8]);
+            fnv.update(&[u8::try_from(slot).unwrap()]);
             fnv.capability(*seq);
         }
 
@@ -84,13 +84,13 @@ fn builtin_descriptions_match_the_generated_table() {
                 .map(|&(slot, seq, shifted)| (slot, (seq, shifted))),
         );
         for (slot, pair) in keys.iter().enumerate() {
-            fnv.update(&[slot as u8]);
+            fnv.update(&[u8::try_from(slot).unwrap()]);
             fnv.capability(pair.map(|(seq, _)| seq));
             fnv.capability(pair.and_then(|(_, shifted)| shifted));
         }
 
         for slot in 0..MAX_FUNCTION_KEY {
-            fnv.update(&[slot as u8]);
+            fnv.update(&[u8::try_from(slot).unwrap()]);
             fnv.capability(description.f_keys.get(slot).copied().flatten());
         }
     }
@@ -160,7 +160,7 @@ fn every_capability_expands() {
         for &(slot, seq) in description.defs {
             let mut params = [Param::default(); 9];
             for (i, param) in params.iter_mut().enumerate() {
-                param.num = i as i64 + 1;
+                param.num = i64::try_from(i).unwrap() + 1;
             }
             let mut buf = [0u8; 1024];
             let mut out = Out::new(&mut buf);

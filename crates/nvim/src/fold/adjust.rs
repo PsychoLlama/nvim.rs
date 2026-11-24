@@ -7,13 +7,6 @@
 //! a caller lend it a window's `w_folds` for the length of the call.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;

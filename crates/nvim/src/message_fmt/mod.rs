@@ -38,13 +38,6 @@
 //! hand it format strings that are *data*, not literals, and those are its
 //! floor. The `_c` message macros that used to sit on top of it are gone.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::message::{
     MSG_IOBUFF_LEN, SEMSG_ERRBUF_LEN, SEMSG_MULTILINE_ERRBUF_LEN, emsg, emsg_multiline_text,

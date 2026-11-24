@@ -11,13 +11,6 @@
 //! the length of the call, and every other caller's is a local.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::*;
 use crate::cmdexpand::defs::ExpandContext;

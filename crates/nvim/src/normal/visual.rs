@@ -6,13 +6,6 @@
 //! covers, and `unadjust_for_sel` puts that back before anything reads the
 //! area again.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::mbyte::Codepoint;

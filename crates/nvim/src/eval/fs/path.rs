@@ -21,13 +21,6 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::{at, err, is_sep, next_component, str_arg, str_arg_chk, tail_with_sep};
 use crate::eval::funcs::builtin::EvalFuncData;

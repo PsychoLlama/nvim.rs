@@ -16,6 +16,8 @@
 //! this port stays under that license (text: licenses/LGPL-2.1.txt).
 
 #![forbid(unsafe_code)]
+// `mod.rs` above allows the cast lints for its own casts; this file has
+// none, so it puts the crate's deny back.
 #![deny(
     clippy::cast_lossless,
     clippy::cast_possible_truncation,

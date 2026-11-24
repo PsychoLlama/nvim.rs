@@ -1,4 +1,12 @@
 #![forbid(unsafe_code)]
+// Casts: the home of the named, deliberate narrowings (a `CAST_ALLOW_FLOOR` row, scripts/ratchet.py).
+#![allow(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 //! Deliberate narrowing, named once.
 //!
@@ -12,9 +20,9 @@
 //! RPC wire.
 //!
 //! So the narrowing stays, and this module is where it is spelled. **This file
-//! deliberately does not carry the cast deny** -- it is the one place in the
-//! tree allowed to write the cast, which is what lets every module that calls
-//! it keep clippy's cast family switched on.
+//! deliberately allows the cast lints** the crate denies -- it is the one place
+//! in the tree allowed to write the cast, which is what lets every module that
+//! calls it keep clippy's cast family switched on.
 //!
 //! Five classes live here, and each one names the C it stands in for:
 //!

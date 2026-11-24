@@ -18,13 +18,6 @@
 //! edits reach extmarks and the buffer-update RPC as the single splice
 //! [`get_region_bytecount`] measured up front.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::extmark::EXTMARK_UNDO;

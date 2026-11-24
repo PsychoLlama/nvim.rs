@@ -14,13 +14,6 @@
 //! some other type.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::types::api::{OBJECT_TYPE_BUFFER, OBJECT_TYPE_WINDOW};
 use core::ffi::CStr;

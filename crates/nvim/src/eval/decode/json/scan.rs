@@ -6,13 +6,6 @@
 //! with [`Decoder::next_map_special`] set.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::charset::{Str2NrBases, str2nr_in, string2float_in};
 use crate::eval::encode::{

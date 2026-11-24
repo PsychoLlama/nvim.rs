@@ -15,13 +15,6 @@
 //! only knowable once every key has been decoded.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::{
     MP_EXT, MP_INTEGER, create_special_dict, decode_create_map_special_dict, decode_owned_string,

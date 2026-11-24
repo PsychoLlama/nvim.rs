@@ -17,13 +17,6 @@
 //! many of the two slots below are real.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use crate::narrow::len_as_int;

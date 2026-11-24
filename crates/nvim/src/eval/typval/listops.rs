@@ -9,13 +9,6 @@
 //! index — the list owns its items, so there is nothing to walk.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::*;
 use crate::eval::collect::var_item_copy;

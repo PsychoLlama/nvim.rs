@@ -11,13 +11,6 @@
 //! *most* of the buffer back is the whole point.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::autocmd::fire_autocmds_for;
 use crate::buffer::{BufFlags, alloc_unregistered_buffer};

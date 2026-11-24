@@ -20,13 +20,6 @@
 //! A push borrows what it converts. The bindings hand back a value they own
 //! and drop it afterwards, which is what releases the Lua references in it.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::lua::abi::lua_Number;

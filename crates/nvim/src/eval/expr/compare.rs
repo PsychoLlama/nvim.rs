@@ -6,13 +6,6 @@
 //! Float, then Number, and only what is left compares as a String.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::eval::EXPR_IS;
 use crate::os::cshim::IS_ALNUM;

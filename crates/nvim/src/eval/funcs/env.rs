@@ -1,13 +1,6 @@
 //! The environment and the paths around it: `environ()`, `expand()`,
 //! `stdpath()` and the swap-file queries.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::tv_get_buf;
 use super::wrappers::{arg_number_chk, dict_alloc_ret};

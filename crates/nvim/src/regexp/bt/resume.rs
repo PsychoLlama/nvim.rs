@@ -7,13 +7,6 @@
 //! to try and hands control back to the forward walk with `Verdict::Continue`.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::narrow::len_as_int;
 use crate::types::LineNr;

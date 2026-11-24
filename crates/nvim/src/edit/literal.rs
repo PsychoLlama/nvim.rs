@@ -17,13 +17,6 @@
 //! path that draws one has to unput it again before inserting -- which is
 //! what `did_putchar` tracks in three separate places here.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::cstr::{self, byte_at};

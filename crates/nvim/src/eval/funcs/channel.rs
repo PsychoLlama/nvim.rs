@@ -1,13 +1,6 @@
 //! Channels and servers: `chansend()`, `rpcrequest()`, `serverstart()` and
 //! the rest of the RPC and socket surface.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::autocmd::state::{AUTOCMD_BUFNR, AUTOCMD_FNAME, AUTOCMD_FNAME_FULL, AUTOCMD_MATCH};
 use crate::channel::defs::{CallbackReader, ChannelPart};

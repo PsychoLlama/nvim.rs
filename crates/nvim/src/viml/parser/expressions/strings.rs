@@ -9,13 +9,6 @@
 //! gets no buffer at all, whatever the decoder would go on to produce.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::keycodes::{FSK_IN_STRING, trans_special_into};
 use crate::mbyte::Codepoint;

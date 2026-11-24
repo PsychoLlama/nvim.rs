@@ -51,7 +51,7 @@ fn every_field_width_round_trips() {
         let encoded = encode_be(nr, len);
         assert_eq!(decode_be(&encoded[..len]), nr, "{nr:#x} in {len} bytes");
         // Most significant byte first, and nothing written past the field.
-        assert_eq!(encoded[0], (nr >> ((len - 1) * 8)) as u8);
+        assert_eq!(encoded[0], nr.to_be_bytes()[8 - len]);
         assert!(encoded[len..].iter().all(|&b| b == 0));
     }
 }
@@ -75,7 +75,7 @@ fn a_link_round_trips_through_its_four_byte_field() {
 
     for seq in [1, 2, 0x7f, 0x80, 0xffff, 0x0100_0000, i32::MAX] {
         let link = UndoLink::to_seq(seq);
-        let field = encode_be(link.seq() as u64, 4);
+        let field = encode_be(i64::from(link.seq()).cast_unsigned(), 4);
         let read_back = i32::from_be_bytes([field[0], field[1], field[2], field[3]]);
         assert_eq!(UndoLink::to_seq(read_back), link, "seq {seq}");
     }
@@ -83,7 +83,7 @@ fn a_link_round_trips_through_its_four_byte_field() {
     // negative field -- which no writer produces and only a corrupt file
     // has -- reads back as no link rather than as a lookup.
     assert_eq!(
-        &encode_be(UndoLink::NONE.seq() as u64, 4)[..4],
+        &encode_be(i64::from(UndoLink::NONE.seq()).cast_unsigned(), 4)[..4],
         &[0, 0, 0, 0]
     );
     assert!(UndoLink::to_seq(-1).is_none());

@@ -1,13 +1,6 @@
 //! Building and reshaping strings: escaping, formatting, splitting,
 //! substituting, hashing, time formatting and spelling.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::wrappers::{arg_bool_chk, arg_number, arg_number_chk, blob_alloc_ret, non_zero_arg};
 use crate::eval::do_string_sub;

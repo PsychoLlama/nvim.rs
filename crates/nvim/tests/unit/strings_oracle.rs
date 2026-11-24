@@ -127,7 +127,10 @@ fn copiers_and_case_folders() {
             for ch in [
                 0x61, 0x27, 0x5c, 0x20, 0xe9, 0xc3, 0x301, 0x1f600, 0x200d, 0xfffd, 0x10ffff, 0, -1,
             ] {
-                d.add(find_char(text, Codepoint::new(ch as c_int)).map_or(-1, |at| at as i64));
+                d.add(
+                    find_char(text, Codepoint::new(c_int::try_from(ch).unwrap()))
+                        .map_or(-1, |at| i64::try_from(at).unwrap()),
+                );
             }
         }
     }

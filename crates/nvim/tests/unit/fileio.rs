@@ -170,7 +170,10 @@ fn a_descriptor_can_be_adopted_for_reading_and_for_writing() {
     let (err, mut fp) = Handle::adopt(file, FILE_READ_ONLY);
     assert_eq!(err, 0);
     let want = contents();
-    assert_eq!(fp.read(want.len()), (want.len() as isize, want.clone()));
+    assert_eq!(
+        fp.read(want.len()),
+        (isize::try_from(want.len()).unwrap(), want.clone())
+    );
     assert_eq!(fp.close(false), Ok(()));
 
     assert_eq!(size_of(&fixture.fresh()), None);
@@ -194,7 +197,7 @@ fn creating_a_file_honours_the_mode_and_create_only_refuses_an_existing_one() {
             assert_eq!(err, 0);
             assert_eq!(
                 mode_of(&fixture.fresh()),
-                Some(0o100_000 | mode as u32),
+                Some(0o100_000 | u32::try_from(mode).unwrap()),
                 "{flags:#x} with mode {mode:#o}"
             );
             assert_eq!(fp.close(false), Ok(()));
@@ -297,7 +300,11 @@ fn reading_in_chunks_of_every_awkward_size() {
             let left = want.len() - shift;
             let (count, got) = fp.read(size);
             let taken = size.min(left);
-            assert_eq!(count, taken as isize, "at {shift} by {size}");
+            assert_eq!(
+                count,
+                isize::try_from(taken).unwrap(),
+                "at {shift} by {size}"
+            );
             assert_eq!(&got[..taken], &want[shift..shift + taken]);
             assert!(
                 got[taken..].iter().all(|&b| b == 0),
@@ -316,7 +323,7 @@ fn reading_in_chunks_of_every_awkward_size() {
     assert_eq!(err, 0);
     assert_eq!(fp.read(5), (5, want[..5].to_vec()));
     let (count, got) = fp.read(want.len());
-    assert_eq!(count, (want.len() - 5) as isize);
+    assert_eq!(count, isize::try_from(want.len() - 5).unwrap());
     assert_eq!(&got[..want.len() - 5], &want[5..]);
     assert_eq!(fp.close(false), Ok(()));
 }
@@ -332,7 +339,7 @@ fn writing_in_chunks_of_every_awkward_size() {
         assert_eq!(err, 0);
         assert!(fp.writing());
         for chunk in want.chunks(size) {
-            assert_eq!(fp.write(chunk), chunk.len() as isize);
+            assert_eq!(fp.write(chunk), isize::try_from(chunk.len()).unwrap());
         }
         assert_eq!(fp.close(false), Ok(()));
         assert_eq!(std::fs::read(fixture.fresh()).unwrap(), want, "by {size}");
@@ -379,7 +386,10 @@ fn skipping_advances_the_read_position() {
     assert_eq!(fp.skip(3), 3);
     assert_eq!(fp.read(3), (3, want[3..6].to_vec()));
     // Skipping past the end answers what it could skip, and reads nothing.
-    assert_eq!(fp.skip(want.len()), (want.len() - 6) as isize);
+    assert_eq!(
+        fp.skip(want.len()),
+        isize::try_from(want.len() - 6).unwrap()
+    );
     assert_eq!(fp.read(3), (0, vec![0; 3]));
     assert_eq!(fp.close(false), Ok(()));
 }

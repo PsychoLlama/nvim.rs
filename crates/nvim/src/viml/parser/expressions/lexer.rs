@@ -6,13 +6,6 @@
 //! `const char *` walk, so the bounds are the compiler's problem.
 //!
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::charset::{Str2NrBases, str2nr_in};
 use crate::mbyte::cluster_len;

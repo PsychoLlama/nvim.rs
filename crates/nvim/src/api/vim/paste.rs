@@ -6,13 +6,6 @@
 //! insertion instead, taking a whole array of lines and a motion type.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 use super::*;
 use crate::api::private::helpers::api_try;
 use crate::api::private::validate::{err_bad_number, err_bad_value, err_expected};

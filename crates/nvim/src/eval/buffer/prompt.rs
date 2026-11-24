@@ -2,13 +2,6 @@
 //! `prompt_setinterrupt()` and `prompt_setprompt()`.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::lines::set_buffer_lines;
 use super::*;

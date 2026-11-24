@@ -12,13 +12,6 @@
 //! paren is on, and `cur_amount`, the column of the paren (or of what follows
 //! it).  Which one wins is the whole of the second half.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use super::*;

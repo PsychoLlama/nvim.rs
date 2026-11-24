@@ -8,13 +8,6 @@
 //! keeps, which one is current, the entries and the current one among them.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::*;
 use crate::buffer::{bare_buffer, free_bare_buffer};

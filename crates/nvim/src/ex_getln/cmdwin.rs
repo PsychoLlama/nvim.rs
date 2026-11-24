@@ -5,13 +5,6 @@
 //! command line's answer.  The `*_locked` guards are here because they are
 //! what stops that window being opened from somewhere it cannot unwind.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use super::*;

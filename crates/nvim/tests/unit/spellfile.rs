@@ -131,7 +131,7 @@ fn tree_words(byts: &[u8], idxs: &[i32]) -> Vec<String> {
             } else {
                 let mut deeper = prefix.clone();
                 deeper.push(byts[at]);
-                stack.push((idxs[at] as usize, deeper));
+                stack.push((usize::try_from(idxs[at]).unwrap(), deeper));
             }
         }
     }

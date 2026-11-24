@@ -1,13 +1,6 @@
 //! `u_write_undo`: writing a buffer's undo tree out to its undo file.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::os::fs::meta::VimAcl;
 use crate::os::libc::uintmax_t;

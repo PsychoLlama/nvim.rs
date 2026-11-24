@@ -12,13 +12,6 @@
 //! out of the right operand before it writes.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::eval::typval::{NumBuf, list_extend, tv_clear, tv_get_number};
 use crate::eval::{num_divide, num_modulus};

@@ -13,13 +13,6 @@
 //! `regstack_push` charges against the stack's byte size.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::mbyte::Codepoint;
 use core::ffi::c_int;

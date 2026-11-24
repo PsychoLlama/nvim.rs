@@ -1,13 +1,6 @@
 //! Numbers: arithmetic, the bitwise operators and the random-number
 //! generator.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::wrappers::{arg_number_chk, tv_get_float_chk};
 use crate::charset::skip;

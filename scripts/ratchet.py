@@ -498,21 +498,19 @@ plus these whole-tree metrics, which are not per-file:
                         the home are the implementation, the ones outside are
                         the debt.
 
-  files_without_deny_casts  the number of source files that have not adopted
-                    the cast lints. `as` is the transpile's universal
-                    conversion — ~21k of them, ~5k infallible widenings that
-                    `From` answers and a long tail of narrowings that need
-                    `TryFrom` and an error — and clippy's cast family
-                    (`cast_lossless`, `cast_possible_truncation`,
-                    `cast_possible_wrap`, `cast_sign_loss`, `ptr_as_ptr`) is
-                    pedantic, i.e. allowed by default. Turning it on tree-wide
-                    is a big-bang sweep nobody can review; the migration adopts
-                    it per module, as the roadmap's phase 19 item 6 asks.
+  files_allowing_casts  the number of source files that lift clippy's cast
+                    family. `as` was the transpile's universal conversion,
+                    and the cast lints (`cast_lossless`,
+                    `cast_possible_truncation`, `cast_possible_wrap`,
+                    `cast_sign_loss`, `ptr_as_ptr`) are pedantic, i.e.
+                    allowed by default; the migration adopted them module by
+                    module with an inner `#![deny(...)]`. Once all but a few
+                    files carried it, the default flipped, as `unsafe_code`'s
+                    did: crates/*/Cargo.toml denies the five crate-wide, so a
+                    new file is held by default, and a file that still casts
+                    carries
 
-                    So the same inverted trick as `forbid(unsafe_code)`: a
-                    module that has finished its casts writes
-
-                        #![deny(
+                        #![allow(
                             clippy::cast_lossless,
                             clippy::cast_possible_truncation,
                             clippy::cast_possible_wrap,
@@ -520,19 +518,23 @@ plus these whole-tree metrics, which are not per-file:
                             clippy::ptr_as_ptr
                         )]
 
-                    and the count of files *not* carrying it may only fall.
-                    The needle is `clippy::cast_lossless` inside a `deny(...)`,
-                    spanning newlines so rustfmt may wrap the list: that lint
-                    is the one the `From` vocabulary answers, so it is the
-                    family's marker. The files left without it are a written
-                    floor, `CAST_DENY_FLOOR` (each with its reason: a
-                    perimeter file's casts, a module root over one, and
-                    `narrow.rs`, the cast home, for good), checked both ways
-                    by every run. Naming the rest is the house convention,
-                    not something the ratchet can check — as with
-                    `forbid(unsafe_code)`, the attribute is a claim the
-                    compiler then enforces, and the ratchet only counts who
-                    has made it.
+                    with its reason in a comment above. The count of files
+                    carrying it may only fall, and they are a written floor,
+                    `CAST_ALLOW_FLOOR` (a perimeter file's casts, and
+                    `narrow.rs`, the cast home, for good), checked both ways.
+                    The needle is `clippy::cast_lossless` inside an inner
+                    `allow(...)`, spanning newlines so rustfmt may wrap the
+                    list: that lint is the family's marker. An item-level
+                    `#[allow]` with a `reason` (a `const fn`, where `From`
+                    cannot be called) is not counted.
+
+                    `check_cast_attributes` is the hard half, over the test
+                    targets too (clippy runs `--all-targets`, and an allow in
+                    a unit file lifts the lints as surely as one in src/): an
+                    inner cast *deny* is redundant, and fails the run, except
+                    in a file below a module root that allows -- there it is
+                    what puts the lints back (`xdiff/xdiffi/compact.rs`) -- and
+                    such a file must carry it.
 
   files_without_deny_unsafe_op  (retired) the number of source files carrying neither
                     #![forbid(unsafe_code)] nor
@@ -2154,31 +2156,27 @@ INSTRUMENT_KEYS = (
 
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
-# A module's claim to have finished its casts. `.` spans newlines so the list
-# may be wrapped; `clippy::cast_lossless` is the family's marker (see above).
+# A file's inner cast attributes, `allow` (a floor row) or `deny` (only below
+# an allowing module root). `.` spans newlines so the list may be wrapped;
+# `clippy::cast_lossless` is the family's marker (see above).
+ALLOW_CASTS = re.compile(r"#!\[allow\([^\]]*\bclippy::cast_lossless\b", re.DOTALL)
 DENY_CASTS = re.compile(r"#!\[deny\([^\]]*\bclippy::cast_lossless\b", re.DOTALL)
 
-# The files that do not carry the cast deny, each with why. This is the floor
-# `files_without_deny_casts` stands on, and it is checked both ways by
-# `check_cast_deny_floor`: a file without the deny that is not here fails the
-# run, and so does a row whose file now carries the deny (or is gone) -- drop
-# the row and lower the count. Three classes:
+# The files that carry the cast allow, each with why. This is the floor
+# `files_allowing_casts` stands on, and it is checked both ways by
+# `check_cast_attributes`: an allow in a file that is not here fails the run,
+# and so does a row whose file no longer carries it (or is gone) -- drop the
+# row and lower the count. Two classes:
 #   perimeter  a perimeter file's own casts, out of the migration's scope;
-#   root       a module root whose `#![deny]` would reach a perimeter file
-#              below it that has casts, so it lands when they do;
 #   home       `narrow.rs`, the one module whose job is to write the
 #              deliberate narrowings once (a float-to-integer conversion has
 #              no cast-free spelling), so that everything else can deny them.
 #              It is permanent.
-CAST_DENY_FLOOR = {
+# A row on a module root (`xdiff/xdiffi/mod.rs`) lifts the lints for its
+# children too, so each of them carries the deny again.
+CAST_ALLOW_FLOOR = {
     "crates/nvim/src/narrow.rs": "home: the named, documented narrowings",
-    "crates/nvim/src/lib.rs": "root: reaches xdiff/, os/, tui/input.rs",
-    "crates/nvim/src/tui/mod.rs": "root: reaches tui/input.rs",
-    "crates/nvim/src/os/mod.rs": "root: reaches os/input.rs, os/fs/",
-    "crates/nvim/src/xdiff/mod.rs": "root: reaches the vendored xdiff files",
-    "crates/nvim/src/tui/input.rs": "perimeter: timeout/mode widths (5)",
     "crates/nvim/src/os/input.rs": "perimeter: option widths, mouse codes, key bytes (35)",
-    "crates/nvim/src/os/fs/mod.rs": "perimeter: modes and write counts (5); root over meta.rs",
     "crates/nvim/src/os/fs/meta.rs": "perimeter: stat mode, xattr sizes (6)",
     "crates/nvim/src/lua/treesitter/ranges.rs": "perimeter: a Lua number as a TSPoint row (2)",
     "crates/nvim/src/xdiff/xdiffi/mod.rs": "perimeter: vendored libxdiff (32)",
@@ -2187,6 +2185,7 @@ CAST_DENY_FLOOR = {
     "crates/nvim/src/xdiff/xprepare.rs": "perimeter: vendored libxdiff (19)",
     "crates/nvim/src/xdiff/xtypes.rs": "perimeter: vendored libxdiff (21)",
 }
+CAST_ALLOW_CLASSES = ("perimeter", "home")
 # The types that keep `#[derive(Copy)]` (`derive_copy`) and `#[repr(C)]`
 # (`repr_c_editor_state` and `repr_c_ffi_types`) for good: the floors those
 # needles fall to. A row is `"path::Type"` (one braced struct/union) or a bare
@@ -3644,7 +3643,7 @@ def missing_safety_doc(text, masked):
 
 def measure():
     """(repo-relative file -> {metric: count} with zeros included,
-    number of files not carrying the cast deny,
+    number of files carrying the cast allow,
     lint name -> number of files carrying its blanket allow,
     repo-relative file -> its masked source, for the whole-tree checks,
     repo-relative file -> its *raw* source, for the three needles that cannot
@@ -3654,7 +3653,7 @@ def measure():
     stats = {}
     tree = {}
     sources = {}
-    without_casts = 0
+    allowing_casts = 0
     allowing = dict.fromkeys(FILE_ALLOWS, 0)
     for path in sorted(
         [*ROOT.glob("crates/*/src/**/*.rs"), *ROOT.glob("crates/*/*.rs")]
@@ -3674,10 +3673,10 @@ def measure():
         stats[str(path.relative_to(ROOT))] = counts
         tree[str(path.relative_to(ROOT))] = masked
         sources[str(path.relative_to(ROOT))] = text
-        without_casts += DENY_CASTS.search(masked) is None
+        allowing_casts += ALLOW_CASTS.search(masked) is not None
         for lint, needle in FILE_ALLOWS.items():
             allowing[lint] += needle in masked
-    return stats, without_casts, allowing, tree, sources
+    return stats, allowing_casts, allowing, tree, sources
 
 
 def ledgers():
@@ -4516,26 +4515,78 @@ def check_names(tree):
         )
 
 
-def check_cast_deny_floor(tree, report=False):
-    """Every file without the cast deny is a `CAST_DENY_FLOOR` row, and every
-    row still names a file without it. With `report`, print the floor."""
-    without = {f for f, m in tree.items() if DENY_CASTS.search(m) is None}
+def module_roots_above(file):
+    """The files whose inner attributes reach this one: the module roots of
+    every directory between it and its crate's root (`d/mod.rs` or `d.rs`),
+    and the crate root itself (`lib.rs`/`main.rs`). Only a tree under a
+    crate's `src/` or a test target's directory has any."""
+    parts = Path(file).parts
+    if len(parts) < 4 or parts[0] != "crates" or parts[2] not in ("src", "tests"):
+        return []
+    # The crate root's directory: `src/`, or `tests/<target>/`.
+    base = 3 if parts[2] == "src" else 4
+    module_dir = parts[:-1] if parts[-1] != "mod.rs" else parts[:-2]
+    roots = []
+    for depth in range(len(module_dir), base - 1, -1):
+        d = "/".join(module_dir[:depth])
+        if depth == base:
+            roots += [f"{d}/lib.rs", f"{d}/main.rs"]
+        else:
+            roots += [f"{d}/mod.rs", f"{d}.rs"]
+    return [r for r in roots if r != file]
+
+
+def check_cast_attributes(tree, report=False):
+    """The cast family is denied crate-wide, so an inner cast attribute is an
+    exception, and each one has to be the one the tree records: an allow is a
+    `CAST_ALLOW_FLOOR` row (and every row still names a file carrying it),
+    and a deny is redundant except below a module root that allows -- where
+    it is required. Test targets are read too. With `report`, print the
+    floor."""
+    files = dict(tree)
+    for path in sorted(ROOT.glob("crates/*/tests/**/*.rs")):
+        files[str(path.relative_to(ROOT))] = mask(path.read_text())
+    allows = {f for f, m in files.items() if ALLOW_CASTS.search(m)}
+    denies = {f for f, m in files.items() if DENY_CASTS.search(m)}
     if report:
-        print(f"files_without_deny_casts: {len(without)}")
-        for file in sorted(without):
-            print(f"  {file}  {CAST_DENY_FLOOR.get(file, 'NOT ON THE FLOOR')}")
-    off = sorted(without - CAST_DENY_FLOOR.keys())
-    stale = sorted(CAST_DENY_FLOOR.keys() - without)
-    if off or stale:
-        sys.exit(
-            "ratchet: the cast deny's floor list is out of date:\n  "
-            + "\n  ".join(
-                [f"{f}: no cast deny and no CAST_DENY_FLOOR row" for f in off]
-                + [f"{f}: a CAST_DENY_FLOOR row that excuses nothing" for f in stale]
+        print(f"files_allowing_casts: {len(allows)}")
+        for file in sorted(allows):
+            print(f"  {file}  {CAST_ALLOW_FLOOR.get(file, 'NOT ON THE FLOOR')}")
+    problems = [
+        f"{f}: allows the cast lints and is no CAST_ALLOW_FLOOR row"
+        for f in sorted(allows - CAST_ALLOW_FLOOR.keys())
+    ]
+    problems += [
+        f"{f}: a CAST_ALLOW_FLOOR row that excuses nothing"
+        for f in sorted(CAST_ALLOW_FLOOR.keys() - allows)
+    ]
+    problems += [
+        f"{f}: a CAST_ALLOW_FLOOR row whose reason opens with no class "
+        f"({'/'.join(CAST_ALLOW_CLASSES)})"
+        for f, why in sorted(CAST_ALLOW_FLOOR.items())
+        if why.split(":")[0] not in CAST_ALLOW_CLASSES
+    ]
+    for file in sorted(files):
+        lifted = [r for r in module_roots_above(file) if r in allows]
+        if file in denies and file in allows:
+            problems.append(f"{file}: both allows and denies the cast lints")
+        elif file in denies and not lifted:
+            problems.append(
+                f"{file}: a cast deny the crate's [lints.clippy] already makes"
             )
-            + "\nGive the file the deny (finish its casts), or -- only for a "
-            "perimeter file, a module root over one, or narrow.rs -- a row "
-            "with its reason; drop a row whose file now carries the deny."
+        elif lifted and file not in denies and file not in allows:
+            problems.append(
+                f"{file}: inherits {lifted[0]}'s cast allow; deny them again"
+            )
+    if problems:
+        sys.exit(
+            "ratchet: the cast lints' file attributes are out of date:\n  "
+            + "\n  ".join(problems)
+            + "\nThe five cast lints are denied in Cargo.toml's [lints.clippy]. "
+            "Finish a file's casts rather than allow them; only a perimeter "
+            "file (or narrow.rs) takes the allow, with a CAST_ALLOW_FLOOR row "
+            "and its reason in a comment above. A per-file deny belongs only "
+            "below a module root that allows."
         )
 
 
@@ -4688,7 +4739,7 @@ def keeper_report(floor, label, sites):
 def render(
     stats,
     ledger_counts,
-    without_casts,
+    allowing_casts,
     allowing,
 ):
     """The baseline document: only metrics with ratchet room are recorded
@@ -4713,7 +4764,7 @@ def render(
     return (
         "{\n"
         f"{head}"
-        f'  "files_without_deny_casts": {without_casts},\n'
+        f'  "files_allowing_casts": {allowing_casts},\n'
         f"{allows}"
         f'  "files": {{\n{body}\n  }}\n'
         "}\n"
@@ -4798,7 +4849,7 @@ VOCABULARY_KEYS = (
 def violations(
     stats,
     counts,
-    without_casts,
+    allowing_casts,
     allowing,
     baseline,
 ):
@@ -4809,9 +4860,9 @@ def violations(
         base = baseline.get(name, counts[name])
         if counts[name] > base:
             found.append(f"{label}: {base} -> {counts[name]}")
-    base_casts = baseline.get("files_without_deny_casts", without_casts)
-    if without_casts > base_casts:
-        found.append(f"files without the cast deny: {base_casts} -> {without_casts}")
+    base_casts = baseline.get("files_allowing_casts", allowing_casts)
+    if allowing_casts > base_casts:
+        found.append(f"files allowing casts: {base_casts} -> {allowing_casts}")
     for lint, count in allowing.items():
         # .get: absent from baselines committed before the metric existed.
         base_allow = baseline.get(f"files_allowing_{lint}", count)
@@ -4832,7 +4883,7 @@ def violations(
     return found
 
 
-def summary(stats, counts, without_casts, allowing):
+def summary(stats, counts, allowing_casts, allowing):
     counted = (*COUNTED, *COUNTED_RE, *DERIVED)
     totals = {name: sum(c[name] for c in stats.values()) for name in counted}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
@@ -4845,7 +4896,7 @@ def summary(stats, counts, without_casts, allowing):
         f"{counts['cell_ptr_accessors']} acquire-once cell_ptr sites",
         f"{counts['cell_copy_owner']} Copy-owner get()s",
         f"{perimeter_lines(stats)[0]} unchecked statements on the perimeter",
-        f"{without_casts} files without the cast deny",
+        f"{allowing_casts} files allowing casts",
     ]
     parts += [f"{n} files allowing {lint}" for lint, n in allowing.items()]
     parts += [f"{counts[name]} {name}" for name in VOCABULARY_KEYS]
@@ -4984,16 +5035,49 @@ SELF_TEST_SAFETY_DOC = [
     # Prose about one costs nothing.
     ("/// An unsafe fn f would.\nfn f() {}\n", 0),
 ]
-# (source, whether the file counts as having adopted the cast lints)
-SELF_TEST_DENY_CASTS = [
-    ("#![deny(clippy::cast_lossless)]\n", True),
+# (source, whether the file carries the cast allow)
+SELF_TEST_ALLOW_CASTS = [
+    ("#![allow(clippy::cast_lossless)]\n", True),
     (
-        "#![deny(\n    clippy::cast_lossless,\n    clippy::ptr_as_ptr\n)]\n",
+        "#![allow(\n    clippy::cast_lossless,\n    clippy::ptr_as_ptr\n)]\n",
         True,
     ),
-    ("#![deny(clippy::ptr_as_ptr)]\n", False),
+    ("#![allow(clippy::ptr_as_ptr)]\n", False),
+    ("#![deny(clippy::cast_lossless)]\n", False),
+    # An item's allow is not the file's.
+    ('#[allow(clippy::cast_lossless, reason = "const fn")]\nconst fn f() {}\n', False),
     # Prose about the attribute does not switch it on.
-    ("//! Adopt `#![deny(clippy::cast_lossless)]` here one day.\n", False),
+    ("//! Never write `#![allow(clippy::cast_lossless)]` here.\n", False),
+]
+# (repo-relative file, the module roots whose inner attributes reach it)
+SELF_TEST_MODULE_ROOTS = [
+    (
+        "crates/nvim/src/xdiff/xdiffi/compact.rs",
+        [
+            "crates/nvim/src/xdiff/xdiffi/mod.rs",
+            "crates/nvim/src/xdiff/xdiffi.rs",
+            "crates/nvim/src/xdiff/mod.rs",
+            "crates/nvim/src/xdiff.rs",
+            "crates/nvim/src/lib.rs",
+            "crates/nvim/src/main.rs",
+        ],
+    ),
+    (
+        "crates/nvim/src/os/mod.rs",
+        ["crates/nvim/src/lib.rs", "crates/nvim/src/main.rs"],
+    ),
+    ("crates/nvim/src/lib.rs", ["crates/nvim/src/main.rs"]),
+    (
+        "crates/nvim/tests/unit/support/tv.rs",
+        [
+            "crates/nvim/tests/unit/support/mod.rs",
+            "crates/nvim/tests/unit/support.rs",
+            "crates/nvim/tests/unit/lib.rs",
+            "crates/nvim/tests/unit/main.rs",
+        ],
+    ),
+    ("crates/nvim/build.rs", []),
+    ("crates/mainthread/lib.rs", []),
 ]
 # (source, expected: does the file allow non_camel_case_types?)
 # (source, the lints whose blanket allow it carries)
@@ -6142,9 +6226,12 @@ def self_test():
         assert got == expected, (
             f"missing_safety_doc={got}, want {expected}, for {source!r}"
         )
-    for source, expected in SELF_TEST_DENY_CASTS:
-        got = DENY_CASTS.search(mask(source)) is not None
-        assert got == expected, f"cast deny={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_ALLOW_CASTS:
+        got = ALLOW_CASTS.search(mask(source)) is not None
+        assert got == expected, f"cast allow={got}, want {expected}, for {source!r}"
+    for file, expected in SELF_TEST_MODULE_ROOTS:
+        got = module_roots_above(file)
+        assert got == expected, f"module roots of {file}: {got}, want {expected}"
     for source, expected in SELF_TEST_FILE_ALLOWS:
         masked = mask(source)
         got = {lint for lint, needle in FILE_ALLOWS.items() if needle in masked}
@@ -6389,14 +6476,14 @@ def main():
         sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
     self_test()
-    stats, without_casts, allowing, tree, sources = measure()
+    stats, allowing_casts, allowing, tree, sources = measure()
     wrappers, by_callee = wrapper_scan(tree)
     sites = instrument_sites(tree, sources, wrappers)
     if dimension == "unsafe_placement":
         placement_report(tree, sources)
         return
-    if dimension == "files_without_deny_casts":
-        check_cast_deny_floor(tree, report=True)
+    if dimension == "files_allowing_casts":
+        check_cast_attributes(tree, report=True)
         return
     if dimension == "copy_keepers":
         keeper_report(COPY_KEEPERS, "derive_copy", copy_sites(tree))
@@ -6428,7 +6515,7 @@ def main():
     check_names(tree)
     check_perimeter(stats)
     check_unsafe_placement(tree, sources)
-    check_cast_deny_floor(tree)
+    check_cast_attributes(tree)
     check_miri_perimeter(tree)
     check_keeper_floors(tree)
     index = unsafe_fn_index(tree)
@@ -6436,7 +6523,7 @@ def main():
     sync_perimeter_doc(stats, "--check" in args)
     sync_wrapper_table(wrapper_table(by_callee, index), "--check" in args)
     counts = {**ledgers(), **whole_tree(stats, tree, sites)}
-    content = render(stats, counts, without_casts, allowing)
+    content = render(stats, counts, allowing_casts, allowing)
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
     if "--check" in args:
@@ -6447,7 +6534,7 @@ def main():
         if grew := violations(
             stats,
             counts,
-            without_casts,
+            allowing_casts,
             allowing,
             json.loads(committed),
         ):
@@ -6468,7 +6555,7 @@ def main():
         if grew := violations(
             stats,
             counts,
-            without_casts,
+            allowing_casts,
             allowing,
             json.loads(committed),
         ):
@@ -6480,7 +6567,7 @@ def main():
     BASELINE.write_text(content)
     print(
         f"wrote {BASELINE.relative_to(ROOT)}: "
-        f"{summary(stats, counts, without_casts, allowing)}"
+        f"{summary(stats, counts, allowing_casts, allowing)}"
     )
 
 

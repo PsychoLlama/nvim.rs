@@ -33,11 +33,11 @@ fn libc_g_fmt(num: f64, precision: u32) -> String {
             buf.as_mut_ptr().cast(),
             buf.len(),
             c"%.*g".as_ptr(),
-            precision as c_int,
+            c_int::try_from(precision).unwrap(),
             num,
         )
     };
-    String::from_utf8(buf[..len as usize].to_vec()).unwrap()
+    String::from_utf8(buf[..usize::try_from(len).unwrap()].to_vec()).unwrap()
 }
 
 fn our_g_fmt(num: f64, precision: u32) -> String {
@@ -54,7 +54,10 @@ fn libc_parse(text: &[u8]) -> (f64, usize) {
     // inside it, so the offset is in bounds.
     unsafe {
         let value = libc_strtod(nul.as_ptr().cast(), &raw mut end);
-        (value, end.cast::<u8>().offset_from(nul.as_ptr()) as usize)
+        (
+            value,
+            usize::try_from(end.cast::<u8>().offset_from(nul.as_ptr())).unwrap(),
+        )
     }
 }
 
@@ -268,8 +271,8 @@ fn strtod_matches_libc_on_random_hex_floats() {
     let mut bits = Bits(0x1234_5678_9abc_def0);
     for _ in 0..20_000 {
         let mantissa = bits.next();
-        let exponent = (bits.next() % 2400) as i64 - 1200;
-        let digits = (bits.next() % 16 + 1) as usize;
+        let exponent = i64::try_from(bits.next() % 2400).unwrap() - 1200;
+        let digits = usize::try_from(bits.next() % 16 + 1).unwrap();
         let text = format!("0x{mantissa:x}.{mantissa:016x}p{exponent}");
         let text = &text[..text.len().min(4 + digits + 20)];
         let (ours, our_used) = strtod(text.as_bytes());

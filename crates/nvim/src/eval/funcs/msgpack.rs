@@ -1,12 +1,5 @@
 //! Serialisation: the `msgpack*()` and `json_*()` families.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::wrappers::blob_alloc_ret;
 use crate::eval::decode::{MsgpackDecoder, json_decode_string, unpack_typval};

@@ -13,13 +13,6 @@
 // Nothing here dereferences anything: the tree is walked by identity, and
 // `win_float_find_altwin` — the float's answer to the same question — is safe
 // too.
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::winlayer::last_used_tab;

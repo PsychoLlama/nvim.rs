@@ -128,7 +128,7 @@ fn the_skippers() {
                 skip::to_white(c),
                 skip::to_white_esc(c),
             ] {
-                d.add((i + offset) as i64);
+                d.add_len(i + offset);
             }
             d.add(i64::from(escapes_next(c)));
             if i + 2 <= text.len() {
@@ -149,12 +149,12 @@ fn the_digit_readers() {
             for strict in [false, true] {
                 let (n, used) = getdigits_at(c, 0, strict, -7);
                 d.add(n);
-                d.add((i + used) as i64);
+                d.add_len(i + used);
                 // `getdigits_int` and its `int32_t` twin, one reader now.
                 for _ in 0..2 {
                     let (n, used) = getdigits_int_at(c, 0, strict, -7);
                     d.add(i64::from(n));
-                    d.add((i + used) as i64);
+                    d.add_len(i + used);
                 }
             }
             for what in [
@@ -164,7 +164,7 @@ fn the_digit_readers() {
                 Str2NrBases::BIN | Str2NrBases::OOCT,
                 Str2NrBases::OCT | Str2NrBases::QUOTE,
             ] {
-                for maxlen in [0, 1, 3, (text.len() - i) as c_int] {
+                for maxlen in [0, 1, 3, c_int::try_from(text.len() - i).unwrap()] {
                     // A positive `maxlen` bounds the bytes the parse sees,
                     // as the pointer form's `strncmp`-style span did.
                     let bounded = match usize::try_from(maxlen) {
@@ -181,7 +181,7 @@ fn the_digit_readers() {
                             n = parsed.value;
                             un = parsed.magnitude;
                         }
-                        for v in [i64::from(pre), i64::from(len), n, un as i64] {
+                        for v in [i64::from(pre), i64::from(len), n, un.cast_signed()] {
                             d.add(v);
                         }
                         d.add(i64::from(overflow));
@@ -198,20 +198,20 @@ fn the_display_forms() {
     let got = digest(|d, text| {
         let c = until_nul(text);
         d.add(i64::from(strsize(text)));
-        for n in [0, 1, 2, 5, text.len() as c_int, 1000] {
+        for n in [0, 1, 2, 5, c_int::try_from(text.len()).unwrap(), 1000] {
             d.add(i64::from(strnsize(text, n)));
         }
         for untab in [false, true] {
             // `transstr_len`, gone with its one caller: the length
             // `transstr` allocates for.
             let shown = transstr_owned(c, untab);
-            d.add(shown.as_cstr().to_bytes().len() as i64);
+            d.add_len(shown.as_cstr().to_bytes().len());
             d.bytes(shown.as_cstr().to_bytes());
             for buflen in [1, 2, 5, 9, 64] {
                 let mut out = vec![0x55u8; buflen];
-                for slen in [-1, 0, 3, text.len() as isize] {
+                for slen in [-1, 0, 3, isize::try_from(text.len()).unwrap()] {
                     let n = transstr_into(c, usize::try_from(slen).ok(), &mut out, untab);
-                    d.add(n as i64);
+                    d.add_len(n);
                     d.bytes(until_nul(&out));
                 }
             }
@@ -221,10 +221,10 @@ fn the_display_forms() {
             trans_characters_in(&mut copy[..bufsize]);
             d.bytes(until_nul(&copy));
         }
-        let orglen = text.len() as c_int;
+        let orglen = c_int::try_from(text.len()).unwrap();
         d.bytes(until_nul(&foldcase(text, None)));
         for buflen in [1, 4, orglen + 1, orglen + 8] {
-            let folded = foldcase(text, Some(buflen as usize));
+            let folded = foldcase(text, Some(usize::try_from(buflen).unwrap()));
             d.bytes(until_nul(&folded));
         }
         let halved = backslash_halved(c);
@@ -241,7 +241,7 @@ fn the_hex_form() {
     for c in (0..0x400).chain([0xffff, 0x10000, 0x10ffff, 0x7fff_ffff]) {
         let mut buf = [0u8; 16];
         let n = transchar_hex_into(&mut buf, Codepoint::new(c));
-        d.add(n as i64);
+        d.add_len(n);
         d.bytes(until_nul(&buf));
     }
     assert_eq!(d.value(), 0x8903a5a44af10085, "hex form");

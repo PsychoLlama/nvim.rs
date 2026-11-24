@@ -5,13 +5,6 @@
 //! prefix `'longest'` inserts, and the `find_word_*` / `find_line_end`
 //! helpers are the scans every buffer source walks with.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use super::*;

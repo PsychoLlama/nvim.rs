@@ -62,7 +62,7 @@ impl Runner {
     /// length comes back as the C `int` it travelled in: its low 32 bits.
     fn at(&mut self, size: usize, call: &dyn Fn(&mut [u8]) -> usize) -> (c_int, Vec<u8>) {
         let mut buf = vec![GUARD; size + 16];
-        let ret = call(&mut buf[..size]) as c_int;
+        let ret = c_int::try_from(call(&mut buf[..size])).unwrap();
         assert!(
             buf[size..].iter().all(|&b| b == GUARD),
             "wrote past a {size}-byte buffer"
@@ -127,6 +127,13 @@ const SIGNED: &[i64] = &[
 ];
 
 #[test]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "each value reaches printf at its length modifier's type, wrapped or \
+              truncated the way a C caller's conversion would"
+)]
 fn integer_conversions() {
     let _editor = editor_lock();
     let mut r = Runner::new(false);
@@ -586,8 +593,8 @@ fn positional_and_mixed_arguments() {
         let ret = match buf[..size].iter().position(|&b| b == 0) {
             Some(len) => format_into(&mut buf[len..size], b"+%s=%d", &args),
             None => format_into(&mut [], b"+%s=%d", &args),
-        } as c_int;
-        r.digest.add(i64::from(ret));
+        };
+        r.digest.add(i64::from(c_int::try_from(ret).unwrap()));
         r.digest.bytes(&buf);
         // `vim_snprintf_safelen`: never more than the room it had.
         let mut buf = vec![GUARD; size + 16];
@@ -596,7 +603,7 @@ fn positional_and_mixed_arguments() {
             0 => 0,
             _ => format_into(&mut buf[..size], b"%s-%s-%5.1f", &args).min(size - 1),
         };
-        r.digest.add(ret as i64);
+        r.digest.add_len(ret);
         r.digest.bytes(&buf);
     }
     assert_eq!(r.digest.value(), 0xf2131e8a16617898, "positional arguments");

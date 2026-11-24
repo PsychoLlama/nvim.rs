@@ -7,13 +7,6 @@
 //! out the windows, and fires `VimResized` -- up to three times, because an
 //! autocommand may change `'lines'` or `'columns'` again.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![forbid(unsafe_code)]
 

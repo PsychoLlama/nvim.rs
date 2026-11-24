@@ -7,13 +7,6 @@
 //! [`option_target`] is the one place the dictionary's rules are enforced.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::api::private::helpers::{
     api_set_sctx, api_try, api_typename, find_buffer_by_handle, find_window_by_handle,

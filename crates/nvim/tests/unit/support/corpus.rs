@@ -185,10 +185,16 @@ impl Digest {
         }
     }
 
+    /// Fold a length or an offset in.
+    #[allow(dead_code, reason = "not every oracle answers in lengths")]
+    pub(crate) fn add_len(&mut self, len: usize) {
+        self.add(i64::try_from(len).expect("a length fits in i64"));
+    }
+
     /// Fold a run of bytes in, length first.
     #[allow(dead_code, reason = "not every oracle answers in bytes")]
     pub(crate) fn bytes(&mut self, bytes: &[u8]) {
-        self.add(i64::try_from(bytes.len()).expect("short"));
+        self.add_len(bytes.len());
         for &byte in bytes {
             self.add(i64::from(byte));
         }

@@ -1,11 +1,4 @@
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 //! The sizing arithmetic of the khash-derived index: how many buckets a
 //! request rounds up to, and how full they may get. Both are upstream's, bit

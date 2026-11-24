@@ -11,13 +11,6 @@
 //! tells a Dict from a curly-brace name all parse without running anything.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::charset::skip;
 use crate::eval::typval::TV_INITIAL_VALUE;

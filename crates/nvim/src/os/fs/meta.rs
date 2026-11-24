@@ -12,6 +12,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `os/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
+// Casts: perimeter: stat mode, xattr sizes (a `CAST_ALLOW_FLOOR` row, scripts/ratchet.py).
+#![allow(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::os::libc::{int32_t, uint64_t};
 use core::ffi::c_int;

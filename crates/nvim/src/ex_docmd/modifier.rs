@@ -6,13 +6,6 @@
 //! is what puts it in force and `undo_cmdmod` what takes it back out, and
 //! the two must stay a matched pair — `do_one_cmd` runs the second on
 //! every exit path, including the ones an error takes.
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 use crate::ex_docmd::lookup::check_for_word;
 use crate::ex_docmd::scan::ends_excmd;

@@ -11,13 +11,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `tui/{tui,input,output,events}.rs` row in docs/perimeter.md.
 #![allow(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_tty_set_mode, uv_write};
 use crate::event::uv::{UV_RUN_DEFAULT, UV_TTY_MODE_IO, UV_TTY_MODE_NORMAL};

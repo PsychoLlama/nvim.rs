@@ -12,13 +12,6 @@
 //! one; and a blockwise write has to measure the widest line in **cells**
 //! rather than bytes.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::charset::getdigits_int_at;

@@ -23,13 +23,6 @@
 //! a copy of their own, never an option's value or a buffer's line.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::*;
 use crate::charset::skip;

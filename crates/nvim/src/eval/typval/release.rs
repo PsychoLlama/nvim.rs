@@ -24,13 +24,6 @@
 //! [`tv_clear`]: super::value::tv_clear
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::{DictRef, ListRef, PartialRef};
 use crate::eval::userfunc::func_unref_name;

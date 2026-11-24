@@ -5,13 +5,6 @@
 //! it.  [`set_ctrl_x_mode`] is the chord dispatch itself.  The rest are the
 //! one-line queries the editor asks about a completion in progress.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![forbid(unsafe_code)]
 

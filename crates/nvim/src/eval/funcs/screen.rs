@@ -1,13 +1,6 @@
 //! What is on the screen: the `screen*()` cell queries, the `syn*()` syntax
 //! queries and the highlight-group lookups.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk};
 use crate::mbyte::Codepoint;

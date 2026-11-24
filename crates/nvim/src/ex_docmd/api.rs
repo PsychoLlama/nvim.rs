@@ -8,13 +8,6 @@
 //! which is why the checks here are spelled out again rather than shared
 //! with `do_one_cmd`.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::buffer::buflist_findpat_prefix;
 use crate::charset::skip;

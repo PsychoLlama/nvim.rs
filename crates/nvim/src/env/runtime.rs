@@ -6,13 +6,6 @@
 //! then from the compiled-in defaults, and publishes what it found.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::eval::vars::{vim_var_string, with_vim_var_str};
 use crate::memory::{ThinCString, XString};

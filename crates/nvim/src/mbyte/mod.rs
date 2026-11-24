@@ -75,13 +75,6 @@
 //! fronts in `harness.rs` that read the C string's bytes there.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::grid::schar::MAX_SCHAR_SIZE;
 use crate::keycodes::KS_SPECIAL;

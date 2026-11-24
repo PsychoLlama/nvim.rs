@@ -6,13 +6,6 @@
 //! closes one by hand the window becomes `w_fold_manual` and stops following
 //! the option until 'foldlevel' is set again.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::buffer_updates::buf_updates_send_changes;

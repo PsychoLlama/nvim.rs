@@ -33,13 +33,6 @@
 //! anything: "a.b" -> "b.a" is a legitimate swap.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_char2len};

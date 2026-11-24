@@ -5,13 +5,6 @@
 //! the fold-opening tail: whether 'foldopen' lets the destination's fold
 //! spring open depends on the command having been *typed*, not replayed.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::keycodes::ModMask;

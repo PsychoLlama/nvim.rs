@@ -5,13 +5,6 @@
 //! Nothing here belongs to one family. The families themselves live in the
 //! sibling modules; this is what the parent module hands them.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::table::{BUILTINS, builtin_index};
 use crate::api::private::converter::call_handler_for_vimscript;

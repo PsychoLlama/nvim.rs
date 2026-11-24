@@ -7,13 +7,6 @@
 //! than reported at line 0.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::buffer::buflist_nr2name;
 use crate::eval::typval::{tv_dict_alloc, tv_list_alloc};

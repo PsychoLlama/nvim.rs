@@ -12,13 +12,6 @@
 //! Every one of them ends in `adjust_skipcol` or `coladvance`, because the
 //! cursor is not allowed to come to rest on a column that is not there.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use core::ffi::c_int;

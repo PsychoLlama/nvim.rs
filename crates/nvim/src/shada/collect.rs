@@ -13,13 +13,6 @@
 //! rather than into a file; the context stack uses them.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::low_byte;
 use crate::api::keysets::KeyDict__shada_search_pat;

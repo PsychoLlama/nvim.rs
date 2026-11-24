@@ -211,7 +211,7 @@ fn permission_bits_are_read_back_set_and_answered_about() {
     assert_eq!(getperm("non-existing-file"), UV_ENOENT);
     assert!(getperm("unit-test-directory") > 0);
     assert_ne!(
-        getperm("unit-test-directory") & libc::S_IRUSR as c_int,
+        getperm("unit-test-directory") & c_int::try_from(libc::S_IRUSR).unwrap(),
         0,
         "the fixture directory is readable"
     );
@@ -219,10 +219,10 @@ fn permission_bits_are_read_back_set_and_answered_about() {
 
     // The executable bit goes off and back on.
     let perm = getperm(file);
-    assert!(setperm(file, perm & !(libc::S_IXUSR as c_int)).is_ok());
-    assert_eq!(getperm(file) & libc::S_IXUSR as c_int, 0);
-    assert!(setperm(file, perm | libc::S_IXUSR as c_int).is_ok());
-    assert_ne!(getperm(file) & libc::S_IXUSR as c_int, 0);
+    assert!(setperm(file, perm & !(c_int::try_from(libc::S_IXUSR).unwrap())).is_ok());
+    assert_eq!(getperm(file) & c_int::try_from(libc::S_IXUSR).unwrap(), 0);
+    assert!(setperm(file, perm | c_int::try_from(libc::S_IXUSR).unwrap()).is_ok());
+    assert_ne!(getperm(file) & c_int::try_from(libc::S_IXUSR).unwrap(), 0);
 
     // Readable: yes, then no once every read bit is off, and no for a name
     // that is not there at all.
@@ -232,7 +232,7 @@ fn permission_bits_are_read_back_set_and_answered_about() {
     };
     assert!(readable(file));
     assert!(!readable("unit-test-directory/what_are_you_smoking.gif"));
-    let no_read = (libc::S_IRUSR | libc::S_IRGRP | libc::S_IROTH) as c_int;
+    let no_read = c_int::try_from(libc::S_IRUSR | libc::S_IRGRP | libc::S_IROTH).unwrap();
     assert!(setperm(file, getperm(file) & !no_read).is_ok());
     assert!(!readable(file));
 
@@ -243,7 +243,7 @@ fn permission_bits_are_read_back_set_and_answered_about() {
     };
     assert_eq!(writable(file), 1);
     assert_eq!(writable("unit-test-directory"), 2);
-    let no_write = (libc::S_IWUSR | libc::S_IWGRP | libc::S_IWOTH) as c_int;
+    let no_write = c_int::try_from(libc::S_IWUSR | libc::S_IWGRP | libc::S_IWOTH).unwrap();
     assert!(setperm(file, getperm(file) & !no_write).is_ok());
     assert_eq!(writable(file), 0);
 }
@@ -326,7 +326,7 @@ fn opening_honours_the_flags_and_the_mode() {
                 .expect(name)
                 .permissions()
                 .mode(),
-            0o100_000 | expected_mode as u32,
+            0o100_000 | u32::try_from(expected_mode).unwrap(),
             "{name}"
         );
     }
@@ -471,7 +471,7 @@ fn the_three_ways_of_asking_about_a_file() {
     let through = info_of(&fixture.link()).expect("the link resolves");
     assert!(filled_in(&through));
     assert_eq!(
-        through.stat.st_mode as libc::mode_t & libc::S_IFMT,
+        libc::mode_t::try_from(through.stat.st_mode).unwrap() & libc::S_IFMT,
         libc::S_IFREG
     );
 
@@ -479,7 +479,7 @@ fn the_three_ways_of_asking_about_a_file() {
     let link = link_info(&cpath(&fixture.link())).expect("the link is there");
     assert!(filled_in(&link));
     assert_eq!(
-        link.stat.st_mode as libc::mode_t & libc::S_IFMT,
+        libc::mode_t::try_from(link.stat.st_mode).unwrap() & libc::S_IFMT,
         libc::S_IFLNK
     );
 }

@@ -50,7 +50,7 @@ impl Labels {
     /// The label of the next event on `queue`.
     fn get(&self, queue: QueueId) -> &'static str {
         match take(queue) {
-            Some(Event::Ids(_, label, _)) => self.0[label as usize],
+            Some(Event::Ids(_, label, _)) => self.0[usize::try_from(label).unwrap()],
             Some(_) => panic!("not a labelled event"),
             None => panic!("queue was empty"),
         }

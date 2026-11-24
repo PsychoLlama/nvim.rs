@@ -888,7 +888,13 @@ fn extending_a_dict_keeps_forces_or_reports() {
         let extend = |d1: *mut Dict, d2: *mut Dict, action: &str, msg: Option<&str>| {
             check_emsg(
                 log.editor(),
-                || dict_extend(&view(d1), &view(d2), *(cstr(action).as_ptr()) as u8),
+                || {
+                    dict_extend(
+                        &view(d1),
+                        &view(d2),
+                        (*cstr(action).as_ptr()).cast_unsigned(),
+                    )
+                },
                 msg,
             );
         };
@@ -947,7 +953,13 @@ fn extending_a_dict_refuses_locked_and_read_only_items() {
         let extend = |d1: *mut Dict, d2: *mut Dict, msg: Option<&str>| {
             check_emsg(
                 log.editor(),
-                || dict_extend(&view(d1), &view(d2), *(cstr("force").as_ptr()) as u8),
+                || {
+                    dict_extend(
+                        &view(d1),
+                        &view(d2),
+                        (*cstr("force").as_ptr()).cast_unsigned(),
+                    )
+                },
                 msg,
             );
         };

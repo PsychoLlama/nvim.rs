@@ -15,13 +15,6 @@
 //! [`get_leader_len`] answers for it on failure.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::cstr::byte_at;
 use crate::narrow::len_as_int;

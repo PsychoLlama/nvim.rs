@@ -258,7 +258,7 @@ fn a_fresh_swap_file_identifies_itself() {
     // big enough to hold the block that names it.
     let page_size = b0.number(offset_of!(ZeroBlockLayout, b0_page_size));
     assert!(
-        page_size as usize >= size_of::<ZeroBlockLayout>(),
+        usize::try_from(page_size).unwrap() >= size_of::<ZeroBlockLayout>(),
         "a page holds block zero: {page_size}"
     );
     assert_eq!(page_size.count_ones(), 1, "a power of two: {page_size}");
@@ -274,7 +274,7 @@ fn a_fresh_swap_file_identifies_itself() {
         .try_into()
         .expect("a c_long"),
     );
-    assert_eq!(long, B0_MAGIC_LONG as c_long);
+    assert_eq!(long, c_long::from(B0_MAGIC_LONG));
     let int = c_int::from_ne_bytes(
         b0.field(
             offset_of!(ZeroBlockLayout, b0_magic_int),
@@ -283,13 +283,13 @@ fn a_fresh_swap_file_identifies_itself() {
         .try_into()
         .expect("a c_int"),
     );
-    assert_eq!(int, B0_MAGIC_INT as c_int);
+    assert_eq!(int, c_int::try_from(B0_MAGIC_INT).unwrap());
     let short = i16::from_ne_bytes(
         b0.field(offset_of!(ZeroBlockLayout, b0_magic_short), 2)
             .try_into()
             .expect("an int16_t"),
     );
-    assert_eq!(short, B0_MAGIC_SHORT as i16);
+    assert_eq!(short, i16::try_from(B0_MAGIC_SHORT).unwrap());
     assert_eq!(
         b0.field(offset_of!(ZeroBlockLayout, b0_magic_char), 1)[0],
         B0_MAGIC_CHAR
@@ -321,17 +321,19 @@ fn a_fresh_swap_file_names_its_file_and_its_owner() {
     // The two fields that make the swap file worth reading: this process
     // wrote it, and the file it names has not changed since.
     let pid = b0.number(offset_of!(ZeroBlockLayout, b0_pid));
-    assert_eq!(pid, std::process::id() as i32);
+    assert_eq!(pid, i32::try_from(std::process::id()).unwrap());
 
     let stat = std::fs::metadata(&edited).expect("the edited file");
     let mtime = b0.number(offset_of!(ZeroBlockLayout, b0_mtime));
-    let expected = std::os::unix::fs::MetadataExt::mtime(&stat) as i32;
+    let expected =
+        i32::try_from(std::os::unix::fs::MetadataExt::mtime(&stat)).expect("an mtime before 2038");
     assert_eq!(mtime, expected);
     // The inode is stored in four signed bytes, so a large one is
     // truncated; the reader only ever compares it, so that is fine, but it
     // is why this is not `assert_eq!(ino, stat.ino())`.
     let ino = b0.number(offset_of!(ZeroBlockLayout, b0_ino));
-    assert_eq!(ino, std::os::unix::fs::MetadataExt::ino(&stat) as i32);
+    let low = std::os::unix::fs::MetadataExt::ino(&stat).to_le_bytes();
+    assert_eq!(ino, i32::from_le_bytes([low[0], low[1], low[2], low[3]]));
 
     // Both names are NUL-terminated inside their own field, which is what
     // `ml_check_b0_strings` refuses a file over.
@@ -576,7 +578,7 @@ fn numbered(count: usize, width: usize, tag: char) -> Vec<String> {
         .map(|i| {
             let mut line = format!("{tag}{i:05}");
             while line.len() < width {
-                line.push(char::from(b'a' + (line.len() % 26) as u8));
+                line.push(char::from(b'a' + u8::try_from(line.len() % 26).unwrap()));
             }
             line
         })

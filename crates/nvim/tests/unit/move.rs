@@ -589,9 +589,9 @@ fn no_scrolloff_asks_for_no_columns() {
 
 #[test]
 fn scrolloff_costs_the_first_screen_line_then_the_rest() {
-    assert_eq!(scrolloff_cols(1, S1, S2), S1 as i64);
-    assert_eq!(scrolloff_cols(2, S1, S2), (S1 + S2) as i64);
-    assert_eq!(scrolloff_cols(4, S1, S2), (S1 + 3 * S2) as i64);
+    assert_eq!(scrolloff_cols(1, S1, S2), i64::from(S1));
+    assert_eq!(scrolloff_cols(2, S1, S2), i64::from(S1 + S2));
+    assert_eq!(scrolloff_cols(4, S1, S2), i64::from(S1 + 3 * S2));
 }
 
 #[test]
@@ -600,7 +600,7 @@ fn a_huge_scrolloff_stays_in_range_of_an_int64() {
     // this, which is what keeps `set so=100000000` from overflowing an int.
     assert_eq!(
         scrolloff_cols(100_000_000, S1, S2),
-        S1 as i64 + 99_999_999 * S2 as i64
+        i64::from(S1) + 99_999_999 * i64::from(S2)
     );
 }
 
@@ -799,7 +799,14 @@ fn scrolloff_columns_are_wound_back_to_the_lines_own_width() {
     // A 12-cell line rounds up to S1 + S2 cells of screen, so asking for four
     // screen lines of context cannot push the row past it.
     assert_eq!(
-        sms_cursor_row(ColNr::new(2), (S1 + 3 * S2) as i64, ColNr::ZERO, 12, S1, S2),
+        sms_cursor_row(
+            ColNr::new(2),
+            i64::from(S1 + 3 * S2),
+            ColNr::ZERO,
+            12,
+            S1,
+            S2
+        ),
         1
     );
 }

@@ -5,13 +5,6 @@
 //! is the only thing in the file that evaluates its own input.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::ascii::{ascii_iswhite, ascii_iswhite_or_nul};
 use crate::cstr::byte_at;

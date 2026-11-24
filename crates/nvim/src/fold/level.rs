@@ -22,13 +22,6 @@
 //! the update then stops ([`TreeLost`]) rather than write into folds that are
 //! gone, which is what upstream's `fold_T *` did.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::charset::skip;

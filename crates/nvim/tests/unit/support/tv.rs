@@ -251,7 +251,7 @@ impl Tv {
                 blob_tv(Some(held))
             }
             Tv::List(items) => {
-                let list = tv_list_alloc(items.len() as isize);
+                let list = tv_list_alloc(isize::try_from(items.len()).unwrap());
                 let l = list.value();
                 path.push(Container::List(l));
                 for item in items {

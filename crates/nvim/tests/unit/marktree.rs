@@ -365,6 +365,11 @@ const fn scale(miri: usize, native: usize) -> usize {
     if cfg!(miri) { miri } else { native }
 }
 
+/// A test size as a row or column.
+fn int(n: usize) -> i32 {
+    i32::try_from(n).expect("a test size fits in a row")
+}
+
 #[test]
 fn keys_come_back_in_order_from_a_multi_level_tree() {
     // 2 * MT_BRANCH_FACTOR - 1 == 19 keys per node, so this is deep enough to
@@ -372,8 +377,8 @@ fn keys_come_back_in_order_from_a_multi_level_tree() {
     let rows = scale(6, 30);
     let cols = scale(9, 40);
     let mut t = Tree::new();
-    for row in 1..=rows as i32 {
-        for col in 1..=cols as i32 {
+    for row in 1..=int(rows) {
+        for col in 1..=int(cols) {
             t.put(row, col, col % 2 == 0);
         }
     }
@@ -389,7 +394,7 @@ fn keys_come_back_in_order_from_a_multi_level_tree() {
 fn deleting_in_a_scrambled_order_rebalances_without_losing_a_mark() {
     let n = scale(60, 700);
     let mut t = Tree::new();
-    for i in 0..n as i32 {
+    for i in 0..int(n) {
         t.put(i / 7, i % 7, i % 3 == 0);
     }
     t.check();
@@ -416,7 +421,7 @@ fn deleting_in_a_scrambled_order_rebalances_without_losing_a_mark() {
 fn a_splice_moves_every_mark_the_way_the_model_says() {
     let rows = scale(8, 40);
     let mut t = Tree::new();
-    for row in 0..rows as i32 {
+    for row in 0..int(rows) {
         for col in [0, 2, 5, 9] {
             t.put(row, col, col == 2 || col == 9);
         }
@@ -444,10 +449,10 @@ fn a_splice_moves_every_mark_the_way_the_model_says() {
 fn marks_collapsed_onto_one_position_stay_distinct() {
     let n = scale(20, 200);
     let mut t = Tree::new();
-    for i in 0..n as i32 {
+    for i in 0..int(n) {
         t.put(1, i, i % 2 == 0);
     }
-    t.splice((1, 0), (0, n as i32), (0, 0));
+    t.splice((1, 0), (0, int(n)), (0, 0));
     let order = t.check();
     assert_eq!(order.len(), n);
     // Every mark is now at (1, 0): the left-gravity ones stayed at the start of
@@ -465,13 +470,13 @@ fn ranges_keep_their_two_halves_paired_across_a_rebalance() {
     let mut t = Tree::new();
     // Nested ranges, so that the outermost covers whole subtrees and lands in
     // their intersection sets rather than being stored on every node.
-    for i in 0..n as i32 {
-        t.put_pair(0, i, (2 * n) as i32 - i, 0);
+    for i in 0..int(n) {
+        t.put_pair(0, i, int(2 * n) - i, 0);
     }
     t.check();
 
     let mut rng = Rng(0xf00d);
-    let mut live: Vec<u32> = (1..=n as u32).collect();
+    let mut live: Vec<u32> = (1..=u32::try_from(n).unwrap()).collect();
     while !live.is_empty() {
         let at = rng.next(live.len());
         t.del_pair(live.swap_remove(at));
@@ -483,7 +488,7 @@ fn ranges_keep_their_two_halves_paired_across_a_rebalance() {
 #[test]
 fn an_iterator_positioned_by_coordinates_lands_on_the_first_mark_at_or_after_it() {
     let mut t = Tree::new();
-    for row in 0..scale(4, 20) as i32 {
+    for row in 0..int(scale(4, 20)) {
         t.put(row * 2, 5, false);
     }
     t.check();
@@ -516,7 +521,7 @@ fn an_empty_tree_has_nothing_to_walk() {
 #[test]
 fn clearing_a_tree_leaves_it_reusable() {
     let mut t = Tree::new();
-    for i in 0..scale(30, 300) as i32 {
+    for i in 0..int(scale(30, 300)) {
         t.put(i, i, false);
     }
     marktree_clear(&mut t.tree);
@@ -550,7 +555,7 @@ fn splitting_a_full_node_keeps_the_order_whichever_key_triggers_it() {
 #[test]
 fn a_splice_that_touches_nothing_leaves_every_mark_alone() {
     let mut t = Tree::new();
-    for i in 0..scale(10, 100) as i32 {
+    for i in 0..int(scale(10, 100)) {
         t.put(i, 3, i % 2 == 0);
     }
     let before = t.check();
@@ -589,7 +594,7 @@ fn moving_a_mark_onto_a_neighbouring_slot_keeps_the_order() {
 /// from scratch to compare.
 #[test]
 fn moving_halves_of_overlapping_ranges_rebuilds_the_covering_records() {
-    let n = scale(20, 300) as i32;
+    let n = int(scale(20, 300));
     let mut t = Tree::new();
     let ids: Vec<u32> = (1..=n)
         .map(|i| t.put_pair_gravity(at(1, i, false), at(2, n - i, false)))
@@ -600,7 +605,7 @@ fn moving_halves_of_overlapping_ranges_rebuilds_the_covering_records() {
         // Alternate which half moves, so both the start's and the end's
         // re-insertion paths run.
         let end = i % 2 == 1;
-        t.move_half(id, end, 1 + i32::from(end), n / 2 + i as i32);
+        t.move_half(id, end, 1 + i32::from(end), n / 2 + int(i));
         if i % 10 == 0 {
             t.check_tree();
         }
@@ -625,14 +630,14 @@ fn the_overlap_iterator_finds_every_range_covering_a_row() {
     'fill: loop {
         for row1 in 1..=9 {
             for row2 in row1..=10 {
-                if k > size as i32 {
+                if k > int(size) {
                     break 'fill;
                 }
-                let id = t.put_pair_gravity(at(row1, k, false), at(row2, size as i32 - k, false));
+                let id = t.put_pair_gravity(at(row1, k, false), at(row2, int(size) - k, false));
                 for row in at_row
                     .iter_mut()
-                    .take(row2 as usize + 1)
-                    .skip(row1 as usize + 1)
+                    .take(usize::try_from(row2).unwrap() + 1)
+                    .skip(usize::try_from(row1).unwrap() + 1)
                 {
                     row.push(id);
                 }
@@ -645,7 +650,7 @@ fn the_overlap_iterator_finds_every_range_covering_a_row() {
     t.check_tree();
 
     for row in 1..=10 {
-        let mut want = at_row[row as usize].clone();
+        let mut want = at_row[usize::try_from(row).unwrap()].clone();
         want.sort_unstable();
         assert_eq!(t.overlapping(row, 0), want, "row {row}");
     }
@@ -660,7 +665,7 @@ fn the_overlap_iterator_finds_every_range_covering_a_row() {
 /// desynchronise the two.
 #[test]
 fn splicing_across_a_stack_of_ranges_keeps_the_covering_records() {
-    let n = scale(20, 400) as i32;
+    let n = int(scale(20, 400));
     let mut t = Tree::new();
     for i in 1..=n {
         t.put_pair_gravity(at(1, i, false), at(2, n - i, false));
@@ -684,10 +689,10 @@ fn splicing_inside_a_deep_tree_of_ranges_keeps_the_covering_records() {
     'fill: loop {
         for row1 in 1..=9 {
             for row2 in row1..=10 {
-                if k > size as i32 {
+                if k > int(size) {
                     break 'fill;
                 }
-                t.put_pair_gravity(at(row1, k, false), at(row2, size as i32 - k, false));
+                t.put_pair_gravity(at(row1, k, false), at(row2, int(size) - k, false));
                 k += 1;
             }
         }
@@ -711,8 +716,8 @@ fn splicing_inside_a_deep_tree_of_ranges_keeps_the_covering_records() {
 /// on that key rather than on the first key of some skipped subtree.
 #[test]
 fn a_filtered_walk_visits_only_the_marked_keys() {
-    let rows = scale(12, 120) as i32;
-    let cols = scale(8, 60) as i32;
+    let rows = int(scale(12, 120));
+    let cols = int(scale(8, 60));
     let mut t = Tree::new();
     // Sparse enough that most subtrees hold nothing the filter wants.
     let marked = |row: i32, col: i32| col == 0 && row % 4 == 3;
@@ -765,8 +770,8 @@ fn a_filtered_walk_visits_only_the_marked_keys() {
 fn deleting_ranges_in_a_strided_order_keeps_the_covering_records() {
     let n = scale(24, 320);
     let mut t = Tree::new();
-    let ids: Vec<u32> = (1..=n as i32)
-        .map(|i| t.put_pair_gravity(at(1, i, false), at(2, n as i32 - i, false)))
+    let ids: Vec<u32> = (1..=int(n))
+        .map(|i| t.put_pair_gravity(at(1, i, false), at(2, int(n) - i, false)))
         .collect();
     t.check_tree();
 

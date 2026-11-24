@@ -1,13 +1,6 @@
 #![forbid(unsafe_code)]
 // the terminal's C callback typedefs, read against upstream's `terminal.c`.
 #![allow(non_camel_case_types)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 //! One terminal's state: the emulator and its pending output, the scrollback
 //! ring, the cursor, and the options a channel opens it with.

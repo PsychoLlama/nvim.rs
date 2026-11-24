@@ -37,13 +37,6 @@
 //! every RPC message on the channel flush the second half before itself.)
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::event::wstream::SharedBuffer;
 use crate::memory::{BLOCK_SIZE, block_vec};

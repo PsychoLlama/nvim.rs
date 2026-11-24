@@ -5,13 +5,6 @@
 //! caller's `SEARCH_MSG` bits ask for, once, with upstream's text.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use core::ffi::c_int;
 

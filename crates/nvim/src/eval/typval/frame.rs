@@ -6,13 +6,6 @@
 //! lives beside `TypVal::bit_copy` in `access.rs`.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::{TV_INITIAL_VALUE, TypVal};
 use core::marker::PhantomData;

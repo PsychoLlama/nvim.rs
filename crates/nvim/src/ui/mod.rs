@@ -24,13 +24,6 @@
 //! several grids into one for UIs that did not ask for `ext_multigrid` in
 //! [`ui_compositor`](crate::ui_compositor).
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 

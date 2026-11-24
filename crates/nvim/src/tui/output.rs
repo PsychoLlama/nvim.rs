@@ -13,13 +13,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `tui/{tui,input,output,events}.rs` row in docs/perimeter.md.
 #![allow(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 //
 // Everything here takes `&mut TUIData` and is safe on the strength of that
 // type's invariant (see `TUIData`): the handles, staging buffer and terminfo

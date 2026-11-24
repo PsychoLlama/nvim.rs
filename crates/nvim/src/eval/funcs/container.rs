@@ -1,13 +1,6 @@
 //! Reading a List, Dict or Blob: `get()`, `empty()`, `index()`,
 //! `flatten()` and friends.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::wrappers::{arg_copy, arg_number_chk};
 use crate::eval::funcs::builtin::EvalFuncData;

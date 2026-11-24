@@ -12,13 +12,6 @@
 //! comparison is on the timestamp every store carries and nothing else prints.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::mark::defs::{FileMark, FileMarkView, XFileMark};
 use crate::memory::{ThinCString, XString};

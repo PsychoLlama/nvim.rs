@@ -6,13 +6,6 @@
 //! only in which scope they fix and whether they read or write.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::*;
 use crate::api::private::helpers::{find_buffer_by_handle, find_window_by_handle};

@@ -786,7 +786,7 @@ mod lexer {
 
     fn intchar(ch: c_int) -> Chr {
         if (20..127).contains(&ch) {
-            Chr::Ch(ch as u8 as char)
+            Chr::Ch(char::from(u8::try_from(ch).expect("printable ASCII")))
         } else {
             Chr::Num(ch)
         }
@@ -1017,7 +1017,7 @@ mod lexer {
                 }),
             },
             ("PlainIdentifier", LexExprTokenData::Var(var)) => Tkd::Var {
-                scope: intchar(var.scope as c_int),
+                scope: intchar(c_int::try_from(var.scope).unwrap()),
                 autoload: var.autoload,
             },
             ("Number", LexExprTokenData::Number(num)) => match num.val {
@@ -1413,7 +1413,7 @@ mod lexer {
 
     #[test]
     fn peeking_reads_the_same_token_without_moving_the_cursor() {
-        let flags = EL_FLAG_PEEK as c_int;
+        let flags = c_int::try_from(EL_FLAG_PEEK).unwrap();
         stable(flags, false);
         eoc(flags, false);
         scopes(flags, false);
@@ -1423,7 +1423,7 @@ mod lexer {
 
     #[test]
     fn forbidding_scope_stops_the_name_before_the_colon() {
-        let flags = EL_FLAG_FORBID_SCOPE as c_int;
+        let flags = c_int::try_from(EL_FLAG_FORBID_SCOPE).unwrap();
         stable(flags, true);
         eoc(flags, true);
         is_comparison(flags, true);
@@ -1441,7 +1441,7 @@ mod lexer {
 
     #[test]
     fn allowing_floats_takes_the_fractional_part() {
-        let flags = EL_FLAG_ALLOW_FLOAT as c_int;
+        let flags = c_int::try_from(EL_FLAG_ALLOW_FLOAT).unwrap();
         stable(flags, true);
         eoc(flags, true);
         scopes(flags, true);
@@ -1490,7 +1490,7 @@ mod lexer {
 
     #[test]
     fn is_can_be_read_as_an_identifier_instead() {
-        let flags = EL_FLAG_IS_NOT_CMP as c_int;
+        let flags = c_int::try_from(EL_FLAG_IS_NOT_CMP).unwrap();
         stable(flags, true);
         eoc(flags, true);
         scopes(flags, true);
@@ -1519,7 +1519,7 @@ mod lexer {
 
     #[test]
     fn forbidding_eoc_makes_the_three_end_characters_invalid() {
-        let flags = EL_FLAG_FORBID_EOC as c_int;
+        let flags = c_int::try_from(EL_FLAG_FORBID_EOC).unwrap();
         stable(flags, true);
         scopes(flags, true);
         is_comparison(flags, true);

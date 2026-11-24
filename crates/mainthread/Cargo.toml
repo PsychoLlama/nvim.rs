@@ -11,3 +11,11 @@ path = "lib.rs"
 [lints.rust]
 unreachable_pub = "deny"
 unused_qualifications = "deny"
+
+# See crates/nvim/Cargo.toml: the cast family is denied crate-wide.
+[lints.clippy]
+cast_lossless = "deny"
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_sign_loss = "deny"
+ptr_as_ptr = "deny"

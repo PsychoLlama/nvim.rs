@@ -17,6 +17,14 @@
 //! this port stays under that license (text: licenses/LGPL-2.1.txt).
 
 #![forbid(unsafe_code)]
+// Casts: perimeter: vendored libxdiff (a `CAST_ALLOW_FLOOR` row, scripts/ratchet.py).
+#![allow(
+    clippy::cast_lossless,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::ptr_as_ptr
+)]
 
 use crate::xdiff::xtypes::{Algorithm, Changed, Env, Params, Rec, XdFile};
 use crate::xdiff::xutils::{bogosqrt, guess_lines, hash_record, hashbits, recmatch};

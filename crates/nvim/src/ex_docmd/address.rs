@@ -12,13 +12,6 @@
 //! Each function is a walk over the command line the caller owns, by
 //! offset.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::addrtype::{arglist_len, get_cmd_default_range, loaded_buffer_range};
 use crate::cstr::byte_at;

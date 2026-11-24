@@ -6,13 +6,6 @@
 //! start/end pattern to `do_searchpair`. The retry loops in both are
 //! Visual-mode extension -- an object already selected whole grows outwards.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::mbyte::Codepoint;

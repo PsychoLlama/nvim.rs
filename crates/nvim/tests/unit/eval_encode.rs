@@ -134,7 +134,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
 unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
     // SAFETY: the caller's.
     unsafe {
-        let list = tv_list_alloc(n as isize);
+        let list = tv_list_alloc(isize::try_from(n).unwrap());
         let outer = list.value();
         // The items share this reference -- item 0 *is* it -- so the value
         // that built it must not release it on the way out.

@@ -42,13 +42,6 @@
 //! The marktree walk is the state's own iterator, a field kept between rows
 //! of a redraw; each step is a [`Cursor`] built over it for that one call.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use super::{

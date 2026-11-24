@@ -34,7 +34,7 @@ use crate::support::editor_lock;
 /// terminator and no further, so the terminator is what bounds them.
 fn cbuf(s: &[u8]) -> Vec<c_char> {
     s.iter()
-        .map(|&b| b as c_char)
+        .map(|&b| b.cast_signed())
         .chain(std::iter::once(0))
         .collect()
 }
@@ -55,7 +55,7 @@ fn cluster(seq: &[u8]) -> (Vec<u8>, c_int) {
     let (sc, firstc) = c_cluster_schar(seq);
     // SAFETY: `out` has room for any glyph and the terminator.
     let len = unsafe { schar_get(out.as_mut_ptr(), sc) };
-    let text = out[..len].iter().map(|&b| b as u8).collect();
+    let text = out[..len].iter().map(|&b| b.cast_unsigned()).collect();
     (text, firstc.get())
 }
 
@@ -79,11 +79,11 @@ fn text(bytes: &[u8], firstc: c_int) -> (Vec<u8>, c_int) {
 fn a_lone_byte_below_0x80_decodes_to_itself_and_so_does_every_other_lead() {
     let _editor = editor_lock();
     for c in 0..=255_u32 {
-        let buf = cbuf(&[c as u8]);
+        let buf = cbuf(&[u8::try_from(c).unwrap()]);
         // SAFETY: `buf` is NUL-terminated.
         assert_eq!(
             unsafe { utf_ptr2char(buf.as_ptr()) },
-            c as c_int,
+            c_int::try_from(c).unwrap(),
             "a truncated sequence answers its first byte"
         );
     }
@@ -101,7 +101,7 @@ fn every_codepoint_round_trips_and_both_word_tests_agree() {
         // Eight bytes, and the encoder writes at most four here.
         encode_char(Codepoint::new(c), &mut buf);
         let encoded = buf;
-        let buf: [c_char; 8] = buf.map(|b| b as c_char);
+        let buf: [c_char; 8] = buf.map(|b| b.cast_signed());
         // SAFETY: the read back stops at the sequence just written.
         unsafe {
             assert_eq!(utf_ptr2char(buf.as_ptr()), c, "round trip of {c:#x}");
@@ -547,7 +547,11 @@ fn the_slice_codec_answers_what_the_pointer_codec_answers() {
         let (want_len, want_char) =
             unsafe { (utf_ptr2len(buf.as_ptr()), utf_ptr2char(buf.as_ptr())) };
         let want_cluster = c_cluster_len(case);
-        assert_eq!(char_len(case), want_len as usize, "char_len {case:x?}");
+        assert_eq!(
+            char_len(case),
+            usize::try_from(want_len).unwrap(),
+            "char_len {case:x?}"
+        );
         assert_eq!(char_at(case).get(), want_char, "char_at {case:x?}");
         assert_eq!(cluster_len(case), want_cluster, "cluster_len {case:x?}");
     }
@@ -783,7 +787,11 @@ fn the_exports_round_trip() {
             // A NUL is the one character whose length `utf_ptr2len`
             // reports as 0 rather than 1 — it is the end of the string,
             // not a character in it.
-            let want = if c == 0 { 0 } else { len as c_int };
+            let want = if c == 0 {
+                0
+            } else {
+                c_int::try_from(len).unwrap()
+            };
             assert_eq!(utf_ptr2len(buf.as_ptr().cast()), want, "{c:#x} ptr2len");
             if len > 1 {
                 assert_eq!(utf_ptr2char_info_impl(buf.as_ptr(), len), c, "{c:#x} info");

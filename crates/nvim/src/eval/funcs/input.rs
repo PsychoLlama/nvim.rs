@@ -1,13 +1,6 @@
 //! Asking the user: `input()`, `confirm()`, the prompt-buffer accessors
 //! and `feedkeys()`.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::tv_get_buf_from_arg;
 use super::wrappers::{arg_number, arg_number_chk};

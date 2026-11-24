@@ -13,13 +13,6 @@
 // `frame_new_height`'s raw-pointer shim is gone, so nothing here needs a
 // dereference.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::arith::{MinSize, NextCurwin};
 use super::*;

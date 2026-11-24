@@ -26,13 +26,6 @@
 //!    `set_ref_in_list_items` are the two loops that drain them.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::guard::Depth;
 use core::ffi::c_int;

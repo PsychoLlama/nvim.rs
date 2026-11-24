@@ -6,13 +6,6 @@
 //! characters. The child is free to change all of it (a shell running a
 //! full-screen program will), so this is only the state it starts in.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::os::libc::termios;
 use crate::os::libc::{cc_t, tcflag_t};

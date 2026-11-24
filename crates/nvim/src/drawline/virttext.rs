@@ -13,13 +13,6 @@
 //! [`line_putchar`] is the single-character primitive under both of them (and
 //! under the column drawing in `columns.rs`).
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 

@@ -28,13 +28,6 @@
 //! and fills the redo buffer with `ciw{word}<Esc>` so that `.` can.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::change::inserted_bytes;
 use crate::cursor::get_cursor_line_len;

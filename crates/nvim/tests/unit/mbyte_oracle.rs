@@ -39,7 +39,7 @@ use crate::support::editor_lock;
 /// `s` as a NUL-terminated C buffer.
 fn cbuf(s: &[u8]) -> Vec<c_char> {
     s.iter()
-        .map(|&b| b as c_char)
+        .map(|&b| b.cast_signed())
         .chain(std::iter::once(0))
         .collect()
 }
@@ -85,7 +85,7 @@ fn digest(f: impl Fn(&mut Digest, &[u8], &[c_char])) -> u64 {
 
 /// `buf`'s bytes, its terminator included.
 fn cstr_bytes(buf: &[c_char]) -> Vec<u8> {
-    buf.iter().map(|&b| b as u8).collect()
+    buf.iter().map(|&b| b.cast_unsigned()).collect()
 }
 
 /// The bytes of `text` up to its first NUL, as a C string would have them.
@@ -123,7 +123,7 @@ fn the_codepoint_readers() {
             d.add(i64::from(info.value));
             d.add(i64::from(info.len));
             for n in bounds(text, i).filter(|&n| n > 0) {
-                d.add(promised_char_len(&text[i..i + n]) as i64);
+                d.add_len(promised_char_len(&text[i..i + n]));
             }
         }
     });
@@ -135,16 +135,16 @@ fn the_cluster_readers() {
     let got = digest(|d, text, buf| {
         let _ = buf;
         for i in 0..=text.len() {
-            d.add(c_cluster_len(&text[i..]) as i64);
-            d.add(c_head_off(text, i) as i64);
-            d.add(c_off_next(text, i) as i64);
-            d.add(c_prev_start(text, i) as i64);
+            d.add_len(c_cluster_len(&text[i..]));
+            d.add_len(c_head_off(text, i));
+            d.add_len(c_off_next(text, i));
+            d.add_len(c_prev_start(text, i));
             for n in bounds(text, i) {
-                d.add(cluster_len(&text[i..i + n]) as i64);
-                d.add(char_count(until_nul(&text[i..i + n])) as i64);
+                d.add_len(cluster_len(&text[i..i + n]));
+                d.add_len(char_count(until_nul(&text[i..i + n])));
             }
         }
-        d.add(char_count(until_nul(text)) as i64);
+        d.add_len(char_count(until_nul(text)));
     });
     assert_eq!(got, 0xc865c1fa01f61725, "cluster readers");
 }
@@ -158,12 +158,12 @@ fn the_drawing_walk() {
         for i in 0..text.len() {
             let (mut at, mut chr) = (i, c_char_info(text, i));
             while byte(at) != 0 {
-                d.add(at as i64);
+                d.add_len(at);
                 d.add(i64::from(chr.value));
                 d.add(i64::from(chr.len));
                 (at, chr) = c_next_cluster(text, at, chr);
             }
-            d.add(at as i64);
+            d.add_len(at);
         }
         let mut out = [0 as c_char; MAX_SCHAR_SIZE + 1];
         for i in 0..=text.len() {
@@ -171,9 +171,9 @@ fn the_drawing_walk() {
             // SAFETY: `out` has room for any glyph and its NUL.
             let n = unsafe { schar_get(out.as_mut_ptr(), sc) };
             d.add(i64::from(firstc));
-            d.add(n as i64);
+            d.add_len(n);
             for &b in &out[..n] {
-                d.add(i64::from(b as u8));
+                d.add(i64::from(b.cast_unsigned()));
             }
         }
     });
@@ -189,10 +189,10 @@ fn the_width_readers() {
             d.add(i64::from(c_ambiguous_width(&text[i..])));
             for n in bounds(text, i) {
                 d.add(i64::from(c_partial_cells_in(&text[i..], 0, n)));
-                d.add(c_string_cells_len(&text[i..], n) as i64);
+                d.add_len(c_string_cells_len(&text[i..], n));
             }
         }
-        d.add(c_string_cells(text) as i64);
+        d.add_len(c_string_cells(text));
     });
     assert_eq!(got, 0x30bc2fa857ad5ffb, "width readers");
 }
@@ -217,12 +217,12 @@ fn the_bounds_and_class_readers() {
         for i in 0..=text.len() {
             for n in bounds(text, i) {
                 let (points, units) = c_utf_lengths(&text[i..], n);
-                d.add(points as i64);
-                d.add(units as i64);
+                d.add_len(points);
+                d.add_len(units);
                 for index in 0..4 {
                     for utf16 in [false, true] {
                         let at = c_utf_index_to_byte(&text[i..], n, index, utf16);
-                        d.add(at.map_or(-1, |at| at as i64));
+                        d.add(at.map_or(-1, |at| i64::try_from(at).unwrap()));
                     }
                 }
             }
@@ -242,17 +242,16 @@ fn the_advancing_readers() {
         // callers now spell it: decode, then step a cluster or a character.
         let p = buf.as_ptr();
         // SAFETY (the second): `at` is inside the NUL-terminated `buf`.
-        let steps: [&dyn Fn(usize) -> usize; 2] = [
-            &|at| c_cluster_len(&text[at..]),
-            &|at| unsafe { utf_ptr2len(p.add(at)) } as usize,
-        ];
+        let steps: [&dyn Fn(usize) -> usize; 2] = [&|at| c_cluster_len(&text[at..]), &|at| {
+            usize::try_from(unsafe { utf_ptr2len(p.add(at)) }).unwrap()
+        }];
         for step in steps {
             let mut at = 0;
             while at < text.len() && text[at] != 0 {
                 // SAFETY: as above.
                 d.add(i64::from(unsafe { utf_ptr2char(p.add(at)) }));
                 at += step(at);
-                d.add(at as i64);
+                d.add_len(at);
             }
         }
     });
@@ -315,7 +314,7 @@ fn the_encoder() {
         let mut buf = [0u8; 8];
         // Eight bytes hold the longest sequence.
         let len = encode_char(Codepoint::new(c), &mut buf);
-        d.add(len as i64);
+        d.add_len(len);
         for &b in &buf[..len] {
             d.add(i64::from(b));
         }

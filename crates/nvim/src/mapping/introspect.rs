@@ -5,13 +5,6 @@
 //! [`get_maparg`] backs `maparg()`/`mapcheck()` and [`keymap_array`] backs
 //! `nvim_get_keymap`.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use super::*;

@@ -104,7 +104,7 @@ fn longer_glyphs_are_interned_once() {
     assert_eq!(schar_cells(a), 1);
     assert_eq!(schar_get_first_codepoint(a), 'e' as c_int);
     // ASCII-only answers ASCII, NUL for anything else.
-    assert_eq!(schar_get_ascii(intern("x")) as u8, b'x');
+    assert_eq!(u8::try_from(schar_get_ascii(intern("x"))).unwrap(), b'x');
     assert_eq!(schar_get_ascii(a), 0);
     assert_eq!(schar_get_ascii(intern("\u{e9}")), 0);
 }

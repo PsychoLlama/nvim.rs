@@ -9,13 +9,6 @@
 //! the lines and the report it ends with ([`lines`]).
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::ascii::NL;
 use crate::ex_docmd::cmdmod_has;

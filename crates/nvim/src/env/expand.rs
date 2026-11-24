@@ -7,13 +7,6 @@
 //! with an early-out per name rather than as a parser.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::charset::{vim_is_ident_char, vim_isfilec};
 use crate::env::getenv_resolved;

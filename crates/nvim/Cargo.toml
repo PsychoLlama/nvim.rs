@@ -139,6 +139,18 @@ level = "warn"
 check-cfg = ['cfg(randomized_layout)', 'cfg(soundness_checks)']
 
 [lints.clippy]
+# A cast says nothing about what it does to a value that does not fit: `as`
+# widens, truncates, wraps and drops the sign alike. Denied crate-wide, so a
+# new file is held by default: a widening is `From`, a narrowing a checked
+# `try_from` or one of `narrow.rs`'s named helpers. The files that still cast
+# carry an inner `#![allow(...)]` of these five with their reason, and each is a
+# `CAST_ALLOW_FLOOR` row in scripts/ratchet.py (shrink-only, checked both
+# ways).
+cast_lossless = "deny"
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_sign_loss = "deny"
+ptr_as_ptr = "deny"
 # Starting a thread or installing a panic hook: the paths off the main thread
 # that `GlobalCell`'s soundness rests on keeping audited (clippy.toml).
 disallowed_methods = "deny"

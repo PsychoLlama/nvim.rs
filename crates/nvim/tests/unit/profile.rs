@@ -49,8 +49,8 @@ fn divide_performs_division() {
         res = profile_add(res, divided);
     }
     let (min, max) = (
-        profile_sub(start, divisor as u64),
-        profile_add(start, divisor as u64),
+        profile_sub(start, u64::try_from(divisor).unwrap()),
+        profile_add(start, u64::try_from(divisor).unwrap()),
     );
     assert!(profile_cmp(min, res) >= 0);
     assert!(profile_cmp(max, res) <= 0);

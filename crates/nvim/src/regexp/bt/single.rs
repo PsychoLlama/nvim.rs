@@ -3,13 +3,6 @@
 //! matcher to reconsider, so each one just says whether the match continues.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::mark::MARK_BUF_LOCAL;
 use crate::mbyte::Codepoint;

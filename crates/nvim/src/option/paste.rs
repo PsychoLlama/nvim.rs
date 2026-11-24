@@ -7,13 +7,6 @@
 //! it is already on must not overwrite them with the suppressed values.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::drawscreen::status_redraw_all;
 use crate::global_cell::GlobalCell;

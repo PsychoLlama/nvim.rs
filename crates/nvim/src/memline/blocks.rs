@@ -20,13 +20,6 @@
 //! [`MemFile::page`]: crate::memfile::MemFile::page
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use core::ffi::{c_int, c_long, c_uint};
 use core::mem::{offset_of, size_of};

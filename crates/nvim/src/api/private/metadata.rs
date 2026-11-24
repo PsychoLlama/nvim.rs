@@ -9,13 +9,6 @@
 //! signatures, tools/apigen/metadata.txt and the tree's own `UI_EXT_NAMES`
 //! and `NVIM_VERSION_*`. Do not edit: run `just apigen`.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 /// The packed metadata, describing 261 methods and 69 UI events.
 pub static PACKED_API_METADATA: &[u8] =

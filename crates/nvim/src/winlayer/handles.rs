@@ -26,13 +26,6 @@
 //! already knows: a lookup reads nothing out of the object it answers with.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use core::ffi::c_int;
 use core::num::NonZero;

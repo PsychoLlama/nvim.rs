@@ -44,7 +44,9 @@ fn bogus(v_type: VarType, bits: usize) -> ManuallyDrop<TypVal> {
 fn bogus_inner(v_type: VarType, bits: usize) -> TypVal {
     let p = ptr::without_provenance_mut::<()>(bits);
     match v_type {
-        VAR_NUMBER => TypVal::Number(bits as VarNumber),
+        VAR_NUMBER => {
+            TypVal::Number(VarNumber::try_from(bits.cast_signed()).expect("a 64-bit target"))
+        }
         VAR_FLOAT => TypVal::Float(f64::from_bits(bits as u64)),
         VAR_STRING => tv::string_tv(p.cast()),
         VAR_FUNC => tv::func_tv(p.cast()),

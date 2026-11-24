@@ -118,12 +118,12 @@ fn reading_one_key_name() {
                     d.add(i64::from(key.raw()));
                     d.add(i64::from(modifiers.bits()));
                     d.add(i64::from(simplified));
-                    d.add((at + used) as i64);
+                    d.add_len(at + used);
 
                     for escape_ks in [false, true] {
                         let mut out = Vec::new();
                         let _ = trans_special_into(name, flags, escape_ks, &mut out);
-                        d.add(out.len() as i64);
+                        d.add_len(out.len());
                         d.bytes(&out);
                     }
                 }
@@ -186,13 +186,13 @@ fn escaping_k_special() {
     for c in (0..0x900).chain([0x10000, 0x10ffff, 0x7fff_ffff, -1, -0x6b80]) {
         let mut out = Vec::new();
         push_char_escaped(Codepoint::new(c), &mut out);
-        d.add(out.len() as i64);
+        d.add_len(out.len());
         for modifiers in [ModMask::NONE, ModMask::CTRL | ModMask::SHIFT] {
             for escape_ks in [false, true] {
                 if c >= 0 || !escape_ks {
                     let mut out = Vec::new();
                     push_special_key(Key::from_raw(c), modifiers, escape_ks, &mut out);
-                    d.add(out.len() as i64);
+                    d.add_len(out.len());
                     d.bytes(&out);
                 }
             }

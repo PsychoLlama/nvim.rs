@@ -15,13 +15,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `event/` row in docs/perimeter.md.
 #![allow(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::event::uv::{UV_RUN_DEFAULT, UV_RUN_NOWAIT, UV_RUN_ONCE};
 use crate::os::uv_error::UV_EBUSY;

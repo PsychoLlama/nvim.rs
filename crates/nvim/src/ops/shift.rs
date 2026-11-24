@@ -16,13 +16,6 @@
 //!   that the driver can do the one `ml_replace` and the one extmark splice.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::extmark::EXTMARK_UNDO;
 use crate::indent::{INDENT_SET, SIN_CHANGED};

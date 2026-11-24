@@ -5,13 +5,6 @@
 //! has reached is the one asked for.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::program::NfaState;
 use crate::mark::MARK_BUF_LOCAL;

@@ -15,13 +15,6 @@
 //! pointer forms stop there only because that is where their string ends.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::ascii::CTRL_V;
 use crate::ascii::{ascii_isbdigit, ascii_isdigit, ascii_iswhite, ascii_isxdigit};

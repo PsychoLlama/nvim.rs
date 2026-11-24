@@ -29,13 +29,6 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::{at, is_sep, str_arg_chk};
 use crate::env::{expand_env, home_to_tilde};

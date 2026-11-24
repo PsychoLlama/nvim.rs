@@ -1,13 +1,6 @@
 //! What the editor is right now: `has()`, `mode()`, `state()` and the rest
 //! of the feature and status queries.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::wrappers::{arg_lnum, arg_number, arg_number_chk, non_zero_arg};
 use crate::api::private::helpers::api_metadata;

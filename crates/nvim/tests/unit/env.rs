@@ -309,7 +309,7 @@ fn the_environment_block_enumerates_by_index_and_stops_at_the_end() {
     // Past the end, however far past.
     for out_of_bounds in [
         10_000,
-        u64::from(u32::MAX) as usize,
+        usize::try_from(u64::from(u32::MAX)).unwrap(),
         18_446_744_073_709_000_000,
     ] {
         assert!(env_name_at(out_of_bounds).is_none());

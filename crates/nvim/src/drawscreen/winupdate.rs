@@ -11,13 +11,6 @@
 //! That is why a bug here shows up as STALE CELLS: every shortcut is a promise
 //! that some rows do not have to be redrawn.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use super::*;

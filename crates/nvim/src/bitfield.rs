@@ -17,13 +17,6 @@
 //! [`untagged_union_debug!`] is the other C-layout helper: the `Debug` of a
 //! union whose live arm is recorded somewhere else, or nowhere.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 /// Marker for types a bitfield range can be read as / written from.
 pub(crate) trait FieldValue: Copy {

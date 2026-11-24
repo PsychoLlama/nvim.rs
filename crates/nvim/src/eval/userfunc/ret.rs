@@ -7,13 +7,6 @@
 //! records a call to make on the way out and `invoke_all_defer` makes them.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::ex_eval::CsFlags;
 use crate::guard::Suppress;

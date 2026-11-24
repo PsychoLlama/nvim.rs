@@ -18,7 +18,7 @@ fn default_table_is_unchanged() {
         let mut bytes = vec![d.char1, d.char2];
         bytes.extend_from_slice(&d.result.get().to_le_bytes());
         for b in bytes {
-            hash = (hash ^ b as u64).wrapping_mul(0x100_0000_01b3);
+            hash = (hash ^ u64::from(b)).wrapping_mul(0x100_0000_01b3);
         }
     }
     assert_eq!(hash, 0x4abb_9183_e972_bd54);

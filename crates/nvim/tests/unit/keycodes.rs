@@ -505,7 +505,10 @@ fn special_key_code_delimits_and_takes_termcaps() {
     // t_xx is TERMCAP2KEY(x, x), whatever the two bytes are.
     assert_eq!(key_code("Up"), key_code("t_ku"));
     assert_eq!(key_code("F1"), key_code("t_k1"));
-    assert_eq!(-(b'z' as c_int + ((b'z' as c_int) << 8)), key_code("t_zz"));
+    assert_eq!(
+        -(c_int::from(b'z') + (c_int::from(b'z') << 8)),
+        key_code("t_zz")
+    );
     // Too short to be a termcap name: falls through to the table and misses.
     assert_eq!(0, key_code("t_k"));
 }

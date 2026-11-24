@@ -9,13 +9,6 @@
 //! `hs=`/`he=`/`rs=`/`re=`/`lc=` offsets to a match.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::narrow::as_index;
 use crate::narrow::number_as_col;

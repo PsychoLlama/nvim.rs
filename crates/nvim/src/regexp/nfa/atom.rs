@@ -6,13 +6,6 @@
 //! shorthands, back-references and ordinary characters.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::regexp::chars::{
     M_1, M_9, M_AMP, M_AT, M_BAR, M_BRACE, M_BRACKET, M_CARET, M_DOLLAR, M_EQUAL, M_GT, M_LT, M_N,

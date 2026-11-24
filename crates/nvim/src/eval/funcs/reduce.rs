@@ -1,12 +1,5 @@
 //! Folding a sequence down to one value: `reduce()`, `max()`, `min()`.
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use super::wrappers::arg_copy;
 use super::{E_MISSING_FUNCTION_ARGUMENT, E_STRING_LIST_OR_BLOB_REQUIRED};

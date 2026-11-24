@@ -4,13 +4,6 @@
 //! Unicode codepoints. Active when 'arabicshape' is set and 'termbidi'
 //! is not.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::mbyte::Codepoint;

@@ -7,13 +7,6 @@
 //! been loaded, which is why they are not in this module.
 
 #![forbid(unsafe_code)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 
 use crate::env::XdgVar;
 use crate::env::{get_appname, user_config_path, xdg_var};

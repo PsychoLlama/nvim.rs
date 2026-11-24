@@ -18,13 +18,6 @@
 // children that stay on the perimeter (luv's C hooks, and making and closing
 // states). Everything else here forbids unsafe code on its own.
 #![deny(unsafe_op_in_unsafe_fn)]
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
 use core::ffi::c_int;

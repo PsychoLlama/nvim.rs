@@ -8,13 +8,6 @@
 //! breakcheck count reset, and `'completeopt'` is the global value, which is
 //! what [`completeopt_flags`] answers with no current buffer.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use super::*;

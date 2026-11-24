@@ -3,13 +3,6 @@
 //!
 //! Every function here is a walk over the command line the caller owns, by
 //! offset.
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use crate::ex_docmd::{CmdError, is_user_cmd};

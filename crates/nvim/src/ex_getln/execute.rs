@@ -5,13 +5,6 @@
 //! [`super::handlekey::command_line_handle_key`].  [`command_line_changed`]
 //! is the other half: what runs after a key that edited the line.
 
-#![deny(
-    clippy::cast_lossless,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::ptr_as_ptr
-)]
 #![forbid(unsafe_code)]
 
 use super::*;
