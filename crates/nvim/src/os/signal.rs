@@ -19,12 +19,7 @@
 use crate::autocmd::apply_autocmds;
 use crate::autocmd::defs::AutoEvent;
 use crate::eval::vars::set_vim_var_nr;
-use crate::event::objects::SignalWatcher;
-use crate::event::signal::{
-    signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
-};
-use crate::event::uv::UV_UNKNOWN_HANDLE;
-use crate::event::uv::{uv__queue, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t};
+use crate::event::signal::SignalWatcher;
 use crate::ex_cmds2::autowrite_all;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
@@ -32,11 +27,11 @@ use crate::memline::ml_sync_all;
 use crate::memory::XString;
 use crate::message_fmt::msg_cstr;
 use crate::option::vars::p_awa;
-use crate::startup::{MAIN_LOOP, V_DYING, preserve_exit};
+use crate::startup::{V_DYING, preserve_exit};
 use crate::types::Vv;
 use crate::winlayer::Buf;
 use ::libc::{pthread_sigmask, sigemptyset, sigset_t};
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 // Signal numbers, for this module and for anything else that names one. Only
@@ -57,49 +52,13 @@ const WATCHED: [c_int; 9] = [
     libc::SIGWINCH,
 ];
 
-/// A watcher before `signal_watcher_init` has filled it in.
-const WATCHER_UNSET: SignalWatcher = SignalWatcher {
-    uv: uv_signal_t {
-        data: ptr::null_mut(),
-        loop_0: ptr::null_mut(),
-        type_0: UV_UNKNOWN_HANDLE,
-        close_cb: None,
-        handle_queue: uv__queue {
-            next: ptr::null_mut(),
-            prev: ptr::null_mut(),
-        },
-        u: uv_signal_s_u { fd: 0 },
-        next_closing: ptr::null_mut(),
-        flags: 0,
-        signal_cb: None,
-        signum: 0,
-        tree_entry: uv_signal_s_tree_entry {
-            rbe_left: ptr::null_mut(),
-            rbe_right: ptr::null_mut(),
-            rbe_parent: ptr::null_mut(),
-            rbe_color: 0,
-        },
-        caught_signals: 0,
-        dispatched_signals: 0,
-    },
-    data: ptr::null_mut(),
-    cb: None,
-    close_cb: None,
-    events: None,
-};
-
+/// One watcher per signal: `WATCHERS[i]` watches `WATCHED[i]`.
 static WATCHERS: GlobalCell<[SignalWatcher; WATCHED.len()]> =
-    GlobalCell::new([WATCHER_UNSET; WATCHED.len()]);
+    GlobalCell::new([const { SignalWatcher::unopened() }; WATCHED.len()]);
 
 /// Whether deadly signals are currently being ignored — see
 /// [`signal_reject_deadly`].
 static REJECTING_DEADLY: GlobalCell<bool> = GlobalCell::new(false);
-
-/// The watcher for the `i`th watched signal. `wrapping_add` keeps this a safe
-/// `fn`; `i` is always an index into `WATCHED`, so the result is in bounds.
-fn watcher(i: usize) -> *mut SignalWatcher {
-    WATCHERS.ptr().cast::<SignalWatcher>().wrapping_add(i)
-}
 
 /// Register a watcher per signal in [`WATCHED`] with the main loop and start
 /// them.
@@ -108,8 +67,7 @@ pub fn signal_init() {
     // the C spelled this the same way (an uninitialised local).
     let mut mask: sigset_t = unsafe { core::mem::zeroed() };
     // SAFETY: `mask` is a live out-parameter; the log call takes no format
-    // arguments; the main loop is initialised before this runs and every
-    // watcher address comes from the static array.
+    // arguments.
     unsafe {
         // Ensure a clean slate by unblocking all signals. If SIGCHLD is
         // blocked, for instance, libuv may hang after spawning a subprocess
@@ -123,43 +81,35 @@ pub fn signal_init() {
                 "Could not unblock signals, nvim might behave strangely."
             );
         }
-        for i in 0..WATCHED.len() {
-            signal_watcher_init(MAIN_LOOP.ptr(), watcher(i), ptr::null_mut());
-        }
     }
+    WATCHERS.with(|watchers| {
+        for watcher in watchers {
+            // SAFETY: the watchers live in a static, at their addresses for
+            // the process.
+            unsafe { watcher.open() };
+        }
+    });
     signal_start();
 }
 
 /// Stop and close every watcher.
 pub fn signal_teardown() {
     signal_stop();
-    // SAFETY: every watcher was initialised by signal_init and outlives the
-    // close, which libuv completes on a later loop tick.
-    unsafe {
-        for i in 0..WATCHED.len() {
-            signal_watcher_close(watcher(i), None);
-        }
-    }
+    WATCHERS.with(|watchers| watchers.iter().for_each(SignalWatcher::close));
 }
 
 /// Start delivering every watched signal to [`on_signal`].
 pub fn signal_start() {
-    // SAFETY: every watcher was initialised by signal_init.
-    unsafe {
-        for (i, &signum) in WATCHED.iter().enumerate() {
-            signal_watcher_start(watcher(i), Some(on_signal), signum);
+    WATCHERS.with(|watchers| {
+        for (watcher, &signum) in watchers.iter().zip(&WATCHED) {
+            watcher.start(handle_signal, signum);
         }
-    }
+    });
 }
 
 /// Stop delivering watched signals.
 pub fn signal_stop() {
-    // SAFETY: every watcher was initialised by signal_init.
-    unsafe {
-        for i in 0..WATCHED.len() {
-            signal_watcher_stop(watcher(i));
-        }
-    }
+    WATCHERS.with(|watchers| watchers.iter().for_each(SignalWatcher::stop));
 }
 
 /// Ignore deadly signals until [`signal_accept_deadly`]. Used while a child
@@ -213,11 +163,6 @@ fn deadly_signal(signum: c_int) -> ! {
     }
     // Preserve files and exit.
     preserve_exit(Some(&crate::cstr::owned(&dying)))
-}
-
-/// The `signal_cb` libuv's watchers are started with: unpack and hand over.
-fn on_signal(_watcher: *mut SignalWatcher, signum: c_int, _data: *mut c_void) {
-    handle_signal(signum);
 }
 
 /// What each watched signal means to the editor.

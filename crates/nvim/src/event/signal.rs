@@ -1,12 +1,11 @@
 //! Signal watchers: a libuv signal handle whose deliveries become events.
 //!
-//! Like the timer watchers, the owner's callback runs from a queue rather
-//! than from libuv's stack. The close notification is the exception — it is
-//! delivered directly, see [`close_cb`].
-//!
-//! libuv keeps the watcher's address in its handle's `data` field, which is
-//! how the callbacks find their way back. [`Signal`] wraps that pointer once,
-//! so the bodies below are ordinary Rust; nothing here may move a watcher.
+//! [`SignalWatcher`] is a watcher as its owner holds it (`os/signal.rs`'s
+//! table, the TUI's `SIGWINCH`): in place, driven through `&self`, opened by
+//! the one unsafe call. Like the timer watchers, the owner's callback runs
+//! from the fast queue rather than from libuv's stack; the queued event
+//! carries the signal and the callback, not the watcher, so it can outlive
+//! the watcher.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 // Unsafe perimeter: the `event/` row in docs/perimeter.md.
@@ -19,172 +18,183 @@
     clippy::ptr_as_ptr
 )]
 
-use core::ffi::{c_int, c_void};
-use core::ops::Deref;
+use core::cell::UnsafeCell;
+use core::ffi::c_int;
 
 use crate::event::libuv::{uv_close, uv_signal_init, uv_signal_start, uv_signal_stop};
-use crate::event::r#loop::{EventLoop, RawEvent};
-use crate::event::objects::Loop;
-use crate::event::objects::{SignalWatcher, signal_cb, signal_close_cb};
+use crate::event::r#loop::main_uv_loop;
+use crate::event::objects::Event;
 use crate::event::uv::{uv_handle_t, uv_signal_t};
 use crate::event_queue::{self, QueueId};
 
-/// A signal watcher, reached through the raw pointer libuv keeps in its
-/// handle's `data` field.
-#[derive(Copy, Clone, Debug)]
-struct Signal(*mut SignalWatcher);
+/// What a watcher's owner is told: the signal that arrived.
+pub(crate) type SignalCallback = fn(c_int);
 
-impl Signal {
+/// Where a watcher is in its life with libuv.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum State {
+    /// libuv has never seen the handle, or is done with it (the close
+    /// callback has run).
+    Unregistered,
+    /// Registered with the loop: started or stopped, but open.
+    Open,
+    /// `uv_close` was called; libuv still holds the address until the close
+    /// callback.
+    Closing,
+}
+
+/// The watcher's words: libuv's handle, first, and what this module keeps
+/// beside it.
+#[repr(C)]
+struct Watcher {
+    uv: uv_signal_t,
+    cb: Option<SignalCallback>,
+    state: State,
+}
+
+/// A signal watcher as its owner holds it: in place, at the address libuv
+/// is given when it is opened.
+///
+/// Every operation takes `&self`. libuv writes the handle behind any
+/// reference to it, and the `UnsafeCell` is what lets a shared one coexist
+/// with that; no `&mut` to a registered watcher is ever formed. Opening is
+/// the one unsafe step, because from then on the owner promises the watcher
+/// stays put until its close callback has run. The other operations are
+/// gated on the watcher being open: starting one that is not is a bug and
+/// panics, stopping or closing one does nothing.
+#[repr(transparent)]
+pub struct SignalWatcher(UnsafeCell<Watcher>);
+
+impl core::fmt::Debug for SignalWatcher {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SignalWatcher")
+            .field("state", &self.state())
+            .finish_non_exhaustive()
+    }
+}
+
+impl SignalWatcher {
+    /// A watcher libuv has not been given.
+    pub(crate) const fn unopened() -> Self {
+        // SAFETY: a libuv handle is plain C data -- pointers, integers and
+        // `Option`s of function pointers -- for all of which all-zero is the
+        // state `uv_signal_init` starts from.
+        let uv: uv_signal_t = unsafe { core::mem::MaybeUninit::zeroed().assume_init() };
+        Self(UnsafeCell::new(Watcher {
+            uv,
+            cb: None,
+            state: State::Unregistered,
+        }))
+    }
+
+    /// The handle libuv is given.
+    fn uv(&self) -> *mut uv_signal_t {
+        // SAFETY: a field of the live watcher, by place: no reference over
+        // memory libuv writes.
+        unsafe { &raw mut (*self.0.get()).uv }
+    }
+
+    fn state(&self) -> State {
+        // SAFETY: a field libuv never writes, read by value; nothing holds a
+        // reference to it (every write below is by place, too).
+        unsafe { (*self.0.get()).state }
+    }
+
+    fn set_state(&self, state: State) {
+        // SAFETY: as [`SignalWatcher::state`].
+        unsafe { (*self.0.get()).state = state };
+    }
+
+    /// Register the watcher with the editor's loop, stopped.
+    ///
+    /// # Panics
+    /// When the watcher is open, or still closing.
+    ///
     /// # Safety
-    /// `watcher` is live, does not move while it is started, and outlives
-    /// every use of this handle.
-    unsafe fn new(watcher: *mut SignalWatcher) -> Self {
-        debug_assert!(!watcher.is_null());
-        Signal(watcher)
+    /// The watcher stays at this address, alive, until its close callback
+    /// has run (after [`SignalWatcher::close`] and the loop turn that
+    /// finishes it).
+    pub(crate) unsafe fn open(&self) {
+        assert!(
+            self.state() == State::Unregistered,
+            "a signal watcher is opened only when libuv is done with it"
+        );
+        // SAFETY: the editor's loop, live for the process, and the
+        // watcher's own handle, which the caller keeps in place.
+        unsafe {
+            uv_signal_init(main_uv_loop(), self.uv());
+            (*self.uv()).data = self.0.get().cast();
+        }
+        self.set_state(State::Open);
     }
 
-    /// The pointer back, for the owner's callback, which still takes one.
-    fn as_ptr(self) -> *mut SignalWatcher {
-        self.0
+    /// Listen for `signum`, telling `cb` of each delivery.
+    ///
+    /// # Panics
+    /// When the watcher is not open.
+    pub(crate) fn start(&self, cb: SignalCallback, signum: c_int) {
+        assert!(
+            self.state() == State::Open,
+            "a signal watcher is opened before it is started"
+        );
+        // SAFETY: a field libuv never writes, by place.
+        unsafe { (*self.0.get()).cb = Some(cb) };
+        // SAFETY: the watcher's own handle, open.
+        unsafe { uv_signal_start(self.uv(), Some(signal_watcher_cb), signum) };
     }
 
-    /// The libuv handle this watcher owns.
-    fn uv(self) -> *mut uv_signal_t {
-        // SAFETY: a field of the live watcher, derived from the wrapped
-        // pointer rather than from a borrow of it.
-        unsafe { &raw mut (*self.0).uv }
+    /// Stop listening; does nothing unless the watcher is open.
+    pub(crate) fn stop(&self) {
+        if self.state() == State::Open {
+            // SAFETY: the watcher's own handle, open.
+            unsafe { uv_signal_stop(self.uv()) };
+        }
     }
 
-    /// The queue this watcher's events go on, or `None` when it is driven
-    /// synchronously.
-    fn events(self) -> Option<QueueId> {
-        self.events
+    /// Close the handle; does nothing unless the watcher is open. libuv is
+    /// done with it after the loop turn that runs its close callback.
+    pub(crate) fn close(&self) {
+        if self.state() == State::Open {
+            self.set_state(State::Closing);
+            // SAFETY: the watcher's own handle, open until this call.
+            unsafe { uv_close(self.uv().cast(), Some(close_cb)) };
+        }
     }
 }
 
-impl Deref for Signal {
-    type Target = SignalWatcher;
-
-    fn deref(&self) -> &SignalWatcher {
-        // SAFETY: the promise made at construction.
-        unsafe { &*self.0 }
-    }
-}
-
-crate::event::stream::field_writers!(Signal {
-    fn set_uv_data => uv.data: *mut c_void;
-    fn set_data => data: *mut c_void;
-    fn set_cb => cb: signal_cb;
-    fn set_close_cb => close_cb: signal_close_cb;
-    fn set_events => events: Option<QueueId>;
-});
-
-/// Attach `watcher` to `uv_loop`, delivering its events on the fast queue.
+/// The watcher libuv's callbacks are handed, from the handle's `data`.
 ///
 /// # Safety
-/// `uv_loop` is live, and `watcher` points at storage for a watcher that does
-/// not move afterwards.
-pub unsafe fn signal_watcher_init(
-    uv_loop: *mut Loop,
-    watcher: *mut SignalWatcher,
-    data: *mut c_void,
-) {
-    // SAFETY: the caller's loop and storage.
-    let (uv_loop, watcher) = unsafe { (EventLoop::new(uv_loop), Signal::new(watcher)) };
-    // SAFETY: the watcher's own handle, on the caller's loop.
-    unsafe { uv_signal_init(uv_loop.uv(), watcher.uv()) };
-    watcher.set_uv_data(watcher.as_ptr().cast());
-    watcher.set_data(data);
-    watcher.set_cb(None);
-    watcher.set_events(Some(QueueId::FAST));
+/// `handle` is the handle of an opened watcher, which is still in place.
+unsafe fn watcher_of<'a>(handle: *mut uv_signal_t) -> &'a SignalWatcher {
+    // SAFETY: `open` put the watcher's address in `data`, and the watcher
+    // is `repr(transparent)` over the cell at that address.
+    unsafe { &*(*handle).data.cast::<SignalWatcher>() }
 }
 
-/// Listen for `signum`, reporting each delivery to `cb`.
+/// libuv: the signal arrived. Queued with the callback and the number the
+/// handle watches now.
 ///
 /// # Safety
-/// `watcher` has been through [`signal_watcher_init`], and `cb` is safe to
-/// call with the watcher's `data`.
-pub unsafe fn signal_watcher_start(watcher: *mut SignalWatcher, cb: signal_cb, signum: c_int) {
-    // SAFETY: the caller's watcher.
-    let watcher = unsafe { Signal::new(watcher) };
-    watcher.set_cb(cb);
-    // SAFETY: the watcher's own handle, registered with a loop.
-    unsafe { uv_signal_start(watcher.uv(), Some(signal_watcher_cb), signum) };
-}
-
-/// # Safety
-/// `watcher` has been through [`signal_watcher_init`].
-pub unsafe fn signal_watcher_stop(watcher: *mut SignalWatcher) {
-    // SAFETY: the caller's watcher, and its own handle.
-    unsafe { uv_signal_stop(Signal::new(watcher).uv()) };
-}
-
-/// Close the watcher's handle; `cb` is told once libuv is done with it.
-///
-/// # Safety
-/// `watcher` has been through [`signal_watcher_init`] and stays put until
-/// `cb` runs.
-pub unsafe fn signal_watcher_close(watcher: *mut SignalWatcher, cb: signal_close_cb) {
-    // SAFETY: the caller's watcher.
-    let watcher = unsafe { Signal::new(watcher) };
-    watcher.set_close_cb(cb);
-    // SAFETY: the watcher's own handle, still open.
-    unsafe { uv_close(watcher.uv().cast(), Some(close_cb)) };
-}
-
-/// libuv: the signal arrived. The number is read back off the handle rather
-/// than taken from the argument, so a watcher restarted on a different signal
-/// between delivery and processing reports the one it is watching now.
-///
-/// # Safety
-/// libuv's signal callback: `handle` is a watcher's own.
+/// libuv's signal callback: `handle` is an open watcher's own.
 unsafe extern "C" fn signal_watcher_cb(handle: *mut uv_signal_t, _signum: c_int) {
-    // SAFETY: `signal_watcher_init` put the watcher's address in `data`.
-    let watcher = unsafe { Signal::new((*handle).data.cast()) };
-    let arg = watcher.as_ptr().cast::<c_void>();
-    match watcher.events() {
-        Some(events) => {
-            // SAFETY: the watcher outlives the event, which carries nothing
-            // but the watcher itself.
-            event_queue::put(events, unsafe { RawEvent::event(signal_event, arg) });
-        }
-        None => {
-            let mut argv = [arg];
-            // SAFETY: as above; the argv is this frame's.
-            unsafe { signal_event(argv.as_mut_ptr()) };
-        }
-    }
-}
-
-/// # Safety
-/// `argv` slot 0 is the watcher, as [`signal_watcher_cb`] packed it.
-unsafe extern "C" fn signal_event(argv: *mut *mut c_void) {
     // SAFETY: the caller's promise.
-    let watcher = unsafe { Signal::new((*argv).cast()) };
-    let notify = watcher.cb.expect("a started watcher has a callback");
-    let (signum, data) = (watcher.uv.signum, watcher.data);
-    // SAFETY: the callback `signal_watcher_start` installed, with the data
-    // `signal_watcher_init` was given for it.
-    unsafe { notify(watcher.as_ptr(), signum, data) };
+    let watcher = unsafe { watcher_of(handle) };
+    // SAFETY: fields read by value, by place: libuv is not writing them
+    // while it runs this callback.
+    let (cb, signum) = unsafe { ((*watcher.0.get()).cb, (*watcher.uv()).signum) };
+    let notify = cb.expect("a started watcher has a callback");
+    event_queue::put(QueueId::FAST, Event::Job(Box::new(move || notify(signum))));
 }
 
-/// libuv: the handle is closed.
-///
-/// Unlike the timer watchers, this notification is *not* queued: upstream
-/// calls the owner's callback straight from libuv's stack. Preserved —
-/// `os/signal.rs` and `tui/tui.rs` both act on the watcher from here, and a
-/// queued close would land after the loop has already been torn down.
+/// libuv: the handle is closed, and libuv is done with the watcher.
 ///
 /// # Safety
-/// libuv's close callback: `handle` is a watcher's own, and this is its last
-/// callback.
+/// libuv's close callback: `handle` is a closing watcher's own, and this is
+/// its last callback.
 unsafe extern "C" fn close_cb(handle: *mut uv_handle_t) {
-    // SAFETY: `signal_watcher_init` put the watcher's address in `data`.
-    let watcher = unsafe { Signal::new((*handle).data.cast()) };
-    if let Some(notify) = watcher.close_cb {
-        let data = watcher.data;
-        // SAFETY: the callback `signal_watcher_close` installed, with the
-        // data `signal_watcher_init` was given for it.
-        unsafe { notify(watcher.as_ptr(), data) };
-    }
+    // SAFETY: the caller's promise; a signal handle's address is its
+    // `uv_signal_t`'s.
+    let watcher = unsafe { watcher_of(handle.cast()) };
+    watcher.set_state(State::Unregistered);
 }

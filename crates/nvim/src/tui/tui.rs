@@ -36,11 +36,8 @@ use crate::event::libuv::{
     uv_timer_start, uv_tty_get_winsize, uv_tty_init, uv_tty_reset_mode, uv_tty_set_mode,
 };
 use crate::event::r#loop::{Drain, main_loop_raw, poll_main_loop, wait_on_main_loop};
-use crate::event::objects::SignalWatcher;
 use crate::event::rstream::ReadStream;
-use crate::event::signal::{
-    signal_watcher_close, signal_watcher_init, signal_watcher_start, signal_watcher_stop,
-};
+use crate::event::signal::SignalWatcher;
 use crate::event::stream::stream_set_blocking;
 use crate::event::uv::{UV_RUN_DEFAULT, UV_TTY_MODE_IO};
 use crate::event::uv::{
@@ -84,9 +81,8 @@ use crate::ui::state::T_COLORS;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::libc::{abort, kill};
 use core::cell::{Cell, UnsafeCell};
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::marker::PhantomPinned;
-use core::ptr;
 use std::borrow::Cow;
 use std::pin::Pin;
 
@@ -167,7 +163,8 @@ pub struct Handles {
     /// [`terminfo_stop`] only, so no painter can make a write go through a
     /// handle libuv never initialised.
     output: Cell<Output>,
-    winch: UnsafeCell<SignalWatcher>,
+    /// `SIGWINCH`.
+    winch: SignalWatcher,
     /// Fires once, shortly after startup, for the sequences that must not
     /// be sent until the terminal has settled.
     startup_delay_timer: UnsafeCell<uv_timer_t>,
@@ -210,7 +207,7 @@ impl Handles {
                 tty: core::mem::zeroed(),
                 pipe: core::mem::zeroed(),
                 output: Cell::new(Output::Unopened),
-                winch: core::mem::zeroed(),
+                winch: SignalWatcher::unopened(),
                 startup_delay_timer: core::mem::zeroed(),
                 input_timer: core::mem::zeroed(),
                 bg_query_timer: core::mem::zeroed(),
@@ -239,11 +236,6 @@ impl Handles {
     /// The output handle when it is an open terminal.
     pub(crate) fn output_tty(&self) -> Option<*mut uv_tty_t> {
         (self.output.get() == Output::Tty).then(|| self.tty.get())
-    }
-
-    /// The `SIGWINCH` watcher.
-    fn winch(&self) -> *mut SignalWatcher {
-        self.winch.get()
     }
 
     /// The startup timer.
@@ -290,14 +282,10 @@ impl Tui {
         let fresh = STATE.with_mut(|state| state.replace(TUIData::new()).is_none());
         assert!(fresh, "the TUI is started once");
         with_tui(|tui| {
-            // SAFETY: the editor's loop, live from startup to exit, and the
-            // watcher inside the boxed state, which never moves; its callback
-            // looks the state up again.
-            let winch = tui.handles.winch();
-            unsafe {
-                signal_watcher_init(main_loop_raw(), winch, ptr::null_mut());
-                signal_watcher_start(winch, Some(sigwinch_cb), libc::SIGWINCH);
-            }
+            // SAFETY: the watcher inside the boxed state, which never
+            // moves; its callback looks the state up again.
+            unsafe { tui.handles.winch.open() };
+            tui.handles.winch.start(sigwinch_cb, libc::SIGWINCH);
             tui_terminal_start(tui);
             let timer = tui.handles.startup_delay_timer();
             // SAFETY: as above, for the startup timer.
@@ -703,13 +691,11 @@ fn tui_stop() {
         tui_terminal_stop(tui);
         stream_set_blocking(tui.input.in_fd, true);
         tinput_destroy(&mut tui.input, &tui.handles);
-        let (winch, timer) = (tui.handles.winch(), tui.handles.startup_delay_timer());
-        // SAFETY: the TUI's own watcher and timer, open until here.
-        unsafe {
-            signal_watcher_stop(winch);
-            signal_watcher_close(winch, None);
-            uv_close(timer.cast::<uv_handle_t>(), None);
-        }
+        tui.handles.winch.stop();
+        tui.handles.winch.close();
+        let timer = tui.handles.startup_delay_timer();
+        // SAFETY: the TUI's own timer, open until here.
+        unsafe { uv_close(timer.cast::<uv_handle_t>(), None) };
     });
 }
 
@@ -765,11 +751,8 @@ fn tui_suspend_cb(tui: &mut TUIData) {
 
 // ------------------------------------------------------------------- sizing
 
-/// The terminal was resized.
-///
-/// # Safety
-/// The signal watcher's callback; the TUI's state is looked up again.
-unsafe fn sigwinch_cb(_watcher: *mut SignalWatcher, _signum: c_int, _cbdata: *mut c_void) {
+/// The terminal was resized; the TUI's state is looked up again.
+fn sigwinch_cb(_signum: c_int) {
     with_tui(|tui| {
         // Terminals that report resizes themselves have already told us.
         if tui_is_stopped(tui) || tui.resize_events_enabled {

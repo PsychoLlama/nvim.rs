@@ -60,7 +60,6 @@ pub type Loop = loop_0;
 pub type Proc = proc;
 pub type ProcType = ::core::ffi::c_uint;
 pub type RStream = rstream;
-pub type SignalWatcher = signal_watcher;
 pub type Stream = stream;
 pub type internal_proc_cb = Option<unsafe fn(*mut Proc) -> ()>;
 #[derive(Debug)]
@@ -125,18 +124,6 @@ pub struct rstream {
     pub(crate) buf: crate::event::rstream::ReadBuffer,
     pub(crate) read_cb: stream_read_cb,
     pub num_bytes: size_t,
-}
-pub type signal_cb =
-    Option<unsafe fn(*mut SignalWatcher, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
-pub type signal_close_cb = Option<unsafe fn(*mut SignalWatcher, *mut ::core::ffi::c_void) -> ()>;
-#[repr(C)]
-#[derive(Debug)]
-pub struct signal_watcher {
-    pub uv: uv_signal_t,
-    pub data: *mut ::core::ffi::c_void,
-    pub cb: signal_cb,
-    pub close_cb: signal_close_cb,
-    pub events: Option<crate::event_queue::QueueId>,
 }
 /// A stream: a libuv pipe, TTY, TCP or idle handle, and what reads and
 /// writes it.

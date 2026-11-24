@@ -156,7 +156,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 - **What:** libuv's loop, streams, timers, signal watchers and child
   processes are C objects libuv holds _by address_ (`libuv.rs` 93 — mostly the declarations — `proc.rs` 70, `socket/mod.rs` 65,
   `loop.rs` 58, `channel.rs` 43, `libuv_proc.rs` 48, `rstream.rs` 34, `stream.rs` 34,
-  `signal.rs` 17, `time.rs` 16, `wstream.rs` 14). Each region is a libuv
+  `signal.rs` 14, `time.rs` 16, `wstream.rs` 14). Each region is a libuv
   call, a handle rebuilt from the address libuv hands back to a callback, or
   a pin projection.
 - **Contract:** a registered handle never moves. A channel's transport sits
@@ -205,7 +205,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   the `getpw*` family (`users.rs` 8), the clocks and `strftime`/`strptime`
   (`time.rs` 10), opening stdin's read stream and the loop polls (`input.rs` 5), the
   PTY — `forkpty`, `ioctl`, `ptsname`, and in the forked child
-  `setsid`/`execvp` (`pty_proc_unix/mod.rs` 38) — signals (`signal.rs` 11),
+  `setsid`/`execvp` (`pty_proc_unix/mod.rs` 38) — signals (`signal.rs` 5),
   `dlopen` for `libcall()` (`dl.rs` 13), `iconv` (`iconv.rs` 7), process
   inspection (`proc.rs` 7), and the C library surface the `libc` crate
   lacks (`cshim.rs` 72: declarations — among them the four C globals

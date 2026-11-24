@@ -71,3 +71,4 @@ a reviewer reads: the bar is the four classes above and nothing softer.
 | `ReadStream::open`            | `crates/nvim/src/event/rstream.rs`      | `ffi:` as [`ReadStream::open_fd`], for a stream whose common half the socket layer connected.                                                       |
 | `Incoming::accept`            | `crates/nvim/src/event/socket/mod.rs`   | `ffi:` registers the caller's stream with libuv by address, as [`ReadStream::open_fd`].                                                             |
 | `socket_connect`              | `crates/nvim/src/event/socket/mod.rs`   | `ffi:` as [`Incoming::accept`]; a failed connect has closed the handle before it returns.                                                           |
+| `SignalWatcher::open`         | `crates/nvim/src/event/signal.rs`       | `ffi:` registers the watcher with libuv by address, as [`ReadStream::open_fd`].                                                                     |

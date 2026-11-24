@@ -51,10 +51,6 @@ typedef union VTermColor VTermColor;
 typedef struct ScreenPen ScreenPen;
 typedef struct ScreenCell ScreenCell;
 typedef struct ScriptCtx ScriptCtx;
-typedef struct uv_signal_s_tree_entry uv_signal_s_tree_entry;
-typedef union uv_signal_s_u uv_signal_s_u;
-typedef struct uv_signal_s uv_signal_s;
-typedef struct signal_watcher signal_watcher;
 typedef struct StrCharInfo StrCharInfo;
 typedef struct TypVal TypVal;
 typedef struct VTerm_mode VTerm_mode;
@@ -106,6 +102,9 @@ typedef struct uv_handle_s uv_handle_s;
 typedef struct uv_lib_t uv_lib_t;
 typedef union uv_loop_s_active_reqs uv_loop_s_active_reqs;
 typedef struct uv_loop_s_timer_heap uv_loop_s_timer_heap;
+typedef struct uv_signal_s_tree_entry uv_signal_s_tree_entry;
+typedef union uv_signal_s_u uv_signal_s_u;
+typedef struct uv_signal_s uv_signal_s;
 typedef struct uv_loop_s uv_loop_s;
 typedef struct uv_random_s uv_random_s;
 typedef struct uv_shutdown_s uv_shutdown_s;
@@ -259,7 +258,6 @@ typedef unsigned int ScopeType;
 typedef int32_t ScreenAttr;
 typedef uint32_t ScreenChar;
 typedef int ScriptId;
-typedef struct signal_watcher SignalWatcher;
 typedef unsigned int SpecialVarValue;
 typedef unsigned int SpellAddType;
 typedef int SpellIdx;
@@ -323,8 +321,6 @@ typedef void (*proc_exit_cb)(Proc *, int, void *);
 typedef void (*proc_state_cb)(Proc *, bool, void *);
 typedef unsigned long pthread_t;
 typedef unsigned short sa_family_t;
-typedef void (*signal_cb)(SignalWatcher *, int, void *);
-typedef void (*signal_close_cb)(SignalWatcher *, void *);
 typedef unsigned int socklen_t;
 typedef void (*stream_close_cb)(Stream *, void *);
 typedef struct stream_read_cb stream_read_cb;
@@ -600,31 +596,6 @@ struct ScriptCtx {
   int sc_seq;
   LineNr sc_lnum;
   uint64_t sc_chan;
-};
-struct uv_signal_s_tree_entry {
-  uv_signal_s *rbe_left;
-  uv_signal_s *rbe_right;
-  uv_signal_s *rbe_parent;
-  int rbe_color;
-};
-union uv_signal_s_u {
-  int fd;
-  void *reserved[4];
-};
-struct uv_signal_s {
-  void *data;
-  uv_loop_t *loop;
-  uv_handle_type type;
-  uv_close_cb close_cb;
-  uv__queue handle_queue;
-  uv_signal_s_u u;
-  uv_handle_t *next_closing;
-  unsigned int flags;
-  uv_signal_cb signal_cb;
-  int signum;
-  uv_signal_s_tree_entry tree_entry;
-  unsigned int caught_signals;
-  unsigned int dispatched_signals;
 };
 struct StrCharInfo {
   char *ptr;
@@ -1070,6 +1041,31 @@ union uv_loop_s_active_reqs {
 struct uv_loop_s_timer_heap {
   void *min;
   unsigned int nelts;
+};
+struct uv_signal_s_tree_entry {
+  uv_signal_s *rbe_left;
+  uv_signal_s *rbe_right;
+  uv_signal_s *rbe_parent;
+  int rbe_color;
+};
+union uv_signal_s_u {
+  int fd;
+  void *reserved[4];
+};
+struct uv_signal_s {
+  void *data;
+  uv_loop_t *loop;
+  uv_handle_type type;
+  uv_close_cb close_cb;
+  uv__queue handle_queue;
+  uv_signal_s_u u;
+  uv_handle_t *next_closing;
+  unsigned int flags;
+  uv_signal_cb signal_cb;
+  int signum;
+  uv_signal_s_tree_entry tree_entry;
+  unsigned int caught_signals;
+  unsigned int dispatched_signals;
 };
 struct uv_loop_s {
   void *data;
