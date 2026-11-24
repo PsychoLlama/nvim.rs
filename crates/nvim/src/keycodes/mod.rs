@@ -187,29 +187,29 @@ pub fn get_special_key_name(key: Key, modifiers: ModMask) -> SpecialKeyName {
         out[at + 1] = b'-';
         at += 2;
     }
-    match name {
+    match (name, key.codepoint()) {
         // An unnamed special key prints as its termcap name.
-        None if key.is_special() => {
+        (None, None) => {
             let code = termcap_name(key);
             out[at..at + 4].copy_from_slice(&[b't', b'_', code[0], code[1]]);
             at += 4;
         }
         // Not a special key at all: only modifiers, printed directly.
-        None => {
-            let len = key.utf8_len();
-            match key.as_byte() {
-                Some(byte) if len == 1 && vim_isprintc(key.code()) => {
+        (None, Some(c)) => {
+            let len = c.utf8_len();
+            match c.as_byte() {
+                Some(byte) if len == 1 && vim_isprintc(c) => {
                     out[at] = byte;
                     at += 1;
                 }
                 _ if len > 1 => {
                     let mut wide = [0u8; MB_MAXBYTES + 1];
-                    let len = encode_char(key.code(), &mut wide);
+                    let len = encode_char(c, &mut wide);
                     out[at..at + len].copy_from_slice(&wide[..len]);
                     at += len;
                 }
                 _ => {
-                    let display = transchar(key.code());
+                    let display = transchar(c);
                     let shown = cstr::in_bytes(&display).to_bytes();
                     out[at..at + shown.len()].copy_from_slice(shown);
                     at += shown.len();
@@ -217,7 +217,7 @@ pub fn get_special_key_name(key: Key, modifiers: ModMask) -> SpecialKeyName {
             }
         }
         // A named key, as long as the name fits.
-        Some(name) => {
+        (Some(name), _) => {
             if name.len() + at + 2 <= MAX_KEY_NAME_LEN {
                 out[at..at + name.len()].copy_from_slice(name.as_bytes());
                 at += name.len();
@@ -268,15 +268,17 @@ pub fn special_key_bytes(key: Key, modifiers: ModMask, escape_ks: bool) -> KeyBy
     if !modifiers.is_empty() {
         out.extend(&[K_SPECIAL, KS_MODIFIER, modifiers.byte()]);
     }
-    if key.is_special() {
-        let code = termcap_name(key);
-        out.extend(&[K_SPECIAL, code[0], code[1]]);
-    } else if escape_ks {
-        escape_char_into(key, &mut out);
-    } else {
-        let mut encoded = [0u8; MB_MAXBYTES + 1];
-        let len = encode_char(key.code(), &mut encoded);
-        out.extend(&encoded[..len]);
+    match key.codepoint() {
+        None => {
+            let code = termcap_name(key);
+            out.extend(&[K_SPECIAL, code[0], code[1]]);
+        }
+        Some(c) if escape_ks => escape_char_into(c, &mut out),
+        Some(c) => {
+            let mut encoded = [0u8; MB_MAXBYTES + 1];
+            let len = encode_char(c, &mut encoded);
+            out.extend(&encoded[..len]);
+        }
     }
     out
 }
@@ -664,9 +666,9 @@ pub fn replace_termcodes(
 
 /// `c`'s UTF-8 bytes, with a literal `K_SPECIAL` byte escaped the way the
 /// typeahead buffer needs.
-fn escape_char_into(c: Key, out: &mut KeyBytes) {
+fn escape_char_into(c: Codepoint, out: &mut KeyBytes) {
     let mut encoded = [0u8; MB_MAXBYTES + 1];
-    let len = encode_char(c.code(), &mut encoded);
+    let len = encode_char(c, &mut encoded);
     for &byte in &encoded[..len] {
         if byte == K_SPECIAL {
             out.extend(&[K_SPECIAL, KS_SPECIAL, KE_FILLER]);
@@ -678,7 +680,7 @@ fn escape_char_into(c: Key, out: &mut KeyBytes) {
 
 /// Append `c` to `out`, escaping a literal `K_SPECIAL` byte the way the
 /// typeahead buffer needs.
-pub fn push_char_escaped(c: Key, out: &mut Vec<u8>) {
+pub fn push_char_escaped(c: Codepoint, out: &mut Vec<u8>) {
     let mut escaped = KeyBytes::new();
     escape_char_into(c, &mut escaped);
     out.extend_from_slice(escaped.as_bytes());
@@ -709,7 +711,7 @@ pub fn escape_ks_bytes(text: &[u8]) -> Vec<u8> {
             src += 3;
         } else {
             // Add the character, possibly multi-byte, escaping K_SPECIAL.
-            push_char_escaped(Key::from_code(char_at(rest)), &mut out);
+            push_char_escaped(char_at(rest), &mut out);
             src += char_len(rest);
         }
     }

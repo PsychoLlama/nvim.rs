@@ -38,10 +38,10 @@ use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::state::CMDMOD;
 use crate::ex_getln::curbuf_locked;
 use crate::file_search::grab_file_name;
-use crate::getchar::state::{KEY_STUFFED, KEY_TYPED, LANGMAP_MAPCHAR, VGETC_BUSY};
+use crate::getchar::state::{KEY_STUFFED, KEY_TYPED, VGETC_BUSY};
 use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
-use crate::mapping::langmap_adjust_mb;
+use crate::mapping::langmap_char;
 use crate::memory::XString;
 use crate::message::E_BUFFER_NR_NOT_FOUND;
 use crate::message_fmt::emsg_text;
@@ -705,13 +705,12 @@ fn langmap_adjust(c: Key) -> Key {
     } else {
         KEY_TYPED.get()
     };
-    if !(mapping && (p_lrm() || typed) && !KEY_STUFFED.get() && !c.is_special()) {
-        return c;
+    match c.codepoint() {
+        Some(code) if mapping && (p_lrm() || typed) && !KEY_STUFFED.get() => {
+            Key::from_code(langmap_char(code))
+        }
+        _ => c,
     }
-    if let Some(b) = c.as_byte() {
-        return LANGMAP_MAPCHAR.with(|map| Key::byte(map[usize::from(b)]));
-    }
-    langmap_adjust_mb(c)
 }
 
 /// Buffer `fnum`, if there is one.

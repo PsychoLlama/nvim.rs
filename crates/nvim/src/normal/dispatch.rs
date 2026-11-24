@@ -31,7 +31,7 @@ use crate::eval::vars::{set_reg_var, set_vcount};
 use crate::ex_docmd::do_sleep;
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::{
-    KEY_STUFFED, KEY_TYPED, LANGMAP_MAPCHAR, MOD_MASK, VGETC_BUSY, VGETC_CHAR, VGETC_MOD_MASK,
+    KEY_STUFFED, KEY_TYPED, MOD_MASK, VGETC_BUSY, VGETC_CHAR, VGETC_MOD_MASK,
 };
 use crate::getchar::{
     beep_flush, gotchars_ignore, ins_char_typebuf, plain_vgetc, readbuf1_empty, stuff_empty,
@@ -40,7 +40,7 @@ use crate::getchar::{
 use crate::guard::{Allow, Keys, Suppress};
 use crate::keycodes::ModMask;
 use crate::keycodes::{SpecialKey, simplify_mod_mask};
-use crate::mapping::langmap_adjust_mb;
+use crate::mapping::langmap_char;
 use crate::mark::checkpcmark;
 use crate::mbyte::{GRAPHEME_STATE_INIT, GraphemeState};
 use crate::mbyte::{encode_char, iscomposing, utf8len_tab};
@@ -148,7 +148,7 @@ const _: () = {
 
 /// The row of `NV_CMD_TABLE` that answers to `cmdchar`, if there is one.
 pub(crate) fn find_command(cmdchar: Key) -> Option<usize> {
-    if cmdchar.code().get() >= 0x100 {
+    if cmdchar.raw() >= 0x100 {
         return None;
     }
     // A special key is stored negative and searched for by magnitude.
@@ -196,11 +196,10 @@ fn langmap_wanted(condition: bool) -> bool {
 /// it.
 #[inline(always)]
 pub(crate) fn langmap_adjust(c: &mut Key, condition: bool) {
-    if !c.is_special() && langmap_wanted(condition) {
-        *c = match c.as_byte() {
-            Some(b) => Key::byte(LANGMAP_MAPCHAR.with(|map| map[usize::from(b)])),
-            None => langmap_adjust_mb(*c),
-        };
+    if let Some(code) = c.codepoint()
+        && langmap_wanted(condition)
+    {
+        *c = Key::from_code(langmap_char(code));
     }
 }
 
@@ -277,11 +276,12 @@ fn resolve_ctrl_backslash(ns: &mut NormalState) {
 fn read_composing_tail(ns: &mut NormalState) {
     let mapped = Allow::mapping();
     let mut state: GraphemeState = GRAPHEME_STATE_INIT as GraphemeState;
-    let mut prev_code = ns.ca.nchar.code();
-    loop {
+    // A special key has nothing to compose with: no tail is read.
+    let mut prev_code = ns.ca.nchar.codepoint();
+    while let Some(prev) = prev_code {
         ns.c = vpeekc();
         // Only a character that is not a lone byte can be composing.
-        let multibyte = ns.c.code().get() >= 0x100
+        let multibyte = ns.c.raw() >= 0x100
             || ns
                 .c
                 .as_byte()
@@ -290,19 +290,23 @@ fn read_composing_tail(ns: &mut NormalState) {
             break;
         }
         ns.c = plain_vgetc();
-        if !iscomposing(prev_code, ns.c.code(), Some(&mut state)) {
+        let Some(code) =
+            ns.c.codepoint()
+                .filter(|&c| iscomposing(prev, c, Some(&mut state)))
+        else {
             vungetc(ns.c);
             break;
-        }
-        // The base character is only encoded once a tail turns up.
+        };
+        // The base character -- still `prev` -- is only encoded once a
+        // tail turns up.
         if ns.ca.nchar_len == 0 {
-            ns.ca.nchar_len = encode_char(ns.ca.nchar.code(), &mut ns.ca.nchar_composing);
+            ns.ca.nchar_len = encode_char(prev, &mut ns.ca.nchar_composing);
         }
-        if ns.ca.nchar_len + ns.c.utf8_len() < ns.ca.nchar_composing.len() {
+        if ns.ca.nchar_len + code.utf8_len() < ns.ca.nchar_composing.len() {
             let at = ns.ca.nchar_len;
-            ns.ca.nchar_len += encode_char(ns.c.code(), &mut ns.ca.nchar_composing[at..]);
+            ns.ca.nchar_len += encode_char(code, &mut ns.ca.nchar_composing[at..]);
         }
-        prev_code = ns.c.code();
+        prev_code = Some(code);
     }
     let at = ns.ca.nchar_len;
     ns.ca.nchar_composing[at] = 0;
@@ -572,7 +576,7 @@ pub(crate) fn normal_execute(ns: &mut NormalState, key: Key) -> Step {
     // put back for insert mode to read and the command becomes a change.
     if visual_active()
         && visual_select()
-        && (vim_isprintc(ns.c.code())
+        && (ns.c.codepoint().is_some_and(vim_isprintc)
             || ns.c == Key::NL
             || ns.c == Key::CAR
             || ns.c == SpecialKey::Kenter)

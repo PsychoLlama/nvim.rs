@@ -129,8 +129,8 @@ pub(crate) fn command_line_end_wildmenu(s: &mut CommandLineState, key_is_wc: boo
         if let Some(c) = c {
             s.skip_pum_redraw = s.skip_pum_redraw
                 && !key_is_wc
-                && !ascii_iswhite(c.code())
-                && (vim_isprintc(c.code())
+                && !c.codepoint().is_some_and(ascii_iswhite)
+                && (c.codepoint().is_some_and(vim_isprintc)
                     || c == SpecialKey::Bs
                     || c == Key::CTRL_H
                     || c == SpecialKey::Del

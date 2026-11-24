@@ -304,7 +304,7 @@ pub(crate) fn create_windows(parm: &mut MainParams) {
         os_breakcheck();
         if GOT_INT.get() {
             // Interrupt the file loading, not the rest of the startup.
-            vgetc().code();
+            vgetc();
             break;
         }
     }
@@ -394,7 +394,7 @@ pub(crate) fn edit_buffers(parm: &MainParams) {
 
         os_breakcheck();
         if GOT_INT.get() {
-            vgetc().code();
+            vgetc();
             break;
         }
     }

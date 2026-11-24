@@ -16,7 +16,7 @@
 )]
 
 use super::Digraph;
-use crate::types::Key;
+use crate::mbyte::Codepoint;
 use core::ffi::c_int;
 
 /// A `:digraphs!` section header: the first codepoint of a Unicode block
@@ -143,7 +143,7 @@ const fn d(char1: u8, char2: u8, result: c_int) -> Digraph {
     Digraph {
         char1,
         char2,
-        result: Key::from_raw(result),
+        result: Codepoint::new(result),
     }
 }
 

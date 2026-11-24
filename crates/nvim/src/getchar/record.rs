@@ -203,7 +203,8 @@ pub(crate) fn add_byte_to_showcmd(byte: u8) {
                 Key::byte(first)
             }
         };
-        if c.code() <= 0x7f {
+        // A special key is below every character, as its negative number was.
+        if c <= Key::DEL {
             // Fold the modifiers into the key where that has a spelling,
             // which reads better: CTRL-A rather than <C-> then A.
             let mut left = modifiers;

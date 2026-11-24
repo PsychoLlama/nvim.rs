@@ -29,6 +29,7 @@
 use crate::cstr::{self, byte_at};
 use crate::keycodes::ModMask;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{c_char_info, c_next_cluster};
 use crate::os::cshim::ctype_bits;
 use crate::types::Key;
@@ -44,7 +45,7 @@ pub(crate) fn ins_ctrl_v() {
 
     let mut did_putchar = false;
     if redrawing() && !char_avail() {
-        edit_putchar(Key::ascii(b'^'), true);
+        edit_putchar(Codepoint::from(b'^'), true);
         did_putchar = true;
     }
     append_to_redobuff(CTRL_V_STR.to_bytes());
@@ -116,7 +117,7 @@ pub(crate) fn get_literal(no_simplify: bool) -> Key {
             unicode = nc.as_byte().unwrap_or(0);
         } else {
             if hex || unicode != 0 {
-                if !ascii_isxdigit(nc.code()) {
+                if !nc.codepoint().is_some_and(ascii_isxdigit) {
                     break;
                 }
                 cc = cc * 16 + nc.as_byte().map_or(0, hex2nr);
@@ -183,25 +184,29 @@ pub(crate) fn get_literal(no_simplify: bool) -> Key {
 /// Command key always does.
 ///
 /// `ctrlv` says `c` was typed just after CTRL-V.
-pub(crate) fn insert_special(mut c: Key, mut allow_modmask: bool, mut ctrlv: bool) {
+pub(crate) fn insert_special(c: Key, mut allow_modmask: bool, mut ctrlv: bool) {
     if MOD_MASK.get().has(ModMask::CMD) {
         // The Command key never produces a normal key.
         allow_modmask = true;
     }
-    if c.is_special() || (!MOD_MASK.get().is_empty() && allow_modmask) {
-        let name = get_special_key_name(c, MOD_MASK.get());
-        let name = cstr::until_nul(&name);
-        let (&last, head) = name.split_last().expect("a key name is never empty");
-        c = Key::byte(last);
-        if name.len() > 2 {
-            if stop_arrow().is_err() {
-                return;
+    let modified = !MOD_MASK.get().is_empty() && allow_modmask;
+    let c = match c.codepoint().filter(|_| !modified) {
+        Some(c) => c,
+        None => {
+            let name = get_special_key_name(c, MOD_MASK.get());
+            let name = cstr::until_nul(&name);
+            let (&last, head) = name.split_last().expect("a key name is never empty");
+            if name.len() > 2 {
+                if stop_arrow().is_err() {
+                    return;
+                }
+                ins_str(head);
+                append_to_redobuff_literally(head);
+                ctrlv = false;
             }
-            ins_str(head);
-            append_to_redobuff_literally(head);
-            ctrlv = false;
+            Codepoint::from(last)
         }
-    }
+    };
     if stop_arrow().is_ok() {
         let flags = if ctrlv { INSCHAR_CTRLV } else { 0 };
         insertchar(c, flags, -1);
@@ -231,7 +236,7 @@ pub(crate) fn ins_digraph() -> Key {
     PC_STATUS.set(PutChar::Unset);
     if redrawing() && !char_avail() {
         ins_redraw(false);
-        edit_putchar(Key::ascii(b'?'), true);
+        edit_putchar(Codepoint::from(b'?'), true);
         did_putchar = true;
         add_to_showcmd_c(Key::CTRL_K);
     }
@@ -256,9 +261,9 @@ pub(crate) fn ins_digraph() -> Key {
         did_putchar = false;
         if redrawing() && !char_avail() {
             ins_redraw(false);
-            if char2cells(c.code()) == 1 {
+            if let Some(code) = c.codepoint().filter(|&code| char2cells(code) == 1) {
                 ins_redraw(false);
-                edit_putchar(c, true);
+                edit_putchar(code, true);
                 did_putchar = true;
             }
             add_to_showcmd_c(c);
@@ -290,10 +295,10 @@ pub(crate) fn ins_digraph() -> Key {
 /// is found by walking that line's characters, adding widths, until the
 /// cursor's virtual column is reached.  Answers NUL -- and beeps -- when the
 /// line does not exist or is too short.
-pub(crate) fn ins_copychar(lnum: LineNr) -> Key {
+pub(crate) fn ins_copychar(lnum: LineNr) -> Codepoint {
     if lnum < LineNr::ONE || lnum > Buf::current().line_count() {
         vim_beep(OPT_BO_FLAG_COPY as ::core::ffi::c_uint);
-        return Key::NUL;
+        return Codepoint::NUL;
     }
 
     // Try to advance to the cursor column.
@@ -316,9 +321,9 @@ pub(crate) fn ins_copychar(lnum: LineNr) -> Key {
 
     // An illegal byte is copied as itself.
     let c = if chr.value < 0 {
-        Key::byte(byte_at(&line, at))
+        Codepoint::from(byte_at(&line, at))
     } else {
-        Key::from_raw(chr.value)
+        Codepoint::new(chr.value)
     };
     if c.is_nul() {
         vim_beep(OPT_BO_FLAG_COPY as ::core::ffi::c_uint);
@@ -346,7 +351,9 @@ pub(crate) fn ins_ctrl_ey(tc: Key) -> Key {
         return c;
     }
 
-    c = ins_copychar(Win::current().cursor().lnum() + if c == Key::CTRL_Y { -1 } else { 1 });
+    c = Key::from_code(ins_copychar(
+        Win::current().cursor().lnum() + if c == Key::CTRL_Y { -1 } else { 1 },
+    ));
     if c.is_nul() {
         return c;
     }

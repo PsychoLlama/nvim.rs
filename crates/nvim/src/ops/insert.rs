@@ -172,7 +172,7 @@ fn move_cursor_for_append(op: &OpArg, bd: &mut BlockDef) -> bool {
                 return false;
             }
             for _ in 0..bd.endspaces {
-                ins_char(Key::SPACE);
+                ins_char(Codepoint::from(b' '));
             }
             bd.textlen += bd.endspaces;
         }

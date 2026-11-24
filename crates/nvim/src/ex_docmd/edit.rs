@@ -191,7 +191,7 @@ pub fn do_sleep(msec: int64_t, hide_cursor: bool) {
     sleep_serving_events(msec);
     if GOT_INT.get() {
         // Take the interrupt out of the typeahead.
-        vpeekc().code();
+        vpeekc();
     }
     if hide_cursor {
         ui_busy_stop();

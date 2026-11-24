@@ -310,13 +310,13 @@ impl KeyBufferRef {
     /// Append character `c`, escaping special keys, NUL and `K_SPECIAL` and
     /// splitting a codepoint into its UTF-8 bytes.
     pub(crate) fn add_char(self, c: Key) {
-        if c.is_special() {
+        let Some(code) = c.codepoint() else {
             // A special key is one unit; it has no UTF-8 spelling.
             self.add_byte(c);
             return;
-        }
+        };
         let mut bytes = [0u8; MB_MAXBYTES + 1];
-        let len = encode_char(c.code(), &mut bytes);
+        let len = encode_char(code, &mut bytes);
         for &byte in &bytes[..len] {
             self.add_byte(Key::byte(byte));
         }

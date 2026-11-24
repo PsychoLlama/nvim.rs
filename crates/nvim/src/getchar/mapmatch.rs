@@ -138,11 +138,12 @@ pub(crate) fn check_simplify_modifier(max_offset: c_int) -> Result<usize, Failed
         }
 
         let mut new_string = [0u8; MB_MAXBYTES];
-        let len = if new_c.is_special() {
-            new_string[..3].copy_from_slice(&key_escape(new_c));
-            3
-        } else {
-            encode_char(new_c.code(), &mut new_string)
+        let len = match new_c.codepoint() {
+            None => {
+                new_string[..3].copy_from_slice(&key_escape(new_c));
+                3
+            }
+            Some(c) => encode_char(c, &mut new_string),
         };
         let new_string = &new_string[..len];
 

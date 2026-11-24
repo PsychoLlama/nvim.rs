@@ -18,6 +18,7 @@
 use super::*;
 use crate::guard::Suppress;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::optionstr::OptStringRef;
 use crate::types::{Key, KeyKind};
 use crate::winlayer::{Buf, Win};
@@ -256,12 +257,10 @@ pub(crate) fn is_first_match(m: Option<MatchId>) -> bool {
 
 /// Is `c` part of the item being completed?  Decides whether typing it
 /// abandons the completion while the menu is up.
-pub fn ins_compl_accept_char(c: Key) -> bool {
+pub fn ins_compl_accept_char(c: Codepoint) -> bool {
     if COMPL_AUTOCOMPLETE.get() && COMPL_FROM_NONKEYWORD.get() {
         return false;
     }
-    // The answer is a character class: asked of the codepoint.
-    let c = c.code();
     if CTRL_X_MODE.get().wants_ident() {
         // Expanding an identifier: only identifier characters.
         return vim_is_ident_char(c);

@@ -17,7 +17,7 @@
 
 use crate::mbyte::Codepoint;
 use crate::ops::{Op, OpType, adjust_cursor_eol};
-use crate::strings::has_char;
+use crate::strings::has_key;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
@@ -644,7 +644,7 @@ pub(crate) fn start_selection() {
 /// 'selectmode' says which of those mean Select. A command-started selection
 /// only counts as typed when nothing is being replayed.
 pub(crate) fn may_start_select(c: Key) {
-    let by_selectmode = p_slm(|value| has_char(value, c.code()));
+    let by_selectmode = p_slm(|value| has_key(value, c));
     let typed = c.is('o') || (stuff_empty() && typeahead().maplen() == 0);
     set_visual_select(typed && by_selectmode);
 }

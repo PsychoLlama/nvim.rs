@@ -606,7 +606,7 @@ fn key_read_literal(s: &mut CommandLineState) {
     s.do_abbr = false; // don't do abbreviation now
     cc.set_special_char(0);
     // May need to remove the ^ when a composing char was typed.
-    if utf_iscomposing_first(s.c.code()) && !CMD_SILENT.get() {
+    if s.c.codepoint().is_some_and(utf_iscomposing_first) && !CMD_SILENT.get() {
         if ui_has(UI_CMDLINE) {
             // TODO(bfredl): why not make unputcmdline also work with true?
             unputcmdline();
@@ -663,7 +663,7 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> Step {
 
         // We come here if we have a normal character.
         if s.do_abbr
-            && (s.c.is_special() || !vim_iswordc(s.c.code()))
+            && !s.c.codepoint().is_some_and(vim_iswordc)
             // A character above 0x100 needs no CTRL-V in front of it.
             && (ccheck_abbr(s.c, s.c.is_char() && s.c.as_byte().is_none())
                 || s.c == Key::CTRL_RSB)
@@ -673,14 +673,17 @@ pub(crate) fn command_line_handle_key(s: &mut CommandLineState) -> Step {
     }
 
     // C's `end:` — put the character in the command line.
-    if s.c.is_special() || !MOD_MASK.get().is_empty() {
-        let name = get_special_key_name(s.c, MOD_MASK.get());
-        put_on_cmdline(cstr::in_bytes(&name).to_bytes(), true);
-    } else {
-        // One character, its own buffer, without its composing characters.
-        let mut ch = [0u8; MB_MAXCHAR];
-        let j = encode_char(s.c.code(), &mut ch);
-        put_on_cmdline(&ch[..j], true);
+    match s.c.codepoint().filter(|_| MOD_MASK.get().is_empty()) {
+        None => {
+            let name = get_special_key_name(s.c, MOD_MASK.get());
+            put_on_cmdline(cstr::in_bytes(&name).to_bytes(), true);
+        }
+        Some(c) => {
+            // One character, its own buffer, without its composing characters.
+            let mut ch = [0u8; MB_MAXCHAR];
+            let j = encode_char(c, &mut ch);
+            put_on_cmdline(&ch[..j], true);
+        }
     }
     if Cc::current().one_key() {
         Step::Leave

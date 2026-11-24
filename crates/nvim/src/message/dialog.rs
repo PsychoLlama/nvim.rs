@@ -151,11 +151,11 @@ pub(crate) fn do_dialog(
                 // "hotkeys" are, and count how many buttons precede it. A
                 // NUL hotkey (a button list ending in a separator) ends the
                 // list, as the terminator of upstream's string did.
-                let c = c.code().to_lower();
+                let c = c.codepoint().map(Codepoint::to_lower);
                 let listed = hotkeys.iter().take_while(|hotkey| !hotkey.is_nul());
                 if let Some(button) = listed
                     .clone()
-                    .position(|&hotkey| hotkey == c)
+                    .position(|&hotkey| Some(hotkey) == c)
                     .and_then(|at| Button::nth(at + 1))
                 {
                     retval = DialogAnswer::Pressed(button);
@@ -471,9 +471,9 @@ mod tests {
         assert_eq!(
             hotkeys,
             [
-                Key::ascii(b'y').code(),
-                Key::ascii(b'n').code(),
-                Key::ascii(b'a').code()
+                Codepoint::from(b'y'),
+                Codepoint::from(b'n'),
+                Codepoint::from(b'a')
             ]
         );
         // No `&`: the first character. `&&` is a literal `&`, and still
@@ -481,6 +481,6 @@ mod tests {
         // character answers.
         let (shown, hotkeys) = render_buttons(b"Ok\nR&&D", None);
         assert_eq!(shown, b"(O)k, R&D: ");
-        assert_eq!(hotkeys, [Key::ascii(b'o').code(), Key::ascii(b'r').code()]);
+        assert_eq!(hotkeys, [Codepoint::from(b'o'), Codepoint::from(b'r')]);
     }
 }

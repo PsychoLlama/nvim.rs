@@ -370,10 +370,13 @@ pub fn set_vim_var_special(idx: Vv, val: SpecialVarValue) {
     replace_vimvar(idx, TypVal::Special(val));
 }
 
-/// Set `v:char` to the character `c` types.
+/// Set `v:char` to the character `c` types. A special key types none and
+/// leaves it empty (upstream wrote a byte of the key's code there).
 pub fn set_vim_var_char(c: Key) {
     let mut buf = [0u8; 7];
-    let buflen = crate::mbyte::encode_char(c.code(), &mut buf);
+    let buflen = c
+        .codepoint()
+        .map_or(0, |c| crate::mbyte::encode_char(c, &mut buf));
     set_vim_var_string(Vv::Char, Some(&buf[..buflen]));
 }
 

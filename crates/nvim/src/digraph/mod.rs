@@ -18,6 +18,7 @@
 
 mod tables;
 
+use crate::ascii::ESC;
 use crate::buffer::KEYMAP_INIT;
 use crate::charset::char2cells;
 use crate::charset::skip;
@@ -39,7 +40,7 @@ use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::SpecialKey;
 use crate::mapping::{MAPTYPE_MAP, MAPTYPE_UNMAP, do_map};
-use crate::mbyte::{char_at, char_len, encode_char, utf_iscomposing_first};
+use crate::mbyte::{Codepoint, char_at, char_len, encode_char, utf_iscomposing_first};
 use crate::memory::ThinCString;
 use crate::message::msg_put_ascii;
 use crate::message::state::MSG_COL;
@@ -102,7 +103,7 @@ impl DigraphError {
     }
 }
 
-/// A digraph mapping: two input characters and the key they produce.
+/// A digraph mapping: two input characters and the character they produce.
 ///
 /// The input characters are single bytes, as in Vim: multibyte characters
 /// given to `digraph_set()` are truncated when stored.
@@ -110,13 +111,13 @@ impl DigraphError {
 pub struct Digraph {
     pub char1: u8,
     pub char2: u8,
-    pub result: Key,
+    pub result: Codepoint,
 }
 
 impl Digraph {
     /// Whether this digraph is typed as `char1` `char2`.
-    fn is_typed_as(&self, char1: Key, char2: Key) -> bool {
-        Key::byte(self.char1) == char1 && Key::byte(self.char2) == char2
+    fn is_typed_as(&self, char1: Codepoint, char2: Codepoint) -> bool {
+        char1 == self.char1 && char2 == self.char2
     }
 }
 
@@ -129,7 +130,7 @@ pub fn default_digraphs() -> &'static [Digraph] {
 }
 
 /// Look up `char1`/`char2` in the default table only.
-pub fn lookup_default(char1: u8, char2: u8) -> Option<Key> {
+pub fn lookup_default(char1: u8, char2: u8) -> Option<Codepoint> {
     tables::DEFAULT_DIGRAPHS
         .iter()
         .find(|d| d.char1 == char1 && d.char2 == char2)
@@ -139,10 +140,7 @@ pub fn lookup_default(char1: u8, char2: u8) -> Option<Key> {
 /// Look up `char1`/`char2` in the user list, then the default table. When
 /// nothing matches, the result is `char2` itself — with the eighth bit set
 /// if `meta_char` is given and `char1` is a space.
-fn get_exact_digraph(char1: Key, char2: Key, meta_char: bool) -> Key {
-    if char1.is_special() || char2.is_special() {
-        return char2;
-    }
+fn get_exact_digraph(char1: Codepoint, char2: Codepoint, meta_char: bool) -> Codepoint {
     let user = USER_DIGRAPHS.with(|user| {
         user.iter()
             .find(|d| d.is_typed_as(char1, char2))
@@ -157,14 +155,23 @@ fn get_exact_digraph(char1: Key, char2: Key, meta_char: bool) -> Key {
         .filter(|result| !result.is_nul());
     match found {
         Some(result) => result,
-        None if char1.is(' ') && meta_char => Key::from_raw(char2.code().get() | 0x80),
+        None if char1 == b' ' && meta_char => Codepoint::new(char2.get() | 0x80),
         None => char2,
     }
 }
 
 /// Get the digraph for `char1` and `char2`, trying the reversed pair too.
-/// Falls back to `char2` when no digraph is defined.
+/// Falls back to `char2` when no digraph is defined, and when either is a
+/// special key (no digraph has one).
 pub fn digraph_get(char1: Key, char2: Key, meta_char: bool) -> Key {
+    match (char1.codepoint(), char2.codepoint()) {
+        (Some(char1), Some(char2)) => Key::from_code(digraph_of(char1, char2, meta_char)),
+        _ => char2,
+    }
+}
+
+/// [`digraph_get`] over two characters.
+fn digraph_of(char1: Codepoint, char2: Codepoint, meta_char: bool) -> Codepoint {
     let mut retval = get_exact_digraph(char1, char2, meta_char);
     if retval == char2 && char1 != char2 {
         retval = get_exact_digraph(char2, char1, meta_char);
@@ -220,7 +227,7 @@ pub fn do_digraph(c: Key) -> Key {
 
 /// Find a digraph that produces `val`, preferring user-defined ones.
 /// Returns the two characters NUL-terminated, ready for `%s`.
-pub fn get_digraph_for_char(val: Key) -> Option<[u8; 3]> {
+pub fn get_digraph_for_char(val: Codepoint) -> Option<[u8; 3]> {
     USER_DIGRAPHS
         .with(|user| user.iter().find(|d| d.result == val).copied())
         .or_else(|| {
@@ -248,7 +255,7 @@ pub fn get_digraph(cmdline: bool) -> Key {
     }
     if cmdline {
         if let Some(byte) = c.as_byte().filter(|&b| b < 128)
-            && char2cells(c.code()) == 1
+            && char2cells(Codepoint::from(byte)) == 1
             && CMDLINE_STAR.get() == 0
         {
             putcmdline(byte.cast_signed(), true);
@@ -266,7 +273,7 @@ pub fn get_digraph(cmdline: bool) -> Key {
 }
 
 /// Add (or overwrite) a user digraph.
-fn register_digraph(char1: Key, char2: Key, n: Key) {
+fn register_digraph(char1: Codepoint, char2: Codepoint, n: Codepoint) {
     USER_DIGRAPHS.with_mut(|user| {
         for d in user.iter_mut() {
             if d.is_typed_as(char1, char2) {
@@ -276,8 +283,8 @@ fn register_digraph(char1: Key, char2: Key, n: Key) {
         }
         // Upstream's `(char)`: a multibyte character keeps its low byte.
         user.push(Digraph {
-            char1: char1.raw().to_le_bytes()[0],
-            char2: char2.raw().to_le_bytes()[0],
+            char1: char1.get().to_le_bytes()[0],
+            char2: char2.get().to_le_bytes()[0],
             result: n,
         });
     });
@@ -285,13 +292,13 @@ fn register_digraph(char1: Key, char2: Key, n: Key) {
 
 /// Check the characters of a prospective digraph: there must be exactly
 /// two, and ESC is not allowed.
-fn check_digraph_chars(char1: Key, char2: Key) -> Result<(), DigraphError> {
+fn check_digraph_chars(char1: Codepoint, char2: Codepoint) -> Result<(), DigraphError> {
     if char2.is_nul() {
         let mut msg = [0u8; 7];
-        let len = encode_char(char1.code(), &mut msg);
+        let len = encode_char(char1, &mut msg);
         return Err(DigraphError::NotTwoChars(msg[..len].into()));
     }
-    if char1 == Key::ESC || char2 == Key::ESC {
+    if char1 == ESC || char2 == ESC {
         return Err(DigraphError::Escape);
     }
     Ok(())
@@ -340,14 +347,15 @@ fn put_digraphs(mut s: &[u8]) -> Result<(), DigraphError> {
         let char1 = s[0];
         let char2 = s.get(1).copied().unwrap_or(0);
         s = &s[s.len().min(2)..];
-        check_digraph_chars(Key::byte(char1), Key::byte(char2))?;
+        let (char1, char2) = (Codepoint::from(char1), Codepoint::from(char2));
+        check_digraph_chars(char1, char2)?;
         s = skip::past_white(s);
         if !s.first().is_some_and(u8::is_ascii_digit) {
             return Err(DigraphError::NumberExpected);
         }
         let (n, rest) = parse_digits(s);
         s = rest;
-        register_digraph(Key::byte(char1), Key::byte(char2), Key::from_raw(n));
+        register_digraph(char1, char2, Codepoint::new(n));
     }
 }
 
@@ -377,8 +385,8 @@ fn newline() {
 /// digraph starts a new Unicode block (`:digraphs!`).
 fn printdigraph(dp: &Digraph, previous: Option<&mut c_int>) {
     const LIST_WIDTH: c_int = 13;
-    let result = dp.result.code();
-    if result == 0 {
+    let result = dp.result;
+    if result.is_nul() {
         return;
     }
     if let Some(previous) = previous {
@@ -432,8 +440,8 @@ pub fn listdigraphs(use_headers: bool) {
         }
         // getexactdigraph() so that user-defined digraphs override the
         // default; the entry is skipped if the user removed it.
-        let result = get_exact_digraph(Key::byte(dp.char1), Key::byte(dp.char2), false);
-        if !result.is_nul() && result != Key::byte(dp.char2) {
+        let result = get_exact_digraph(dp.char1.into(), dp.char2.into(), false);
+        if !result.is_nul() && result != dp.char2 {
             let tmp = Digraph { result, ..*dp };
             let previous = use_headers.then_some(&mut previous);
             printdigraph(&tmp, previous);
@@ -460,7 +468,7 @@ pub fn listdigraphs(use_headers: bool) {
 fn getlist_append_pair(dp: &Digraph, list: &mut List) {
     let chars = [dp.char1, dp.char2, 0];
     let mut buf = [0u8; 7];
-    encode_char(dp.result.code(), &mut buf);
+    encode_char(dp.result, &mut buf);
     let pair = tv_list_alloc(2);
     pair.edit().push_str(Some(cstr::in_bytes(&chars)));
     pair.edit().push_str(Some(cstr::in_bytes(&buf)));
@@ -481,8 +489,8 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
             if GOT_INT.get() {
                 break;
             }
-            let result = get_exact_digraph(Key::byte(dp.char1), Key::byte(dp.char2), false);
-            if !result.is_nul() && result != Key::byte(dp.char2) {
+            let result = get_exact_digraph(dp.char1.into(), dp.char2.into(), false);
+            if !result.is_nul() && result != dp.char2 {
                 getlist_append_pair(&Digraph { result, ..*dp }, &mut list);
             }
         }
@@ -499,11 +507,11 @@ fn digraph_getlist_common(list_all: bool, result: &mut TypVal) {
 /// Decode the leading character of `s`, and answer it with what follows,
 /// stepping over the base character only. A NUL first byte decodes to 0 and
 /// consumes nothing, as the C did.
-fn next_char(s: &[u8]) -> (Key, &[u8]) {
+fn next_char(s: &[u8]) -> (Codepoint, &[u8]) {
     if s.first().is_none_or(|&b| b == 0) {
-        return (Key::NUL, s);
+        return (Codepoint::NUL, s);
     }
-    (Key::from_code(char_at(s)), &s[char_len(s)..])
+    (char_at(s), &s[char_len(s)..])
 }
 
 /// The string value of `arg`, `None` when the typval is not one (which is
@@ -515,7 +523,7 @@ fn tv_string<'a>(arg: &'a TypVal, buf: &'a mut NumBuf) -> Option<&'a [u8]> {
 /// The two digraph characters of `chars`: E1214 on anything but exactly
 /// two characters, `None` included -- a non-string argument reads as the
 /// string "[NULL]", which is what the C `%s` format path printed.
-fn digraph_chars(chars: Option<&[u8]>) -> Result<(Key, Key), DigraphError> {
+fn digraph_chars(chars: Option<&[u8]>) -> Result<(Codepoint, Codepoint), DigraphError> {
     if let Some(bytes) = chars.filter(|b| !b.is_empty()) {
         let (char1, rest) = next_char(bytes);
         if !rest.is_empty() {
@@ -571,11 +579,17 @@ pub fn f_digraph_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) 
         DigraphError::NotTwoChars(bytes.into()).report();
         return;
     }
-    // The chars go through `char` in C, hence the sign extension.
-    let sign_extended = |b: u8| Key::from_raw(c_int::from(b.cast_signed()));
-    let code = digraph_get(sign_extended(bytes[0]), sign_extended(bytes[1]), false);
-    let mut buf = [0u8; 7];
-    let len = encode_char(code.code(), &mut buf);
+    // The chars go through `char` in C, so a byte past ASCII arrived
+    // negative, as a special key, which no digraph has: the answer is the
+    // second byte as it stands.
+    let mut buf = [bytes[1], 0, 0, 0, 0, 0, 0];
+    let mut len = 1;
+    if bytes.is_ascii() {
+        len = encode_char(
+            digraph_of(bytes[0].into(), bytes[1].into(), false),
+            &mut buf,
+        );
+    }
     result.write_string(Some(ThinCString::from_bytes(&buf[..len])));
 }
 

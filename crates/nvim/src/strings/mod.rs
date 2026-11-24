@@ -18,7 +18,7 @@ use crate::mbyte::MB_MAXCHAR;
 use crate::mbyte::{cluster_len, encode_char};
 use crate::memory::XString;
 use crate::semsg;
-use crate::types::{Failed, TypVal};
+use crate::types::{Failed, Key, TypVal};
 use core::ffi::CStr;
 
 // The carve of the transpiled module; see each child's docs.
@@ -98,6 +98,11 @@ pub fn find_char(haystack: &[u8], c: Codepoint) -> Option<usize> {
 /// and none of those wants a pointer.
 pub(crate) fn has_char(set: &CStr, c: Codepoint) -> bool {
     find_char(set.to_bytes(), c).is_some()
+}
+
+/// [`has_char`] for a key: only a character is in a set of characters.
+pub(crate) fn has_key(set: &CStr, key: Key) -> bool {
+    key.codepoint().is_some_and(|c| has_char(set, c))
 }
 
 /// The byte offset at which `needle` occurs in `haystack`, or `None`.

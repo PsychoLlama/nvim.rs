@@ -571,11 +571,12 @@ fn insert_normal_char(s: &mut InsertState) {
                 // Insert the new value of v:char literally.
                 let mut at = 0;
                 while at < text.len() {
-                    s.c = Key::from_code(char_at(&text[at..]));
-                    if s.c == Key::CAR || s.c == SpecialKey::Kenter || s.c == Key::NL {
+                    let c = char_at(&text[at..]);
+                    s.c = Key::from_code(c);
+                    if s.c == Key::CAR || s.c == Key::NL {
                         let _ = ins_eol(s.c);
                     } else {
-                        ins_char(s.c);
+                        ins_char(c);
                     }
                     at += c_cluster_len(&text[at..]);
                 }
@@ -606,8 +607,9 @@ fn insert_normal_char(s: &mut InsertState) {
     // Insert the character, checking for an abbreviation on a special
     // one.  `CTRL-]` expands an abbreviation without being inserted
     // itself.  A character above 0x100 needs no CTRL-V in front of it.
-    if vim_iswordc(s.c.code())
-        || (!check_abbr(s.c, s.c.code().get() >= 0x100) && s.c != Key::CTRL_RSB)
+    let code = s.c.codepoint();
+    if code.is_some_and(vim_iswordc)
+        || (!check_abbr(s.c, code.is_some_and(|c| c.get() >= 0x100)) && s.c != Key::CTRL_RSB)
     {
         insert_special(s.c, false, false);
         REVINS_LEGAL.set(REVINS_LEGAL.get() + 1);
@@ -665,5 +667,5 @@ fn compl_option_ok(cpt_only: bool) -> bool {
 /// Is `c` a character that can be shown on the screen?
 #[inline(always)]
 fn printable(c: Key) -> bool {
-    vim_isprintc(c.code())
+    c.codepoint().is_some_and(vim_isprintc)
 }

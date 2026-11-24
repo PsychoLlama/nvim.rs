@@ -16,7 +16,7 @@ fn default_table_is_unchanged() {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for d in table {
         let mut bytes = vec![d.char1, d.char2];
-        bytes.extend_from_slice(&d.result.raw().to_le_bytes());
+        bytes.extend_from_slice(&d.result.get().to_le_bytes());
         for b in bytes {
             hash = (hash ^ b as u64).wrapping_mul(0x100_0000_01b3);
         }
@@ -33,14 +33,14 @@ fn default_table_well_formed() {
         // codepoints, and no pair is defined twice.
         assert!(d.char1.is_ascii() && !d.char1.is_ascii_control(), "{d:?}");
         assert!(d.char2.is_ascii() && !d.char2.is_ascii_control(), "{d:?}");
-        assert!(!d.result.is_nul() && d.result.as_char().is_some(), "{d:?}");
+        assert!(!d.result.is_nul() && d.result.to_char().is_some(), "{d:?}");
         assert!(seen.insert((d.char1, d.char2)), "duplicate {d:?}");
     }
 }
 
 #[test]
 fn lookup_finds_known_digraphs() {
-    let get = |c1: u8, c2: u8| lookup_default(c1, c2).map(|key| key.code().get());
+    let get = |c1: u8, c2: u8| lookup_default(c1, c2).map(|c| c.get());
     // First and last entries plus well-known digraphs from the docs.
     assert_eq!(get(b'N', b'U'), Some(0x0a));
     assert_eq!(get(b's', b't'), Some(0xfb06));

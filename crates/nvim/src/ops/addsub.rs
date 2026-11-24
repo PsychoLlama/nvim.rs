@@ -35,12 +35,12 @@
 use crate::charset::{Str2NrBases, str2nr_scan};
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
+use crate::mbyte::Codepoint;
 use crate::message_fmt::report_msg;
 use crate::narrow::len_as_int;
 use crate::normal::defs::MotionType;
 use crate::os::cshim::ctype_bits;
 use crate::tr_plural;
-use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -457,7 +457,7 @@ fn bump_alpha_char(firstdigit: u8, op_type: OpType, prenum1: i32, col: ColNr) ->
     Win::current().cursor().set_col(col);
     let startpos = Win::current().w_cursor();
     let _ = del_char(false);
-    ins_char(Key::ascii(bumped));
+    ins_char(Codepoint::from(bumped));
     let endpos = Win::current().w_cursor();
     Win::current().cursor().set_col(col);
     (startpos, endpos)

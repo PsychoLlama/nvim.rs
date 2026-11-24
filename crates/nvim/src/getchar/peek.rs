@@ -34,6 +34,7 @@ use super::*;
 use crate::charset::display::ptr2cells_at;
 use crate::guard::Depth;
 use crate::keycodes::{K_SPECIAL, KS_EXTRA, key_escape};
+use crate::mbyte::Codepoint;
 use crate::mbyte::{cells_at, head_off};
 use crate::memline::Lines;
 use crate::normal::SHOWCMD_COLS;
@@ -183,7 +184,7 @@ fn show_partial_key(at: CursorAt) -> Partial {
         // NUL follows it.
         if STATE.get() & MODE_INSERT != 0 && last_byte_is_one_cell(last) {
             // This looks nice when typing a dead-character mapping.
-            edit_putchar(Key::byte(last), false);
+            edit_putchar(Codepoint::from(last), false);
             setcursor(); // put the cursor back where it belongs
             partial.showing = true;
         }

@@ -17,11 +17,12 @@
 )]
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 
+use crate::charset::transchar_key;
 use crate::keycodes::SpecialKey;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 
-use crate::charset::{transchar, vim_isprintc};
+use crate::charset::vim_isprintc;
 use crate::cstr;
 use crate::drawscreen::setcursor;
 use crate::drawscreen::state::{REDRAW_TABLINE, SC_COL};
@@ -307,8 +308,14 @@ pub(crate) fn add_to_showcmd(c: Key) -> bool {
 
     let mut mbyte_buf = [0u8; 7];
     let display;
-    let extra: &[u8] = if c.code() <= 0x7f || !vim_isprintc(c.code()) {
-        display = transchar(c.code());
+    let wide = c
+        .codepoint()
+        .filter(|&code| code > 0x7f_u8 && vim_isprintc(code));
+    let extra: &[u8] = if let Some(code) = wide {
+        let n = encode_char(code, &mut mbyte_buf);
+        &mbyte_buf[..n]
+    } else {
+        display = transchar_key(c);
         // A space is shown as its byte value, so it is not lost in the
         // padding the area is drawn with.
         if display[0] == b' ' {
@@ -316,9 +323,6 @@ pub(crate) fn add_to_showcmd(c: Key) -> bool {
         } else {
             cstr::in_bytes(&display).to_bytes()
         }
-    } else {
-        let n = encode_char(c.code(), &mut mbyte_buf);
-        &mbyte_buf[..n]
     };
 
     let mut sc = SHOWCMD_BUF.get();

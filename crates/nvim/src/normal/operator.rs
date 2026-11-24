@@ -26,7 +26,7 @@ use crate::getchar::state::{GOT_INT, REG_EXECUTING, REG_RECORDED};
 use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
 use crate::keycodes::SpecialKey;
-use crate::message::{emsg, emsg_invreg};
+use crate::message::{emsg, emsg_invreg_key};
 use crate::normal::{
     E_CMDLINE_WINDOW_ALREADY_OPEN, check_clear_op, check_clear_op_quit, clear_op_beep,
     langmap_adjust, visual_active, visual_select,
@@ -80,7 +80,7 @@ pub(crate) fn nv_at(cmd_arg: &mut CmdArg) {
     let Some(regname) = register_name(cmd_arg.nchar) else {
         // A key that is not even a byte names no register: what replaying
         // it would have said.
-        emsg_invreg(cmd_arg.nchar.code());
+        emsg_invreg_key(cmd_arg.nchar);
         clear_op_beep(cmd_arg.op());
         return;
     };

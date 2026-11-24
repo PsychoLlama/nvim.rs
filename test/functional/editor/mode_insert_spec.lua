@@ -32,6 +32,19 @@ describe('insert-mode', function()
     expect('void func(void) {\n}')
   end)
 
+  it('InsertCharPre does not see a special key as a character', function()
+    command('let g:chars = [] | autocmd InsertCharPre * call add(g:chars, v:char)')
+    feed('i<F5>a<Esc>')
+    eq('<F5>a', curbuf_contents())
+    eq({ 'a' }, eval('g:chars'))
+  end)
+
+  it('an <expr> abbreviation ended by a special key sees an empty v:char', function()
+    command([[iabbrev <expr> foo '[' .. v:char .. ']']])
+    feed('ifoo<F5><Esc>')
+    eq('[]<F5>', curbuf_contents())
+  end)
+
   it('CTRL-@', function()
     -- Inserts last-inserted text, leaves insert-mode.
     insert('hello')

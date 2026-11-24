@@ -382,9 +382,10 @@ pub(crate) fn insert_check(s: &mut InsertState) -> Step {
             && !key_available()
             && Win::current().cursor().col() > ColNr::ZERO
         {
-            // Upstream leaves its −1 in the key when there is no character.
-            s.c = char_before_cursor().map_or(Key::from_raw(-1), Key::from_code);
-            if vim_isprintc(s.c.code()) {
+            // The column is past 0, so there is a character before it.
+            let before = char_before_cursor();
+            s.c = before.map_or(Key::from_raw(-1), Key::from_code);
+            if before.is_some_and(vim_isprintc) {
                 ins_compl_enable_autocomplete();
                 ins_compl_init_get_longest();
                 insert_do_complete(s);
@@ -591,13 +592,13 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
     // An ordinary character extends the leader.  `InsertCharPre` may
     // replace it with a whole string, which goes in a character at a
     // time.
-    if ins_compl_accept_char(s.c) {
+    if let Some(c) = s.c.codepoint().filter(|&c| ins_compl_accept_char(c)) {
         match do_insert_char_pre(s.c) {
-            None => ins_compl_addleader(s.c),
+            None => ins_compl_addleader(c),
             Some(text) => {
                 let mut at = 0;
                 while at < text.len() {
-                    ins_compl_addleader(Key::from_code(char_at(&text[at..])));
+                    ins_compl_addleader(char_at(&text[at..]));
                     at += c_cluster_len(&text[at..]);
                 }
             }
@@ -619,7 +620,7 @@ fn compl_takes_key(s: &mut InsertState) -> bool {
             return true;
         }
         ins_compl_insert(false, false);
-    } else if ascii_iswhite_nl_or_nul(s.c.code()) && ins_compl_preinsert_effect() {
+    } else if s.c.codepoint().is_some_and(ascii_iswhite_nl_or_nul) && ins_compl_preinsert_effect() {
         ins_compl_delete(false);
     }
     false

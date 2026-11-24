@@ -26,12 +26,14 @@
 )]
 
 use super::*;
+use crate::charset::transchar_key;
 use crate::event::r#loop::schedule_deferred_job;
 use crate::guard::Suppress;
 use crate::log::{LOG_DEBUG, logmsg};
 use crate::mbyte::Codepoint;
 use crate::message_fmt::{msg_bytes as text_arg, msg_cstr};
 use crate::runtime::{estack_sfile, sourcing_lnum, sourcing_name_copy, with_sourcing_name};
+use crate::types::Key;
 use crate::types::LineNr;
 use core::ffi::{CStr, c_int, c_long};
 use std::ffi::CString;
@@ -270,6 +272,14 @@ pub fn emsg(s: &CStr) -> bool {
 /// "E354: Invalid register name" for register `name`.
 pub fn emsg_invreg(name: Codepoint) {
     let display = transchar_buf(None, name);
+    let display = msg_cstr(cstr::in_bytes(&display));
+    crate::semsg!("E354: Invalid register name: '{}'", display);
+}
+
+/// [`emsg_invreg`] for a key, which may be a special key: shown as
+/// upstream's `transchar` showed its negative number, behind `~@`.
+pub(crate) fn emsg_invreg_key(name: Key) {
+    let display = transchar_key(name);
     let display = msg_cstr(cstr::in_bytes(&display));
     crate::semsg!("E354: Invalid register name: '{}'", display);
 }

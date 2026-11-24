@@ -56,7 +56,7 @@ use crate::optionstr::{OptString, OptStringRef};
 /// because either can be followed by CTRL-D.  What is left is exactly the
 /// printable ASCII characters but those two, one byte each.
 const fn needs_processing(c: Key) -> bool {
-    !matches!(c.code().get(), 0x20..0x7f) || c.is('0') || c.is('^')
+    !matches!(c.raw(), 0x20..0x7f) || c.is('0') || c.is('^')
 }
 
 /// Insert one character, formatting and batching as described in the module
@@ -68,7 +68,7 @@ const fn needs_processing(c: Key) -> bool {
 /// passed straight through to `internal_format`, which also reads
 /// `INSCHAR_DO_COM` and `INSCHAR_COM_LIST`.  `second_indent` is the indent
 /// for a second line, if not negative.
-pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
+pub(crate) fn insertchar(c: Codepoint, flags: c_int, second_indent: c_int) {
     let textwidth = comp_textwidth(flags & INSCHAR_FORMAT != 0);
     wrap_before_insert(c, flags, second_indent, textwidth);
 
@@ -91,7 +91,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
     // which has to see every character one at a time.  The event test
     // comes before `vpeekc` because the autocommand can change the input
     // buffer.
-    if let Some(first) = c.as_byte().filter(|_| !needs_processing(c))
+    if let Some(first) = c.as_byte().filter(|&b| !needs_processing(Key::byte(b)))
         && !has_event(AutoEvent::InsertCharPre)
         && !test_disable_char_avail.get()
         && !vpeekc().is_nul()
@@ -122,7 +122,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
                     virtcol < ColNr::new(textwidth)
                 })
                 && !(!NO_ABBR.get()
-                    && !vim_iswordc(next.code())
+                    && !next.codepoint().is_some_and(vim_iswordc)
                     && vim_iswordc(Codepoint::from(buf[i - 1])));
             if !take {
                 break;
@@ -151,15 +151,15 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
         let cc = c.utf8_len();
         if cc > 1 {
             let mut buf = [0u8; MB_MAXCHAR];
-            let len = encode_char(c.code(), &mut buf);
+            let len = encode_char(c, &mut buf);
             ins_char_bytes(&buf[..len]);
-            append_to_redobuff_char(c);
+            append_to_redobuff_char(Key::from_code(c));
         } else {
             ins_char(c);
             if flags & INSCHAR_CTRLV != 0 {
-                redo_literal(c);
+                redo_literal(Key::from_code(c));
             } else {
-                append_to_redobuff_char(c);
+                append_to_redobuff_char(Key::from_code(c));
             }
         }
     }
@@ -175,7 +175,7 @@ pub(crate) fn insertchar(c: Key, flags: c_int, second_indent: c_int) {
 /// started on, only when 'formatoptions' lacks `l` or the line was not
 /// already too long, and lacks `b` or a blank was inserted at or before
 /// 'textwidth'.
-fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_int) {
+fn wrap_before_insert(c: Codepoint, flags: c_int, second_indent: c_int, textwidth: c_int) {
     let force_format = flags & INSCHAR_FORMAT;
     let fo_ins_blank = has_format_option(FoFlag::INS_BLANK);
     let fo_ins_long = has_format_option(FoFlag::INS_LONG);
@@ -184,7 +184,7 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
         return;
     }
     let wanted = force_format != 0
-        || (!ascii_iswhite(c.code())
+        || (!ascii_iswhite(c)
             && !(STATE.get() & REPLACE_FLAG != 0
                 && STATE.get() & VREPLACE_FLAG == 0
                 && cursor_byte() != 0)
@@ -198,20 +198,19 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
     // Format with 'formatexpr' when it is set; use the internal
     // formatting when it is not, or when it answered non-zero.
     let mut do_internal = true;
-    let virtcol =
-        get_nolist_virtcol() + char2cells(if c.is_nul() { gchar_cursor() } else { c.code() });
+    let virtcol = get_nolist_virtcol() + char2cells(if c.is_nul() { gchar_cursor() } else { c });
 
     if Buf::current().read().b_p_fex.first_byte() != 0
         && flags & INSCHAR_NO_FEX == 0
         && (force_format != 0 || virtcol > ColNr::new(textwidth))
     {
-        do_internal = fex_format(Win::current().cursor().lnum(), 1, c.raw()) != 0;
+        do_internal = fex_format(Win::current().cursor().lnum(), 1, c.get()) != 0;
         // Saving for undo may be needed again, e.g. when the expression
         // called setline().
         INS_NEED_UNDO.set(true);
     }
     if do_internal {
-        internal_format(textwidth, second_indent, flags, c.is_nul(), c.raw());
+        internal_format(textwidth, second_indent, flags, c.is_nul(), c.get());
     }
 }
 
@@ -221,8 +220,8 @@ fn wrap_before_insert(c: Key, flags: c_int, second_indent: c_int, textwidth: c_i
 /// leader.  When it arrives, the *middle* leader that was auto-indented in
 /// has to come off and the end leader go in -- all but its last character,
 /// which the caller inserts as an ordinary one.
-fn end_pending_comment(c: Key) {
-    if !DID_AI.get() || END_COMMENT_PENDING.get().map(Key::byte) != Some(c) {
+fn end_pending_comment(c: Codepoint) {
+    if !DID_AI.get() || END_COMMENT_PENDING.get().map(Codepoint::from) != Some(c) {
         return;
     }
 
@@ -328,10 +327,13 @@ pub(crate) fn do_insert_char_pre(c: Key) -> Option<XString> {
     if c == Key::CTRL_RSB || !has_event(AutoEvent::InsertCharPre) {
         return None;
     }
+    // A special key has no text for `v:char` (upstream wrote a byte of its
+    // code there), and goes in as its `<>` name without the event.
+    let c = c.codepoint()?;
 
     let save_state = STATE.get();
     let mut buf = [0u8; MB_MAXBYTES];
-    let buflen = encode_char(c.code(), &mut buf);
+    let buflen = encode_char(c, &mut buf);
 
     let locked = Lock::text();
     // Up to a NUL, which is where every reader stops: `c` may be one.

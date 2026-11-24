@@ -16,6 +16,7 @@
 
 use super::*;
 use crate::keycodes::SpecialKey;
+use crate::mbyte::Codepoint;
 use crate::mbyte::head_off;
 use crate::mbyte::{char_at, cluster_len, encode_char};
 use crate::memline::Lines;
@@ -153,7 +154,7 @@ pub(crate) fn ins_compl_new_leader() {
 }
 
 /// Append one character to the match leader. May reduce the number of matches.
-pub fn ins_compl_addleader(c: Key) {
+pub fn ins_compl_addleader(c: Codepoint) {
     if ins_compl_preinsert_effect() {
         ins_compl_delete(false);
     }
@@ -163,7 +164,7 @@ pub fn ins_compl_addleader(c: Key) {
     }
     if c.utf8_len() > 1 {
         let mut buf = [0u8; MB_MAXCHAR];
-        let len = encode_char(c.code(), &mut buf);
+        let len = encode_char(c, &mut buf);
         insert_chars(&buf[..len]);
     } else {
         ins_char(c);
@@ -243,8 +244,8 @@ pub fn ins_compl_addfrommatch() {
     } else {
         shown.text_copy()
     };
-    // The next character of the match's text, as the key that types it.
-    ins_compl_addleader(Key::from_code(char_at(&text[len..])));
+    // The next character of the match's text.
+    ins_compl_addleader(char_at(&text[len..]));
 }
 
 /// Stop insert completion mode.
@@ -289,7 +290,7 @@ pub(crate) fn ins_compl_stop(c: Key, prev_mode: CtrlXMode, mut retval: bool) -> 
         }
         // Only format when something was inserted.
         if !ARROW_USED.get() && !ins_need_undo_get() && c != Key::CTRL_E {
-            insertchar(Key::NUL, 0, -1);
+            insertchar(Codepoint::NUL, 0, -1);
         }
         if prev_col > ColNr::ZERO && Win::current().cursor().col() < get_cursor_line_len() {
             inc_cursor();

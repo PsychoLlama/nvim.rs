@@ -436,7 +436,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
         pull_insstart_orig_to_cursor();
 
         if STATE.get() & VREPLACE_FLAG != 0 {
-            ins_char(Key::SPACE);
+            ins_char(Codepoint::from(b' '));
         } else {
             ins_str(b" ");
             if STATE.get() & REPLACE_FLAG != 0 {

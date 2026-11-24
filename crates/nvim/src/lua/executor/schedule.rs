@@ -207,7 +207,7 @@ pub(crate) fn wait(stack: &mut Stack) -> Result<c_int, Raise> {
             // Swallow the interrupt: `vim.wait` reports it rather than
             // letting it escape into whatever called it.
             GOT_INT.set(false);
-            vgetc().code();
+            vgetc();
             stack.push_boolean(false);
             stack.push_integer(WAIT_INTERRUPTED);
             Ok(2)

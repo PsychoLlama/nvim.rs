@@ -15,6 +15,7 @@
 #![forbid(unsafe_code)]
 
 use crate::indent::SIN_CHANGED;
+use crate::mbyte::Codepoint;
 use crate::narrow::number_as_int;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
@@ -144,7 +145,7 @@ pub(crate) fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
 
     set_vim_var_nr(Vv::Lnum, i64::from(lnum));
     set_vim_var_nr(Vv::Count, count as VarNumber);
-    set_vim_var_char(Key::from_raw(c));
+    set_vim_var_char(Key::from_code(Codepoint::new(c)));
 
     // Copy it: the option can be changed while it is running.
     let fex = Buf::current().read().b_p_fex.get();
@@ -381,7 +382,7 @@ pub(crate) fn format_lines(line_count: LineNr, avoid_fex: bool) {
                 let smd_save = p_smd();
                 P_SMD.set(false);
                 insertchar(
-                    Key::NUL,
+                    Codepoint::NUL,
                     INSCHAR_FORMAT
                         + if do_comments { INSCHAR_DO_COM } else { 0 }
                         + if do_comments && do_comments_list {

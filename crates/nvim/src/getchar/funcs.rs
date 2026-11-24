@@ -217,11 +217,12 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
             temp[2] = MOD_MASK.get().byte();
             i = 3;
         }
-        if n.is_special() {
-            temp[i..i + 3].copy_from_slice(&key_escape(n));
-            i += 3;
-        } else {
-            i += encode_char(n.code(), &mut temp[i..]);
+        match n.codepoint() {
+            None => {
+                temp[i..i + 3].copy_from_slice(&key_escape(n));
+                i += 3;
+            }
+            Some(c) => i += encode_char(c, &mut temp[i..]),
         }
         debug_assert!(i < temp.len());
 
@@ -233,7 +234,7 @@ pub(crate) fn getchar_common(args: &[TypVal], result: &mut TypVal, allow_number:
     } else if !opts.allow_number {
         (*result).write_empty(VAR_STRING);
     } else {
-        (*result).write_number(VarNumber::from(n.code()));
+        (*result).write_number(VarNumber::from(n.raw()));
     }
 }
 

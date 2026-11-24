@@ -34,6 +34,7 @@ use crate::indent::INDENT_DEC;
 use crate::indent::INDENT_INC;
 use crate::indent::INDENT_SET;
 use crate::indent::StopList;
+use crate::mbyte::Codepoint;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -438,5 +439,5 @@ fn tabstops(which: StopList) -> c_int {
 /// Insert one space at the cursor, replacing a character in Replace mode.
 #[inline(always)]
 fn insert_space() {
-    ins_char(Key::SPACE)
+    ins_char(Codepoint::from(b' '))
 }

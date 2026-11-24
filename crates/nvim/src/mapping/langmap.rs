@@ -7,7 +7,7 @@
 //! Two tables hold the answer, and both are written only from here.
 //! `LANGMAP_MAPCHAR` covers the 256 single-byte characters directly;
 //! [`LANGMAP_MULTIBYTE`] is a sorted table of `from`/`to` pairs doing the same
-//! job for everything at or above U+0100, searched by [`langmap_adjust_mb`].
+//! job for everything at or above U+0100, searched by [`langmap_char`].
 //! [`did_set_langmap`] parses the option into both.
 
 #![forbid(unsafe_code)]
@@ -21,19 +21,19 @@
 
 use super::*;
 use crate::formatted;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, char_len};
 use crate::memory::ThinCString;
 use crate::message_fmt::msg_bytes;
 use crate::option::defs::OptError;
 use crate::option::vars::P_LANGMAP;
 use crate::swmsg;
-use crate::types::Key;
 
 /// One `'langmap'` pair for a character that does not fit `LANGMAP_MAPCHAR`.
 #[derive(Debug)]
 struct LangmapEntry {
-    from: Key,
-    to: Key,
+    from: Codepoint,
+    to: Codepoint,
 }
 
 /// `'langmap'` pairs for characters >= 256, sorted ascending by `from`.
@@ -43,19 +43,29 @@ struct LangmapEntry {
 static LANGMAP_MULTIBYTE: GlobalCell<Vec<LangmapEntry>> = GlobalCell::new(Vec::new());
 
 /// Point `from` at `to`, replacing any existing pair for `from`.
-fn langmap_set_entry(from: Key, to: Key) {
+fn langmap_set_entry(from: Codepoint, to: Codepoint) {
     LANGMAP_MULTIBYTE.with_mut(|entries| {
-        match entries.binary_search_by_key(&from.code(), |entry| entry.from.code()) {
+        match entries.binary_search_by_key(&from, |entry| entry.from) {
             Ok(at) => entries[at].to = to,
             Err(at) => entries.insert(at, LangmapEntry { from, to }),
         }
     });
 }
 
+/// Apply `'langmap'` to the character `c` and return the result: the
+/// byte table below U+0100, the pairs above.
+#[inline]
+pub(crate) fn langmap_char(c: Codepoint) -> Codepoint {
+    match c.as_byte() {
+        Some(b) => Codepoint::from(LANGMAP_MAPCHAR.with(|map| map[usize::from(b)])),
+        None => langmap_adjust_mb(c),
+    }
+}
+
 /// Apply `'langmap'` to multi-byte character `c` and return the result.
-pub(crate) fn langmap_adjust_mb(c: Key) -> Key {
+fn langmap_adjust_mb(c: Codepoint) -> Codepoint {
     LANGMAP_MULTIBYTE.with(|entries| {
-        match entries.binary_search_by_key(&c.code(), |entry| entry.from.code()) {
+        match entries.binary_search_by_key(&c, |entry| entry.from) {
             Ok(at) => entries[at].to,
             // No entry: the character maps to itself.
             Err(_) => c,
@@ -94,7 +104,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
     // The byte at `at`, with the option's own NUL past the end.
     let byte = |at: usize| opt.get(at).copied().unwrap_or(0);
     let tail = |at: usize| opt.get(at..).unwrap_or_default();
-    let char_at = |at: usize| Key::from_code(char_at(tail(at)));
+    let char_at = |at: usize| char_at(tail(at));
     let len_at = |at: usize| cluster_len(tail(at));
     // Advance past one character, honouring a `\` escape.
     let skip = |at: usize| {
@@ -134,7 +144,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
                 at += 1;
             }
             let (from, from_at) = (char_at(at), at);
-            let mut to = Key::NUL;
+            let mut to = Codepoint::NUL;
             let mut to_at = None;
             match alt {
                 None => {
@@ -159,10 +169,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
             }
             if to.is_nul() {
                 let missing = c"E357: 'langmap': Matching character missing for %s";
-                return fail(
-                    missing,
-                    crate::cstr::in_bytes(&transchar(from.code())).to_bytes(),
-                );
+                return fail(missing, crate::cstr::in_bytes(&transchar(from)).to_bytes());
             }
 
             if let Some(from) = from.as_byte() {
@@ -179,7 +186,7 @@ pub fn did_set_langmap(_args: &mut OptSet) -> Result<(), OptError> {
                 }
                 // The closure is a store; it cannot re-enter the cell.
                 // Upstream's `(uint8_t)`: a wider `to` keeps its low byte.
-                let to = to.raw().to_le_bytes()[0];
+                let to = to.get().to_le_bytes()[0];
                 LANGMAP_MAPCHAR.with_mut(|map| map[usize::from(from)] = to);
             } else {
                 langmap_set_entry(from, to);

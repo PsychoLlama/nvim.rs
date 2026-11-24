@@ -78,8 +78,7 @@ use crate::fileio::check_timestamps;
 use crate::fileio::state::{DID_CHECK_TIMESTAMPS, NEED_CHECK_TIMESTAMPS};
 use crate::fold::{fold_check_close, fold_open_cursor, fold_update_after_insert};
 use crate::getchar::state::{
-    GOT_INT, KEY_STUFFED, KEY_TYPED, LANGMAP_MAPCHAR, MOD_MASK, REG_RECORDING, VGETC_BUSY,
-    test_disable_char_avail,
+    GOT_INT, KEY_STUFFED, KEY_TYPED, MOD_MASK, REG_RECORDING, VGETC_BUSY, test_disable_char_avail,
 };
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_literally,
@@ -115,7 +114,7 @@ use crate::insexpand::{
 };
 use crate::keycodes::KS_MODIFIER;
 use crate::keycodes::{K_SPECIAL, get_special_key_name, push_char_escaped};
-use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
+use crate::mapping::{check_abbr, langmap_char, map_to_exists_mode};
 use crate::mark::mark_view_make;
 use crate::mbyte::MB_MAXBYTES;
 use crate::mbyte::{mb_adjust_cursor, utf8len_tab};

@@ -41,7 +41,7 @@ use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
 use crate::plines::linetabsize_text;
 use crate::semsg;
-use crate::types::{CmdIdx, ColNr, ExArg, Key};
+use crate::types::{CmdIdx, ColNr, ExArg};
 use crate::undo::u_save;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_int};
@@ -129,7 +129,7 @@ fn describe_byte(c: u8, cval: u8, need_clear: &mut bool) {
     let empty: &[u8] = b"";
     // The digraph is always passed: the format without a `Digr %s` simply
     // never reads that argument, as any unused trailing vararg.
-    let digraph = get_digraph_for_char(Key::byte(cval));
+    let digraph = get_digraph_for_char(Codepoint::from(cval));
     let fmt = match digraph {
         Some(_) => c"<%s>%s%s  %d,  Hex %02x,  Oct %03o, Digr %s",
         None => c"<%s>%s%s  %d,  Hex %02x,  Octal %03o",
@@ -171,7 +171,7 @@ fn describe_char(c: Codepoint, spaced: bool, need_clear: &mut bool) {
 
     // Four formats: with and without a digraph, and hex in four or eight
     // digits.  The digraph argument goes out either way (see `describe_byte`).
-    let digraph = get_digraph_for_char(Key::from_code(c));
+    let digraph = get_digraph_for_char(c);
     let fmt = match (digraph.is_some(), c.get() < 0x10000) {
         (true, true) => c"> %d, Hex %04x, Oct %o, Digr %s",
         (true, false) => c"> %d, Hex %08x, Oct %o, Digr %s",

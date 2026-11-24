@@ -112,12 +112,12 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     let mut literal = false;
     if cmd_arg.nchar == Key::CTRL_V || cmd_arg.nchar == Key::CTRL_Q {
         cmd_arg.nchar = get_literal(false);
-        literal = (0..=0x7f).contains(&cmd_arg.nchar.code());
+        literal = cmd_arg.nchar.as_byte().is_some_and(|b| b <= 0x7f);
     }
-    if cmd_arg.nchar.is_special() {
+    let Some(nchar) = cmd_arg.nchar.codepoint() else {
         clear_op_beep(cmd_arg.op());
         return;
-    }
+    };
     if visual_active() {
         // The selection form is an operator; the interrupt a long
         // selection may have raised is not this command's business.
@@ -224,7 +224,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
             let bytes = cstr::until_nul(&cmd_arg.nchar_composing);
             ins_char_bytes(&bytes[..cmd_arg.nchar_len]);
         } else {
-            ins_char(cmd_arg.nchar);
+            ins_char(nchar);
         }
         STATE.set(old_state);
     }
@@ -234,7 +234,7 @@ pub(crate) fn nv_replace(cmd_arg: &mut CmdArg) {
     mb_adjust_cursor();
     Buf::current().set_b_op_end(Win::current().w_cursor());
     Win::current().set_w_set_curswant(true);
-    set_last_insert(cmd_arg.nchar);
+    set_last_insert(nchar);
     fold_update_after_insert();
 }
 
@@ -287,7 +287,8 @@ pub(crate) fn nv_vreplace(cmd_arg: &mut CmdArg) {
     }
     // Replay the character through virtual replace mode. A control
     // character needs its own CTRL-V to survive the replay.
-    if cmd_arg.extra_char.code() < 0x20 {
+    // A special key is below every character, as its negative number was.
+    if cmd_arg.extra_char < Key::SPACE {
         stuff_readbuf_char(Key::ctrl(b'V'));
     }
     stuff_readbuf_char(cmd_arg.extra_char);

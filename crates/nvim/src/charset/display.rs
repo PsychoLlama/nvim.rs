@@ -21,6 +21,7 @@ use crate::ascii::CAR;
 use crate::cstr;
 use crate::fileio::EOL_MAC;
 use crate::mbyte::Codepoint;
+use crate::types::Key;
 use core::ffi::CStr;
 use core::ffi::c_int;
 
@@ -395,6 +396,20 @@ fn render_byte(buffer: Option<Buf>, c: u8) -> render::Rendered {
 /// The display form of character `c`.
 pub(crate) fn transchar(c: Codepoint) -> CharDisplay {
     transchar_buf(Buf::current_or_none(), c)
+}
+
+/// The display form of the key `key`: a character as [`transchar`] shows
+/// it, a special key as the byte of its code behind `~@` -- what upstream's
+/// `transchar` made of a key's negative number.
+pub(crate) fn transchar_key(key: Key) -> CharDisplay {
+    let buffer = Buf::current_or_none();
+    match key.codepoint() {
+        Some(c) => owned(&render_char(buffer, c)),
+        None => {
+            let (prefix, byte) = render::special_key_form(key);
+            owned(&render_char(buffer, Codepoint::from(byte)).behind(prefix))
+        }
+    }
 }
 
 /// The display form of `c` as it would appear in `buffer` (which decides how a

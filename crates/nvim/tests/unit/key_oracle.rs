@@ -93,7 +93,7 @@ fn every_special_key_converts_both_ways() {
     }
     assert_eq!(Key::from_char('é').as_char(), Some('é'));
     assert!(Key::ascii(b'x').is('x'));
-    assert_eq!(Key::ctrl(b'V').code(), 0x16);
+    assert_eq!(Key::ctrl(b'V').raw(), 0x16);
     assert_eq!(Key::ctrl(b'['), Key::ESC);
     assert_eq!(Key::from_char('€').utf8_len(), 3);
 }

@@ -146,8 +146,8 @@ fn auto_write(buffer: Buf) -> Result<(), Failed> {
 }
 
 fn get_key() {
-    // SAFETY: reads one key through the main input machinery.
-    vgetc().code();
+    // Reads one key through the main input machinery, and drops it.
+    vgetc();
 }
 
 /// Make `buffer` the current buffer, as `:buffer` does.

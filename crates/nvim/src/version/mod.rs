@@ -546,7 +546,7 @@ fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
 pub(crate) fn ex_intro(_excmd: &mut ExArg) {
     screenclear();
     intro_message(true);
-    plain_vgetc().code();
+    plain_vgetc();
 }
 
 #[cfg(test)]

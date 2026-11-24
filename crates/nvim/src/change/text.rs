@@ -22,6 +22,7 @@
 )]
 
 use crate::cstr;
+use crate::mbyte::Codepoint;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, head_off, iscomposing};
 use crate::memline::{MlFlags, book_deleted, deleted_counts};
 use crate::memory::XString;
@@ -32,7 +33,7 @@ use core::ffi::c_int;
 use super::*;
 use crate::option::cpo_has;
 use crate::option::defs::CpoFlag;
-use crate::types::{Failed, Key};
+use crate::types::Failed;
 use crate::winlayer::{Buf, Win};
 
 /// Insert `bytes` at the cursor, one character at a time, so that Replace
@@ -51,12 +52,9 @@ pub fn ins_bytes(bytes: &[u8]) {
 }
 
 /// Insert or replace the single character `c` at the cursor.
-///
-/// A special key has no text: its code is encoded the way upstream's
-/// `utf_char2bytes` encodes a negative number.
-pub fn ins_char(c: Key) {
+pub fn ins_char(c: Codepoint) {
     let mut buf = [0u8; 7];
-    let n = encode_char(c.code(), &mut buf);
+    let n = encode_char(c, &mut buf);
     // `c` being 0x100, 0x200, ... would encode to a leading NUL byte, which
     // must not go into the line; CTRL-V u9900 reaches this.
     if buf[0] == 0 {

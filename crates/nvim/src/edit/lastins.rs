@@ -21,6 +21,7 @@
 )]
 #![forbid(unsafe_code)]
 
+use crate::mbyte::Codepoint;
 use crate::types::Key;
 use core::ffi::c_int;
 
@@ -33,10 +34,10 @@ use crate::types::Failed;
 /// Used by `r`.  What is stored is the *redo buffer* spelling: a CTRL-V in
 /// front of a control character, then the character, then the `<Esc>` that
 /// ends an insert.
-pub(crate) fn set_last_insert(c: Key) {
+pub(crate) fn set_last_insert(c: Codepoint) {
     let mut text = Vec::with_capacity(MB_MAXBYTES * 3 + 4);
     // The CTRL-V is only needed to enter a special character.
-    if c.code() < 0x20 || c == Key::DEL {
+    if c < b' ' || c == 0x7f {
         text.push(0x16); // Ctrl_V
     }
     push_char_escaped(c, &mut text);

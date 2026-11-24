@@ -28,6 +28,7 @@
 
 use crate::keycodes::SpecialKey;
 use crate::mark::defs::FileMark;
+use crate::mbyte::Codepoint;
 use crate::option::vars::P_LANGMAP;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win};
@@ -66,7 +67,7 @@ pub(crate) fn ins_reg() {
     if redrawing() && !char_avail() {
         // May need to redraw now that no more characters are available.
         ins_redraw(false);
-        edit_putchar(Key::ascii(b'"'), true);
+        edit_putchar(Codepoint::from(b'"'), true);
         add_to_showcmd_c(Key::CTRL_R);
     }
 
@@ -85,10 +86,8 @@ pub(crate) fn ins_reg() {
             && !KEY_STUFFED.get()
             && !c.is_special()
         {
-            match c.as_byte() {
-                Some(b) => Key::byte(LANGMAP_MAPCHAR.with(|map| map[usize::from(b)])),
-                None => langmap_adjust_mb(c),
-            }
+            c.codepoint()
+                .map_or(c, |code| Key::from_code(langmap_char(code)))
         } else {
             c
         }

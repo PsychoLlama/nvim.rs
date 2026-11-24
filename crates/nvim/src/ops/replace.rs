@@ -22,6 +22,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::ascii::{CAR, NL};
 use crate::extmark::EXTMARK_UNDO;
 use crate::guard::Suppress;
 use crate::mbyte::Codepoint;
@@ -73,7 +74,7 @@ pub(crate) fn pbyte(mut pos: Pos, c: u8) {
 ///
 /// Goes through Replace mode's own insert so that a multi-byte character on
 /// either side is handled; leaves the cursor back on the replaced character.
-fn replace_character(c: Key) {
+fn replace_character(c: Codepoint) {
     let saved = STATE.get();
     STATE.set(MODE_REPLACE);
     ins_char(c);
@@ -87,20 +88,22 @@ fn replace_character(c: Key) {
 /// `c` is the replacement, or `Key::REPLACE_CR`/`Key::REPLACE_NL` for the
 /// `CTRL-V <CR>`/`CTRL-V <NL>` spellings that mean the literal byte rather
 /// than a line split. `op` describes a region of the current buffer.
-pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
+pub(crate) fn op_replace(op: &mut OpArg, c: Key) -> Result<(), Failed> {
     if Buf::current().ml_flags().has(MlFlags::EMPTY) || op.empty {
         return Ok(());
     }
 
-    // CTRL-V CR / CTRL-V NL: put the byte in, do not split the line.
-    let mut had_ctrl_v_cr = false;
-    if c == Key::REPLACE_CR {
-        had_ctrl_v_cr = true;
-        c = Key::CAR;
+    // CTRL-V CR / CTRL-V NL: put the byte in, do not split the line. Any
+    // other key is a character: `nv_replace` refuses a special key.
+    let (c, had_ctrl_v_cr) = if c == Key::REPLACE_CR {
+        (Codepoint::from(CAR), true)
     } else if c == Key::REPLACE_NL {
-        had_ctrl_v_cr = true;
-        c = Key::NL;
-    }
+        (Codepoint::from(NL), true)
+    } else if let Some(c) = c.codepoint() {
+        (c, false)
+    } else {
+        return Ok(());
+    };
 
     mb_adjust_opend(op);
 
@@ -128,7 +131,7 @@ pub(crate) fn op_replace(op: &mut OpArg, mut c: Key) -> Result<(), Failed> {
 /// The blockwise arm: one rebuilt line per line the block reaches.
 ///
 /// `op` must be blockwise.
-fn replace_block(op: &mut OpArg, c: Key, had_ctrl_v_cr: bool) {
+fn replace_block(op: &mut OpArg, c: Codepoint, had_ctrl_v_cr: bool) {
     let mut bd = BlockDef::ZERO;
     bd.is_max = Win::current().w_curswant() == ColNr::MAX;
     while Win::current().cursor().lnum() <= op.end.lnum {
@@ -154,9 +157,9 @@ fn replace_block(op: &mut OpArg, c: Key, had_ctrl_v_cr: bool) {
 /// `\n` and no CTRL-V there is no "after": the tail becomes a new line.
 ///
 /// `op` and `bd` must describe the cursor line, as [`block_prep`] left them.
-fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: bool) {
+fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Codepoint, had_ctrl_v_cr: bool) {
     // Replacing with `\r`/`\n` splits the line rather than overwriting.
-    let splits_line = !had_ctrl_v_cr && (c == Key::CAR || c == Key::NL);
+    let splits_line = !had_ctrl_v_cr && (c == CAR || c == NL);
     let baselnum = Win::current().cursor().lnum();
 
     // When the block starts in virtual space, that offset counts as
@@ -182,14 +185,14 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
         numc -= (op.end_vcol - bd.end_vcol) + 1;
     }
     // A double-wide character only fits half as many times.
-    if utf_char2cells(c.code()) > 1 {
+    if utf_char2cells(c) > 1 {
         if numc & 1 != 0 && !bd.is_short {
             bd.endspaces += 1;
         }
         numc /= 2;
     }
     let mut char_bytes = [0u8; MB_MAXCHAR];
-    let encoded_len = encode_char(c.code(), &mut char_bytes);
+    let encoded_len = encode_char(c, &mut char_bytes);
     let encoded = &char_bytes[..encoded_len];
 
     // Up to the replaced part, then the pre-spaces; then, unless the line
@@ -266,7 +269,7 @@ fn replace_block_line(op: &mut OpArg, bd: &mut BlockDef, c: Key, had_ctrl_v_cr: 
 /// The charwise and linewise arm: walk the region a character at a time.
 ///
 /// `op` must be charwise or linewise.
-fn replace_chars(op: &mut OpArg, c: Key) {
+fn replace_chars(op: &mut OpArg, c: Codepoint) {
     // The cursor walks the region, so it names a position of the current
     // buffer at every step, which is what each of these asks for.
     if op.motion_type == MotionType::LineWise {
@@ -345,7 +348,7 @@ fn replace_chars(op: &mut OpArg, c: Key) {
 /// first and those are then replaced.
 ///
 /// The cursor must be on `op.end.lnum`.
-fn replace_virtual_tail(op: &OpArg, c: Key) {
+fn replace_virtual_tail(op: &OpArg, c: Codepoint) {
     let mut virtcols = op.end.coladd;
     if Win::current().cursor().lnum() == op.start.lnum
         && op.start.col == op.end.col

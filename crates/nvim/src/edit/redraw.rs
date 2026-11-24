@@ -24,6 +24,7 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::mbyte::Codepoint;
 use crate::mbyte::{encode_char, head_off};
 use crate::winlayer::{Buf, Win};
 
@@ -158,7 +159,7 @@ pub(crate) fn ins_redraw(ready: bool) {
 /// Used while handling CTRL-V, CTRL-K and friends, which have to show
 /// something at the cursor while they wait for the rest of the sequence.
 /// Nothing is stored in a buffer, so the next real redraw removes it.
-pub(crate) fn edit_putchar(c: Key, highlight: bool) {
+pub(crate) fn edit_putchar(c: Codepoint, highlight: bool) {
     let win = Win::current();
     if !win.grid_alloc().is_allocated() && !default_grid_ref().is_allocated() {
         return;
@@ -197,7 +198,7 @@ pub(crate) fn edit_putchar(c: Key, highlight: bool) {
     }
 
     let mut buf = [0u8; MB_MAXCHAR + 1];
-    let len = encode_char(c.code(), &mut buf);
+    let len = encode_char(c, &mut buf);
     grid_line_puts(PC_COL.get(), &buf[..len], attr);
     grid_line_flush();
 }
@@ -246,7 +247,7 @@ pub(crate) fn display_dollar(col_arg: ColNr) {
         .set_col(win.cursor().col() - ColNr::try_from(back).unwrap_or(ColNr::ZERO).get());
     curs_columns(win, 0); // recompute w_wrow and w_wcol
     if win.w_wcol() < win.w_view_width() {
-        edit_putchar(Key::ascii(b'$'), false);
+        edit_putchar(Codepoint::from(b'$'), false);
         DOLLAR_VCOL.set(win.w_virtcol());
     }
     win.cursor().set_col(save_col);

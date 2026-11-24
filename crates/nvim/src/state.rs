@@ -391,7 +391,7 @@ struct ModeInputs {
 
 /// How far a visual mode's key is above the select mode's: `v` - `s`, which
 /// takes `v`/`V`/CTRL-V to `s`/`S`/CTRL-S.
-const VISUAL_TO_SELECT: c_int = Key::ascii(b'v').code().get() - Key::ascii(b's').code().get();
+const VISUAL_TO_SELECT: c_int = Key::ascii(b'v').raw() - Key::ascii(b's').raw();
 
 /// The mode `m` describes, as `mode(1)` spells it.
 ///
@@ -711,7 +711,7 @@ mod tests {
             all_onemore,
             MODE_NORMAL,
             true,
-            Key::CTRL_V.code().get() - 1
+            Key::CTRL_V.raw() - 1
         ));
         assert!(ve_flags_allow(
             all_onemore,

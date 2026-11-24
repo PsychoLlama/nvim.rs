@@ -27,7 +27,6 @@ use crate::mbyte::Codepoint;
 use crate::message_fmt::report_msg;
 use crate::normal::defs::MotionType;
 use crate::tr_plural;
-use crate::types::Key;
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 
@@ -194,7 +193,7 @@ pub fn swapchar(op_type: OpType, pos: Pos) -> bool {
         };
         let _ = del_bytes(len.get(), false, false);
         // The new character, from the case tables, as the key that types it.
-        ins_char(Key::from_code(nc));
+        ins_char(nc);
         Win::current().set_w_cursor(saved);
     } else {
         // Both are below 0x80 here.

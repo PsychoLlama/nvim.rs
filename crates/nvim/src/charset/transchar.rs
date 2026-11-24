@@ -128,6 +128,13 @@ pub fn negative_form(c: Codepoint) -> (&'static [u8; 2], u8) {
     (b"~@", byte)
 }
 
+/// [`negative_form`] for a special key: `~@` and the termcap byte of its
+/// code, upstream's `K_SECOND`.
+#[inline]
+pub(crate) fn special_key_form(key: crate::types::Key) -> (&'static [u8; 2], u8) {
+    (b"~@", key.raw().wrapping_neg().to_le_bytes()[0])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

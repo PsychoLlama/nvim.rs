@@ -18,6 +18,7 @@ use crate::search::{ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, FIND_ANY, FIND_DE
 use crate::search::{FM_BACKWARD, FM_FORWARD};
 use crate::spell::{SMT_BAD, SMT_RARE};
 use crate::strings::has_char;
+use crate::strings::has_key;
 use crate::types::{ColNr, Key, LineNr, Pos};
 use crate::winlayer::{Buf, Win};
 
@@ -68,8 +69,9 @@ fn match_direction(cmd_arg: &mut CmdArg) -> c_int {
 /// cursor is inside; the second walks back in from there, counting the braces
 /// the count asked for. `prev_pos` carries the second-outermost block between
 /// the two, which is what makes `2[m` mean "the method one level out".
+/// `nchar` is the character `cmd_arg.nchar` types, one of the block forms;
 /// `old_pos` is the cursor position the caller saved.
-fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
+fn nv_bracket_block(cmd_arg: &mut CmdArg, nchar: Codepoint, old_pos: Pos) {
     let mut new_pos = Pos {
         lnum: LineNr::ZERO,
         col: ColNr::ZERO,
@@ -83,10 +85,13 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
     let mut pos: Option<Pos> = None;
 
     // `[*` and `]*` are spelled `[/` and `]/` to findmatchlimit.
-    if cmd_arg.nchar.is('*') {
+    let nchar = if nchar == b'*' {
         cmd_arg.nchar = Key::ascii(b'/');
-    }
-    let method = cmd_arg.nchar.is('m') || cmd_arg.nchar.is('M');
+        Codepoint::from(b'/')
+    } else {
+        nchar
+    };
+    let method = nchar == b'm' || nchar == b'M';
     let findc = if method {
         if cmd_arg.cmdchar.is('[') {
             Codepoint::byte(b'{')
@@ -94,7 +99,7 @@ fn nv_bracket_block(cmd_arg: &mut CmdArg, old_pos: Pos) {
             Codepoint::byte(b'}')
         }
     } else {
-        cmd_arg.nchar.code()
+        nchar
     };
     let mut n = if method { 9999 } else { cmd_arg.count1 };
 
@@ -303,10 +308,10 @@ pub(crate) fn nv_brackets(cmd_arg: &mut CmdArg) {
 
     if nchar.is('f') {
         nv_gotofile(cmd_arg);
-    } else if has_char(c"iI\tdD\x04", nchar.code()) {
+    } else if has_key(c"iI\tdD\x04", nchar) {
         nv_bracket_ident(cmd_arg);
-    } else if has_char(block_chars, nchar.code()) {
-        nv_bracket_block(cmd_arg, old_pos);
+    } else if let Some(c) = nchar.codepoint().filter(|&c| has_char(block_chars, c)) {
+        nv_bracket_block(cmd_arg, c, old_pos);
     } else if nchar.is('[') || nchar.is(']') {
         // `[[` and `]]` look for a section start, `[]` and `][` for its
         // end.

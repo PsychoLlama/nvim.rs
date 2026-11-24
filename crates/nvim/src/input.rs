@@ -155,11 +155,11 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
                 continue; // More bytes to get.
             }
             let end = if len >= buflen { buflen - 1 } else { len };
-            break char_at(&buf[..as_index(end)]);
+            break Key::from_code(char_at(&buf[..as_index(end)]));
         }
 
-        let key = key_unescape(buf[1], buf[2]).code();
-        if !is_swallowed_key(buf[1], key.get()) {
+        let key = key_unescape(buf[1], buf[2]);
+        if !is_swallowed_key(buf[1], key.raw()) {
             break key;
         }
         if buf[1] == KS_MODIFIER {
@@ -176,7 +176,7 @@ pub(crate) fn get_keystroke(events: Option<&'static GlobalCell<Option<ChildQueue
     // to be written back.
     let mut modifiers = MOD_MASK.get();
     // SAFETY: `modifiers` is a live local the callee reads and writes.
-    let key = merge_modifiers(Key::from_code(key), &mut modifiers);
+    let key = merge_modifiers(key, &mut modifiers);
     MOD_MASK.set(modifiers);
     key
 }

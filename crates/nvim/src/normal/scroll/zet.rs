@@ -13,11 +13,10 @@
 use crate::keycodes::SpecialKey;
 use crate::narrow::number_as_int;
 use crate::spell::{SMT_ALL, SPELL_ADD_BAD, SPELL_ADD_GOOD, SpellAddType};
-use crate::strings::has_char;
+use crate::strings::has_key;
 use crate::types::Key;
 use crate::winlayer::{Buf, Win, windows};
 
-use crate::ascii::ascii_isdigit;
 use crate::cursor::{check_cursor_col, set_leftcol};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_later};
 use crate::edit::{BeginlineOpts, beginline};
@@ -117,7 +116,7 @@ pub(crate) fn nv_zg_zw(cmd_arg: &mut CmdArg, mut nchar: Key) -> Result<(), Faile
     let mut undo = false;
     if nchar.is('u') {
         nchar = read_command_char();
-        if !has_char(c"gGwW", nchar.code()) {
+        if !has_key(c"gGwW", nchar) {
             clear_op_beep(cmd_arg.op());
             return Ok(());
         }
@@ -405,14 +404,14 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
     let old_fen = win.wo_fen();
 
     // `z` may take a count of its own between the `z` and the command.
-    if ascii_isdigit(nchar.code()) && !nv_z_get_count(cmd_arg, &mut nchar) {
+    if nchar.digit().is_some() && !nv_z_get_count(cmd_arg, &mut nchar) {
         return;
     }
     // The commands that are operators or motions of their own answer for
     // a pending operator themselves; the rest refuse one.
     if !cmd_arg.nchar.is('f')
         && !cmd_arg.nchar.is('F')
-        && !(visual_active() && has_char(c"dcCoO", cmd_arg.nchar.code()))
+        && !(visual_active() && has_key(c"dcCoO", cmd_arg.nchar))
         && !cmd_arg.nchar.is('j')
         && !cmd_arg.nchar.is('k')
         && check_clear_op(cmd_arg.op())
@@ -421,7 +420,7 @@ pub(crate) fn nv_zet(cmd_arg: &mut CmdArg) {
     }
     // For the positioning commands a count names the line to position,
     // not how many of anything.
-    if has_char(c"+\r\nt.z^-b", nchar.code())
+    if has_key(c"+\r\nt.z^-b", nchar)
         && cmd_arg.count0 != 0
         && LineNr::new(cmd_arg.count0) != win.cursor().lnum()
     {

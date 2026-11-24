@@ -178,16 +178,17 @@ pub fn check_abbr(c: Key, literal: bool, text: Vec<u8>, mincol: c_int) -> bool {
     // inserted into the input stream.
     let mut typed = Vec::new();
     if c != Key::ctrl(b']') {
-        if c.is_special() || c == Key::byte(K_SPECIAL) {
+        match c.codepoint().filter(|_| c != Key::byte(K_SPECIAL)) {
             // A special key code, split up.
-            typed.extend_from_slice(&key_escape(c));
-        } else {
-            let printable = c.as_byte().is_some_and(|b| (b' '..=b'~').contains(&b));
-            if !literal && !printable {
-                typed.push(CTRL_V_BYTE); // a special char needs CTRL-V
+            None => typed.extend_from_slice(&key_escape(c)),
+            Some(code) => {
+                let printable = code.as_byte().is_some_and(|b| (b' '..=b'~').contains(&b));
+                if !literal && !printable {
+                    typed.push(CTRL_V_BYTE); // a special char needs CTRL-V
+                }
+                // The character, with K_SPECIAL escaped.
+                push_char_escaped(code, &mut typed);
             }
-            // The character, with K_SPECIAL escaped.
-            push_char_escaped(c, &mut typed);
         }
         typed.push(0);
         // Insert the last typed char.

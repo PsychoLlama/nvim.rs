@@ -9,8 +9,10 @@
 //! The newtype keeps that representation -- `#[repr(transparent)]` over the
 //! `c_int`, every constructor a `const fn` -- so the typeahead and the
 //! tables cost what they did; what it changes is that a key no longer
-//! passes for a count, a column or a byte. [`Key::code`] is the integer, for
-//! the typeahead's escape spelling and for the callers that still carry one.
+//! passes for a count, a column or a byte. [`Key::raw`] is the integer, for
+//! the typeahead's escape spelling and the integer channels a key leaves
+//! through; [`Key::codepoint`] is the character, and only a character has
+//! one -- a special key's negative code is never read as text.
 //!
 //! A reader that dispatches on a key matches [`Key::kind`], the enum of the
 //! three halves the integer packs: a character ([`KeyKind::Char`], matched
@@ -264,15 +266,19 @@ impl Key {
         Key(c.get())
     }
 
-    /// The character this key types, as text: the crossing from input
-    /// back to a codepoint, for a reader that encodes, classifies or
-    /// compares it. A special key passes its negative code through, as
-    /// upstream's `int` did; the display and width functions render that
-    /// as its `~@` form, and every other reader asks [`Key::is_char`]
-    /// first.
+    /// The character this key types, as text, when it is one: the crossing
+    /// from input back to a codepoint, for a reader that encodes,
+    /// classifies or compares it. NUL is a character (`KeyKind::Char`); a
+    /// special or pseudo key is not, and answers `None` -- upstream fed its
+    /// negative code to the text functions, which is the confusion this
+    /// refuses.
     #[inline]
-    pub const fn code(self) -> Codepoint {
-        Codepoint::new(self.0)
+    pub const fn codepoint(self) -> Option<Codepoint> {
+        if self.0 >= 0 {
+            Some(Codepoint::new(self.0))
+        } else {
+            None
+        }
     }
 
     /// The key whose upstream integer is `raw`: an integer channel that
@@ -345,7 +351,7 @@ impl Key {
     /// key, which is upstream's answer for a negative number.
     #[inline]
     pub fn utf8_len(self) -> usize {
-        self.code().utf8_len()
+        self.codepoint().map_or(1, Codepoint::utf8_len)
     }
 }
 
