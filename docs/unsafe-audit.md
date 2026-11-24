@@ -9,24 +9,24 @@ have to change for it to go.
 
 Rust checks memory safety at compile time everywhere except inside `unsafe`
 code, where the programmer promises what the compiler cannot verify. In this
-tree that code is confined to **65 files**, holding **1,614 unchecked
+tree that code is confined to **68 files**, holding **1,499 unchecked
 statements** — every one of them on the _perimeter_ ([docs/perimeter.md](perimeter.md)),
 the list of modules where the program meets something it does not own. The
-other 1,287 source files of the editor (`crates/nvim/src`, 1,352 files) contain
-no unsafe code, and 1,280 of them say so with `#![forbid(unsafe_code)]`, which
-the compiler enforces; the remaining seven are module roots that cannot carry
-the attribute because a file beneath them is on the perimeter. The unsafe code
-falls into four classes:
+other 1,290 of the editor's 1,358 source files (`crates/nvim/src`) contain no
+unsafe code, and all but 10 say so with `#![forbid(unsafe_code)]`, which the
+compiler enforces; the 10 are module roots that cannot carry the attribute
+because a file beneath them is on the perimeter. The unsafe code falls into
+four classes:
 
-- **A foreign ABI — 34 files, 1,028 statements.** Calls into C libraries the
+- **A foreign ABI — 34 files, 932 statements.** Calls into C libraries the
   editor links: LuaJIT and its libraries, libuv (the event loop, processes,
   sockets, the terminal's I/O), tree-sitter and libxdiff. The unsafe is the
   call itself, and the reads of what the library answers.
-- **The operating system — 14 files, 237 statements.** System calls the
+- **The operating system — 14 files, 223 statements.** System calls the
   standard library does not offer, or offers with different error text:
   libuv's file-system calls, the environment, locales, the user database,
   clocks, the PTY, signals, `dlopen` and `iconv`.
-- **Raw memory — 13 files, 221 statements.** The few primitives every safe
+- **Raw memory — 16 files, 246 statements.** The few primitives every safe
   type above them is built on: the allocator, the `xmalloc` family and the
   owned C strings, the checked cell that replaces C's global variables, the
   type-stable slots handles check their target's liveness against, and
@@ -51,10 +51,11 @@ falls into four classes:
 - Every file's count of unchecked statements is ratcheted: it may shrink and
   never grow without an explicit, justified override. A statement is what the
   code _does_ — splitting a block into smaller ones does not lower it.
-- Every `unsafe fn` (229) carries a `# Safety` section saying what its caller
+- Every `unsafe fn` (200) carries a `# Safety` section saying what its caller
   must guarantee; the ratchet fails on one without. An `unsafe fn` whose
   signature shows no raw pointer needs a row in
-  [docs/unsafe-fn-allowlist.md](unsafe-fn-allowlist.md) (five rows today).
+  [docs/unsafe-fn-allowlist.md](unsafe-fn-allowlist.md), with the class of
+  obligation that earns it.
 - Checked builds add one check the release build compiles out: `GlobalCell`'s
   per-access main-thread check (its borrow checks, and the overlapping-edit
   check on Vimscript values, are in every build). It is the cfg
@@ -68,37 +69,42 @@ falls into four classes:
   a `tests` module the recipe names by its whole path, and
   `just ratchet --check` fails on one that does not.
 
-To check the numbers here: `python3 scripts/ratchet.py --dimension
-unsafe_placement` lists any misplaced attribute (none);
-`metrics/ratchet.json` holds each file's `unsafe_stmts`; `rg -l
-'allow\(unsafe_code\)' crates/nvim/src` lists the 66 files.
+The numbers here are checked: `just ratchet --check` measures every row of
+the table below (files that allow unsafe code, their unchecked statements and
+`unsafe fn`s), the class totals and the headline above, and fails when one is
+stale or a `PERIMETER` entry is missing from the table. To read them yourself:
+`metrics/ratchet.json` holds each file's `unsafe_stmts`, `python3
+scripts/ratchet.py --dimension unsafe_fns` lists the `unsafe fn`s, and `rg -l
+'allow\(unsafe_code\)' crates/nvim/src` lists the files. The per-file counts
+in the sections below are the same measurement, by hand.
 
 ## The rows
 
 | row                                         | class    | files | statements | `unsafe fn`s | what it holds                                    |
 | ------------------------------------------- | -------- | ----: | ---------: | -----------: | ------------------------------------------------ |
 | `lua/ffi.rs`, `lua/executor/{luv,state}.rs` | foreign  |     3 |        104 |            8 | LuaJIT's declarations, luv's hooks, state making |
-| `lua/stack/`                                | foreign  |     5 |        111 |            7 | the typed Lua stack                              |
-| `lua/treesitter/`                           | foreign  |    10 |        204 |            9 | the tree-sitter library                          |
-| `event/`                                    | foreign  |    11 |        490 |           77 | libuv: loop, streams, timers, signals, children  |
-| `tui/{tui,input,output,events}.rs`          | foreign  |     4 |         60 |            4 | the terminal's libuv handles                     |
+| `lua/stack/`                                | foreign  |     5 |        113 |            7 | the typed Lua stack                              |
+| `lua/treesitter/`                           | foreign  |    10 |        205 |           10 | the tree-sitter library                          |
+| `event/`                                    | foreign  |    11 |        462 |           73 | libuv: loop, streams, timers, signals, children  |
+| `tui/{tui,input,output,events}.rs`          | foreign  |     4 |         47 |            3 | the terminal's libuv handles                     |
 | `xdiff/`                                    | foreign  |     1 |          1 |            0 | `isspace(3)`'s table                             |
-| `os/`                                       | OS       |    14 |        232 |           14 | system calls                                     |
+| `os/`                                       | OS       |    14 |        223 |           14 | system calls                                     |
 | `allocator.rs`                              | memory   |     1 |         16 |            4 | the global allocator                             |
-| `memory/`                                   | memory   |     3 |         66 |           19 | `xmalloc`, owned C strings                       |
-| `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
-| `slot.rs`, `slot/`                          | memory   |     2 |         41 |            7 | type-stable slots and their checked handles      |
-| `winlayer.rs`, `winlayer/`                  | memory   |     6 |         49 |            9 | window, buffer, grid and terminal handles        |
-| `eval/typval/{handle,store}.rs`             | memory   |     2 |         43 |            7 | Vimscript value handles                          |
+| `memory/`                                   | memory   |     3 |         66 |           20 | `xmalloc`, owned C strings                       |
+| `global_cell.rs`                            | memory   |     1 |         13 |            1 | the cell under every global                      |
+| `slot.rs`, `slot/`                          | memory   |     2 |         42 |           10 | type-stable slots and their checked handles      |
+| `winlayer.rs`, `winlayer/`                  | memory   |     7 |         73 |            9 | window, buffer, grid and terminal handles        |
+| `eval/typval/{handle,store}.rs`             | memory   |     2 |         36 |            5 | Vimscript value handles                          |
 | `vterm/abi/`                                | test ABI |     3 |         90 |           31 | libvterm's C interface                           |
 | `harness.rs`                                | test ABI |     1 |          8 |            5 | editor symbols the harnesses resolve             |
 
-Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
-`metrics/ratchet.json` is the source.
+Paths are relative to `crates/nvim/src/`. "files" counts the files that
+carry `#![allow(unsafe_code)]`; `winlayer/`'s two field-getter files hold no
+counted statement of their own (their unsafe is `slot_fields!`'s expansion).
 
 ### `lua/ffi.rs`, `lua/executor/{luv,state}.rs` — LuaJIT, luv, lpeg
 
-- **What:** `ffi.rs` (68) declares LuaJIT's, luv's and lpeg's C functions —
+- **What:** `ffi.rs` (67) declares LuaJIT's, luv's and lpeg's C functions —
   a declaration is an unchecked promise about a C signature, and costs one
   statement each — and the inline shims over LuaJIT's header macros.
   `luv.rs` (19) holds the four hooks luv calls to run a libuv callback on the
@@ -111,7 +117,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 ### `lua/stack/` — the Lua stack
 
 - **What:** the one module that pushes, pops and reads LuaJIT's value stack
-  (`mod.rs` 62, `dispatch.rs` 24, `userdata.rs` 16, `debug.rs` 9,
+  (`mod.rs` 60, `dispatch.rs` 24, `userdata.rs` 18, `debug.rs` 9,
   `table.rs` 2). Every region is one LuaJIT call, a read of what one
   answered, a userdata block, or the read of the state's `top`/`base`
   fields. The rest of `lua/` reaches Lua only through this module and
@@ -136,7 +142,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 
 - **What:** parsers, trees, queries and cursors are C objects with C
   lifetimes, held by Lua userdata whose finaliser deletes them (`mod.rs` 76,
-  `node.rs` 38, `lang.rs` 24, `parser.rs` 20, `query.rs` 14, `cursor.rs` 12,
+  `node.rs` 38, `lang.rs` 24, `parser.rs` 21, `query.rs` 14, `cursor.rs` 12,
   `tree.rs` 8, `ranges.rs` 7, `logger.rs` 4, `init.rs` 1). The unsafe is the
   calls and the reads of the arrays and strings they answer.
 - **Contract:** a userdata's object lives until its first `__gc` (which
@@ -179,7 +185,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 ### `tui/{tui,input,output,events}.rs` — the terminal's libuv handles
 
 - **What:** the output tty/pipe handle on a private write loop, the startup
-  timer, the window-size signal and the suspend `kill` (`tui.rs` 29); stdin's
+  timer, the window-size signal and the suspend `kill` (`tui.rs` 18); stdin's
   read stream's opening, the escape and query timers and `tcgetattr` (`input.rs` 14);
   the UI events that reach libuv (`events.rs` 11); the flush's one
   `uv_write` (`output.rs` 4).
@@ -238,11 +244,12 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 - **What:** the `xmalloc` family with its out-of-memory retry and the
   allocation log the unit suite asserts sequences against, and the C-shaped
   string helpers (`xstrdup`, `xmemdupz`, …) the perimeter's
-  callers and the unit specs still call (`mod.rs` 65); `XString` and
+  callers and the unit specs still call (`mod.rs` 39); `XString` and
   `ThinCString`, the owned NUL-terminated strings that adopt a `malloc`
   block from C and hand one back (`thin_cstring.rs` 18, `xstring.rs` 9). The
-  block pool (`blocks.rs`) is safe Rust beside them: a list of spent
-  `Vec<u8>` blocks.
+  block pool (`blocks.rs`, a list of spent `Vec<u8>` blocks) and a
+  child's argument and environment vectors (`cstr_vec.rs`) are safe Rust
+  beside them.
 - **Contract:** a block from the family is freed once, with `xfree`; the
   retry frees the scrollback and memfile caches, so no borrow of them may be
   live across an allocation (`try_to_free_memory`'s `# Safety`); a string
@@ -268,7 +275,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   an audited site; [safe-surface.md](safe-surface.md) S2), and checked on
   every access in checked builds only. The value comes first (`repr(C)`),
   so the exported cells keep their C address. `ptr()`, the raw
-  escape hatch, is used only on the perimeter (22 sites: the globals libuv
+  escape hatch, is used only on the perimeter (9 sites: the globals libuv
   holds by address, and the cell's own tests).
 - **After an emergency** (`emergency`, every exit that abandons) the
   interrupted frames' borrows stay recorded, as nothing can give them back.
@@ -290,14 +297,14 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   owner of a value in its type's pool, and the guards a value is lent
   through (`slot/guards.rs`): `SlotEdit` (the edit bit), `SlotRead` (a
   counted borrow) and `SlotPart` (one interior part lent mutably beside
-  reads of the rest -- a buffer's memline) (41): the header reads (generation, index, reader count; 3), the value's
-  writes, reads and drops as it enters and leaves a slot (7), the
-  dereferences of a live handle, a detached slot, a vacant place being
-  filled, the pool's own borrow and the two guards (9), and the `unsafe
-fn`s that take a value address apart (`slot_of`, `generation_at`,
-  `word_at`, `SlotRef::from_parts`; the graph handles' constructors and
-  checks from a bare address) or lend through one (`edit_at`, `read_at`,
-  `check_write`), with their tests (13).
+  reads of the rest -- a buffer's memline) (`slot.rs` 22, `guards.rs` 20):
+  the header reads (generation, index, reader count), the value's writes,
+  reads and drops as it enters and leaves a slot, the dereferences of a
+  live handle, a detached slot, a vacant place being filled, the pool's own
+  borrow and the guards, and the `unsafe fn`s that take a value address
+  apart (`slot_of`, `generation_at`, `word_at`, `SlotRef::from_parts`; the
+  graph handles' constructors and checks from a bare address) or lend
+  through one (`edit_at`, `read_at`, `check_write`), with their tests.
   `IdTable`/`ViewTable` (`slot/id_table.rs`, forbid) are built on it, and
   so are the window, buffer, tab page, frame and terminal pools
   (`winlayer/handles.rs`, forbid; `winlayer/terminal.rs`).
@@ -328,10 +335,10 @@ fn`s that take a value address apart (`slot_of`, `generation_at`,
 
 - **What:** `Win`, `Buf`, `TabPage`, `FrameRef`, `PosRef`, the
   screen grid handle `GridRef` and the terminal handle `Term` — each a
-  `Copy` value over one pointer (`winlayer.rs` 10, `graph.rs` 17,
-  `deref.rs` 18 — the checked handles, the place getters and setters
-  (`deref/buf_fields.rs`, `deref/win_fields.rs`) and `edit()`/`read()` —, `grid.rs`
-  6, `terminal.rs` 1). Building one from an address is the
+  `Copy` value over one pointer (`winlayer.rs` 9, `graph.rs` 17,
+  `deref.rs` 40 — the checked handles, `edit()`/`read()` and the
+  `slot_fields!` place getters and setters that `deref/buf_fields.rs` and
+  `deref/win_fields.rs` expand —, `grid.rs` 6, `terminal.rs` 1). Building one from an address is the
   unsafe step; dereferencing it is not. A window's grid handle carries the
   window's generation and is checked against it; a terminal handle is a
   slot handle of its own pool. `curwin`/`CURBUF`/`CURTAB` are cells
@@ -465,5 +472,47 @@ each is its section in [safe-surface.md](safe-surface.md).
 
 ## Listed for later
 
-Editor-shaped residue on the perimeter, each with what removes it: the emulator's
-offset keepers.
+Editor-shaped residue on the perimeter, each with what removes it.
+
+- **A child's output streams are bare `RStream`s.** A job's stdout and
+  stderr stay raw fields of its `Proc`, driven through the `event/`
+  functions that take `*mut RStream`, where stdin, the TUI and the socket
+  and stdio channels hold a `ReadStream`. The owner gates its safe
+  operations on "has a read block", and a job's stderr is connected by the
+  spawn but gets its block only when read, so a gated `close` would leak
+  its handle. Removed by a "registered" flag on `Stream` (set when libuv
+  takes the handle, cleared by its close callback): `Proc`'s streams become
+  `ReadStream`s, `close` gates on registered and `start`/`consume` on the
+  block, and `open` can then take `Pin<&Self>` with a `Drop` assertion,
+  leaving no unsafe step at all.
+- **The child object model.** `Proc` is the first field of
+  `LibuvProc`/`PtyProc` and is cast to and from them (`Child::pty`, a
+  `field:` row of [docs/unsafe-fn-allowlist.md](unsafe-fn-allowlist.md));
+  a channel's `Stream`s are built by `Conn::new` and projected out of their
+  pin by `event/channel.rs`. Removed by a typed child owner -- one value
+  owning the `Proc` and its kind's handle, driven through `&self` as
+  `ReadStream` and `SignalWatcher` are -- which first needs a design for
+  re-entry: a libuv callback reaches a child while a caller up the stack
+  holds it. Roughly a hundred statements of `event/` by estimate.
+- **The 46 `test` rows of [docs/abi-ledger.md](abi-ledger.md).** The 30
+  libvterm exports (`vterm/abi/`) and the 16 editor symbols (14 defined in
+  `harness.rs`, plus `curwin` and `win_col_off` in `winlayer/graph.rs`)
+  exist for C and Lua clients in this repository: upstream's unit spec and
+  fixture, the functional specs' FFI, the old-style harness, the battery's
+  `vtsweep`. When
+  the emulator becomes a crate of its own, its unit spec and fixture are
+  re-expressed in Rust; that retires the Lua unit harness, ffigen and the
+  seven harness rows only the unit suite resolves (`early_init`,
+  `event_init`, the three UTF-8 readers, `utf8len_tab`, `schar_get`).
+  `vterm/abi/` itself stays while `vtsweep` (a differential against kept C
+  builds) and `tui_spec` read it, and the rest of `harness.rs` row by row
+  with the spec that resolves each name.
+- **The emulator's offset keepers.** `LineInfoSlots`/`BufferSlot` in
+  `vterm/types.rs` are a type with no unsafe code (private words whose one
+  value is zero), kept only so the structs keep the byte layout the
+  battery's cut `vtsweep` declarations read. Removed at the next battery
+  `BASE` bump, by re-cutting those declarations without them.
+- **The cast floor's perimeter files.** `os/input.rs`, `os/fs/meta.rs`,
+  `lua/treesitter/ranges.rs` and `xdiff/`'s vendored files still allow
+  clippy's cast lints (`CAST_ALLOW_FLOOR` in `scripts/ratchet.py`).
+  Removed by finishing each file's casts, which drops its row.

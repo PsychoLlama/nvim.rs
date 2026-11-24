@@ -1165,9 +1165,9 @@ PERIMETER = {
     # -- The primitives everything else stands on. Their whole job is to be
     # the one place a raw operation happens, so that callers need not.
     "crates/nvim/src/allocator.rs": "the global allocator: malloc/realloc/free",
-    "crates/nvim/src/memory/": "xmalloc, the block pool and the owned C "
-    "strings that adopt and hand back malloc blocks — the floor under every "
-    "owned type in the tree",
+    "crates/nvim/src/memory/": "xmalloc and the owned C strings that adopt "
+    "and hand back malloc blocks — the floor under every owned type in the "
+    "tree",
     "crates/nvim/src/global_cell.rs": "the checked wrapper over c2rust's "
     "mutable statics; the raw static is touched here so it is nowhere else",
     "crates/nvim/src/slot.rs": "type-stable slots: values in memory never "
@@ -1179,9 +1179,9 @@ PERIMETER = {
     "screen grid handle and the terminal handle: constructing one is the "
     "unsafe step, dereferencing it is not",
     "crates/nvim/src/winlayer/": "the same, split out by family",
-    "crates/nvim/src/eval/typval/handle.rs": "the value handles (`ListRef`, "
-    "`DictRef`, `BlobRef`, `PartialRef`): constructing a handle is the unsafe "
-    "step, dereferencing it is not",
+    "crates/nvim/src/eval/typval/handle.rs": "the value handle `ObjRef` "
+    "(`ListRef`, `DictRef`, `BlobRef`, `PartialRef`): constructing a handle "
+    "is the unsafe step, dereferencing it is not",
     "crates/nvim/src/eval/typval/store.rs": "a dictionary's item store: a hash "
     "table whose slots own boxed items by address",
 }
@@ -3838,6 +3838,137 @@ def sync_perimeter_doc(stats, check):
         PERIMETER_DOC.write_text(fresh)
 
 
+AUDIT_DOC = ROOT / "docs" / "unsafe-audit.md"
+# docs/unsafe-audit.md's class bullets, by the class column its table uses.
+AUDIT_CLASSES = {
+    "A foreign ABI": "foreign",
+    "The operating system": "OS",
+    "Raw memory": "memory",
+    "Exported test ABI": "test ABI",
+}
+TABLE_ROW = re.compile(r"^\|(.*)\|\s*$", re.M)
+
+
+def doc_number(text):
+    return int(text.replace(",", ""))
+
+
+def row_tables(text):
+    """Each perimeter row of a doc's tables, as (row text, {header: cell}).
+
+    A table counts when its header has a `files` column; a row is one whose
+    first cell names paths in backticks."""
+    rows, header = [], None
+    for m in TABLE_ROW.finditer(text):
+        cells = [c.strip() for c in m.group(1).split("|")]
+        if all(set(c) <= set("-: ") for c in cells):
+            continue
+        if "files" in cells:
+            header = cells
+        elif header and BACKTICKED.search(cells[0]) and len(cells) == len(header):
+            rows.append((cells[0], dict(zip(header, cells))))
+        elif not BACKTICKED.search(cells[0]):
+            header = None
+    return rows
+
+
+def row_measure(cell, allowing, stats, unsafe_fns):
+    """(entries, files allowing unsafe, unchecked statements, `unsafe fn`s)
+    under the PERIMETER entries a table row's first cell spells."""
+    entries = {
+        CRATE_SRC + path
+        for spelled in BACKTICKED.findall(cell)
+        for path in expand_braces(spelled.strip())
+    }
+    files = [f for f in allowing if in_home(f, entries)]
+    return (
+        entries,
+        len(files),
+        sum(stats[f]["unsafe_stmts"] for f in files),
+        sum(n for f, n in unsafe_fns.items() if in_home(f, entries)),
+    )
+
+
+def check_row_tables(stats, tree, unsafe_fns):
+    """docs/perimeter.md's list and docs/unsafe-audit.md's rows say what the
+    tree measures: each row's files (that allow unsafe code), unchecked
+    statements and `unsafe fn`s, every PERIMETER entry in exactly one row of
+    each table, and the audit's class totals and headline numbers.
+
+    Only the "Today" line used to be checked, and every other number in the
+    two docs drifted: slices applied their deltas to counts that were
+    already wrong (the raw-memory class read 13 files and 221 statements
+    against a measured 16 and 246)."""
+    allowing = sorted(
+        f
+        for f, m in tree.items()
+        if f.startswith(CRATE_SRC) and FILE_ALLOWS_UNSAFE in m
+    )
+    crate_files = [f for f in tree if f.startswith(CRATE_SRC)]
+    forbidding = sum(FORBID in tree[f] for f in crate_files)
+    bad = []
+    classes = collections.defaultdict(lambda: [0, 0])
+    for doc in (PERIMETER_DOC, AUDIT_DOC):
+        name = doc.relative_to(ROOT)
+        text = doc.read_text()
+        claimed = collections.Counter()
+        for cell, row in row_tables(text):
+            entries, files, stmts, fns = row_measure(cell, allowing, stats, unsafe_fns)
+            claimed.update(entries & PERIMETER.keys())
+            if stray := sorted(entries - PERIMETER.keys()):
+                bad.append(f"{name}: row {cell} names no PERIMETER entry {stray}")
+            want = {
+                "files": files,
+                "unchecked": stmts,
+                "statements": stmts,
+                "`unsafe fn`s": fns,
+            }
+            for header, value in want.items():
+                if header in row and doc_number(row[header]) != value:
+                    bad.append(
+                        f"{name}: row {cell}: {header} {row[header]}, measured {value:,}"
+                    )
+            if "class" in row:
+                classes[row["class"]][0] += files
+                classes[row["class"]][1] += stmts
+        for entry in sorted(PERIMETER):
+            if claimed[entry] != 1:
+                bad.append(
+                    f"{name}: PERIMETER entry {entry} is in {claimed[entry]} table rows, not 1"
+                )
+    # Prose wraps anywhere, so the sentences are matched on one line.
+    audit = re.sub(r"\s+", " ", AUDIT_DOC.read_text())
+    total = sum(stats[f]["unsafe_stmts"] for f in allowing)
+    expected = [
+        (r"confined to \*\*([\d,]+) files\*\*", len(allowing)),
+        (r"holding \*\*([\d,]+) unchecked\s+statements\*\*", total),
+        (r"Every `unsafe fn` \(([\d,]+)\)", sum(unsafe_fns.values())),
+        (r"The other ([\d,]+) of the editor's", len(crate_files) - len(allowing)),
+        (r"editor's ([\d,]+) source files", len(crate_files)),
+        (r"all but ([\d,]+) say so", len(crate_files) - len(allowing) - forbidding),
+    ]
+    for label, cls in AUDIT_CLASSES.items():
+        files, stmts = classes[cls]
+        expected.append((rf"\*\*{label} — ([\d,]+) files,", files))
+        expected.append((rf"\*\*{label} — [\d,]+ files, ([\d,]+) statements", stmts))
+    for pattern, value in expected:
+        m = re.search(pattern, audit)
+        if m is None:
+            bad.append(
+                f"{AUDIT_DOC.relative_to(ROOT)}: no sentence matching /{pattern}/"
+            )
+        elif doc_number(m.group(1)) != value:
+            bad.append(
+                f"{AUDIT_DOC.relative_to(ROOT)}: /{pattern}/ says {m.group(1)}, measured {value:,}"
+            )
+    if bad:
+        sys.exit(
+            "ratchet: the perimeter docs' counts are stale:\n  "
+            + "\n  ".join(bad)
+            + "\nFix the numbers (or the rows) in the same commit as the code."
+        )
+
+
 # The comment block naming a perimeter row: "Unsafe perimeter: the `os/` row
 # in docs/perimeter.md." Every backticked path in it is a row's spelling,
 # brace groups included (`lua/executor/{luv,state}.rs`).
@@ -6405,6 +6536,10 @@ def self_test():
         }
         assert got == expected, f"placement={got}, want {expected}, for {files}"
     assert expand_braces("a/{b,c}.rs") == ["a/b.rs", "a/c.rs"]
+    assert row_tables(
+        "| row | class | files |\n| --- | --- | ---: |\n| `a/`, `b.rs` | x | 1,2 |\n"
+        "\n| prose | no | 3 |\n"
+    ) == [("`a/`, `b.rs`", {"row": "`a/`, `b.rs`", "class": "x", "files": "1,2"})]
     for case, expected in SELF_TEST_PERIMETER_CHECK:
         stats = {
             (entry + "x.rs" if entry.endswith("/") else entry): {
@@ -6521,6 +6656,7 @@ def main():
     index = unsafe_fn_index(tree)
     check_unsafe_fn_allowlist(index, unsafe_fn_allowlist())
     sync_perimeter_doc(stats, "--check" in args)
+    check_row_tables(stats, tree, sites["unsafe_fns"])
     sync_wrapper_table(wrapper_table(by_callee, index), "--check" in args)
     counts = {**ledgers(), **whole_tree(stats, tree, sites)}
     content = render(stats, counts, allowing_casts, allowing)
