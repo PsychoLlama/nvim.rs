@@ -213,6 +213,36 @@ describe('a number at the ends of int', function()
     end
   end)
 
+  it('is a :clist range', function()
+    fn.setqflist({}, ' ', { lines = { 'a:1:x', 'a:2:y', 'a:3:z' }, efm = '%f:%l:%m' })
+    fn.setloclist(0, {}, ' ', { lines = { 'a:1:x', 'a:2:y' }, efm = '%f:%l:%m' })
+    local all = fn.execute('clist')
+    -- Counted from the end, before the first entry is entry 0: nothing to
+    -- list alone, everything up to the end of a range.
+    eq('', fn.execute('clist -5'))
+    eq('', fn.execute('clist -2147483648'))
+    eq('', fn.execute('clist -4294967295'))
+    eq(all, fn.execute('clist -2147483648,-1'))
+    eq('', fn.execute('clist 1,-2147483648'))
+    -- Counted from the current entry, past the last is the last.
+    eq(all, fn.execute('clist +2147483647'))
+    eq('', fn.execute('llist -2147483648'))
+    eq(fn.execute('llist'), fn.execute('llist +2147483647'))
+  end)
+
+  it('is a virtual text window column', function()
+    fn.setline(1, 'abc')
+    command('set number')
+    local ns = api.nvim_create_namespace('')
+    api.nvim_buf_set_extmark(0, ns, 0, 0, { virt_text = { { 'hi' } }, virt_text_win_col = INT_MAX })
+    command('redraw')
+    -- Past the gutter and off the window: not drawn.
+    eq(
+      '  1 abc',
+      fn.trim(eval([[join(map(range(1, 20), 'nr2char(screenchar(1, v:val))'), '')]]), ' ', 2)
+    )
+  end)
+
   it('is a character in a pattern', function()
     -- An over-long UTF-8 form decodes to 0x7fffffff, which is no magic
     -- character.

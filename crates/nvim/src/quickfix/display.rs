@@ -210,16 +210,20 @@ pub fn qf_list(excmd: &mut ExArg) {
         return;
     };
     let qfl = qi.current_slot();
+    // Upstream's `-idx1` and `index + idx1` overflow at the ends of an
+    // `int` (`:clist -2147483648`, `:clist +2147483647`); neither negates
+    // nor wraps here, which is what C does for every number that fits.
     if plus {
-        idx2 = qfl.index() + idx1;
+        idx2 = qfl.index().saturating_add(idx1);
         idx1 = qfl.index();
     } else {
         let count = qfl.count();
+        let from_end = |idx: c_int| if idx < -count { 0 } else { idx + count + 1 };
         if idx1 < 0 {
-            idx1 = if -idx1 > count { 0 } else { idx1 + count + 1 };
+            idx1 = from_end(idx1);
         }
         if idx2 < 0 {
-            idx2 = if -idx2 > count { 0 } else { idx2 + count + 1 };
+            idx2 = from_end(idx2);
         }
     }
 
@@ -310,6 +314,9 @@ fn decimal(text: &[u8]) -> (Option<c_int>, usize) {
     if negative {
         n = -n;
     }
+    // Past `INT_MAX` is refused, as upstream does; below `INT_MIN` clamps
+    // where upstream's `(int)` wraps (`-4294967295` would list from entry 1
+    // there). Counted from the end, the clamp is "before the first entry".
     let n = if n > i64::from(c_int::MAX) {
         None
     } else {

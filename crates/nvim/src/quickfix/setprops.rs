@@ -492,6 +492,9 @@ fn qf_setprop_curidx(qi: Qi, qfl: Qfl, idx: &TypVal) -> Result<(), QfError> {
         let Ok(n) = tv_get_number_chk(idx) else {
             return Err(QfError::BadValue);
         };
+        // Deliberately not upstream's `(int)` wrap, which turns 4294967297
+        // into entry 1: past an `int` saturates, so a huge index selects the
+        // last entry and a hugely negative one is refused below.
         c_int::try_from(n).unwrap_or(if n < 0 { c_int::MIN } else { c_int::MAX })
     };
 

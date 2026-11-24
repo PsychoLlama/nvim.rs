@@ -184,7 +184,14 @@ pub(crate) fn draw_virt_text(
                     Some(right_pos)
                 }
                 V_POS_END_OF_LINE if do_eol => Some(eol_col),
-                V_POS_WIN_COL => Some((col_off + vt.as_ref().map_or(0, |vt| vt.col)).max(0)),
+                // `virt_text_win_col` is the API's to set anywhere in an
+                // `int`, so past the gutter it saturates (off the window,
+                // never drawn) where upstream's sum overflows.
+                V_POS_WIN_COL => Some(
+                    col_off
+                        .saturating_add(vt.as_ref().map_or(0, |vt| vt.col))
+                        .max(0),
+                ),
                 // Inline, overlay, or an eol form with no end of line to
                 // hang off: placed elsewhere, or not at all.
                 _ => None,

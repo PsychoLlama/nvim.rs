@@ -420,6 +420,8 @@ pub(crate) fn qf_get_properties(
         if di.di_tv.v_type() != VAR_NUMBER {
             return Err(QfError::BadValue);
         }
+        // Deliberately not upstream's `(int)` wrap, which turns 4294967297
+        // into entry 1: an index no `int` holds names no entry (-1).
         eidx = c_int::try_from(di.di_tv.number_or_zero()).unwrap_or(-1);
     }
 
