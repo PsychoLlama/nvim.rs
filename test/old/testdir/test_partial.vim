@@ -417,4 +417,21 @@ func Test_non_callable_type_as_method()
   call assert_fails('echo 30->d.Fn()', 'E1085: Not a callable type: d.Fn')
 endfunc
 
+" A partial extended past 20 bound arguments is refused where it is made:
+" upstream counted only the new list, and call() on the result overran its
+" argument frame.
+func Test_partial_bound_args_limit()
+  func Count(...)
+    return a:0
+  endfunc
+  let P = function('Count', range(20))
+  call assert_equal(20, call(P, []))
+  call assert_equal(20, call(function(P, []), []))
+  call assert_fails("let Q = function(P, [1])", 'E118: Too many arguments for function: Count')
+  call assert_fails("let Q = function(function('Count', range(19)), [1, 2])", 'E118:')
+  call assert_equal(20, call(function(function('Count', range(19)), [1]), []))
+  call assert_fails('call call(P, [1])', 'E699:')
+  delfunc Count
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab

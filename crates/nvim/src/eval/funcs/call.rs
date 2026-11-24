@@ -16,10 +16,10 @@ use crate::env::expand_env;
 use crate::eval::AUTOLOAD_CHAR;
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::gc::{GARBAGE_COLLECT_AT_EXIT, WANT_GARBAGE_COLLECT};
-use crate::eval::typval::ReadScope;
 use crate::eval::typval::{
     ListRef, NumBuf, PartialRef, list_iter, list_len, tv_check_for_dict_arg, tv_check_for_list_arg,
 };
+use crate::eval::typval::{ReadScope, index_of};
 use crate::eval::userfunc::{MAX_FUNC_ARGS, TFN_INT, TFN_NO_AUTOLOAD, TFN_NO_DEREF, TFN_QUIET};
 use crate::eval::userfunc::{
     emsg_funcname, find_func, func_call, func_exists, func_ptr_ref, func_ref_name, func_unref_name,
@@ -370,6 +370,7 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
     let mut arg_idx = 0;
     let reads = ReadScope::new();
     let mut list: Option<&List> = None;
+    let already_bound = arg_pt.map_or(0, |bound| bound.pt_argv.len());
     if args.len() > 1 {
         if args.len() > 2 {
             arg_idx = 1;
@@ -397,7 +398,10 @@ fn common_function(args: &[TypVal], result: &mut TypVal, is_funcref: bool) {
             list = args[arg_idx].list_in(&reads);
             if list_len(list) == 0 {
                 arg_idx = 0;
-            } else if list_len(list) > MAX_FUNC_ARGS {
+            } else if list_len(list) > MAX_FUNC_ARGS - index_of(already_bound) {
+                // A partial being extended counts its own bound arguments
+                // too. Upstream checks only this list, so it can build a
+                // partial no call frame holds, which `call()` then overruns.
                 emsg_funcname(E_TOOMANYARG, written);
                 return;
             }
