@@ -866,10 +866,7 @@ impl Hasher for DigestHasher {
     /// table indexes by (a bare multiply leaves them to the low key bits,
     /// which for a digest are its length and first hash byte).
     fn finish(&self) -> u64 {
-        let mut x = self.0;
-        x = (x ^ (x >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        x = (x ^ (x >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        x ^ (x >> 31)
+        crate::math::splitmix64_mix(self.0)
     }
 
     fn write(&mut self, bytes: &[u8]) {

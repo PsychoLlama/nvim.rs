@@ -23,6 +23,8 @@ use core::ffi::c_int;
 use core::hash::{BuildHasherDefault, Hasher};
 use std::collections::HashMap;
 
+use crate::math::splitmix64_mix;
+
 /// Mixes a packed id pair so that the top bits — which the table probes
 /// first — depend on all of it. Ids are small and consecutive, which the
 /// identity hash spreads badly, and this sits on the per-cell path where
@@ -32,11 +34,7 @@ struct AttrPairHasher(u64);
 
 impl Hasher for AttrPairHasher {
     fn write_u64(&mut self, n: u64) {
-        // splitmix64's finalizer.
-        let mut z = n;
-        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        self.0 = z ^ (z >> 31);
+        self.0 = splitmix64_mix(n);
     }
 
     fn write(&mut self, bytes: &[u8]) {

@@ -157,11 +157,7 @@ struct BlockNrHasher(u64);
 
 impl Hasher for BlockNrHasher {
     fn write_i64(&mut self, n: i64) {
-        // splitmix64's finalizer.
-        let mut z = n.cast_unsigned();
-        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        self.0 = z ^ (z >> 31);
+        self.0 = crate::math::splitmix64_mix(n.cast_unsigned());
     }
 
     fn write(&mut self, bytes: &[u8]) {

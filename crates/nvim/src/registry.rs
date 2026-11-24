@@ -514,11 +514,7 @@ pub(crate) struct IdHasher(u64);
 
 impl IdHasher {
     fn mix(&mut self, n: u64) {
-        // splitmix64's finalizer.
-        let mut z = n;
-        z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-        self.0 = z ^ (z >> 31);
+        self.0 = crate::math::splitmix64_mix(n);
     }
 }
 

@@ -27,6 +27,18 @@ pub(crate) fn vim_append_digit_int(value: &mut c_int, digit: c_int) -> bool {
     }
 }
 
+/// splitmix64's finaliser: a bijection on `u64` after which every input bit
+/// reaches every output bit. The editor's hashers of small, consecutive keys
+/// (ids, block numbers, digests) use it to spread a key over the bits a
+/// hash table probes, where the identity hash clusters and SipHash's setup
+/// is not worth paying.
+#[inline]
+pub(crate) const fn splitmix64_mix(x: u64) -> u64 {
+    let x = (x ^ (x >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    let x = (x ^ (x >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    x ^ (x >> 31)
+}
+
 /// Clamp an `i64` into `int` range.
 pub(crate) fn trim_to_int(x: i64) -> c_int {
     // The clamp is the narrowing's proof.
@@ -37,6 +49,14 @@ pub(crate) fn trim_to_int(x: i64) -> c_int {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn splitmix64_mix_is_the_reference_finaliser() {
+        // splitmix64 seeded with 0: its first output is the finaliser of
+        // one golden-ratio step (Vigna's reference implementation).
+        assert_eq!(splitmix64_mix(0x9e37_79b9_7f4a_7c15), 0xe220_a839_7b1d_cdaf);
+        assert_eq!(splitmix64_mix(0), 0);
+    }
 
     #[test]
     fn append_digit_stops_at_int_max() {

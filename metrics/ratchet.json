@@ -551,7 +551,7 @@
     "crates/nvim/src/mbyte/utf8/slice.rs": {"pub_items": 6},
     "crates/nvim/src/mbyte/utf8/tables.rs": {"pub_items": 2},
     "crates/nvim/src/mbyte/walk.rs": {"pub_items": 3},
-    "crates/nvim/src/memfile/mod.rs": {"lines": 1004, "pub_items": 2},
+    "crates/nvim/src/memfile/mod.rs": {"pub_items": 2},
     "crates/nvim/src/memline/block0.rs": {"pub_items": 3},
     "crates/nvim/src/memline/blocks.rs": {"pub_items": 12},
     "crates/nvim/src/memline/error.rs": {"pub_items": 1},
