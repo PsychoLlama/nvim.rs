@@ -415,5 +415,7 @@ refresh *args: apigen keycodes-lua fmt ffigen abi-ledger visibility-ledger (ratc
 # minutes, and rustdoc's ~10 s wants the crate already compiled. `lint-tools`
 # stays listed on its own so the seconds-long generator lint still runs before
 # anything expensive; just runs a recipe once per invocation, so naming it
-# twice costs nothing.
-minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (visibility-ledger "--check") (ratchet "--check") lint-tools build build-release cargo-test lint doc
+# twice costs nothing. `unittest` (the libvterm spec, its C fixture and the
+# generated cdefs they compile against) takes ~4 s on the debug build, and no
+# other lane runs it.
+minimal-ci: fmt-check (apigen "--check") (ffigen "--check") (keycodes-lua "--check") (abi-ledger "--check") (visibility-ledger "--check") (ratchet "--check") lint-tools build build-release cargo-test unittest lint doc
