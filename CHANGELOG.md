@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The event layer's read streams, signal watchers, listening sockets and child command lines are owned Rust types driven through safe methods, registering with libuv being the one unsafe step; clippy's lossy-cast lints are denied crate-wide rather than opted into file by file.
+
+### Fixed
+
+- A `--listen`/`serverstart()` address longer than 255 bytes was silently truncated.
+
 ## [2026.11.23-03b1bf7c52]
 
 ### Changed
