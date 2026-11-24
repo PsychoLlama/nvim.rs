@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2026.11.24-95d83729e6]
+
 ### Changed
 
 - The event layer's read streams, signal watchers, listening sockets and child command lines are owned Rust types driven through safe methods, registering with libuv being the one unsafe step; clippy's lossy-cast lints are denied crate-wide rather than opted into file by file.
@@ -531,7 +533,8 @@ Safety foundation: make undefined behavior observable, then structurally shrink 
 
 First tagged release (unstable). The c2rust transpile of Neovim from C to Rust, made to build and pass the functional, old, and unit suites, with the CalVer release pipeline in place. The starting point: ~1.21M lines of mostly `unsafe` Rust with no user-visible change from upstream.
 
-[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.23-03b1bf7c52...HEAD
+[Unreleased]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.24-95d83729e6...HEAD
+[2026.11.24-95d83729e6]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.23-03b1bf7c52...2026.11.24-95d83729e6
 [2026.11.23-03b1bf7c52]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.17-3c323fb9b5...2026.11.23-03b1bf7c52
 [2026.11.17-3c323fb9b5]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.15-fd1efed7e4...2026.11.17-3c323fb9b5
 [2026.11.15-fd1efed7e4]: https://github.com/PsychoLlama/nvim.rs/compare/2026.11.11-84ff67e6c4...2026.11.15-fd1efed7e4
