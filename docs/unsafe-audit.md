@@ -154,8 +154,8 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 ### `event/` — libuv
 
 - **What:** libuv's loop, streams, timers, signal watchers and child
-  processes are C objects libuv holds _by address_ (`libuv.rs` 93 — mostly the declarations — `proc.rs` 70, `socket/mod.rs` 65,
-  `loop.rs` 58, `channel.rs` 43, `libuv_proc.rs` 48, `rstream.rs` 34, `stream.rs` 34,
+  processes are C objects libuv holds _by address_ (`libuv.rs` 93 — mostly the declarations — `proc.rs` 65, `socket/mod.rs` 65,
+  `loop.rs` 58, `channel.rs` 37, `libuv_proc.rs` 32, `rstream.rs` 34, `stream.rs` 34,
   `signal.rs` 14, `time.rs` 16, `wstream.rs` 14). Each region is a libuv
   call, a handle rebuilt from the address libuv hands back to a callback, or
   a pin projection.
@@ -169,11 +169,12 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   code. The `# Safety` sections say the rest: "`stream` has been through
   `rstream_init`", "`uv_loop` is live and `stream` points at storage that
   does not move afterwards".
-- **Editor-shaped, still here:** a spawned child's `char **` argv and
-  environment, listed for later work (see below). (A read stream's block is
-  a pool block with two offsets, and its consumer takes a slice.)
-- **Retires:** with libuv. Not planned; the item above can leave without
-  that.
+- **Owned, handed over by address:** a child's command line, directory and
+  environment are an owned `Command` (`CStrVec`: the words and the
+  NULL-terminated vector over them), lent to `uv_spawn`/`execvp` at the
+  one spawn call and freed by `Drop`. A read stream's block is a pool block
+  with two offsets, and its consumer takes a slice.
+- **Retires:** with libuv. Not planned.
 
 ### `tui/{tui,input,output,events}.rs` — the terminal's libuv handles
 
@@ -205,7 +206,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
   the `getpw*` family (`users.rs` 8), the clocks and `strftime`/`strptime`
   (`time.rs` 10), opening stdin's read stream and the loop polls (`input.rs` 5), the
   PTY — `forkpty`, `ioctl`, `ptsname`, and in the forked child
-  `setsid`/`execvp` (`pty_proc_unix/mod.rs` 38) — signals (`signal.rs` 5),
+  `setsid`/`execvp` (`pty_proc_unix/mod.rs` 35) — signals (`signal.rs` 5),
   `dlopen` for `libcall()` (`dl.rs` 13), `iconv` (`iconv.rs` 7), process
   inspection (`proc.rs` 7), and the C library surface the `libc` crate
   lacks (`cshim.rs` 72: declarations — among them the four C globals
@@ -466,7 +467,6 @@ each is its section in [safe-surface.md](safe-surface.md).
 
 ## Listed for later
 
-Editor-shaped residue on the perimeter, each with what removes it: a child's `char **` argv/environment (an owned argv type
-handed to libuv at the one spawn call), `handle.rs`'s `Box` allocation and
+Editor-shaped residue on the perimeter, each with what removes it: `handle.rs`'s `Box` allocation and
 generic handle, and the emulator's
 offset keepers.

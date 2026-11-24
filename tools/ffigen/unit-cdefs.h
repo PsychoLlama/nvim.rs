@@ -4,6 +4,7 @@ typedef struct lua_State lua_State;
 typedef struct ApiDict ApiDict;
 typedef struct ApiString ApiString;
 typedef struct Array Array;
+typedef struct Command Command;
 typedef struct Expand Expand;
 typedef struct OptSet OptSet;
 typedef struct ReadBuffer ReadBuffer;
@@ -35,11 +36,8 @@ typedef union stream_uv stream_uv;
 typedef struct stream stream;
 typedef struct rstream rstream;
 typedef struct proc proc;
-typedef struct uv_process_options_s uv_process_options_s;
 typedef union uv_process_s_u uv_process_s_u;
 typedef struct uv_process_s uv_process_s;
-typedef union uv_stdio_container_s_data uv_stdio_container_s_data;
-typedef struct uv_stdio_container_s uv_stdio_container_s;
 typedef struct LibuvProc LibuvProc;
 typedef struct Object Object;
 typedef struct ParserScratch ParserScratch;
@@ -106,8 +104,11 @@ typedef struct uv_signal_s_tree_entry uv_signal_s_tree_entry;
 typedef union uv_signal_s_u uv_signal_s_u;
 typedef struct uv_signal_s uv_signal_s;
 typedef struct uv_loop_s uv_loop_s;
+typedef struct uv_process_options_s uv_process_options_s;
 typedef struct uv_random_s uv_random_s;
 typedef struct uv_shutdown_s uv_shutdown_s;
+typedef union uv_stdio_container_s_data uv_stdio_container_s_data;
+typedef struct uv_stdio_container_s uv_stdio_container_s;
 typedef union uv_stream_s_u uv_stream_s_u;
 typedef struct uv_stream_s uv_stream_s;
 typedef union uv_timer_s_node uv_timer_s_node;
@@ -503,18 +504,6 @@ struct stream {
   size_t curmem;
   size_t maxmem;
 };
-struct uv_process_options_s {
-  uv_exit_cb exit_cb;
-  const char *file;
-  char **args;
-  char **env;
-  const char *cwd;
-  unsigned int flags;
-  int stdio_count;
-  uv_stdio_container_t *stdio;
-  uv_uid_t uid;
-  uv_gid_t gid;
-};
 union uv_process_s_u {
   int fd;
   void *reserved[4];
@@ -532,14 +521,6 @@ struct uv_process_s {
   int pid;
   uv__queue queue;
   int status;
-};
-union uv_stdio_container_s_data {
-  uv_stream_t *stream;
-  int fd;
-};
-struct uv_stdio_container_s {
-  uv_stdio_flags flags;
-  uv_stdio_container_s_data data;
 };
 struct ParserScratch {
   int leaderlen;
@@ -1105,6 +1086,18 @@ struct uv_loop_s {
   void *inotify_watchers;
   int inotify_fd;
 };
+struct uv_process_options_s {
+  uv_exit_cb exit_cb;
+  const char *file;
+  char **args;
+  char **env;
+  const char *cwd;
+  unsigned int flags;
+  int stdio_count;
+  uv_stdio_container_t *stdio;
+  uv_uid_t uid;
+  uv_gid_t gid;
+};
 struct uv_random_s {
   void *data;
   uv_req_type type;
@@ -1122,6 +1115,14 @@ struct uv_shutdown_s {
   void *reserved[6];
   uv_stream_t *handle;
   uv_shutdown_cb cb;
+};
+union uv_stdio_container_s_data {
+  uv_stream_t *stream;
+  int fd;
+};
+struct uv_stdio_container_s {
+  uv_stdio_flags flags;
+  uv_stdio_container_s_data data;
 };
 union uv_stream_s_u {
   int fd;

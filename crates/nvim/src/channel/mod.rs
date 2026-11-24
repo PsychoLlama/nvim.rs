@@ -213,9 +213,6 @@ fn channel_destroy(mut channel: Box<Channel>) {
     if channel.is_rpc {
         rpc_free(&mut channel);
     }
-    if let Some(job) = channel.stream_mut().job() {
-        job.free_argv();
-    }
     callback_reader_free(&mut channel.on_data);
     callback_reader_free(&mut channel.on_stderr);
     callback_free(&mut channel.on_exit);

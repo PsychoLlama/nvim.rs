@@ -14,13 +14,16 @@
 //! watchers `event/` registers with libuv by address, plus the queued
 //! [`Event`].
 
-use crate::eval::typval::DictBox;
 use crate::event::uv::{
     uv_async_t, uv_file, uv_idle_t, uv_loop_t, uv_pipe_t, uv_signal_t, uv_stream_t, uv_tcp_t,
     uv_timer_t,
 };
+use crate::memory::cstr_vec::CStrVec;
 use crate::os::libc::{int64_t, size_t, uint8_t, uint64_t};
+use crate::shell::Argv;
 use crate::types::Refcount;
+use core::ffi::CStr;
+use std::ffi::CString;
 
 /// One queued event, run once when its queue reaches it.
 ///
@@ -87,10 +90,9 @@ pub struct proc {
     pub refcount: Refcount,
     pub exit_signal: uint8_t,
     pub stopped_time: uint64_t,
-    pub cwd: *const ::core::ffi::c_char,
-    pub argv: *mut *mut ::core::ffi::c_char,
-    pub exepath: *const ::core::ffi::c_char,
-    pub env: *mut DictBox,
+    /// What the child runs. Boxed so that an all-zero `Proc` (`proc_init`)
+    /// is one without.
+    pub(crate) command: Option<Box<Command>>,
     pub in_0: Stream,
     pub out: RStream,
     pub err: RStream,
@@ -105,6 +107,47 @@ pub struct proc {
     pub stdio_noinherit: bool,
     pub events: Option<crate::event_queue::QueueId>,
 }
+/// What a child runs: its command line, and where and with which
+/// environment it starts.
+#[derive(Debug)]
+pub(crate) struct Command {
+    pub argv: CStrVec,
+    /// The program, when the caller resolved it; `argv[0]` otherwise.
+    pub exepath: Option<CString>,
+    /// The directory it starts in; the editor's own otherwise.
+    pub cwd: Option<CString>,
+    /// Its whole environment; the editor's own otherwise.
+    pub env: Option<CStrVec>,
+}
+
+impl Command {
+    /// A command line run as it is, in the editor's directory and
+    /// environment.
+    pub(crate) fn new(argv: Argv) -> Self {
+        Self {
+            argv: CStrVec::new(argv.into_words()),
+            exepath: None,
+            cwd: None,
+            env: None,
+        }
+    }
+
+    /// The program to start: `exepath`, or else `argv[0]`.
+    pub(crate) fn program(&self) -> &CStr {
+        self.exepath
+            .as_deref()
+            .or_else(|| self.argv.first())
+            .unwrap_or(c"")
+    }
+
+    /// Drop what only the spawn reads: everything but the command line.
+    pub(crate) fn spawned(&mut self) {
+        self.exepath = None;
+        self.cwd = None;
+        self.env = None;
+    }
+}
+
 pub type proc_exit_cb =
     Option<unsafe fn(*mut Proc, ::core::ffi::c_int, *mut ::core::ffi::c_void) -> ()>;
 pub type proc_state_cb = Option<unsafe fn(*mut Proc, bool, *mut ::core::ffi::c_void) -> ()>;

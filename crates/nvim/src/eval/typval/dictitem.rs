@@ -38,7 +38,7 @@ use crate::deref::deref_to_field;
 use crate::eval::vars::var_wrong_func_name_named;
 use crate::mbyte::cluster_len;
 use crate::memory::ThinCString;
-use crate::memory::handoff::owned_cstr;
+use crate::memory::cstr_vec::CStrVec;
 use crate::os::libc::uint8_t;
 use crate::semsg;
 use crate::types::Failed;
@@ -235,22 +235,18 @@ pub fn dict_get_bool(d: Option<&Dict>, key: &[u8], def: ::core::ffi::c_int) -> V
     }
 }
 
-/// `denv` as a NULL-terminated `environ`-shaped array of `KEY=VALUE` strings.
-///
-/// Every string, and the array itself, is freshly allocated from the
-/// allocator `xfree` releases; **the caller owns the lot** and has to free
-/// it. Every value of `denv` must have a string form.
-pub fn dict_to_env(denv: &Dict) -> *mut *mut ::core::ffi::c_char {
+/// `denv` as an `environ`: one `KEY=VALUE` string per item. Every value of
+/// `denv` must have a string form.
+pub(crate) fn dict_to_env(denv: &Dict) -> CStrVec {
     let mut numbuf = NumBuf::new();
-    // + 1 for NULL
-    let mut env = Vec::with_capacity(denv.len() + 1);
-    for var in denv.items() {
-        let value = numbuf.string(&var.di_tv);
-        env.push(owned_cstr([var.key(), b"=", value.to_bytes()].concat()));
-    }
-    // must be null terminated
-    env.push(::core::ptr::null_mut());
-    Box::into_raw(env.into_boxed_slice()).cast::<*mut ::core::ffi::c_char>()
+    let vars = denv
+        .items()
+        .map(|var| {
+            let value = numbuf.string(&var.di_tv);
+            ThinCString::from_vec([var.key(), b"=", value.to_bytes()].concat())
+        })
+        .collect();
+    CStrVec::new(vars)
 }
 
 /// `d[key]` as a fresh allocation **the caller owns**, NULL for a missing

@@ -1,12 +1,12 @@
 count	callee	no_raw	defs	def
 41	f	0	0	
-23	CStr::from_ptr	0	0	
 20	.as_ref	0	0	
+19	CStr::from_ptr	0	0	
 12	Reader::new	0	1	crates/nvim/src/event/rstream.rs
 12	from_raw_parts	0	0	
 11	Box::from_raw	0	6	
-11	Child::new	0	1	crates/nvim/src/event/proc.rs
 11	zeroed	0	0	
+9	Child::new	0	1	crates/nvim/src/event/proc.rs
 8	Conn::new	0	1	crates/nvim/src/event/stream.rs
 7	c_bytes	0	1	crates/nvim/src/lua/treesitter/mod.rs
 7	check_write	0	1	crates/nvim/src/slot/guards.rs
@@ -39,8 +39,6 @@ count	callee	no_raw	defs	def
 4	uv_timer_start	0	0	
 3	.get_unchecked_mut	0	0	
 3	.next_arg::<::core::ffi::c_int>	0	0	
-3	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
-3	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 3	Self::new	0	10	
 3	Stack::above_top	0	1	crates/nvim/src/lua/stack/mod.rs
 3	ThinCString::from_raw	0	1	crates/nvim/src/memory/thin_cstring.rs
@@ -50,8 +48,6 @@ count	callee	no_raw	defs	def
 3	create_event	0	1	crates/nvim/src/event/proc.rs
 3	edit_at	0	1	crates/nvim/src/slot/guards.rs
 3	lend_part_at	0	1	crates/nvim/src/slot/guards.rs
-3	proc_free	0	1	crates/nvim/src/event/proc.rs
-3	proc_get_exepath	0	1	crates/nvim/src/event/proc.rs
 3	process_events	0	1	crates/nvim/src/event/loop.rs
 3	rstream_init	0	1	crates/nvim/src/event/rstream.rs
 3	state_terminal	0	1	crates/nvim/src/vterm/abi/mod.rs
@@ -68,6 +64,8 @@ count	callee	no_raw	defs	def
 2	.open	1	2	
 2	.read	0	0	
 2	.write	0	0	
+2	DictRef::owning	0	1	crates/nvim/src/eval/typval/handle.rs
+2	DictRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 2	File::from_raw_fd	0	0	
 2	ListRef::retained	0	1	crates/nvim/src/eval/typval/handle.rs
 2	RawEvent::event	0	1	crates/nvim/src/event/loop.rs
@@ -80,7 +78,6 @@ count	callee	no_raw	defs	def
 2	copy_nonoverlapping	0	0	
 2	decref	0	1	crates/nvim/src/event/proc.rs
 2	free	0	0	
-2	free_child_env	0	1	crates/nvim/src/event/libuv_proc.rs
 2	from_raw_parts_mut	0	0	
 2	gettext_raw	0	1	crates/nvim/src/os/cshim.rs
 2	iconv	0	0	
@@ -156,7 +153,6 @@ count	callee	no_raw	defs	def
 1	fdopen	0	0	
 1	fopen	0	0	
 1	forkpty	0	0	
-1	free_raw_argv	0	1	crates/nvim/src/event/libuv_proc.rs
 1	getgid	0	0	
 1	getuid	0	0	
 1	getxattr	0	0	

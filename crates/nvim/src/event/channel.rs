@@ -39,11 +39,10 @@ use crate::channel::defs::{
     Channel, ChannelStream, InternalState, JobProc, StderrState, StdioPair,
 };
 use crate::channel::with_channel;
-use crate::eval::typval::DictRef;
-use crate::event::libuv_proc::argv_into_raw;
+use crate::eval::typval::{DictRef, dict_to_env};
 use crate::event::r#loop::{Drain, main_loop_raw, wait_on_main_loop};
-use crate::event::objects::{Proc, RStream, Stream};
-use crate::event::proc::{proc_free, proc_spawn, proc_stop, proc_wait};
+use crate::event::objects::{Command, Proc, RStream, Stream};
+use crate::event::proc::{proc_spawn, proc_stop, proc_wait};
 use crate::event::rstream::{
     Arrived, ReadStream, rstream_init, rstream_may_close, rstream_start, rstream_start_inner,
     rstream_stop_inner,
@@ -199,29 +198,13 @@ impl JobProc {
         unsafe { proc_stop(self.proc_ptr()) };
     }
 
-    /// Release the argument vector the child was started with.
-    pub(crate) fn free_argv(self: Pin<&mut Self>) {
-        // SAFETY: as above; the vector is the child's own.
-        unsafe { proc_free(self.proc_ptr()) };
-    }
-
     /// The child's command line, as it was started.
     pub(crate) fn argv(&self) -> Vec<&CStr> {
-        let mut words = Vec::new();
-        let mut at = self.proc().argv;
-        if at.is_null() {
-            return words;
-        }
-        // SAFETY: a spawned child owns a NULL-terminated vector of
-        // NUL-terminated words until `free_argv`; the walk stops at the
-        // null, and each word is borrowed for as long as `self` is.
-        unsafe {
-            while !(*at).is_null() {
-                words.push(CStr::from_ptr(*at));
-                at = at.add(1);
-            }
-        }
-        words
+        self.proc()
+            .command
+            .as_deref()
+            .map(|command| command.argv.words().collect())
+            .unwrap_or_default()
     }
 
     /// Close the requested halves of the child's pipes.
@@ -339,6 +322,12 @@ pub(crate) struct JobSpawn<'a> {
 /// Spawn job channel `id`'s child, or answer the negative libuv error, in
 /// which case the child's handles are already closed and its argv released.
 pub(crate) fn spawn_job(id: u64, spec: JobSpawn<'_>) -> Result<(), c_int> {
+    let command = Box::new(Command {
+        exepath: spec.exepath.map(CStr::to_owned),
+        cwd: spec.cwd.map(CStr::to_owned),
+        env: spec.env.map(|env| dict_to_env(&env.read())),
+        ..Command::new(spec.argv)
+    });
     let proc = with(id, |channel| {
         let events = channel.events.id();
         let job = channel.stream_mut().job();
@@ -346,10 +335,7 @@ pub(crate) fn spawn_job(id: u64, spec: JobSpawn<'_>) -> Result<(), c_int> {
         // SAFETY: the unspawned child at its fixed address, lent for its
         // plain fields only: no stream is moved or replaced.
         let fields = unsafe { &mut *proc };
-        fields.argv = argv_into_raw(spec.argv);
-        fields.exepath = spec.exepath.map_or(ptr::null(), CStr::as_ptr);
-        fields.cwd = spec.cwd.map_or(ptr::null(), CStr::as_ptr);
-        fields.env = spec.env.map_or(ptr::null_mut(), DictRef::into_raw);
+        fields.command = Some(command);
         fields.cb = Some(job_exit_shim);
         fields.state_cb = Some(job_state_shim);
         fields.events = Some(events);
@@ -358,19 +344,9 @@ pub(crate) fn spawn_job(id: u64, spec: JobSpawn<'_>) -> Result<(), c_int> {
         fields.fwd_err = spec.fwd_err;
         proc
     });
-    // SAFETY: the job's child, at its fixed address and unspawned; the
-    // strings outlive the spawn, which is the only reader of `exepath` and
-    // `cwd`.
+    // SAFETY: the job's child, at its fixed address and unspawned, with its
+    // command filled in.
     let status = unsafe { proc_spawn(proc, spec.has_in, spec.has_out, spec.has_err) };
-    // SAFETY: the child, still at its fixed address (the caller's reference
-    // keeps the channel), lent for its plain fields only.
-    let fields = unsafe { &mut *proc };
-    fields.exepath = ptr::null();
-    fields.cwd = ptr::null();
-    let env = core::mem::replace(&mut fields.env, ptr::null_mut());
-    // The environment was only for the spawn.
-    // SAFETY: the reference `into_raw` gave the child, taken back once.
-    drop(unsafe { DictRef::owning(env) });
     if status == 0 { Ok(()) } else { Err(status) }
 }
 

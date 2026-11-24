@@ -46,14 +46,14 @@
 use crate::event::libuv::{
     uv_close, uv_pipe_init, uv_recv_buffer_size, uv_timer_start, uv_timer_stop, uv_unref,
 };
-use crate::event::libuv_proc::{LibuvProc, free_raw_argv};
+use crate::event::libuv_proc::LibuvProc;
 use crate::event::libuv_proc::{libuv_proc_close, libuv_proc_spawn};
 use crate::event::r#loop::{
     RawEvent, loop_children, loop_poll_events, process_events, process_events_until,
     stop_children_watcher,
 };
 use crate::event::objects::Loop;
-use crate::event::objects::{Event, Proc, ProcType, Stream};
+use crate::event::objects::{Command, Event, Proc, ProcType, Stream};
 use crate::event::rstream::{Reader, deliver_eof, rstream_may_close};
 use crate::event::stream::{stream_init, stream_may_close};
 use crate::event::uv::{uv_loop_t, uv_timer_t};
@@ -70,7 +70,7 @@ use crate::startup::{
     EXITING, MAIN_LOOP, UI_CLIENT_CHANNEL_ID, UI_CLIENT_EXIT_STATUS, os_exit, preserve_exit,
 };
 use crate::types::Refcount;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{c_int, c_void};
 use core::ops::Deref;
 use core::ptr;
 
@@ -136,6 +136,15 @@ impl Child {
         unsafe { &mut *self.0.cast::<PtyProc>() }
     }
 
+    /// Drop the parts of the child's command only the spawn reads.
+    fn spawn_done(self) {
+        // SAFETY: a field of the live child, by place; the spawn that read
+        // the command has returned, and nothing else borrows it.
+        if let Some(command) = unsafe { (*self.0).command.as_deref_mut() } {
+            command.spawned();
+        }
+    }
+
     /// Was the child started by `forkpty` rather than by libuv?
     fn is_pty(self) -> bool {
         self.type_0 == PROC_TYPE_PTY
@@ -196,7 +205,6 @@ crate::event::stream::field_writers!(Child {
     fn set_status => status: c_int;
     fn set_exit_signal => exit_signal: u8;
     fn set_stopped_time => stopped_time: u64;
-    fn set_argv => argv: *mut *mut c_char;
     fn set_internal_exit_cb => internal_exit_cb: crate::event::objects::internal_proc_cb;
     fn set_internal_close_cb => internal_close_cb: crate::event::objects::internal_proc_cb;
     fn set_closed => closed: bool;
@@ -216,10 +224,10 @@ fn as_exit_signal(signal: c_int) -> u8 {
 
 /// A fresh, unspawned child of the given kind.
 ///
-/// Every field of `Proc` is a pointer, an integer, a `bool` or an
-/// `Option<fn>`, for all of which all-zeroes is the "unset" value the
-/// field-by-field initialiser upstream spelled out; only the four fields
-/// below differ from it.
+/// Every field of `Proc` is a pointer, an integer, a `bool`, an
+/// `Option<fn>` or an `Option<Box>`, for all of which all-zeroes is the
+/// "unset" value the field-by-field initialiser upstream spelled out; only
+/// the four fields below differ from it.
 pub fn proc_init(uv_loop: *mut Loop, kind: ProcType, data: *mut c_void) -> Proc {
     // SAFETY: see above — `Proc` is inhabited by the all-zero bit pattern.
     let mut proc: Proc = unsafe { core::mem::zeroed() };
@@ -235,24 +243,6 @@ pub fn proc_init(uv_loop: *mut Loop, kind: ProcType, data: *mut c_void) -> Proc 
 /// Whether a child has exited, or has been asked to and is being waited out.
 pub fn proc_is_stopped(proc: &Proc) -> bool {
     proc.status >= 0 || proc.stopped_time != 0
-}
-
-/// The executable a child was (or is about to be) started from.
-///
-/// `exepath` is set when the caller resolved the program itself; otherwise
-/// it is `argv[0]`, as passed to `execvp`.
-///
-/// # Safety
-/// `proc` is a live child whose `argv` has been filled in.
-pub unsafe fn proc_get_exepath(proc: *mut Proc) -> *const c_char {
-    // SAFETY: the caller's promise.
-    let child = unsafe { Child::new(proc) };
-    if child.exepath.is_null() {
-        // SAFETY: a child without an `exepath` was given an argv to exec.
-        unsafe { *child.argv }
-    } else {
-        child.exepath
-    }
 }
 
 /// Start `proc`, optionally with each of the three standard streams piped.
@@ -308,8 +298,7 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
         } else {
             proc_close(child);
         }
-        // SAFETY: the caller's child, which owns its argv.
-        unsafe { proc_free(child.as_ptr()) };
+        child.spawn_done();
         child.set_status(-1);
         return status;
     }
@@ -340,17 +329,15 @@ pub unsafe fn proc_spawn(proc: *mut Proc, has_in: bool, has_out: bool, has_err: 
     unsafe { (*loop_children(child.loop_0)).push(child.as_ptr()) };
 
     let pid = child.pid;
-    // SAFETY: the child, which has just been spawned.
-    let exepath = unsafe { proc_get_exepath(child.as_ptr()) };
     logmsg!(
         LOGLVL_DBG,
         c"proc_spawn",
         127,
         "new: pid={} exepath=[{}]",
         pid,
-        // SAFETY: the child's own program name, when it has one.
-        msg_cstr_opt((!exepath.is_null()).then(|| unsafe { CStr::from_ptr(exepath) }))
+        msg_cstr_opt(child.command.as_deref().map(Command::program))
     );
+    child.spawn_done();
     0
 }
 
@@ -491,20 +478,6 @@ pub unsafe fn proc_stop(proc: *mut Proc) {
     arm_kill_timer(child);
 }
 
-/// Release the resources the child itself owns. The `Proc` is the caller's.
-///
-/// # Safety
-/// `proc` is a live child.
-pub unsafe fn proc_free(proc: *mut Proc) {
-    // SAFETY: the caller's promise.
-    let child = unsafe { Child::new(proc) };
-    if !child.argv.is_null() {
-        // SAFETY: the argv the child was spawned with, which it owns.
-        unsafe { free_raw_argv(child.argv) };
-        child.set_argv(ptr::null_mut());
-    }
-}
-
 /// Self-exit, because the primary RPC channel was closed.
 pub fn exit_on_closed_chan(status: c_int) {
     logmsg!(
@@ -624,9 +597,6 @@ unsafe extern "C" fn proc_close_event(argv: *mut *mut c_void) {
     if let Some(notify) = child.cb {
         // SAFETY: the owner's callback, given the child it was registered for.
         unsafe { notify(child.as_ptr(), child.status, child.data) };
-    } else {
-        // SAFETY: a live child nobody else will free.
-        unsafe { proc_free(child.as_ptr()) };
     }
 }
 

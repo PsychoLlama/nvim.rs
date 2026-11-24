@@ -27,15 +27,14 @@
 mod termios;
 mod wait_status;
 
-use crate::eval::typval::{DictRef, dict_to_env};
 use crate::event::libuv::{uv_chdir, uv_disable_stdio_inheritance, uv_pipe_open};
 use crate::event::r#loop::{loop_children, start_children_watcher};
 use crate::event::objects::{Loop, Proc};
-use crate::event::proc::{PROC_TYPE_PTY, proc_get_exepath, proc_init};
+use crate::event::proc::{PROC_TYPE_PTY, proc_init};
 use crate::event::uv::{uv_pipe_t, uv_signal_t};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::message_fmt::{msg_cstr, msg_cstr_opt};
+use crate::message_fmt::msg_cstr;
 use crate::os::cshim::environ;
 use crate::os::fs::{errno_text, os_strerror, set_cloexec};
 use crate::os::libc::{speed_t, uint16_t, winsize};
@@ -297,11 +296,11 @@ pub fn pty_proc_close_master(ptyproc: &mut PtyProc) {
 ///
 /// Everything here runs between `fork` and `exec` in a process that had more
 /// than one thread, so in principle it may only call async-signal-safe
-/// functions: no allocation, no locks. Upstream does not honour that — both
-/// `dict_to_env` and the failure logging allocate — and the behaviour is
-/// preserved rather than fixed, because building the environment before the
-/// fork would change when the child's variables are read. Do not add
-/// anything further that allocates, formats or takes a lock.
+/// functions: no allocation, no locks. The command line, directory and
+/// environment are built by the parent before the fork (upstream built the
+/// environment here); the failure logging still allocates, as upstream's
+/// did. Do not add anything further that allocates, formats or takes a
+/// lock.
 ///
 /// Runs in the child half of a `forkpty`, on the (copied) process the
 /// parent set up.
@@ -325,12 +324,14 @@ fn init_child(ptyproc: &PtyProc) -> ! {
         unsafe { signal(sig, SIG_DFL) };
     }
 
-    let proc = &ptyproc.proc;
+    let command = ptyproc
+        .proc
+        .command
+        .as_deref()
+        .expect("a child is spawned with a command");
     // Not `os_chdir`: that would buffer UI events for nobody.
-    if !proc.cwd.is_null() {
+    if let Some(cwd) = command.cwd.as_deref() {
         // SAFETY: the parent's NUL-terminated copy of the directory.
-        let cwd = unsafe { CStr::from_ptr(proc.cwd) };
-        // SAFETY: as above.
         let err = unsafe { uv_chdir(cwd.as_ptr()) };
         if err != 0 {
             let (cwd, why) = (msg_cstr(cwd), msg_cstr(os_strerror(err)));
@@ -341,21 +342,17 @@ fn init_child(ptyproc: &PtyProc) -> ! {
         }
     }
 
-    // SAFETY: the parent's copy of the child, whose argv it filled in.
-    let prog = unsafe { proc_get_exepath(ptr::from_ref(proc).cast_mut()) };
-    debug_assert!(!proc.env.is_null());
-    // SAFETY: the parent's dictionary of variables, read through a second
-    // reference to the one the spawn holds (given back at the statement's
-    // end, which cannot free it); `environ` is this process's own, about to
-    // be replaced by the exec.
-    unsafe { environ = dict_to_env(&DictRef::retained(proc.env).expect("an environment").read()) };
+    let prog = command.program();
+    if let Some(env) = &command.env {
+        // SAFETY: `environ` is this process's own, about to be replaced by
+        // the exec; the vector is the parent's copy, built before the fork.
+        unsafe { environ = env.as_ptr() };
+    }
     // SAFETY: the program and the NULL-terminated argv the parent built;
     // `execvp` replaces the image or returns having done nothing.
-    unsafe { execvp(prog, proc.argv.cast::<*const c_char>()) };
+    unsafe { execvp(prog.as_ptr(), command.argv.as_ptr().cast::<*const c_char>()) };
     let (at, why) = (c"init_child", why());
-    // SAFETY: as above, the program's NUL-terminated name.
-    let prog = msg_cstr_opt((!prog.is_null()).then(|| unsafe { CStr::from_ptr(prog) }));
-    let why = msg_cstr(&why);
+    let (prog, why) = (msg_cstr(prog), msg_cstr(&why));
     logmsg!(LOGLVL_ERR, at, 327, "execvp({prog}) failed: {why}");
     // SAFETY: as above.
     unsafe { _exit(EXEC_FAILED) }

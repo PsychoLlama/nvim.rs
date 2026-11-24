@@ -1,13 +1,12 @@
 //! Children started through libuv's process API.
 //!
-//! [`LibuvProc`] is a [`Proc`] with a `uv_process_t` and the options libuv
-//! needs to spawn it bolted on. `Proc` is the first field, so `event/proc.rs`
-//! casts freely between the two; libuv is handed the address of the `Proc`
+//! [`LibuvProc`] is a [`Proc`] with a `uv_process_t` bolted on. `Proc` is
+//! the first field, so `event/proc.rs` casts freely between the two; libuv is handed the address of the `Proc`
 //! (not of the `LibuvProc`) in the handle's `data` field, and the callbacks
 //! here cast it back.
 //!
 //! Every one of those casts goes through [`Uv`], a wrapper whose construction
-//! is the unsafe step: past it, reading `uvproc.uvopts.file` is ordinary Rust,
+//! is the unsafe step: past it, reading `uvproc.proc.command` is ordinary Rust,
 //! and a write is a field writer (`set_proc_pid`), never a `&mut LibuvProc`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -21,33 +20,29 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::eval::typval::{DictRef, dict_to_env};
 use crate::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn};
 use crate::event::r#loop::{loop_poll_events, main_loop_raw};
 use crate::event::objects::Loop;
-use crate::event::objects::{Proc, Stream, stream_read_cb};
-use crate::event::proc::{
-    PROC_TYPE_UV, proc_get_exepath, proc_init, proc_spawn, proc_stop, proc_wait,
-};
+use crate::event::objects::{Command, Proc, Stream, stream_read_cb};
+use crate::event::proc::{PROC_TYPE_UV, proc_init, proc_spawn, proc_stop, proc_wait};
 use crate::event::rstream::{Arrived, rstream_init, rstream_start};
 use crate::event::stream::stream_may_close;
 use crate::event::uv::{
     uv_file, uv_handle_t, uv_loop_t, uv_pipe_t, uv_process_options_t, uv_process_t,
-    uv_stdio_container_t, uv_stdio_flags,
+    uv_stdio_container_s_data, uv_stdio_container_t, uv_stdio_flags,
 };
 use crate::event::wstream::{SharedBuffer, wstream_init, wstream_set_write_cb, wstream_write};
 use crate::event_queue::{self, ChildQueue};
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::memory::ThinCString;
-use crate::memory::xfree;
-use crate::message_fmt::{msg_cstr, msg_cstr_opt};
+use crate::memory::cstr_vec::CStrVec;
+use crate::message_fmt::msg_cstr;
 use crate::narrow::number_as_int;
 use crate::os::fs::os_strerror;
 use crate::os::libc::STDERR_FILENO;
 use crate::shell::Argv;
 use crate::startup::UI_CLIENT_FORWARD_STDIN;
 use ::libc::close;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ops::Deref;
 use core::ptr;
 
@@ -92,19 +87,6 @@ impl Uv {
         unsafe { &raw mut (*self.0).uv }
     }
 
-    /// The spawn options, which libuv reads while `uv_spawn` runs.
-    fn opts(self) -> *mut uv_process_options_t {
-        // SAFETY: a field of the live child.
-        unsafe { &raw mut (*self.0).uvopts }
-    }
-
-    /// The four stdio slots, as the pointer `uv_process_options_t` wants.
-    fn stdio(self) -> *mut uv_stdio_container_t {
-        // SAFETY: a field of the live child; an array decays to its first
-        // element, which is what upstream's cast meant.
-        unsafe { (&raw mut (*self.0).uvstdio).cast() }
-    }
-
     /// The libuv loop the child will run on.
     fn uv_loop(self) -> *mut uv_loop_t {
         let uv_loop: *mut Loop = self.proc.loop_0;
@@ -137,8 +119,6 @@ impl Deref for Uv {
 
 crate::event::stream::field_writers!(Uv {
     fn set_uv_data => uv.data: *mut c_void;
-    fn set_uvopts => uvopts: uv_process_options_t;
-    fn set_uvstdio => uvstdio: [uv_stdio_container_t; 4];
     fn set_proc_pid => proc.pid: c_int;
     fn set_proc_status => proc.status: c_int;
 });
@@ -194,47 +174,36 @@ fn open_stdio_pipe(
 
 /// Start the child. Returns zero, or a negative error code.
 ///
+/// libuv reads the options, and the command line, directory and
+/// environment they point into, only while `uv_spawn` runs (the fork's
+/// child has its own copy), so they are this frame's.
+///
 /// # Safety
-/// `uvproc` is a live, unspawned `LibuvProc` on a live loop, with its `argv`
-/// and `env` filled in.
+/// `uvproc` is a live, unspawned `LibuvProc` on a live loop, with its
+/// command filled in.
 pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
     // SAFETY: the caller's promise.
     let uvproc = unsafe { Uv::new(uvproc) };
-    // SAFETY: the child, whose argv the caller filled in.
-    let exepath = unsafe { proc_get_exepath(uvproc.as_proc()) };
+    let command = uvproc
+        .proc
+        .command
+        .as_deref()
+        .expect("a child is spawned with a command");
 
-    // Both are filled in here and stored whole: libuv reads them, by
-    // address, while `uv_spawn` runs.
-    let mut opts = uvproc.uvopts;
-    let mut stdio = uvproc.uvstdio;
-    opts.file = exepath;
-    opts.args = uvproc.proc.argv;
-    opts.flags = UV_PROCESS_WINDOWS_HIDE | UV_PROCESS_DETACHED;
-    opts.exit_cb = Some(exit_cb);
-    opts.cwd = uvproc.proc.cwd;
-    opts.stdio = uvproc.stdio();
-    opts.stdio_count = 3;
-    for slot in &mut stdio[..3] {
-        slot.flags = UV_IGNORE;
-    }
-
+    let unused = uv_stdio_container_t {
+        flags: UV_IGNORE,
+        data: uv_stdio_container_s_data { fd: 0 },
+    };
+    let mut stdio = [unused; 4];
+    let mut stdio_count = 3;
     if UI_CLIENT_FORWARD_STDIN.get() {
         // A UI client reads the editor's own stdin, on the descriptor the
         // remote side knows as UI_CLIENT_STDIN_FD.
-        opts.stdio_count = 4;
+        stdio_count = 4;
         stdio[3].data.fd = 0;
         stdio[3].flags = UV_INHERIT_FD;
     }
     uvproc.set_uv_data(uvproc.as_proc().cast());
-
-    opts.env = if uvproc.proc.env.is_null() {
-        ptr::null_mut()
-    } else {
-        // SAFETY: the reference the job's spawn holds (`into_raw`), taken
-        // again for the read.
-        let env = unsafe { DictRef::retained(uvproc.proc.env) };
-        dict_to_env(&env.expect("checked non-null").read())
-    };
 
     // The parent's copies of the descriptors the child inherits. They are
     // dropped after the spawn, whether or not it succeeded.
@@ -252,33 +221,37 @@ pub unsafe fn libuv_proc_spawn(uvproc: *mut LibuvProc) -> c_int {
         stdio[2].flags = UV_INHERIT_FD;
         stdio[2].data.fd = STDERR_FILENO;
     }
-    uvproc.set_uvopts(opts);
-    uvproc.set_uvstdio(stdio);
 
-    let (uv_loop, handle) = (uvproc.uv_loop(), uvproc.handle());
-    let opts = uvproc.opts();
-    // SAFETY: the child's loop, its own process handle, and the options
-    // filled in above, which libuv keeps pointers into until it closes.
-    let status = unsafe { uv_spawn(uv_loop, handle, opts) };
-    if status != 0 {
-        let file = uvproc.uvopts.file;
-        // SAFETY: the spawn options' own file name, when there is one.
-        let file = msg_cstr_opt((!file.is_null()).then(|| unsafe { CStr::from_ptr(file) }));
-        let why = msg_cstr(os_strerror(status));
+    let program = command.program();
+    let opts = uv_process_options_t {
+        exit_cb: Some(exit_cb),
+        file: program.as_ptr(),
+        args: command.argv.as_ptr(),
+        env: command
+            .env
+            .as_ref()
+            .map_or(ptr::null_mut(), CStrVec::as_ptr),
+        cwd: command.cwd.as_deref().map_or(ptr::null(), CStr::as_ptr),
+        flags: UV_PROCESS_WINDOWS_HIDE | UV_PROCESS_DETACHED,
+        stdio_count,
+        stdio: stdio.as_mut_ptr(),
+        uid: 0,
+        gid: 0,
+    };
+    // SAFETY: the child's loop, its own process handle, and options that
+    // point into this frame and the child's command, both live until the
+    // call returns.
+    let status = unsafe { uv_spawn(uvproc.uv_loop(), uvproc.handle(), &raw const opts) };
+    if status == 0 {
+        uvproc.set_proc_pid(uvproc.uv.pid);
+    } else {
+        let (file, why) = (msg_cstr(program), msg_cstr(os_strerror(status)));
         logmsg!(
             LOGLVL_INF,
             c"libuv_proc_spawn",
             141,
             "uv_spawn({file}) failed: {why}"
         );
-        // Nothing will reach `close_cb` to free it.
-        if !uvproc.uvopts.env.is_null() {
-            let env = uvproc.uvopts.env;
-            // SAFETY: the environment `dict_to_env` built above.
-            unsafe { free_child_env(env) };
-        }
-    } else {
-        uvproc.set_proc_pid(uvproc.uv.pid);
     }
 
     for fd in to_close {
@@ -303,8 +276,7 @@ pub unsafe fn libuv_proc_close(uvproc: *mut LibuvProc) {
     unsafe { uv_close(handle, Some(close_cb)) };
 }
 
-/// The process handle finished closing: report it, then release the
-/// environment libuv held a pointer into.
+/// The process handle finished closing: report it.
 ///
 /// # Safety
 /// libuv's: `handle` is the process handle of a live child, whose `data` is
@@ -316,11 +288,6 @@ unsafe extern "C" fn close_cb(handle: *mut uv_handle_t) {
     if let Some(notify) = uvproc.proc.internal_close_cb {
         // SAFETY: the child's own close callback.
         unsafe { notify(uvproc.as_proc()) };
-    }
-    if !uvproc.uvopts.env.is_null() {
-        let env = uvproc.uvopts.env;
-        // SAFETY: the environment `libuv_proc_spawn` built for the child.
-        unsafe { free_child_env(env) };
     }
 }
 
@@ -348,60 +315,6 @@ fn exit_status(status: i64, term_signal: c_int) -> c_int {
         128 + term_signal
     } else {
         number_as_int(status)
-    }
-}
-
-/// Free the environment [`dict_to_env`](crate::eval::typval::dict_to_env)
-/// built for a child: every string, and the array.
-///
-/// # Safety
-/// `env` must be a NULL-terminated vector of owned strings, all allocated as
-/// `dict_to_env` allocates them, that nothing else frees or still reads.
-unsafe fn free_child_env(env: *mut *mut c_char) {
-    // SAFETY: the caller's contract.
-    unsafe {
-        let mut it = env;
-        while !(*it).is_null() {
-            xfree((*it).cast());
-            it = it.add(1);
-        }
-        xfree(env.cast());
-    }
-}
-
-// ---------------------------------------------------------------------------
-// A child's command line
-// ---------------------------------------------------------------------------
-
-/// Lay `argv` out as the NULL-terminated vector of NUL-terminated words a
-/// child is spawned with; the child owns it until [`free_raw_argv`].
-pub(crate) fn argv_into_raw(argv: Argv) -> *mut *mut c_char {
-    let slots: Box<[*mut c_char]> = argv
-        .into_words()
-        .into_iter()
-        .map(ThinCString::into_raw)
-        .chain([ptr::null_mut()])
-        .collect();
-    Box::into_raw(slots).cast::<*mut c_char>()
-}
-
-/// Release a vector [`argv_into_raw`] laid out.
-///
-/// # Safety
-/// `argv` is null or an answer of [`argv_into_raw`], released once.
-pub(crate) unsafe fn free_raw_argv(argv: *mut *mut c_char) {
-    if argv.is_null() {
-        return;
-    }
-    // SAFETY: the caller's contract -- a boxed slice of words ending in the
-    // null, each word a `ThinCString` taken over once.
-    unsafe {
-        let mut len = 0;
-        while !(*argv.add(len)).is_null() {
-            drop(ThinCString::from_raw(*argv.add(len)));
-            len += 1;
-        }
-        drop(Box::from_raw(ptr::slice_from_raw_parts_mut(argv, len + 1)));
     }
 }
 
@@ -452,10 +365,10 @@ pub(crate) fn run_to_exit(
     let events = ChildQueue::of_main_loop();
     let mut uvproc = libuv_proc_init(main_loop_raw(), ptr::null_mut());
     uvproc.proc.events = Some(events.id());
-    uvproc.proc.argv = argv_into_raw(argv);
+    uvproc.proc.command = Some(Box::new(Command::new(argv)));
     let proc = &raw mut uvproc.proc;
 
-    // SAFETY: the child on this frame, unspawned, with its argv set.
+    // SAFETY: the child on this frame, unspawned, with its command set.
     let status = unsafe { proc_spawn(proc, has_input, true, true) };
     if status != 0 {
         // SAFETY: the editor's loop, live for the process; this lets the
@@ -535,8 +448,6 @@ unsafe fn input_written_shim(stream: *mut Stream, data: *mut c_void, status: c_i
 pub struct LibuvProc {
     pub proc: Proc,
     pub uv: uv_process_t,
-    pub uvopts: uv_process_options_t,
-    pub uvstdio: [uv_stdio_container_t; 4],
 }
 
 #[cfg(test)]

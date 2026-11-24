@@ -505,7 +505,7 @@ pub unsafe fn xmemdup(data: *const c_void, len: usize) -> *mut c_void {
 pub mod alloc_log;
 pub mod blocks;
 pub(crate) mod claimed;
-pub(crate) mod handoff;
+pub(crate) mod cstr_vec;
 pub mod thin_cstring;
 pub mod xstring;
 /// The block pool, re-exported: it is the same allocation family.
