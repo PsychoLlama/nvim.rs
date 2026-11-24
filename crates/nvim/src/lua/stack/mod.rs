@@ -544,18 +544,6 @@ impl Stack {
         Some(unsafe { CStr::from_ptr(bytes) })
     }
 
-    /// [`Stack::to_bytes`] as the C string `lua_tostring` answers: cut at its
-    /// first NUL, a number converted in place. `None` for any other kind.
-    pub fn to_c_string(&mut self, at: At) -> Option<&CStr> {
-        let bytes = unsafe { lua_tolstring(self.l(), at.0, ptr::null_mut()) };
-        if bytes.is_null() {
-            return None;
-        }
-        // SAFETY: every Lua string is NUL-terminated, and alive while its
-        // slot is, which the borrow of `self` keeps.
-        Some(unsafe { CStr::from_ptr(bytes) })
-    }
-
     /// [`Stack::string`] with the terminating NUL every Lua string carries
     /// after its bytes, for a reader that walks it as C strings.
     pub fn string_with_nul(&self, at: At) -> Option<&[u8]> {

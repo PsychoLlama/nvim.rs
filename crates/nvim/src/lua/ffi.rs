@@ -159,7 +159,6 @@ unsafe extern "C-unwind" {
     ) -> *const ::core::ffi::c_char;
     pub fn lua_tonumber(L: *mut lua_State, idx: ::core::ffi::c_int) -> lua_Number;
     pub fn lua_topointer(L: *mut lua_State, idx: ::core::ffi::c_int) -> *const ::core::ffi::c_void;
-    pub fn lua_touserdata(L: *mut lua_State, idx: ::core::ffi::c_int) -> *mut ::core::ffi::c_void;
     pub fn lua_type(L: *mut lua_State, idx: ::core::ffi::c_int) -> ::core::ffi::c_int;
     pub fn lua_typename(L: *mut lua_State, tp: ::core::ffi::c_int) -> *const ::core::ffi::c_char;
     pub fn luaopen_luv(L: *mut lua_State) -> ::core::ffi::c_int;

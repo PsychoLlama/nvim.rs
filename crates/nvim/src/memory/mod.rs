@@ -39,14 +39,13 @@ use crate::mbyte::Codepoint;
 use crate::memory::alloc_log::AllocEvent;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_ulong, c_void};
-use core::{ptr, slice};
+use core::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::memfile::mf_release_all;
 use crate::message::E_OUTOFMEM;
 use crate::message::clear_sb_text;
 use crate::message::state::EMSG_SILENT;
-use crate::os::cshim::gettext;
 use crate::os::libc::size_t;
 use crate::startup::{fallibly, preserve_exit};
 use ::libc::{calloc, free, malloc, realloc};
@@ -398,27 +397,6 @@ pub unsafe extern "C" fn xrealloc(ptr: *mut c_void, size: usize) -> *mut c_void 
     ret
 }
 
-/// [`xmalloc`] of `size + 1` bytes with the extra one set to NUL: room for
-/// `size` bytes of payload plus a terminator.
-///
-/// # Safety
-///
-/// As [`try_malloc`].
-pub unsafe fn xmallocz(size: usize) -> *mut c_void {
-    let total_size = size.wrapping_add(1);
-    // SAFETY: a NUL-terminated string from `gettext`, then `size + 1` bytes
-    // of fresh allocation whose last byte is the one being written.
-    unsafe {
-        if total_size < size {
-            let too_big = c"Nvim: Data too large to fit into virtual memory space\n";
-            preserve_exit(Some(gettext(too_big)));
-        }
-        let ret = xmalloc(total_size);
-        *ret.cast::<u8>().add(size) = 0;
-        ret
-    }
-}
-
 /// A C string's bytes, terminator excluded.
 ///
 /// # Safety
@@ -453,148 +431,16 @@ unsafe fn copy_bytes(dst: *mut c_void, src: *const c_void, len: usize) {
 ///
 /// `data` is readable for `len` bytes; otherwise as [`try_malloc`].
 pub unsafe fn xmemdupz(data: *const c_void, len: usize) -> *mut c_void {
-    // SAFETY: `xmallocz` answers `len + 1` fresh bytes, which cannot
-    // overlap the caller's `len` readable ones.
+    // `len` readable bytes put it at most `isize::MAX`, so the terminator's
+    // byte cannot overflow the size.
+    // SAFETY: `xmalloc` answers `len + 1` fresh bytes, which cannot overlap
+    // the caller's `len` readable ones; the last is the terminator.
     unsafe {
-        let ret = xmallocz(len);
+        let ret = xmalloc(len + 1);
         copy_bytes(ret, data, len);
+        *ret.cast::<u8>().add(len) = 0;
         ret
     }
-}
-
-/// `memcpy` that terminates the copy: `len` bytes plus a NUL.
-///
-/// # Safety
-///
-/// `src` is readable for `len` bytes, `dst` writable for `len + 1`, and they
-/// do not overlap.
-pub unsafe fn xmemcpyz(dst: *mut c_void, src: *const c_void, len: usize) -> *mut c_void {
-    // SAFETY: the caller's promise, terminator byte included.
-    unsafe {
-        copy_bytes(dst, src, len);
-        *dst.cast::<u8>().add(len) = 0;
-    }
-    dst
-}
-
-/// Position of `c` in `haystack`, or `haystack.len()` when absent.
-fn find_or_end(haystack: &[u8], c: u8) -> usize {
-    haystack
-        .iter()
-        .position(|&b| b == c)
-        .unwrap_or(haystack.len())
-}
-
-/// Substitute every `from` byte with `to`.
-fn replace_bytes(s: &mut [u8], from: u8, to: u8) {
-    for b in s {
-        if *b == from {
-            *b = to;
-        }
-    }
-}
-
-/// Number of `c` bytes in `s`.
-fn count_byte(s: &[u8], c: u8) -> usize {
-    s.iter().filter(|&&b| b == c).count()
-}
-
-/// Like `strchr`, but absent characters yield the terminator instead of
-/// NULL.
-///
-/// # Safety
-///
-/// `str` is NUL-terminated.
-pub unsafe fn xstrchrnul(str: *const c_char, c: c_char) -> *mut c_char {
-    // SAFETY: the caller's NUL-terminated string; the answer is at most the
-    // terminator's own address.
-    let off = find_or_end(unsafe { cbytes(str) }, c.cast_unsigned());
-    unsafe { str.add(off) }.cast_mut()
-}
-
-/// Like `memchr`, but absent characters yield `addr + size` instead of
-/// NULL.
-///
-/// # Safety
-///
-/// `addr` is readable for `size` bytes.
-pub unsafe fn xmemscan(addr: *const c_void, c: c_char, size: usize) -> *mut c_void {
-    // SAFETY: the caller's `size` readable bytes; the answer is at most one
-    // past the end, which is a legal address to form.
-    let hay = unsafe { slice::from_raw_parts(addr.cast::<u8>(), size) };
-    unsafe { addr.cast::<u8>().add(find_or_end(hay, c.cast_unsigned())) }
-        .cast_mut()
-        .cast::<c_void>()
-}
-
-/// Replace every `c` byte of a C string with `x`.
-///
-/// # Safety
-///
-/// `str` is a NUL-terminated, writable string.
-pub unsafe fn strchrsub(str: *mut c_char, c: c_char, x: c_char) {
-    debug_assert!(c != 0, "c != NUL");
-    // SAFETY: the caller's writable string, up to but not past its NUL.
-    let len = unsafe { cbytes(str) }.len();
-    let s = unsafe { slice::from_raw_parts_mut(str.cast::<u8>(), len) };
-    replace_bytes(s, c.cast_unsigned(), x.cast_unsigned());
-}
-
-/// Replace every `c` byte of a `len`-byte buffer with `x`.
-///
-/// # Safety
-///
-/// `data` is writable for `len` bytes.
-pub unsafe fn memchrsub(data: *mut c_void, c: c_char, x: c_char, len: usize) {
-    if len != 0 {
-        // SAFETY: the caller's `len` writable bytes.
-        let s = unsafe { slice::from_raw_parts_mut(data.cast::<u8>(), len) };
-        replace_bytes(s, c.cast_unsigned(), x.cast_unsigned());
-    }
-}
-
-/// How many `c` bytes the first `len` bytes of `data` hold.
-///
-/// # Safety
-///
-/// `data` is readable for `len` bytes.
-pub unsafe fn memcnt(data: *const c_void, c: c_char, len: usize) -> usize {
-    if len == 0 {
-        return 0;
-    }
-    // SAFETY: the caller's `len` readable bytes.
-    let hay = unsafe { slice::from_raw_parts(data.cast::<u8>(), len) };
-    count_byte(hay, c.cast_unsigned())
-}
-
-/// `strnlen`: bytes before the terminator, reading at most `maxlen` bytes.
-///
-/// # Safety
-///
-/// `s` is readable up to its terminator or `maxlen` bytes, whichever comes
-/// first.
-unsafe fn strnlen(s: *const c_char, maxlen: usize) -> usize {
-    let mut n = 0;
-    // SAFETY: the caller's promise; the read stops at the first NUL, so it
-    // never runs past a shorter string than `maxlen`.
-    while n < maxlen && unsafe { *s.add(n) } != 0 {
-        n += 1;
-    }
-    n
-}
-
-/// `strcpy` returning a pointer to the written terminator rather than
-/// `dst`.
-///
-/// # Safety
-///
-/// `src` is NUL-terminated and `dst` is writable for its whole length plus
-/// the terminator; the two do not overlap.
-pub unsafe fn xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char {
-    // SAFETY: the caller's promise, terminator included.
-    let len = unsafe { cbytes(src) }.len() + 1;
-    unsafe { copy_bytes(dst.cast::<c_void>(), src.cast::<c_void>(), len) };
-    unsafe { dst.add(len - 1) }
 }
 
 /// BSD `strlcpy`: bounded copy that always terminates (when `dsize > 0`)
@@ -660,39 +506,6 @@ pub unsafe fn xstrdup(str: *const c_char) -> *mut c_char {
     unsafe { xmemdupz(str.cast::<c_void>(), len) }.cast::<c_char>()
 }
 
-/// `memrchr`: last occurrence of `c` in the first `len` bytes, or NULL.
-///
-/// # Safety
-///
-/// `src` is readable for `len` bytes.
-pub unsafe fn xmemrchr(src: *const c_void, c: u8, len: usize) -> *mut c_void {
-    if len == 0 {
-        return ptr::null_mut();
-    }
-    // SAFETY: the caller's `len` readable bytes; the answer is an index
-    // into them.
-    let hay = unsafe { slice::from_raw_parts(src.cast::<u8>(), len) };
-    match hay.iter().rposition(|&b| b == c) {
-        Some(i) => unsafe { src.cast::<u8>().add(i) }
-            .cast_mut()
-            .cast::<c_void>(),
-        None => ptr::null_mut(),
-    }
-}
-
-/// `strndup`: duplicate at most `len` bytes (stopping at a terminator),
-/// always NUL-terminating the copy.
-///
-/// # Safety
-///
-/// `str` is readable up to its terminator or `len` bytes, whichever comes
-/// first; otherwise as [`try_malloc`].
-pub unsafe fn xstrndup(str: *const c_char, len: usize) -> *mut c_char {
-    // SAFETY: the caller's promise; `strnlen` never reports more than it
-    // was allowed to read.
-    unsafe { xmemdupz(str.cast::<c_void>(), strnlen(str, len)) }.cast::<c_char>()
-}
-
 /// Duplicate `len` bytes into a fresh allocation, without a terminator.
 ///
 /// # Safety
@@ -706,38 +519,6 @@ pub unsafe fn xmemdup(data: *const c_void, len: usize) -> *mut c_void {
         copy_bytes(ret, data, len);
         ret
     }
-}
-
-/// `strncmp(a, b, n) == 0`, phrased over whole C strings: the length-`n`
-/// prefixes match, where a terminator before `n` ends both sides.
-fn eq_upto(a: &[u8], b: &[u8], n: usize) -> bool {
-    a[..a.len().min(n)] == b[..b.len().min(n)]
-}
-
-/// `strcmp` equality where NULL only equals NULL.
-///
-/// # Safety
-///
-/// `a` and `b` are null or NUL-terminated.
-pub unsafe fn strequal(a: *const c_char, b: *const c_char) -> bool {
-    if a.is_null() || b.is_null() {
-        return a.is_null() && b.is_null();
-    }
-    // SAFETY: neither is null, so both are the caller's C strings.
-    unsafe { cbytes(a) == cbytes(b) }
-}
-
-/// `strncmp` equality where NULL only equals NULL.
-///
-/// # Safety
-///
-/// `a` and `b` are null or NUL-terminated.
-pub unsafe fn strnequal(a: *const c_char, b: *const c_char, n: usize) -> bool {
-    if a.is_null() || b.is_null() {
-        return a.is_null() && b.is_null();
-    }
-    // SAFETY: neither is null, so both are the caller's C strings.
-    unsafe { eq_upto(cbytes(a), cbytes(b), n) }
 }
 
 pub mod alloc_log;
@@ -770,25 +551,5 @@ mod tests {
         assert_eq!(lcat_copy(3, 5, 6), (2, Some(5)));
         // No room at all: zero bytes, still re-terminates.
         assert_eq!(lcat_copy(3, 5, 4), (0, Some(3)));
-    }
-
-    #[test]
-    fn eq_upto_matches_strncmp_semantics() {
-        assert!(eq_upto(b"abc", b"abc", 10)); // shared terminator before n
-        assert!(eq_upto(b"abcX", b"abcY", 3)); // differences past n invisible
-        assert!(!eq_upto(b"abc", b"abcd", 4)); // terminator vs 'd'
-        assert!(eq_upto(b"", b"", 5));
-        assert!(eq_upto(b"xyz", b"abc", 0)); // n = 0 compares nothing
-    }
-
-    #[test]
-    fn find_replace_count_over_slices() {
-        assert_eq!(find_or_end(b"hello", b'l'), 2);
-        assert_eq!(find_or_end(b"hello", b'z'), 5);
-        let mut buf = *b"a.b.c";
-        replace_bytes(&mut buf, b'.', b'-');
-        assert_eq!(&buf, b"a-b-c");
-        assert_eq!(count_byte(b"a-b-c", b'-'), 2);
-        assert_eq!(count_byte(b"", b'-'), 0);
     }
 }

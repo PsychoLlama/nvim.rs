@@ -18,7 +18,7 @@ the compiler enforces; the remaining seven are module roots that cannot carry
 the attribute because a file beneath them is on the perimeter. The unsafe code
 falls into four classes:
 
-- **A foreign ABI — 34 files, 1,039 statements.** Calls into C libraries the
+- **A foreign ABI — 34 files, 1,028 statements.** Calls into C libraries the
   editor links: LuaJIT and its libraries, libuv (the event loop, processes,
   sockets, the terminal's I/O), tree-sitter and libxdiff. The unsafe is the
   call itself, and the reads of what the library answers.
@@ -26,7 +26,7 @@ falls into four classes:
   standard library does not offer, or offers with different error text:
   libuv's file-system calls, the environment, locales, the user database,
   clocks, the PTY, signals, `dlopen` and `iconv`.
-- **Raw memory — 13 files, 244 statements.** The few primitives every safe
+- **Raw memory — 13 files, 221 statements.** The few primitives every safe
   type above them is built on: the allocator, the `xmalloc` family and the
   owned C strings, the checked cell that replaces C's global variables, the
   type-stable slots handles check their target's liveness against, and
@@ -77,15 +77,15 @@ unsafe_placement` lists any misplaced attribute (none);
 
 | row                                         | class    | files | statements | `unsafe fn`s | what it holds                                    |
 | ------------------------------------------- | -------- | ----: | ---------: | -----------: | ------------------------------------------------ |
-| `lua/ffi.rs`, `lua/executor/{luv,state}.rs` | foreign  |     3 |        105 |            8 | LuaJIT's declarations, luv's hooks, state making |
-| `lua/stack/`                                | foreign  |     5 |        113 |            7 | the typed Lua stack                              |
+| `lua/ffi.rs`, `lua/executor/{luv,state}.rs` | foreign  |     3 |        104 |            8 | LuaJIT's declarations, luv's hooks, state making |
+| `lua/stack/`                                | foreign  |     5 |        111 |            7 | the typed Lua stack                              |
 | `lua/treesitter/`                           | foreign  |    10 |        204 |            9 | the tree-sitter library                          |
-| `event/`                                    | foreign  |    11 |        551 |           90 | libuv: loop, streams, timers, signals, children  |
+| `event/`                                    | foreign  |    11 |        543 |           90 | libuv: loop, streams, timers, signals, children  |
 | `tui/{tui,input,output,events}.rs`          | foreign  |     4 |         69 |            6 | the terminal's libuv handles                     |
 | `xdiff/`                                    | foreign  |     1 |          1 |            0 | `isspace(3)`'s table                             |
 | `os/`                                       | OS       |    14 |        237 |           15 | system calls                                     |
 | `allocator.rs`                              | memory   |     1 |         16 |            4 | the global allocator                             |
-| `memory/`                                   | memory   |     4 |         99 |           36 | `xmalloc`, the block pool, owned C strings       |
+| `memory/`                                   | memory   |     4 |         76 |           22 | `xmalloc`, the block pool, owned C strings       |
 | `global_cell.rs`                            | memory   |     1 |         13 |            0 | the cell under every global                      |
 | `slot.rs`, `slot/`                          | memory   |     2 |         41 |            7 | type-stable slots and their checked handles      |
 | `winlayer.rs`, `winlayer/`                  | memory   |     6 |         49 |            9 | window, buffer, grid and terminal handles        |
@@ -155,7 +155,7 @@ Paths are relative to `crates/nvim/src/`. Counts drift as work lands;
 
 - **What:** libuv's loop, streams, timers, signal watchers and child
   processes are C objects libuv holds _by address_ (`socket/mod.rs` 102,
-  `libuv.rs` 100 — mostly the declarations — `proc.rs` 70, `loop.rs` 58,
+  `libuv.rs` 93 — mostly the declarations — `proc.rs` 70, `loop.rs` 58,
   `channel.rs` 51, `libuv_proc.rs` 48, `rstream.rs` 41, `stream.rs` 34,
   `signal.rs` 17, `time.rs` 16, `wstream.rs` 14). Each region is a libuv
   call, a handle rebuilt from the address libuv hands back to a callback, or

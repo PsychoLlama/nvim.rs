@@ -97,26 +97,6 @@ unsafe extern "C" {
         flags: ::core::ffi::c_int,
         cb: uv_fs_cb,
     ) -> ::core::ffi::c_int;
-    pub fn uv_fs_fchown(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        file: uv_file,
-        uid: uv_uid_t,
-        gid: uv_gid_t,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    pub fn uv_fs_fstat(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        file: uv_file,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
-    pub fn uv_fs_fsync(
-        loop_0: *mut uv_loop_t,
-        req: *mut uv_fs_t,
-        file: uv_file,
-        cb: uv_fs_cb,
-    ) -> ::core::ffi::c_int;
     pub fn uv_fs_lstat(
         loop_0: *mut uv_loop_t,
         req: *mut uv_fs_t,
@@ -234,17 +214,8 @@ unsafe extern "C" {
     ) -> ::core::ffi::c_int;
     pub fn uv_loop_close(loop_0: *mut uv_loop_t) -> ::core::ffi::c_int;
     pub fn uv_loop_init(loop_0: *mut uv_loop_t) -> ::core::ffi::c_int;
-    pub fn uv_mutex_destroy(handle: *mut uv_mutex_t);
-    pub fn uv_mutex_init(handle: *mut uv_mutex_t) -> ::core::ffi::c_int;
     pub fn uv_mutex_init_recursive(handle: *mut uv_mutex_t) -> ::core::ffi::c_int;
-    pub fn uv_mutex_lock(handle: *mut uv_mutex_t);
-    pub fn uv_mutex_unlock(handle: *mut uv_mutex_t);
     pub fn uv_now(_: *const uv_loop_t) -> uint64_t;
-    pub fn uv_os_getenv(
-        name: *const ::core::ffi::c_char,
-        buffer: *mut ::core::ffi::c_char,
-        size: *mut size_t,
-    ) -> ::core::ffi::c_int;
     pub fn uv_os_homedir(buffer: *mut ::core::ffi::c_char, size: *mut size_t)
     -> ::core::ffi::c_int;
     pub fn uv_os_setenv(
