@@ -200,6 +200,9 @@ fn parse_redraw<'a>(
         g.icell = 0;
         g.coloff = 0;
         g.cur_attr = -1;
+        // Set by a trailing clear run only, so an event with no cells must
+        // not inherit the previous event's.
+        g.clear_width = 0;
         *input = cursor.data;
         *state = protocol::GRID_LINE_CELLS;
         stage = protocol::GRID_LINE_CELLS;
@@ -423,5 +426,26 @@ mod tests {
         // A string token carries no integer at all.
         let mut c = cursor(&[0xa0u8]);
         assert_eq!(unpack_integer_token(c.next(Kind::Str).unwrap()), None);
+    }
+
+    /// A `grid_line` with no cells clears nothing, whatever the event before
+    /// it cleared (it used to inherit that event's `clear_width`, painted in
+    /// the attribute -1 no cell had set).
+    #[test]
+    fn a_line_with_no_cells_clears_nothing() {
+        let mut unpacker = Unpacker::new();
+        // [1, 0, 0, [[" ", 0, 5]], false]: a trailing clear run of five.
+        let mut input: &[u8] = &[
+            0x95, 0x01, 0x00, 0x00, 0x91, 0x93, 0xa1, b' ', 0x00, 0x05, 0xc2,
+        ];
+        unpacker.state = protocol::GRID_LINE_EVENT;
+        assert!(unpacker_parse_redraw(&mut unpacker, &mut input));
+        assert_eq!(unpacker.grid_line_event.clear_width, 5);
+        // [1, 0, 0, [], false]
+        let mut input: &[u8] = &[0x95, 0x01, 0x00, 0x00, 0x90, 0xc2];
+        unpacker.state = protocol::GRID_LINE_EVENT;
+        assert!(unpacker_parse_redraw(&mut unpacker, &mut input));
+        assert_eq!(unpacker.grid_line_event.clear_width, 0);
+        assert_eq!(unpacker.grid_line_event.cur_attr, -1);
     }
 }

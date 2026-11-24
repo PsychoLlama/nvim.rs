@@ -41,13 +41,11 @@ use crate::event::r#loop::{Drain, wait_on_main_loop};
 use crate::event::socket::socket_address_is_tcp;
 use crate::event_queue::put_job_on_fast_events;
 use crate::global_cell::GlobalCell;
-use crate::grid::defs::GridLineEvent;
 use crate::highlight::HlAttrs;
 use crate::highlight::{HLATTRS_INIT, MAX_TYPENR, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
-use crate::msgpack_rpc::unpacker::Unpacker;
 use crate::narrow::{as_index, number_as_int};
 use crate::os::env::{ENV_TEST_LOG, env_exists, process_id};
 use crate::os::libc::{STDERR_FILENO, STDOUT_FILENO};
@@ -64,10 +62,7 @@ use crate::tui::events::{
     tui_mouse_off, tui_mouse_on, tui_option_set, tui_set_icon, tui_set_title, tui_ui_send,
     tui_update_menu, tui_visual_bell,
 };
-use crate::tui::paint::{
-    tui_flush, tui_grid_clear, tui_grid_cursor_goto, tui_grid_resize, tui_grid_scroll,
-    tui_raw_line, tui_screenshot,
-};
+use crate::tui::paint::{tui_flush, tui_screenshot};
 use crate::tui::state::TUIData;
 use crate::tui::tui::Tui;
 use crate::tui::tui::tui_suspend;
@@ -76,7 +71,6 @@ use crate::types::{
     ApiDict, ApiString, Array, Error, Integer, OBJECT_TYPE_ARRAY, OBJECT_TYPE_BOOLEAN,
     OBJECT_TYPE_DICT, OBJECT_TYPE_INTEGER, OBJECT_TYPE_STRING, Object, ObjectType,
 };
-use crate::ui::state::LINE_FLAG_WRAP;
 use crate::ui::state::T_COLORS;
 use crate::ui::state::UIClientHandler;
 use core::ffi::{CStr, c_int};
@@ -523,6 +517,14 @@ macro_rules! forward {
     )*};
 }
 
+// After the macros, which it uses: `macro_rules!` scope is textual.
+mod grid;
+use grid::{
+    ui_client_event_grid_clear, ui_client_event_grid_cursor_goto, ui_client_event_grid_resize,
+    ui_client_event_grid_scroll,
+};
+pub(crate) use grid::{ui_client_event_grid_line, ui_client_event_raw_line};
+
 forward! {
     fn ui_client_event_update_menu() => tui_update_menu, c"update_menu";
     fn ui_client_event_busy_start() => tui_busy_start, c"busy_start";
@@ -553,73 +555,6 @@ forward! {
         cterm_fg: Integer,
         cterm_bg: Integer,
     ) => tui_default_colors_set, c"default_colors_set";
-    fn ui_client_event_grid_clear(grid: Integer) => tui_grid_clear, c"grid_clear";
-    fn ui_client_event_grid_cursor_goto(grid: Integer, row: Integer, col: Integer)
-        => tui_grid_cursor_goto, c"grid_cursor_goto";
-    fn ui_client_event_grid_scroll(
-        grid: Integer,
-        top: Integer,
-        bot: Integer,
-        left: Integer,
-        right: Integer,
-        rows: Integer,
-        cols: Integer,
-    ) => tui_grid_scroll, c"grid_scroll";
-}
-
-/// Resizes a grid, and the buffers a `grid_line` is decoded into.
-pub(crate) fn ui_client_event_grid_resize(mut args: Array) {
-    let (Some(grid), Some(width), Some(height)) = (
-        take_arg(&mut args, 0, Some(OBJECT_TYPE_INTEGER)),
-        take_arg(&mut args, 1, Some(OBJECT_TYPE_INTEGER)),
-        take_arg(&mut args, 2, Some(OBJECT_TYPE_INTEGER)),
-    ) else {
-        return bad_event(c"grid_resize", c"ui_client_event_grid_resize");
-    };
-    let expect = "`arg` checked the tag";
-    let (grid, width, height) = (
-        grid.as_integer().expect(expect),
-        width.as_integer().expect(expect),
-        height.as_integer().expect(expect),
-    );
-    tui_state(|t| tui_grid_resize(t, grid, width, height));
-
-    // The decoder writes cells straight into these rather than
-    // building an array, so they have to hold the widest grid.
-    Unpacker::widen_grid_line_buf(usize::try_from(width).unwrap_or(0));
-}
-
-/// Never called: the decoder recognises `grid_line` by this function's
-/// address and decodes the cells itself, ending at
-/// [`ui_client_event_raw_line`].
-pub(crate) fn ui_client_event_grid_line(_args: Array) {
-    unreachable!("grid_line is decoded by the unpacker, not dispatched");
-}
-
-/// Paints the cells the decoder wrote into the shared buffers.
-pub(crate) fn ui_client_event_raw_line(g: &GridLineEvent) {
-    let [grid, row, startcol] = g.args;
-    let endcol = Integer::from(startcol + g.coloff);
-    let clearcol = endcol + Integer::from(g.clear_width);
-    let flags = if g.wrap { LINE_FLAG_WRAP } else { 0 };
-    let (grid, row, startcol) = (
-        Integer::from(grid),
-        Integer::from(row),
-        Integer::from(startcol),
-    );
-    let attr = Integer::from(g.cur_attr);
-    Unpacker::with_grid_line_cells(|chars, attrs, width| {
-        // The decoder only counts a cell it wrote, which bounds the run the
-        // TUI reads; an event that claims more is not drawn.
-        if usize::try_from(g.coloff).map_or(true, |cells| cells > width) {
-            return;
-        }
-        tui_state(|t| {
-            tui_raw_line(
-                t, grid, row, startcol, endcol, clearcol, attr, flags, chars, attrs,
-            );
-        });
-    });
 }
 
 // The events below carry an index the TUI uses as one. The server is not

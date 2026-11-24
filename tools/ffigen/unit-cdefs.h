@@ -3050,6 +3050,7 @@ static const int MFS_STOP = 2;
 static const int MFS_ZERO = 8;
 static const int MINIMAL_SIZE = 20;
 static const int MIN_COLUMNS = 12;
+static const int MIN_GRID_WIDTH = 2;
 static const int MIN_LINES = 2;
 static const int MIN_SPACE = 75;
 static const int MIN_SWAP_PAGE_SIZE = 1048;

@@ -26,9 +26,10 @@ use crate::winlayer::{self, Win};
 use crate::winlayer::{Buf, TabPage};
 
 /// The largest screen this port will allocate, so that `ROWS * COLUMNS` cannot
-/// overflow.
-const MAX_ROWS: c_int = 1000;
-const MAX_COLUMNS: c_int = 10000;
+/// overflow. Also the largest grid a `--remote-ui` client accepts from a
+/// server.
+pub(crate) const MAX_ROWS: c_int = 1000;
+pub(crate) const MAX_COLUMNS: c_int = 10000;
 
 /// Resize `DEFAULT_GRID` to `ROWS` x `COLUMNS`, and answer whether it moved.
 ///
