@@ -999,6 +999,29 @@ mod tests {
         free_view(held);
     }
 
+    /// A memo under a walk names its copy with a reference of its own, and
+    /// under any other walk nothing; a seed's references go back as one.
+    #[test]
+    fn a_copy_walk_memo_and_a_seed_count_their_references() {
+        let _serial = editor_state_lock();
+        let (orig, copy) = (tv_dict_alloc(), tv_dict_alloc());
+        let walk = CopyWalk::new();
+        orig.remember_copy(&walk, &copy);
+        assert_eq!(copy.refcount(), 2, "the walk holds the copy");
+        let found = orig.copy_under(&walk).expect("the memo");
+        assert!(found.ptr_eq(&copy));
+        assert_eq!(copy.refcount(), 3);
+        assert!(orig.copy_under(&CopyWalk::new()).is_none());
+        drop((found, walk));
+        assert_eq!(copy.refcount(), 1);
+
+        let list = tv_list_alloc(0);
+        let seed = list.seed(5);
+        assert_eq!(list.refcount(), 6);
+        drop(seed);
+        assert_eq!(list.refcount(), 1);
+    }
+
     /// The discriminant is the `VarType` code at offset zero: what
     /// `#[repr(u32)]` promises.
     #[test]
