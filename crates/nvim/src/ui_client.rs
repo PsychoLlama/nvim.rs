@@ -36,18 +36,19 @@ use crate::api::private::helpers::{api_dict_to_keydict, api_metadata};
 use crate::channel::defs::CallbackReader;
 use crate::channel::open::JobOptions;
 use crate::channel::{channel_connect, channel_job_start};
+use crate::cursor_shape::SHAPE_IDX_COUNT;
 use crate::event::r#loop::{Drain, wait_on_main_loop};
 use crate::event::socket::socket_address_is_tcp;
 use crate::event_queue::put_job_on_fast_events;
 use crate::global_cell::GlobalCell;
 use crate::grid::defs::GridLineEvent;
 use crate::highlight::HlAttrs;
-use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
+use crate::highlight::{HLATTRS_INIT, MAX_TYPENR, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::message_fmt::msg_cstr;
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::msgpack_rpc::unpacker::Unpacker;
-use crate::narrow::number_as_int;
+use crate::narrow::{as_index, number_as_int};
 use crate::os::env::{ENV_TEST_LOG, env_exists, process_id};
 use crate::os::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::os::proc::os_dup2;
@@ -419,9 +420,9 @@ fn take_arg(args: &mut [Object], index: usize, want: Option<ObjectType>) -> Opti
 
 /// Notes that an event arrived with arguments it could not have.
 ///
-/// The server and the client are the same build, so this means a corrupt
-/// stream rather than a version mismatch; there is nothing to do about it
-/// but skip the event.
+/// A server of this build never sends one, so this is a corrupt stream or
+/// a `--remote-ui` server that is not this build; there is nothing to do
+/// about it but skip the event.
 fn bad_event(event: &'static CStr, wrapper: &'static CStr) {
     let name = msg_cstr(event);
     logmsg!(
@@ -523,16 +524,11 @@ macro_rules! forward {
 }
 
 forward! {
-    /// The cursor shapes and blink timings for each mode.
-    fn ui_client_event_mode_info_set(enabled: Boolean, cursor_styles: Array)
-        => tui_mode_info_set, c"mode_info_set";
     fn ui_client_event_update_menu() => tui_update_menu, c"update_menu";
     fn ui_client_event_busy_start() => tui_busy_start, c"busy_start";
     fn ui_client_event_busy_stop() => tui_busy_stop, c"busy_stop";
     fn ui_client_event_mouse_on() => tui_mouse_on, c"mouse_on";
     fn ui_client_event_mouse_off() => tui_mouse_off, c"mouse_off";
-    fn ui_client_event_mode_change(mode: ApiString, mode_idx: Integer)
-        => tui_mode_change, c"mode_change";
     fn ui_client_event_bell() => tui_bell, c"bell";
     fn ui_client_event_visual_bell() => tui_visual_bell, c"visual_bell";
     /// Everything since the last flush may now be shown.
@@ -626,8 +622,47 @@ pub(crate) fn ui_client_event_raw_line(g: &GridLineEvent) {
     });
 }
 
+// The events below carry an index the TUI uses as one. The server is not
+// necessarily this build (`--remote-ui` connects to whatever listens), so
+// an index out of range is a bad event, skipped, not a panic in the TUI.
+
+/// The cursor shapes and blink timings for each mode: one dict per mode,
+/// and no more modes than the TUI keeps shapes for.
+pub(crate) fn ui_client_event_mode_info_set(mut args: Array) {
+    let (Some(enabled), Some(styles)) = (
+        take_arg(&mut args, 0, tag!(Boolean)),
+        take_arg(&mut args, 1, tag!(Array)),
+    ) else {
+        return bad_event(c"mode_info_set", c"ui_client_event_mode_info_set");
+    };
+    let (enabled, styles) = (payload!(Boolean, enabled), payload!(Array, styles));
+    let fits = !styles.is_empty() && styles.len() <= as_index(SHAPE_IDX_COUNT);
+    if enabled && !(fits && styles.iter().all(|style| style.as_dict().is_some())) {
+        return bad_event(c"mode_info_set", c"ui_client_event_mode_info_set");
+    }
+    tui_state(|t| tui_mode_info_set(t, enabled, styles));
+}
+
+/// The editor changed mode, which it names by its index into the shapes
+/// `mode_info_set` sent.
+pub(crate) fn ui_client_event_mode_change(mut args: Array) {
+    let (Some(mode), Some(mode_idx)) = (
+        take_arg(&mut args, 0, tag!(ApiString)),
+        take_arg(&mut args, 1, tag!(Integer)),
+    ) else {
+        return bad_event(c"mode_change", c"ui_client_event_mode_change");
+    };
+    let (mode, mode_idx) = (payload!(ApiString, mode), payload!(Integer, mode_idx));
+    if !(0..Integer::from(SHAPE_IDX_COUNT)).contains(&mode_idx) {
+        return bad_event(c"mode_change", c"ui_client_event_mode_change");
+    }
+    tui_state(|t| tui_mode_change(t, mode, mode_idx));
+}
+
 /// Announces a highlight attribute id, converting both dicts back into the
-/// attribute entry the TUI keeps.
+/// attribute entry the TUI keeps. The TUI's table is indexed by id, so an
+/// id past any the server's attribute table reaches is refused rather
+/// than grown to.
 pub(crate) fn ui_client_event_hl_attr_define(mut args: Array) {
     let (Some(id), Some(rgb), Some(cterm), Some(info)) = (
         take_arg(&mut args, 0, Some(OBJECT_TYPE_INTEGER)),
@@ -644,6 +679,9 @@ pub(crate) fn ui_client_event_hl_attr_define(mut args: Array) {
         cterm.into_dict().expect(expect),
         info.into_array().expect(expect),
     );
+    if !usize::try_from(id).is_ok_and(|id| id <= MAX_TYPENR) {
+        return bad_event(c"hl_attr_define", c"ui_client_event_hl_attr_define");
+    }
     // Both conversions intern URLs in the TUI, so they run before the
     // state is lent to the definition.
     let (rgb, cterm) = (dict_to_hlattrs(&rgb, true), dict_to_hlattrs(&cterm, false));
@@ -823,6 +861,49 @@ pub(crate) fn ui_client_attach_to_restarted_server() {
                     );
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::global_cell::editor_state_lock;
+    use core::mem::ManuallyDrop;
+
+    fn array(items: Vec<Object>) -> Object {
+        Object::Array(ManuallyDrop::new(Array::from(items)))
+    }
+
+    fn dict() -> Object {
+        Object::Dict(ManuallyDrop::new(ApiDict::new()))
+    }
+
+    fn string(text: &str) -> Object {
+        Object::String(ManuallyDrop::new(ApiString::from_bytes(text.as_bytes())))
+    }
+
+    /// An index from the server the TUI would use as one is range-checked
+    /// before it gets there. No TUI is started here, so an event that got
+    /// past its check would panic in `tui_state`.
+    #[test]
+    fn an_index_out_of_range_is_a_bad_event() {
+        let _held = editor_state_lock();
+        for idx in [-1, Integer::from(SHAPE_IDX_COUNT), Integer::MAX] {
+            ui_client_event_mode_change(Array::from(vec![string("n"), Object::Integer(idx)]));
+        }
+        let too_big = Integer::try_from(MAX_TYPENR).expect("a small table") + 1;
+        for id in [-1, too_big, Integer::MIN] {
+            ui_client_event_hl_attr_define(Array::from(vec![
+                Object::Integer(id),
+                dict(),
+                dict(),
+                array(vec![]),
+            ]));
+        }
+        let modes = as_index(SHAPE_IDX_COUNT) + 1;
+        for styles in [vec![], vec![Object::Integer(1)], vec![dict(); modes]] {
+            ui_client_event_mode_info_set(Array::from(vec![Object::Boolean(true), array(styles)]));
         }
     }
 }

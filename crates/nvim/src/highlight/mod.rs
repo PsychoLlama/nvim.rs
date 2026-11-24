@@ -150,7 +150,7 @@ pub const HLATTRS_INIT: HlAttrs = HlAttrs {
 
 /// How many entries the table may hold before it is thrown away and rebuilt:
 /// an id has to fit a `ScreenAttr`.
-const MAX_TYPENR: usize = 65535;
+pub(crate) const MAX_TYPENR: usize = 65535;
 
 /// Does any UI want to know where an attribute came from (`ext_hlstate`)?
 /// Until one does, the provenance fields are erased on the way in.
