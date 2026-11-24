@@ -2392,7 +2392,6 @@ REPR_C_FLOOR = {
     "crates/nvim/src/types/typval.rs::TypVal": "abi: the value model; ffigen renders it and the unit specs read it",
     "crates/nvim/src/types/typval.rs::Callback": "abi: the value model (a `TypVal` payload)",
     "crates/nvim/src/types/typval.rs::ScriptCtx": "abi: the value model (a `Callback`'s and a function's context)",
-    "crates/nvim/src/types/pos.rs::Pos": "abi: ffigen renders it into every signature that takes a position",
     "crates/nvim/src/mbyte/mod.rs::CharInfo": "abi: the C fixtures build it by value (`shim.h`)",
     "crates/nvim/src/mbyte/mod.rs::StrCharInfo": "abi: the C fixtures build it by value (`shim.h`)",
     "crates/nvim/src/memline/blocks.rs::ZeroBlockLayout": "codec: the swap file's block 0 on disk",

@@ -510,7 +510,6 @@ pub struct LPos {
     pub col: ColNr,
 }
 #[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
-#[repr(C)]
 pub struct Pos {
     pub lnum: LineNr,
     pub col: ColNr,
