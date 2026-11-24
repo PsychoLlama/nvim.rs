@@ -392,6 +392,23 @@ fn a_cursor_off_the_left_scrolls_by_the_sidescroll_step() {
 }
 
 #[test]
+fn a_sidescroll_step_of_int_max_is_capped() {
+    // One column past the right edge of a window scrolled to 6: the step arm
+    // with p_ss == INT_MAX, which overflowed an `int` (upstream wraps to a
+    // negative column, then 0).
+    assert_eq!(
+        scroll(
+            ColNr::new(46),
+            ColNr::new(46),
+            ColNr::new(6),
+            0,
+            i64::from(c_int::MAX)
+        ),
+        Some(0x3fff_ffff)
+    );
+}
+
+#[test]
 fn a_gap_of_half_a_window_centres_instead_of_stepping() {
     // diff >= width1 / 2 takes the centring arm even off the left.
     assert_eq!(

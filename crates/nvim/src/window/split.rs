@@ -279,7 +279,9 @@ fn split_room_vertical(
     };
     let mut needed = wmw1 + 1;
     if flags & WSP_ROOM != 0 {
-        needed += number_as_int(p_wiw()) - wmw1;
+        // Saturated, here and below: 'winwidth' may be `INT_MAX`, which no
+        // screen has room for (upstream's sum wrapped and split anyway).
+        needed = needed.saturating_add(number_as_int(p_wiw()) - wmw1);
     }
     let top = current_topframe();
     let (minwidth, available) = if toplevel {
@@ -294,7 +296,7 @@ fn split_room_vertical(
         let frame = oldwin.frame();
         (frame.min_width(NextCurwin::NoWin), frame.fr_width())
     };
-    needed += minwidth;
+    needed = needed.saturating_add(minwidth);
     if available < needed {
         return Err(err(WinError::NoRoom));
     }
@@ -342,7 +344,9 @@ fn split_room_horizontal(
     let wmh1 = number_as_int(p_wmh()).max(1) + oldwin.w_winbar_height();
     let mut needed = wmh1 + STATUS_HEIGHT;
     if flags & WSP_ROOM != 0 {
-        needed += number_as_int(p_wh()) - wmh1 + oldwin.w_winbar_height();
+        // Saturated, here and below: 'winheight' may be `INT_MAX`, which no
+        // screen has room for (upstream's sum wrapped and split anyway).
+        needed = needed.saturating_add(number_as_int(p_wh()) - wmh1 + oldwin.w_winbar_height());
     }
     if p_ch() < 1 as OptInt {
         needed += 1; // adjust for 'cmdheight' = 0
@@ -364,7 +368,7 @@ fn split_room_horizontal(
             frame.fr_height(),
         )
     };
-    needed += minheight;
+    needed = needed.saturating_add(minheight);
     if available < needed {
         return Err(err(WinError::NoRoom));
     }

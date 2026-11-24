@@ -301,6 +301,9 @@ pub fn wrap_cursor_cell(
     (wcol, wrow, did_sub_skipcol)
 }
 
+/// The furthest a 'sidescroll' step moves `w_leftcol`: half of `MAXCOL`.
+const SIDESCROLL_LEFTCOL_MAX: int64_t = 0x3fff_ffff;
+
 /// The `w_leftcol` a horizontal scroll should move to, or `None` when the
 /// cursor is far enough from both edges. From `curs_columns()`'s
 /// no-wrap-may-scroll arm; the caller compares against the current value
@@ -336,12 +339,14 @@ pub fn sidescroll_leftcol(
                 debug_assert!(sidescroll <= OptInt::from(c_int::MAX), "p_ss <= INT_MAX");
                 diff = sidescroll;
             }
-            (if off_left < 0 {
-                leftcol - number_as_int(diff)
-            } else {
-                leftcol + number_as_int(diff)
-            })
-            .get()
+            // In 64 bits and capped: 'sidescroll' is any `int`, and a step
+            // of `INT_MAX` from a nonzero `leftcol` would overflow (upstream
+            // wraps it). The cap is far past any line a window shows, and
+            // leaves `leftcol` room for what drawing and `zl` add to it.
+            // Below zero is clamped just after.
+            let step = if off_left < 0 { -diff } else { diff };
+            let moved = int64_t::from(leftcol.get()) + step;
+            number_as_int(moved.min(SIDESCROLL_LEFTCOL_MAX))
         };
     Some(if new_leftcol > 0 { new_leftcol } else { 0 })
 }

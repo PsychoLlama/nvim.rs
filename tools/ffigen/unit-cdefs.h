@@ -4096,6 +4096,7 @@ static const int SH_HL_EOL = 2;
 static const int SH_IS_SIGN = 1;
 static const int SH_SPELL_OFF = 32;
 static const int SH_SPELL_ON = 16;
+static const int SIDESCROLL_LEFTCOL_MAX = 1073741823;
 static const int SID_API_CLIENT = -9;
 static const int SID_CARG = -3;
 static const int SID_CMDARG = -2;

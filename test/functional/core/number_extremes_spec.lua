@@ -69,6 +69,18 @@ describe('a number at the ends of int', function()
       eq(INT_MAX, fn.getmatches()[3].pos1[3])
     end)
 
+    it('is a 1-based index', function()
+      -- 2^31 narrows to INT_MIN as upstream's cast does, and one less than
+      -- that overflowed: now it is below every index.
+      t.matches('E487: Argument must be positive', t.pcall_err(fn.setcmdline, 'x', 2 ^ 31))
+      command('call settagstack(1, {"curidx": 0x80000000})')
+      eq(1, fn.gettagstack().curidx)
+      fn.setline(1, 'abc')
+      command('diffthis | vnew | call setline(1, "abd") | diffthis')
+      eq(fn.hlID('DiffChange'), fn.diff_hlID(1, 2 ^ 31))
+      eq(fn.hlID('DiffText'), fn.diff_hlID(1, 3))
+    end)
+
     it('asks for suggestions', function()
       command('set spell spelllang=en')
       -- A word with hundreds of suggestions rather than thousands: the count
@@ -158,6 +170,34 @@ describe('a number at the ends of int', function()
       command('redraw!')
       -- The fold tree stops at its own depth.
       eq(20, fn.foldlevel(1))
+    end)
+
+    it('is a sidescroll step', function()
+      command('set nowrap sidescroll=1')
+      fn.setline(1, ('x '):rep(500))
+      command('normal! 85l')
+      command('redraw')
+      eq(6, fn.winsaveview().leftcol)
+      -- One column past the edge, by a step of INT_MAX from a nonzero
+      -- 'leftcol': capped far past the line (upstream wraps to 0).
+      command('set sidescroll=2147483647')
+      command('normal! l')
+      command('redraw')
+      eq(1073741823, fn.winsaveview().leftcol)
+      command('normal! 5zl')
+      command('redraw')
+    end)
+
+    it('is a window height or width no split has room for', function()
+      -- Like any 'winheight' taller than the screen: no room for a second
+      -- window (upstream's sum wrapped and split anyway).
+      command('args a b c')
+      command('set winheight=2147483647')
+      command('silent! all')
+      eq(1, fn.winnr('$'))
+      command('set winheight=1 winwidth=2147483647')
+      command('silent! vertical all')
+      eq(1, fn.winnr('$'))
     end)
 
     it('is a terminal colour', function()

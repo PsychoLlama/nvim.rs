@@ -338,7 +338,9 @@ pub fn set_tagstack(window: Win, d: &Dict, action: c_int) -> Result<(), Failed> 
 
     let mut stack = TagStack::of(window);
     if let Some(di) = dict_find(Some(d), b"curidx") {
-        stack.set_curidx(number_as_int(tv_get_number(&di.di_tv)) - 1);
+        // Saturated: `INT_MIN` is below the stack, and `set_curidx` clamps
+        // it to the bottom (upstream's wrap made it `INT_MAX`, the top).
+        stack.set_curidx(number_as_int(tv_get_number(&di.di_tv)).saturating_sub(1));
     }
 
     if action == 't' as c_int {

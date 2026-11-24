@@ -224,7 +224,8 @@ pub fn f_setcmdline(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
         let Ok(given) = tv_get_number_chk(&args[1]) else {
             return;
         };
-        pos = number_as_int(given) - 1;
+        // Saturated: `INT_MIN` (from `0x8000_0000`) is not positive either.
+        pos = number_as_int(given).saturating_sub(1);
         if pos < 0 {
             emsg(gettext(E_POSITIVE));
             return;

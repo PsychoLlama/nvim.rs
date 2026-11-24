@@ -397,7 +397,8 @@ pub fn f_diff_hl_id(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     }
 
     if HL_ID.get() == HLF_CHD || HL_ID.get() == HLF_TXD {
-        let col = number_as_int(tv_get_number(&args[1])) - 1;
+        // Saturated: an `INT_MIN` column is before every change, not after.
+        let col = number_as_int(tv_get_number(&args[1])).saturating_sub(1);
         if cache_results {
             HL_ID.set(if col >= CHANGE_START.get() && col < CHANGE_END.get() {
                 HLF_TXD
