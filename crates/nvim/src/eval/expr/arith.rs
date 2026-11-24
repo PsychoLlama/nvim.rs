@@ -15,7 +15,6 @@
 )]
 
 use crate::eval::typval::TV_INITIAL_VALUE;
-use core::ffi::c_int;
 
 use crate::eval::typval::{
     NumBuf, list_concat_values, tv_blob_alloc, tv_blob_set_ret, tv_clear, tv_get_number_chk,
@@ -66,15 +65,11 @@ pub(crate) fn eval_addblob(tv1: &mut TypVal, tv2: &TypVal) {
     let held = tv_blob_alloc();
     let total = b1.len() + b2.len();
 
-    // A result that would not fit a garray is silently dropped: the
-    // answer is an empty Blob and nothing is reported.
-    if c_int::try_from(total).is_ok() {
-        let mut held = held.edit();
-        let room = held.claim(total);
-        room[..b1.len()].copy_from_slice(&b1);
-        room[b1.len()..].copy_from_slice(&b2);
-        drop(held);
-    }
+    let mut edit = held.edit();
+    let room = edit.claim(total);
+    room[..b1.len()].copy_from_slice(&b1);
+    room[b1.len()..].copy_from_slice(&b2);
+    drop(edit);
     drop((b1, b2));
     tv_clear(tv1);
     tv_blob_set_ret(tv1, Some(held));

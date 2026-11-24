@@ -37,9 +37,9 @@ use core::ops::ControlFlow;
 use crate::ascii::ascii_iswhite;
 use crate::cstr::byte_at;
 use crate::eval::typval::{
-    BlobRef, DictRef, ListRef, NumBuf, blob_check_index, blob_check_range, index_of,
-    list_check_range_index_one, list_check_range_index_two, list_items_mut, tv_blob_alloc_ret,
-    tv_check_str, tv_dict_alloc, tv_get_number, tv_list_alloc_ret,
+    BlobIndexOutOfRange, BlobRef, DictRef, ListRef, NumBuf, blob_check_index, blob_check_range,
+    index_of, list_check_range_index_one, list_check_range_index_two, list_items_mut,
+    tv_blob_alloc_ret, tv_check_str, tv_dict_alloc, tv_get_number, tv_list_alloc_ret,
 };
 use crate::eval::userfunc::funccal_scope;
 use crate::eval::vars::{
@@ -54,8 +54,10 @@ use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
 use crate::memory::XString;
 use crate::message::state::EMSG_SEVERE;
+use crate::narrow::len_as_integer;
 use crate::types::{
     Failed, LIST_LEN_UNKNOWN, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VarLock,
+    VarNumber,
 };
 
 /// Why [`get_lval`] resolved no left-hand side.
@@ -665,18 +667,31 @@ impl Walk<'_, '_> {
         var2: &TypVal,
         empty1: bool,
     ) -> Result<(), LvalError> {
-        let bloblen = blob.read().len_int();
-        self.span.n1 = if empty1 {
-            0
-        } else {
-            index_of(tv_get_number(var1))
+        let bloblen = len_as_integer(blob.read().len());
+        // The span holds an `int`, as upstream's did, while a blob may pass
+        // 2 GiB: an index the span would clamp is refused, never stored as
+        // the clamp (which would name another byte).
+        let in_span = |asked: VarNumber, held: c_int| {
+            let held = VarNumber::from(held);
+            if asked == held {
+                Ok(())
+            } else {
+                Err(BlobIndexOutOfRange(asked))
+            }
         };
+        let asked1 = if empty1 { 0 } else { tv_get_number(var1) };
+        self.span.n1 = index_of(asked1);
         let n1 = i64::from(self.span.n1);
-        blob_check_index(bloblen, n1).map_err(|bad| self.refuse_with(|| bad.report()))?;
+        blob_check_index(bloblen, n1)
+            .and_then(|()| in_span(asked1, self.span.n1))
+            .map_err(|bad| self.refuse_with(|| bad.report()))?;
         if self.span.range && !self.span.empty2 {
-            self.span.n2 = index_of(tv_get_number(var2));
+            let asked2 = tv_get_number(var2);
+            self.span.n2 = index_of(asked2);
             let n2 = i64::from(self.span.n2);
-            blob_check_range(bloblen, n1, n2).map_err(|bad| self.refuse_with(|| bad.report()))?;
+            blob_check_range(bloblen, n1, n2)
+                .and_then(|()| in_span(asked2, self.span.n2))
+                .map_err(|bad| self.refuse_with(|| bad.report()))?;
         }
         Ok(())
     }

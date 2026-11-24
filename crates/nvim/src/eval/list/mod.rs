@@ -644,32 +644,30 @@ impl<'a> BlobArg<'a> {
 
     /// Length in bytes; a NULL blob is empty.
     #[inline(always)]
-    pub(crate) fn len(self) -> c_int {
-        self.0.map_or(0, |b| b.read().len_int())
+    pub(crate) fn len(self) -> usize {
+        self.0.map_or(0, |b| b.read().len())
     }
 
     #[inline(always)]
-    pub(crate) fn byte(self, idx: c_int) -> uint8_t {
+    pub(crate) fn byte(self, idx: usize) -> uint8_t {
         self.0.expect("a live blob").read().byte(idx)
     }
 
     #[inline(always)]
-    pub(crate) fn set_byte(self, idx: c_int, byte: uint8_t) {
+    pub(crate) fn set_byte(self, idx: usize, byte: uint8_t) {
         self.get().expect("a live blob").set_byte(idx, byte);
     }
 
     /// Drop the byte at `idx`, closing the gap -- `filter()`'s removal.
     #[inline(always)]
-    pub(crate) fn remove_byte(self, idx: c_int) {
-        let at = usize::try_from(idx).expect("a byte of the blob");
-        self.get().expect("a live blob").drain(at, at);
+    pub(crate) fn remove_byte(self, idx: usize) {
+        self.get().expect("a live blob").drain(idx, idx);
     }
 
     /// Insert `byte` before `idx`, which may be the blob's length.
     #[inline(always)]
-    pub(crate) fn insert_byte(self, idx: c_int, byte: uint8_t) {
+    pub(crate) fn insert_byte(self, idx: usize, byte: uint8_t) {
         let mut blob = self.get().expect("a live blob");
-        let idx = usize::try_from(idx).expect("a byte of the blob");
         let len = blob.len();
         // `claim` grows the array *and* declares the byte live, so the
         // shuffle below runs over the whole new length.

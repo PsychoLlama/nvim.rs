@@ -28,6 +28,7 @@ use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::eval::typval::{DictItem, dict_add_item};
 use crate::message_fmt::msg_bytes;
+use crate::narrow::len_as_integer;
 use crate::semsg;
 
 use super::{LValue, Slot, Span, Target};
@@ -280,12 +281,12 @@ fn set_blob_var(lval: &LValue<'_>, blob: &BlobRef, span: Span, value: &TypVal, o
 
     if span.range && value.v_type() == VAR_BLOB {
         let n2 = if span.empty2 {
-            blob.read().len_int() - 1
+            len_as_integer(blob.read().len()) - 1
         } else {
-            span.n2
+            VarNumber::from(span.n2)
         };
         // `value` may hold that very blob, which the callee allows.
-        let _ = set_range(blob, VarNumber::from(span.n1), VarNumber::from(n2), value);
+        let _ = set_range(blob, VarNumber::from(span.n1), n2, value);
         return;
     }
 
@@ -296,7 +297,9 @@ fn set_blob_var(lval: &LValue<'_>, blob: &BlobRef, span: Span, value: &TypVal, o
             semsg!("E1239: Invalid value for blob: 0xlX");
         } else {
             let byte = u8::try_from(val).expect("a byte, just checked");
-            blob.edit().set_or_append(span.n1, byte);
+            // `get_lval` checked the index against the blob: 0 up to its length.
+            let at = usize::try_from(span.n1).expect("an index get_lval checked");
+            blob.edit().set_or_append(at, byte);
         }
     }
 }

@@ -17,6 +17,7 @@
 
 use super::*;
 use crate::message::emsg;
+use crate::narrow::len_as_integer;
 use crate::semsg;
 use crate::types::Failed;
 
@@ -40,12 +41,6 @@ impl Blob {
         self.bv_data.len()
     }
 
-    /// How many bytes the blob holds, as the `int` upstream counted in.
-    #[inline]
-    pub(crate) fn len_int(&self) -> ::core::ffi::c_int {
-        ::core::ffi::c_int::try_from(self.len()).expect("a blob shorter than 2 GiB")
-    }
-
     /// Whether the blob holds no bytes at all.
     #[inline]
     pub(crate) fn is_empty(&self) -> bool {
@@ -54,22 +49,21 @@ impl Blob {
 
     /// The byte at `idx`, which must name one.
     #[inline]
-    pub(crate) fn byte(&self, idx: ::core::ffi::c_int) -> u8 {
-        self.bytes()[usize::try_from(idx).expect("a byte of the blob")]
+    pub(crate) fn byte(&self, idx: usize) -> u8 {
+        self.bytes()[idx]
     }
 
     /// Store `byte` at `idx`, which must name a byte of the blob.
     #[inline]
-    pub(crate) fn set_byte(&mut self, idx: ::core::ffi::c_int, byte: u8) {
-        let at = usize::try_from(idx).expect("a byte of the blob");
-        self.bytes_mut()[at] = byte;
+    pub(crate) fn set_byte(&mut self, idx: usize, byte: u8) {
+        self.bytes_mut()[idx] = byte;
     }
 
     /// `blob[idx] = byte`, growing the blob by one when `idx` is the slot
     /// just past the end.  Anything further out is silently ignored, which
     /// is upstream's `tv_blob_set_append`.
-    pub(crate) fn set_or_append(&mut self, idx: ::core::ffi::c_int, byte: u8) {
-        let len = self.len_int();
+    pub(crate) fn set_or_append(&mut self, idx: usize, byte: u8) {
+        let len = self.len();
         if idx > len {
             return;
         }
@@ -111,12 +105,6 @@ impl Blob {
     }
 }
 
-/// Length of `b`'s data in bytes; a NULL blob is empty.
-#[inline]
-pub(crate) fn blob_len(b: Option<&Blob>) -> ::core::ffi::c_int {
-    b.map_or(0, Blob::len_int)
-}
-
 /// The bytes of `b`; a NULL blob is empty.
 #[inline]
 pub(crate) fn blob_bytes(b: Option<&Blob>) -> &[u8] {
@@ -151,8 +139,8 @@ impl TypVal {
 
     /// The length of the blob this value holds; a NULL blob is empty.
     #[inline(always)]
-    pub(crate) fn blob_len(&self) -> ::core::ffi::c_int {
-        self.blob_ref().map_or(0, |b| b.len_int())
+    pub(crate) fn blob_len(&self) -> usize {
+        self.blob_ref().map_or(0, |b| b.len())
     }
 
     /// The blob this value holds, borrowed for writing: an [`Edit`].
@@ -214,7 +202,7 @@ pub fn blob_equal(b1: Option<&Blob>, b2: Option<&Blob>) -> bool {
 /// `result` holds the blob being subscripted on the way in.  Indexes out of
 /// range give an empty result rather than an error.
 pub(crate) fn blob_slice(
-    len: ::core::ffi::c_int,
+    len: VarNumber,
     mut n1: VarNumber,
     mut n2: VarNumber,
     exclusive: bool,
@@ -223,21 +211,21 @@ pub(crate) fn blob_slice(
     // The resulting variable is a sub-blob.  If the indexes
     // are out of range the result is empty.
     if n1 < 0 {
-        n1 += VarNumber::from(len);
+        n1 += len;
         if n1 < 0 {
             n1 = 0;
         }
     }
     if n2 < 0 {
-        n2 += VarNumber::from(len);
-    } else if n2 >= VarNumber::from(len) {
-        n2 = VarNumber::from(len - if exclusive { 0 } else { 1 });
+        n2 += len;
+    } else if n2 >= len {
+        n2 = len - if exclusive { 0 } else { 1 };
     }
     if exclusive {
         n2 -= 1;
     }
 
-    if n1 >= VarNumber::from(len) || n2 < 0 || n1 > n2 {
+    if n1 >= len || n2 < 0 || n1 > n2 {
         tv_clear(result);
         result.write_blob(None);
     } else {
@@ -260,16 +248,16 @@ pub(crate) fn blob_slice(
 /// `result` holds the blob being subscripted on the way in.  An index out of
 /// range raises `E979`.
 pub(crate) fn blob_index(
-    len: ::core::ffi::c_int,
+    len: VarNumber,
     mut idx: VarNumber,
     result: &mut TypVal,
 ) -> Result<(), Failed> {
     // The resulting variable is a byte value.
     // If the index is too big or negative that is an error.
     if idx < 0 {
-        idx += VarNumber::from(len);
+        idx += len;
     }
-    if idx >= VarNumber::from(len) || idx < 0 {
+    if idx >= len || idx < 0 {
         semsg!("E979: Blob index out of range: {}", idx);
         return Err(Failed);
     }
@@ -293,7 +281,7 @@ pub fn blob_slice_or_index(
     exclusive: bool,
     result: &mut TypVal,
 ) -> Result<(), Failed> {
-    let len = result.blob_len();
+    let len = len_as_integer(result.blob_len());
     if is_range {
         blob_slice(len, n1, n2, exclusive, result)
     } else {
@@ -316,10 +304,10 @@ impl BlobIndexOutOfRange {
 /// Whether `n1` names a byte of a `bloblen`-byte blob, or the slot just past
 /// the end (which an assignment may append to).
 pub(crate) fn blob_check_index(
-    bloblen: ::core::ffi::c_int,
+    bloblen: VarNumber,
     n1: VarNumber,
 ) -> Result<(), BlobIndexOutOfRange> {
-    if n1 < 0 || n1 > VarNumber::from(bloblen) {
+    if n1 < 0 || n1 > bloblen {
         return Err(BlobIndexOutOfRange(n1));
     }
     Ok(())
@@ -327,11 +315,11 @@ pub(crate) fn blob_check_index(
 
 /// Whether `n1..=n2` is a range of a `bloblen`-byte blob.
 pub(crate) fn blob_check_range(
-    bloblen: ::core::ffi::c_int,
+    bloblen: VarNumber,
     n1: VarNumber,
     n2: VarNumber,
 ) -> Result<(), BlobIndexOutOfRange> {
-    if n2 < 0 || n2 >= VarNumber::from(bloblen) || n2 < n1 {
+    if n2 < 0 || n2 >= bloblen || n2 < n1 {
         return Err(BlobIndexOutOfRange(n2));
     }
     Ok(())
@@ -349,7 +337,7 @@ pub(crate) fn set_range(
     n2: VarNumber,
     src: &TypVal,
 ) -> Result<(), Failed> {
-    if n2 - n1 + 1 != VarNumber::from(src.blob_len()) {
+    if n2 - n1 + 1 != len_as_integer(src.blob_len()) {
         let msg = gettext(c"E972: Blob value does not have the right number of bytes");
         emsg(msg);
         return Err(Failed);
@@ -386,7 +374,7 @@ pub fn blob_remove(
         return;
     };
 
-    let len = int64_t::from(blob.map_or(0, |b| blob_len(Some(&b.read()))));
+    let len = len_as_integer(blob.map_or(0, |b| b.read().len()));
     if idx < 0 {
         // count from the end
         idx += len;
@@ -514,8 +502,6 @@ mod tests {
         assert_eq!(b.edit().bytes_mut(), b"");
         assert_eq!(b.read().len(), 0);
         assert!(b.read().is_empty());
-        assert_eq!(blob_len(Some(&b.read())), 0);
-        assert_eq!(blob_len(None), 0);
         assert_eq!(blob_bytes(None), b"");
     }
 
@@ -584,6 +570,49 @@ mod tests {
 
         tv_clear(&mut dest);
         drop(src);
+        drop(held);
+    }
+
+    /// A blob past 2 GiB is measured and indexed in `usize`: upstream's
+    /// `int` length wrapped there, and the port's checked narrowing to it
+    /// panicked (`let b = readblob('/dev/zero', 0, 2147483649)`). The bytes
+    /// come from `calloc`, so the pages stay unmapped but for the one the
+    /// test writes.
+    #[test]
+    #[cfg_attr(miri, ignore = "a 2 GiB allocation")]
+    fn a_blob_past_two_gib_is_indexed_whole() {
+        let _held = editor_state_lock();
+        let len = (1_usize << 31) + 2;
+        let held = tv_blob_alloc();
+        held.edit().bv_data = vec![0; len];
+        held.edit().set_or_append(len - 1, 7);
+        held.edit().set_or_append(len, 8);
+        assert_eq!(held.read().len(), len + 1);
+        let len = len_as_integer(len + 1);
+
+        let mut tv = TypVal::blob(Some(held.clone()));
+        assert_eq!(tv.blob_len(), held.read().len());
+        assert_eq!(
+            blob_slice_or_index(false, len - 2, 0, false, &mut tv),
+            Ok(())
+        );
+        assert!(matches!(tv, TypVal::Number(7)));
+
+        let mut tv = TypVal::blob(Some(held.clone()));
+        assert_eq!(blob_slice_or_index(false, -1, 0, false, &mut tv), Ok(()));
+        assert!(matches!(tv, TypVal::Number(8)));
+
+        let mut tv = TypVal::blob(Some(held.clone()));
+        assert_eq!(blob_slice_or_index(true, -2, -1, false, &mut tv), Ok(()));
+        assert_eq!(&*tv.blob_bytes(), [7, 8]);
+        tv_clear(&mut tv);
+
+        assert_eq!(blob_check_index(len, len), Ok(()));
+        assert_eq!(blob_check_range(len, len - 2, len - 1), Ok(()));
+        assert_eq!(
+            blob_check_index(len, len + 1),
+            Err(BlobIndexOutOfRange(len + 1))
+        );
         drop(held);
     }
 

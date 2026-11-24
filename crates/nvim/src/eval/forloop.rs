@@ -148,8 +148,7 @@ pub(crate) fn next_for_item(info: &mut ForInfo, arg: &[u8]) -> bool {
             if *next >= blob.len() {
                 return false;
             }
-            let at = i32::try_from(*next).expect("a Blob index fits an int");
-            value.write_number(VarNumber::from(blob.byte(at)));
+            value.write_number(VarNumber::from(blob.byte(*next)));
             drop(blob);
             *next += 1;
         }

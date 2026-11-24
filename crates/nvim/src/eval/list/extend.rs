@@ -189,17 +189,19 @@ pub fn f_insert(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
             let len = b.len();
             let mut before = 0;
             if args.len() > 2 {
-                before = number_as_int(number_of(&args[2], &mut error));
+                let asked = number_as_int(number_of(&args[2], &mut error));
                 if error {
                     // Type error; errmsg already given.
                     return;
                 }
-                if before < 0 || before > len {
+                let at = usize::try_from(asked).ok().filter(|&at| at <= len);
+                let Some(at) = at else {
                     let mut numbuf = NumBuf::new();
                     let what = msg_cstr(cstr_of(&args[2], &mut numbuf));
                     semsg!("E475: Invalid argument: {what}");
                     return;
-                }
+                };
+                before = at;
             }
             let val = number_as_int(number_of(&args[1], &mut error));
             if error {

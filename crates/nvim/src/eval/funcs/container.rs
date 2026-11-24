@@ -191,23 +191,27 @@ pub fn f_get(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
 /// of range leaves -1 there, which a default given to the call replaces.
 fn get_from_blob(args: &[TypVal], result: &mut TypVal) -> bool {
     let mut error = false;
-    let mut idx = number_as_int(arg_number_chk(&args[1], Some(&mut error)));
+    let idx = number_as_int(arg_number_chk(&args[1], Some(&mut error)));
     if error {
         return false;
     }
+    // Counted from the end when negative; a blob may pass 2 GiB, so the
+    // index is resolved in an `i64`/`usize` rather than upstream's `int`.
     let bytes = args[0].blob_bytes();
-    let len = c_int::try_from(bytes.len()).expect("a short blob");
-    result.write_empty(VAR_NUMBER);
-    if idx < 0 {
-        idx += len;
+    let mut at = VarNumber::from(idx);
+    if at < 0 {
+        at += len_as_integer(bytes.len());
     }
-    if idx < 0 || idx >= len {
+    let byte = usize::try_from(at)
+        .ok()
+        .and_then(|at| bytes.get(at).copied());
+    drop(bytes);
+    result.write_empty(VAR_NUMBER);
+    let Some(byte) = byte else {
         result.write_number(-1);
         return false;
-    }
-    result.write_number(VarNumber::from(
-        bytes[usize::try_from(idx).expect("a byte of the blob")],
-    ));
+    };
+    result.write_number(VarNumber::from(byte));
     true
 }
 
@@ -359,18 +363,20 @@ fn index_blob(args: &[TypVal], result: &mut TypVal) {
     let Some(b) = args[0].blob_ref() else {
         return;
     };
-    let len = b.len_int();
-    if start < 0 {
-        start = (len + start).max(0);
+    let len = b.len();
+    let mut first = VarNumber::from(start);
+    if first < 0 {
+        first = (len_as_integer(len) + first).max(0);
     }
-    for idx in start..len {
+    let first = usize::try_from(first).expect("a start clamped to zero");
+    for idx in first..len {
         let mut tv = TV_INITIAL_VALUE;
         tv.write_number(VarNumber::from(b.byte(idx)));
         // The Blob branch never reads argument 3, so a Blob search is
         // always case-sensitive however 'ic' was spelled. Upstream is
         // the same; the flag only reaches the List branch.
         if tv_equal(&tv, &args[1], false) {
-            result.write_number(VarNumber::from(idx));
+            result.write_number(len_as_integer(idx));
             return;
         }
     }
@@ -486,7 +492,7 @@ fn indexof_blob(b: Option<&BlobRef>, startidx: VarNumber, expr: &TypVal) -> VarN
     let Some(b) = b else {
         return -1;
     };
-    let len = VarNumber::from(b.read().len_int());
+    let len = len_as_integer(b.read().len());
     let start = if startidx < 0 {
         (len + startidx).max(0)
     } else {
@@ -498,9 +504,9 @@ fn indexof_blob(b: Option<&BlobRef>, startidx: VarNumber, expr: &TypVal) -> VarN
     // The length is re-read at every step, as upstream does: the predicate
     // is the user's, and may shorten the blob.
     let mut idx = start;
-    while idx < VarNumber::from(b.read().len_int()) {
+    while idx < len_as_integer(b.read().len()) {
         set_vim_var_nr(Vv::Key, idx);
-        let at = c_int::try_from(idx).expect("a byte of the blob");
+        let at = usize::try_from(idx).expect("a start clamped to the blob");
         let byte = b.read().byte(at);
         set_vim_var_nr(Vv::Val, VarNumber::from(byte));
         if indexof_matches(expr) {
@@ -560,7 +566,7 @@ pub fn f_len(args: &[TypVal], result: &mut TypVal, _fptr: EvalFuncData) {
     // Number is measured through its String spelling.
     result.write_number(match tv.v_type() {
         VAR_STRING | VAR_NUMBER => len_as_integer(numbuf.bytes(&args[0]).len()),
-        VAR_BLOB => VarNumber::from(tv.blob_len()),
+        VAR_BLOB => len_as_integer(tv.blob_len()),
         VAR_LIST => VarNumber::from(list_len(tv.list_ref().as_deref())),
         VAR_DICT => dict_len(tv.dict_ref().as_deref()) as VarNumber,
         // The remaining tags are Unknown, Funcref, Partial, Float,

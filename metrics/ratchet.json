@@ -4,7 +4,7 @@
   "cell_ptr_keepers": 3,
   "cell_ptr_accessors": 1,
   "cell_copy_owner": 7,
-  "c_int_returns": 951,
+  "c_int_returns": 947,
   "ok_fail": 0,
   "error_out_params": 0,
   "semsg_c": 19,
