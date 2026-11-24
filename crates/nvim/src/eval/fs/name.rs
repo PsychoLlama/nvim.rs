@@ -47,7 +47,7 @@ use crate::mbyte::Codepoint;
 use crate::mbyte::{cluster_len, head_off};
 use crate::memory::XString;
 use crate::os::fs::{dir_exists, dirname_text};
-use crate::path::{MAXPATHL, add_pathsep};
+use crate::path::{MAXPATHL, add_pathsep, after_pathsep};
 use crate::path::{full_name_save, path_fnamencmp, tail_index, vim_is_abs_name};
 use crate::strings::{find_char, shellescape};
 use crate::types::TypVal;
@@ -152,13 +152,6 @@ fn until_nul(text: &[u8]) -> &[u8] {
 /// which `:h` never removes.
 fn past_head_off(s: &[u8]) -> usize {
     s.iter().position(|&b| b != b'/').unwrap_or(s.len())
-}
-
-/// Whether byte `i` of `s` follows a path separator that is not the
-/// trailing byte of a multibyte character, looking back no further than
-/// byte `from`.
-fn after_sep(s: &[u8], from: usize, i: usize) -> bool {
-    i > from && is_sep(s, i - 1) && head_off(&s[from..], i - 1 - from) == 0
 }
 
 // ---------------------------------------------------------------------
@@ -280,7 +273,7 @@ fn trim_stages(mods: &mut Mods<'_>, f: &mut Fname<'_>, valid: &mut c_int) {
         mods.advance(2);
         let s = until_nul(&f.with_nul()[base..]);
         let head = past_head_off(s);
-        while tail > head && after_sep(s, head, tail) {
+        while tail > head && after_pathsep(s, tail) {
             tail -= head_off(s, tail - 1) + 1;
         }
         len = tail - start;
@@ -290,7 +283,7 @@ fn trim_stages(mods: &mut Mods<'_>, f: &mut Fname<'_>, valid: &mut c_int) {
             base = 0;
             (tail, start, len) = (0, 0, 1);
         } else {
-            while tail > head && !after_sep(s, head, tail) {
+            while tail > head && !after_pathsep(s, tail) {
                 tail -= head_off(s, tail - 1) + 1;
             }
         }

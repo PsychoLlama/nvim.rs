@@ -29,14 +29,14 @@
     clippy::ptr_as_ptr
 )]
 
-use super::{after_sep, at, err, is_sep, next_component, str_arg, str_arg_chk, tail_with_sep};
+use super::{at, err, is_sep, next_component, str_arg, str_arg_chk, tail_with_sep};
 use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::NumBuf;
 use crate::eval::typval::tv_get_number;
 use crate::fileio::file_pat_to_regpat;
 use crate::memory::ThinCString;
 use crate::narrow::number_as_int;
-use crate::path::{MAXPATHL, add_pathsep};
+use crate::path::{MAXPATHL, add_pathsep, after_pathsep};
 use crate::path::{path_is_absolute, shorten_dir_name, simplify_filename, tail_index};
 use crate::types::{Failed, TypVal, VAR_STRING, VarNumber};
 use core::ffi::CStr;
@@ -155,7 +155,7 @@ fn resolve(fname: &CStr) -> Result<Vec<u8>, Failed> {
     }
 
     let len = p.len();
-    if len > 1 && after_sep(&p, len) {
+    if len > 1 && after_pathsep(&p, len) {
         has_trailing_pathsep = true;
         // The trailing separator breaks `readlink`.
         p.truncate(len - 1);
@@ -244,7 +244,7 @@ fn resolve(fname: &CStr) -> Result<Vec<u8>, Failed> {
 
     // And carries no trailing separator unless the argument did -- but "/"
     // and "//" are kept whole, which `tail_with_sep` never cuts into.
-    if !has_trailing_pathsep && after_sep(&p, p.len()) {
+    if !has_trailing_pathsep && after_pathsep(&p, p.len()) {
         p.truncate(tail_with_sep(&p));
     }
     Ok(p)

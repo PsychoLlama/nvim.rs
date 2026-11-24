@@ -41,7 +41,6 @@ use crate::eval::funcs::builtin::EvalFuncData;
 use crate::eval::typval::{
     NumBuf, tv_check_for_nonempty_string_arg, tv_check_for_string_arg, tv_get_number_chk,
 };
-use crate::mbyte::head_off;
 use crate::memory::ThinCString;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
@@ -51,7 +50,7 @@ use crate::os::fs::{
     os_file_is_writable,
 };
 use crate::os::libc::uint64_t;
-use crate::path::{tail_index, vim_ispathsep};
+use crate::path::{after_pathsep, tail_index, vim_ispathsep};
 use crate::types::{TypVal, VAR_STRING, VarNumber};
 use core::ffi::{CStr, c_int};
 
@@ -125,19 +124,13 @@ pub(crate) fn is_sep(b: &[u8], i: usize) -> bool {
     vim_ispathsep(c_int::from(at(b, i)))
 }
 
-/// Whether byte `i` of `b` follows a path separator -- one that is not the
-/// trailing byte of a multibyte character. Upstream's `after_pathsep`.
-pub(crate) fn after_sep(b: &[u8], i: usize) -> bool {
-    i > 0 && is_sep(b, i - 1) && head_off(b, i - 1) == 0
-}
-
 /// Where the separators before the last component of `b` start, never
 /// before the head of the path: upstream's `path_tail_with_sep`, as an
 /// index.
 pub(crate) fn tail_with_sep(b: &[u8]) -> usize {
     let past_head = b.iter().position(|&c| c != b'/').unwrap_or(b.len());
     let mut tail = tail_index(b);
-    while tail > past_head && after_sep(b, tail) {
+    while tail > past_head && after_pathsep(b, tail) {
         tail -= 1;
     }
     tail
