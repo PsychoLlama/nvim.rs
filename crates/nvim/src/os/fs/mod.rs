@@ -375,12 +375,12 @@ pub fn os_can_exe(
 /// Whether `name` is a regular file the process may execute, storing its
 /// resolved absolute path in `abspath`.
 fn is_executable(name: &CStr, abspath: Option<&mut Option<crate::memory::XString>>) -> bool {
-    let mode = getperm(name);
-    if mode < 0 {
+    // A negative mode is `getperm`'s error.
+    let Ok(mode) = u64::try_from(getperm(name)) else {
         return false;
-    }
+    };
     // Only a regular file is worth asking `access(2)` about.
-    let ok = mode as u64 & S_IFMT == S_IFREG
+    let ok = mode & S_IFMT == S_IFREG
         // SAFETY: as above.
         && fs_result(|req| unsafe { uv_fs_access(NO_LOOP, req, name.as_ptr(), X_OK, None) }) == 0;
     if ok && let Some(abspath) = abspath {
@@ -608,8 +608,8 @@ pub(crate) fn write_bytes(fd: BorrowedFd<'_>, bytes: &[u8], non_blocking: bool) 
         let rest = &bytes[written_bytes..];
         // SAFETY: `rest` is a live slice of exactly its own length.
         let cur = unsafe { write(fd, rest.as_ptr().cast::<c_void>(), rest.len()) };
-        if cur > 0 {
-            written_bytes += cur as size_t;
+        if let Ok(cur @ 1..) = size_t::try_from(cur) {
+            written_bytes += cur;
         } else if cur == 0 {
             // A zero-length write of a non-empty buffer has no explanation.
             return UV_UNKNOWN as ptrdiff_t;
@@ -623,7 +623,7 @@ pub(crate) fn write_bytes(fd: BorrowedFd<'_>, bytes: &[u8], non_blocking: bool) 
             }
         }
     }
-    written_bytes as ptrdiff_t
+    ptrdiff_t::try_from(written_bytes).expect("a slice's length fits isize")
 }
 
 /// Copies `path` onto `new_path` with libuv's `copyfile` flags.
@@ -642,8 +642,8 @@ pub(crate) fn realpath(name: &CStr) -> Option<Vec<u8>> {
 
 /// Whether `path` exists and is a directory, a symlink to one included.
 pub fn dir_exists(path: &CStr) -> bool {
-    let mode = getperm(path);
-    mode >= 0 && is_dir(mode as u64)
+    // A negative mode is `getperm`'s error.
+    u64::try_from(getperm(path)).is_ok_and(is_dir)
 }
 
 /// The editor's standard input as a file of the caller's own, for a reader

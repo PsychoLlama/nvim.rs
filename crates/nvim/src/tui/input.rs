@@ -48,7 +48,7 @@ use crate::tui::keys::{KEYMOD_RECOGNIZED, modified_utf8, mouse_event, simple_utf
 use crate::tui::negotiate::{
     tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color, tui_tk_ti_getstr,
 };
-use crate::tui::state::{KEY_BUFFER_SIZE, TermInput, TermInputCallbacks};
+use crate::tui::state::{KEY_BUFFER_SIZE, TermInput, TermInputCallbacks, TermMode, TermModeState};
 use crate::tui::state::{KEY_ENCODING_KITTY, TUIData};
 use crate::tui::terminfo::entry::TerminfoEntry;
 use crate::tui::termkey::termkey::{
@@ -113,6 +113,15 @@ impl TermInput {
             key_buffer: [0; KEY_BUFFER_SIZE],
             key_buffer_len: 0,
         }
+    }
+
+    /// How long an incomplete sequence waits for the rest of it, in ms, or
+    /// `None` when `'ttimeout'` is off or `'ttimeoutlen'` is negative (wait
+    /// for good).
+    fn ttimeout_ms(&self) -> Option<u64> {
+        u64::try_from(self.ttimeoutlen)
+            .ok()
+            .filter(|_| self.ttimeout)
     }
 }
 
@@ -291,13 +300,8 @@ fn take_arrived(tui: &mut TUIData, arrived: &[u8], eof: bool) -> usize {
     // Bytes left over are an incomplete sequence: give the rest of it
     // `'ttimeoutlen'` to arrive.
     if consumed < arrived.len() {
-        let input = &tui.input;
-        let ms: i64 = if input.ttimeout && input.ttimeoutlen >= 0 {
-            input.ttimeoutlen
-        } else {
-            0
-        };
-        restart_timer(&tui.handles, u64::from(ms as u32));
+        let ms = tui.input.ttimeout_ms().unwrap_or(0);
+        restart_timer(&tui.handles, ms);
     }
     consumed
 }
@@ -448,9 +452,7 @@ fn tk_getkeys(tui: &mut TUIData, force: bool) {
     }
     // Half a sequence: either it is worth waiting for the rest, or
     // `'ttimeout'` says to take it as it is straight away.
-    let input = &tui.input;
-    if input.ttimeout && input.ttimeoutlen >= 0 {
-        let ms = input.ttimeoutlen as u64;
+    if let Some(ms) = tui.input.ttimeout_ms() {
         restart_timer(&tui.handles, ms);
     } else {
         tk_getkeys(tui, true);
@@ -543,8 +545,11 @@ fn handle_bracketed_paste(input: &mut TermInput, data: &[u8]) -> (usize, bool) {
 
 /// The terminal answering a question about one of its modes.
 fn handle_modereport(tui: &mut TUIData, key: &TermKeyKey) {
-    if let Some((_initial, mode, value)) = interpret_modereport(key) {
-        tui_handle_term_mode(tui, mode as _, value as _);
+    // Both are unpacked from bytes, so neither is ever negative.
+    if let Some((_initial, mode, value)) = interpret_modereport(key)
+        && let (Ok(mode), Ok(value)) = (TermMode::try_from(mode), TermModeState::try_from(value))
+    {
+        tui_handle_term_mode(tui, mode, value);
     }
 }
 
